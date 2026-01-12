@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3 uid="uid://d3s6mw8hy4nfp"]
+
+[ext_resource type="Script" path="res://scripts/ability_pickup.gd" id="1_abilitypickup"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_ability"]
+size = Vector3(0.4, 0.4, 0.4)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_ability"]
+size = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_ability"]
+mix_rate = 44100.0
+buffer_length = 0.1
+
+[node name="AbilityPickup" type="Area3D"]
+collision_layer = 16
+collision_mask = 2
+script = ExtResource("1_abilitypickup")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_ability")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_ability")
+
+[node name="PickupSound" type="AudioStreamPlayer3D" parent="."]
+stream = SubResource("AudioStreamGenerator_ability")
+volume_db = -3.0
+max_distance = 25.0

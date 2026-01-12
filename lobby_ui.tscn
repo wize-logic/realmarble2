@@ -1,0 +1,150 @@
+[gd_scene load_steps=2 format=3 uid="uid://dpqx5h8m7yn2h"]
+
+[ext_resource type="Script" path="res://scripts/lobby_ui.gd" id="1_lobby"]
+
+[node name="LobbyUI" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_lobby")
+
+[node name="MainLobbyPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -200.0
+offset_right = 200.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="MainLobbyPanel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "MARBLE MULTIPLAYER"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="PlayerNameLabel" type="Label" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Your Name:"
+
+[node name="PlayerNameInput" type="LineEdit" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+placeholder_text = "Enter your name..."
+max_length = 16
+
+[node name="HSeparator2" type="HSeparator" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="CreateGameButton" type="Button" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Create Game"
+
+[node name="HSeparator3" type="HSeparator" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="RoomCodeLabel" type="Label" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Join Game:"
+
+[node name="RoomCodeInput" type="LineEdit" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+placeholder_text = "Enter room code..."
+max_length = 6
+
+[node name="JoinGameButton" type="Button" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Join Game"
+
+[node name="HSeparator4" type="HSeparator" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="QuickPlayButton" type="Button" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Quick Play"
+
+[node name="HSeparator5" type="HSeparator" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="MainLobbyPanel/VBox"]
+layout_mode = 2
+text = "Back to Main Menu"
+
+[node name="GameLobbyPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -300.0
+offset_right = 250.0
+offset_bottom = 300.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="GameLobbyPanel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "GAME LOBBY"
+horizontal_alignment = 1
+
+[node name="RoomCodeLabel" type="Label" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Room Code: XXXXXX"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="PlayersLabel" type="Label" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Players:"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerList" type="VBoxContainer" parent="GameLobbyPanel/VBox/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="HSeparator2" type="HSeparator" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Waiting for players..."
+horizontal_alignment = 1
+
+[node name="HSeparator3" type="HSeparator" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="ReadyButton" type="Button" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Not Ready"
+
+[node name="StartGameButton" type="Button" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Start Game (Host Only)"
+
+[node name="LeaveLobbyButton" type="Button" parent="GameLobbyPanel/VBox"]
+layout_mode = 2
+text = "Leave Lobby"

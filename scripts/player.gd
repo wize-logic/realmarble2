@@ -1,0 +1,726 @@
+extends RigidBody3D
+
+@onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
+@onready var camera_arm: Node3D = get_node_or_null("CameraArm")
+@onready var ground_ray: RayCast3D = get_node_or_null("GroundRay")
+@onready var marble_mesh: MeshInstance3D = get_node_or_null("MarbleMesh")
+@onready var jump_sound: AudioStreamPlayer3D = get_node_or_null("JumpSound")
+@onready var spin_sound: AudioStreamPlayer3D = get_node_or_null("SpinSound")
+@onready var land_sound: AudioStreamPlayer3D = get_node_or_null("LandSound")
+@onready var charge_sound: AudioStreamPlayer3D = get_node_or_null("ChargeSound")
+@onready var hit_sound: AudioStreamPlayer3D = get_node_or_null("HitSound")
+
+## Number of hits before respawn
+@export var health: int = 3
+## The xyz position of the random spawns, you can add as many as you want!
+@export var spawns: PackedVector3Array = [
+	Vector3(-18, 2, 0),
+	Vector3(18, 2, 0),
+	Vector3(-2.8, 2, -6),
+	Vector3(-17, 2, 17),
+	Vector3(17, 2, 17),
+	Vector3(17, 2, -17),
+	Vector3(-17, 2, -17)
+]
+
+# Camera settings - 3rd person shooter style
+var sensitivity: float = 0.005
+var controller_sensitivity: float = 0.010
+var axis_vector: Vector2
+var mouse_captured: bool = true
+var camera_distance: float = 5.0  # Closer for shooter feel
+var camera_height: float = 2.5  # Lower for better view
+var camera_pitch: float = 0.0  # Vertical camera angle
+var camera_yaw: float = 0.0  # Horizontal camera angle
+var camera_min_pitch: float = -60.0  # Max look down (degrees)
+var camera_max_pitch: float = 45.0  # Max look up (degrees)
+
+# Marble movement properties - Shooter style (responsive)
+var marble_mass: float = 8.0  # Marbles are dense (glass/steel)
+var base_roll_force: float = 300.0  # Significantly increased for climbing slopes
+var base_jump_impulse: float = 70.0
+var current_roll_force: float = 300.0
+var current_jump_impulse: float = 70.0
+var max_speed: float = 12.0  # Slightly higher max speed
+var air_control: float = 0.4  # Better air control for shooter feel
+var base_spin_dash_force: float = 150.0
+var current_spin_dash_force: float = 150.0
+
+# Jump system
+var jump_count: int = 0
+var max_jumps: int = 2  # Double jump!
+
+# Spin dash properties
+var is_charging_spin: bool = false
+var is_spin_dashing: bool = false  # Actively spinning from spindash
+var spin_dash_timer: float = 0.0  # How long the spin lasts
+var spin_charge: float = 0.0
+var max_spin_charge: float = 1.5  # Max charge time in seconds
+var spin_cooldown: float = 0.0
+var spin_cooldown_time: float = 0.8  # Cooldown in seconds (reduced from 1.0)
+var charge_spin_rotation: float = 0.0  # For spin animation during charge
+
+# Level up system (3 levels max)
+var level: int = 0
+const MAX_LEVEL: int = 3
+const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
+const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
+const SPIN_BOOST_PER_LEVEL: float = 30.0   # Spin dash boost per level
+
+# Ground detection
+var is_grounded: bool = false
+
+# Ability system
+var current_ability: Node = null  # The currently equipped ability
+
+# Falling death state
+var is_falling_to_death: bool = false
+var fall_death_timer: float = 0.0
+var fall_camera_detached: bool = false
+var fall_camera_position: Vector3 = Vector3.ZERO
+
+# Debug/cheat properties
+var god_mode: bool = false
+
+func _enter_tree() -> void:
+	set_multiplayer_authority(str(name).to_int())
+
+func _ready() -> void:
+	# Set up RigidBody3D physics properties - shooter style
+	mass = marble_mass  # Marbles are dense (glass/steel)
+	gravity_scale = 2.5  # Marble gravity - dense and heavy
+	linear_damp = 0.5   # Moderate damp for better momentum and ramming
+	angular_damp = 0.3   # Low rolling resistance but some friction
+
+	# Physics material properties
+	physics_material_override = PhysicsMaterial.new()
+	physics_material_override.friction = 0.4  # Higher friction for better control
+	physics_material_override.bounce = 0.6     # More bounce for marble ramming and interaction
+	physics_material_override.rough = false    # Smooth surface
+
+	# Enable continuous collision detection for fast movement
+	continuous_cd = true
+
+	# Lock all rotation to prevent spinning (no torque-based movement)
+	lock_rotation = true
+
+	# Set collision layers for player interaction
+	collision_layer = 2  # Player layer
+	collision_mask = 7   # Collide with world (1), players (2), projectiles (4)
+
+	# Make camera arm ignore parent rotation (prevents rolling with marble)
+	if camera_arm:
+		camera_arm.top_level = true
+
+	# Set up ground detection raycast
+	if not ground_ray:
+		ground_ray = RayCast3D.new()
+		ground_ray.name = "GroundRay"
+		add_child(ground_ray)
+
+	ground_ray.enabled = true
+	ground_ray.target_position = Vector3.DOWN * 0.6  # Cast down 0.6 units (slightly more than radius)
+	ground_ray.collision_mask = 0xFFFFFFFF  # Check all layers
+	ground_ray.collide_with_areas = false
+	ground_ray.collide_with_bodies = true
+
+	# Set up sound effects (create nodes if they don't exist)
+	if not jump_sound:
+		jump_sound = AudioStreamPlayer3D.new()
+		jump_sound.name = "JumpSound"
+		add_child(jump_sound)
+		jump_sound.max_distance = 20.0
+		jump_sound.volume_db = -5.0
+
+	if not spin_sound:
+		spin_sound = AudioStreamPlayer3D.new()
+		spin_sound.name = "SpinSound"
+		add_child(spin_sound)
+		spin_sound.max_distance = 25.0
+		spin_sound.volume_db = 0.0
+
+	if not land_sound:
+		land_sound = AudioStreamPlayer3D.new()
+		land_sound.name = "LandSound"
+		add_child(land_sound)
+		land_sound.max_distance = 15.0
+		land_sound.volume_db = -8.0
+
+	if not charge_sound:
+		charge_sound = AudioStreamPlayer3D.new()
+		charge_sound.name = "ChargeSound"
+		add_child(charge_sound)
+		charge_sound.max_distance = 20.0
+		charge_sound.volume_db = -3.0
+
+	if not hit_sound:
+		hit_sound = AudioStreamPlayer3D.new()
+		hit_sound.name = "HitSound"
+		add_child(hit_sound)
+		hit_sound.max_distance = 25.0
+		hit_sound.volume_db = 0.0
+
+	# Set up marble mesh and texture
+	if not marble_mesh:
+		marble_mesh = MeshInstance3D.new()
+		marble_mesh.name = "MarbleMesh"
+		add_child(marble_mesh)
+
+		# Create sphere mesh
+		var sphere: SphereMesh = SphereMesh.new()
+		sphere.radius = 0.5
+		sphere.height = 1.0
+		marble_mesh.mesh = sphere
+
+		# Create material with texture
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint
+		mat.metallic = 0.3
+		mat.roughness = 0.4
+		mat.uv1_scale = Vector3(2.0, 2.0, 2.0)  # Tile the texture
+
+		# Add a procedural texture pattern
+		var noise_tex: NoiseTexture2D = NoiseTexture2D.new()
+		var noise: FastNoiseLite = FastNoiseLite.new()
+		noise.noise_type = FastNoiseLite.TYPE_CELLULAR
+		noise.frequency = 0.05
+		noise_tex.noise = noise
+		noise_tex.width = 512
+		noise_tex.height = 512
+		mat.albedo_texture = noise_tex
+
+		marble_mesh.material_override = mat
+
+	if not is_multiplayer_authority():
+		return
+
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	if camera:
+		camera.current = true
+
+	# Spawn at fixed position based on player ID
+	var player_id: int = str(name).to_int()
+	var spawn_index: int = player_id % spawns.size()
+	global_position = spawns[spawn_index]
+
+	# Reset velocity on spawn
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+
+func _process(delta: float) -> void:
+	if not is_multiplayer_authority():
+		return
+
+	if not camera or not camera_arm:
+		return
+
+	# Handle falling death state
+	if is_falling_to_death:
+		fall_death_timer += delta
+
+		# Keep camera at fixed position watching the marble fall
+		if not fall_camera_detached:
+			fall_camera_position = camera_arm.global_position
+			fall_camera_detached = true
+
+		camera_arm.global_position = fall_camera_position
+		camera.look_at(global_position, Vector3.UP)
+
+		# Respawn after 2 seconds
+		if fall_death_timer >= 2.0:
+			respawn()
+			is_falling_to_death = false
+			fall_camera_detached = false
+			fall_death_timer = 0.0
+		return
+
+	sensitivity = Global.sensitivity
+	controller_sensitivity = Global.controller_sensitivity
+
+	# Read controller input continuously
+	axis_vector = Input.get_vector("look_left", "look_right", "look_up", "look_down")
+
+	# 3rd person shooter camera - Update from controller input
+	if axis_vector.length() > 0.0:
+		camera_yaw -= axis_vector.x * controller_sensitivity * delta * 60.0
+		camera_pitch -= axis_vector.y * controller_sensitivity * delta * 60.0
+		camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
+
+	# Position camera arm at player
+	camera_arm.global_position = global_position
+
+	# Apply yaw rotation to camera arm (horizontal look)
+	camera_arm.global_rotation = Vector3(0, deg_to_rad(camera_yaw), 0)
+
+	# Calculate camera position - shooter style over-the-shoulder view
+	var pitch_rad: float = deg_to_rad(camera_pitch)
+	var offset: Vector3 = Vector3(0, camera_height, camera_distance)
+
+	# Apply pitch rotation to offset
+	var rotated_offset: Vector3 = Vector3(
+		offset.x,
+		offset.y * cos(pitch_rad) - offset.z * sin(pitch_rad),
+		offset.y * sin(pitch_rad) + offset.z * cos(pitch_rad)
+	)
+
+	# Camera occlusion - raycast to prevent clipping through walls
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+		camera_arm.global_position,
+		camera_arm.global_position + camera_arm.global_transform.basis * rotated_offset
+	)
+	query.exclude = [self]  # Don't hit the player
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+
+	var result: Dictionary = space_state.intersect_ray(query)
+	var final_offset: Vector3 = rotated_offset
+
+	if result:
+		# Hit something - move camera closer
+		var hit_point: Vector3 = result.position
+		var local_hit: Vector3 = camera_arm.global_transform.inverse() * hit_point
+		# Pull camera back slightly from hit point to avoid clipping
+		final_offset = local_hit - (local_hit.normalized() * 0.2)
+
+	# Position camera
+	camera.position = final_offset
+
+	# Make camera look at player
+	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
+
+# MARBLE ROLLING ANIMATION - Always update for all marbles (including bots)
+func _physics_process_marble_roll(delta: float) -> void:
+	"""Update marble rolling animation based on velocity"""
+	if not marble_mesh:
+		return
+
+	if is_spin_dashing:
+		# RAPID SPINNING during spindash - spin on all axes
+		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin
+		marble_mesh.rotate_y(delta * 25.0)  # Add some tumble
+	elif not is_charging_spin:
+		# Normal rolling based on movement
+		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		var speed: float = horizontal_vel.length()
+
+		if speed > 0.1:  # Only roll if moving
+			# Calculate roll axis (perpendicular to movement direction)
+			var move_dir: Vector3 = horizontal_vel.normalized()
+			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # 90 degree rotation (inverted for correct direction)
+
+			# Roll speed based on velocity (marble radius is 0.5)
+			var roll_speed: float = speed / 0.5  # Angular velocity = linear velocity / radius
+
+			# Apply rotation
+			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
+
+func _input(event: InputEvent) -> void:
+	if not is_multiplayer_authority():
+		return
+
+	# Mouse look - 3rd person shooter style (handled in _input for priority)
+	if event is InputEventMouseMotion:
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			if camera and camera_arm:
+				# Update yaw (horizontal) and pitch (vertical) from mouse movement
+				camera_yaw -= event.relative.x * sensitivity * 57.2958  # Convert to degrees
+				camera_pitch -= event.relative.y * sensitivity * 57.2958
+				camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
+				# Mark event as handled so it doesn't propagate further
+				get_viewport().set_input_as_handled()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_multiplayer_authority():
+		return
+
+	# Respawn on command
+	if Input.is_action_just_pressed("respawn"):
+		receive_damage(health)
+
+	# Mouse capture toggle
+	if Input.is_action_just_pressed("capture"):
+		if mouse_captured:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			mouse_captured = false
+		else:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			mouse_captured = true
+
+	# Jump - Space key (with double jump)
+	if event is InputEventKey and event.keycode == KEY_SPACE:
+		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps)
+		if event.pressed and not event.echo:
+			if jump_count < max_jumps:
+				var jump_strength: float = current_jump_impulse
+				# Second jump is slightly weaker
+				if jump_count == 1:
+					jump_strength *= 0.85
+
+				print("JUMPING! (Jump #", jump_count + 1, ") Impulse: ", jump_strength)
+
+				# Cancel vertical velocity for consistent jumps
+				var vel: Vector3 = linear_velocity
+				vel.y = 0
+				linear_velocity = vel
+
+				apply_central_impulse(Vector3.UP * jump_strength)
+				jump_count += 1
+
+				# Play jump sound
+				if jump_sound and jump_sound.stream:
+					play_jump_sound.rpc()
+			else:
+				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
+
+	# Use ability - E key or controller X button
+	if Input.is_action_just_pressed("use_ability"):
+		if current_ability and current_ability.has_method("use"):
+			print("Using ability!")
+			current_ability.use()
+
+	# Drop ability - O key
+	if event is InputEventKey and event.keycode == KEY_O:
+		if event.pressed and not event.echo:
+			if current_ability:
+				print("Dropping ability!")
+				drop_ability()
+
+	# Spin dash - start charging (Shift key)
+	if event is InputEventKey and event.keycode == KEY_SHIFT:
+		print("Shift key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Cooldown: ", spin_cooldown)
+		if event.pressed and not event.echo:
+			if is_grounded and spin_cooldown <= 0.0:
+				print("Starting spin dash charge!")
+				is_charging_spin = true
+				spin_charge = 0.0
+			else:
+				if not is_grounded:
+					print("Can't spin dash - not grounded")
+				if spin_cooldown > 0.0:
+					print("Can't spin dash - on cooldown")
+
+		# Spin dash - release to dash (Shift key)
+		if not event.pressed:
+			print("Shift released! Charging: ", is_charging_spin, " | Charge amount: ", spin_charge)
+			if is_charging_spin and spin_charge > 0.1:  # Minimum charge threshold
+				print("Executing spin dash!")
+				execute_spin_dash()
+			elif is_charging_spin:
+				print("Charge too low: ", spin_charge)
+			is_charging_spin = false
+			spin_charge = 0.0
+
+func _physics_process(delta: float) -> void:
+	# Update marble rolling for ALL marbles (players and bots)
+	_physics_process_marble_roll(delta)
+
+	# Freeze ALL players (including bots) during countdown
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and world.get("countdown_active"):
+		return  # Don't process physics during countdown
+
+	if multiplayer.multiplayer_peer != null:
+		if not is_multiplayer_authority():
+			return
+
+	# Check if marble is on ground using raycast
+	check_ground()
+
+	# Update spin dash cooldown
+	if spin_cooldown > 0.0:
+		spin_cooldown -= delta
+
+	# Update spin dash timer (for visual spinning)
+	if spin_dash_timer > 0.0:
+		spin_dash_timer -= delta
+		if spin_dash_timer <= 0.0:
+			is_spin_dashing = false
+
+	# Charge spin dash if holding button
+	if is_charging_spin:
+		spin_charge += delta
+		spin_charge = min(spin_charge, max_spin_charge)
+
+		# Spin the marble mesh during charge (gets faster as charge increases)
+		if marble_mesh:
+			charge_spin_rotation += delta * 20.0 * (1.0 + spin_charge * 3.0)  # Accelerates with charge
+			marble_mesh.rotation.y = charge_spin_rotation
+
+		# Play charge sound (looping)
+		if charge_sound and not charge_sound.playing:
+			charge_sound.play()
+
+		# Don't allow movement while charging
+		return
+	else:
+		# Stop charge sound when not charging
+		if charge_sound and charge_sound.playing:
+			charge_sound.stop()
+		charge_spin_rotation = 0.0
+
+	# Get input direction relative to camera
+	var input_dir := Input.get_vector("left", "right", "up", "down")
+
+	if input_dir != Vector2.ZERO:
+		var move_direction: Vector3
+
+		if camera_arm:
+			# Get camera's forward direction (ignore Y to keep movement horizontal)
+			var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
+			cam_forward.y = 0
+			cam_forward = cam_forward.normalized()
+
+			var cam_right: Vector3 = camera_arm.global_transform.basis.x
+			cam_right.y = 0
+			cam_right = cam_right.normalized()
+
+			# Calculate movement direction relative to camera
+			# Negate input_dir.y because Input.get_vector returns negative when pressing "up"
+			move_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
+		else:
+			# Fallback: use global directions if no camera
+			move_direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
+
+		# Get current horizontal speed
+		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		var current_speed: float = horizontal_velocity.length()
+
+		# Apply movement force with reduced control in air
+		var control_multiplier: float = 1.0 if is_grounded else air_control
+		var force_to_apply: float = current_roll_force * control_multiplier
+
+		# Only apply force if below max speed (or allow air control regardless)
+		if current_speed < max_speed or not is_grounded:
+			# Apply central force for movement (no torque to prevent spinning)
+			apply_central_force(move_direction * force_to_apply)
+
+func check_ground() -> void:
+	# Use RayCast3D node for ground detection
+	if not ground_ray:
+		is_grounded = false
+		return
+
+	# Force raycast update
+	ground_ray.force_raycast_update()
+
+	var was_grounded: bool = is_grounded
+	is_grounded = ground_ray.is_colliding()
+
+	# Reset jump count when landing
+	if is_grounded and not was_grounded:
+		jump_count = 0
+		print("Landed! Jump count reset")
+
+		# Play landing sound
+		if land_sound and land_sound.stream:
+			play_land_sound.rpc()
+
+	# Debug logging every 60 frames (about once per second)
+	if Engine.get_physics_frames() % 60 == 0:
+		print("Ground check: ", is_grounded, " | Y-pos: ", global_position.y, " | Jumps: ", jump_count, "/", max_jumps)
+		if is_grounded:
+			print("  Hit: ", ground_ray.get_collider(), " at distance: ", ground_ray.get_collision_point().distance_to(global_position))
+		else:
+			print("  No ground detected under marble")
+
+	# Log ground state changes
+	if was_grounded != is_grounded:
+		print("Ground state changed: ", is_grounded, " | Position: ", global_position)
+
+func execute_spin_dash() -> void:
+	"""Execute a Sonic-style spin dash"""
+	# Calculate dash direction based on camera or input
+	var dash_direction: Vector3 = Vector3.ZERO
+
+	# Try to use current input direction
+	var input_dir := Input.get_vector("left", "right", "up", "down")
+
+	if input_dir != Vector2.ZERO and camera_arm:
+		# Dash in input direction
+		var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
+		cam_forward.y = 0
+		cam_forward = cam_forward.normalized()
+
+		var cam_right: Vector3 = camera_arm.global_transform.basis.x
+		cam_right.y = 0
+		cam_right = cam_right.normalized()
+
+		dash_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
+	elif camera_arm:
+		# No input - dash forward relative to camera
+		dash_direction = -camera_arm.global_transform.basis.z
+		dash_direction.y = 0
+		dash_direction = dash_direction.normalized()
+	else:
+		# Fallback - dash in current velocity direction or forward
+		if linear_velocity.length() > 0.1:
+			dash_direction = linear_velocity.normalized()
+			dash_direction.y = 0
+		else:
+			dash_direction = Vector3.FORWARD
+
+	# Calculate dash force based on charge (50% to 100% of max force)
+	var charge_multiplier: float = 0.5 + (spin_charge / max_spin_charge) * 0.5
+	var dash_impulse: float = current_spin_dash_force * charge_multiplier
+
+	# Apply the dash impulse
+	apply_central_impulse(dash_direction * dash_impulse)
+
+	# Add small upward impulse for extra flair
+	apply_central_impulse(Vector3.UP * 2.5)
+
+	# Start spinning animation
+	is_spin_dashing = true
+	spin_dash_timer = 1.0  # Spin for 1 second
+
+	# Start cooldown
+	spin_cooldown = spin_cooldown_time
+
+	# Play spin dash sound
+	if spin_sound and spin_sound.stream:
+		play_spin_sound.rpc()
+
+	print("Spin dash! Charge: %.1f%% | Force: %.1f" % [charge_multiplier * 100, dash_impulse])
+
+@rpc("any_peer")
+func receive_damage(damage: int = 1) -> void:
+	if god_mode:
+		return  # Immune to damage
+	health -= damage
+	if health <= 0:
+		respawn()
+
+@rpc("any_peer")
+func receive_damage_from(damage: int, attacker_id: int) -> void:
+	"""Receive damage from a specific player"""
+	if god_mode:
+		return  # Immune to damage
+
+	health -= damage
+	print("Received %d damage from player %d! Health: %d" % [damage, attacker_id, health])
+
+	# Play hit sound
+	if hit_sound and hit_sound.stream:
+		play_hit_sound.rpc()
+
+	if health <= 0:
+		# Notify world of kill
+		var world: Node = get_parent()
+		if world and world.has_method("add_score"):
+			world.add_score(attacker_id, 1)
+
+		respawn()
+		print("Killed by player %d!" % attacker_id)
+
+func respawn() -> void:
+	health = 3
+	level = 0  # Reset level on death
+	jump_count = 0  # Reset jumps
+	update_stats()
+
+	# Reset death state
+	is_falling_to_death = false
+	fall_camera_detached = false
+	fall_death_timer = 0.0
+
+	# Reset physics
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+
+	# Move to fixed spawn based on player ID
+	var player_id: int = str(name).to_int()
+	var spawn_index: int = player_id % spawns.size()
+	global_position = spawns[spawn_index]
+
+func fall_death() -> void:
+	"""Called when player falls off the map"""
+	if is_falling_to_death or god_mode:
+		return
+
+	print("Player fell off the map!")
+	is_falling_to_death = true
+	fall_death_timer = 0.0
+	fall_camera_detached = false
+
+	# Let physics continue so marble keeps falling
+
+func collect_orb() -> void:
+	"""Call this when player collects a level-up orb"""
+	if level < MAX_LEVEL:
+		level += 1
+		update_stats()
+		print("⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force])
+		# Play jump sound as level up feedback (temporary)
+		if jump_sound and jump_sound.stream:
+			play_jump_sound.rpc()
+	else:
+		print("Already at MAX_LEVEL (%d)" % MAX_LEVEL)
+
+func update_stats() -> void:
+	"""Update movement stats based on current level"""
+	current_roll_force = base_roll_force + (level * SPEED_BOOST_PER_LEVEL)
+	current_jump_impulse = base_jump_impulse + (level * JUMP_BOOST_PER_LEVEL)
+	current_spin_dash_force = base_spin_dash_force + (level * SPIN_BOOST_PER_LEVEL)
+
+func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
+	"""Pickup a new ability"""
+	# Drop current ability if we have one
+	if current_ability:
+		drop_ability()
+
+	# Instantiate and equip the new ability
+	current_ability = ability_scene.instantiate()
+	add_child(current_ability)
+
+	# Tell the ability it was picked up
+	if current_ability.has_method("pickup"):
+		current_ability.pickup(self)
+
+	print("Picked up ability: ", ability_name)
+
+func drop_ability() -> void:
+	"""Drop the current ability"""
+	if not current_ability:
+		return
+
+	# Tell the ability it was dropped
+	if current_ability.has_method("drop"):
+		current_ability.drop()
+
+	# Remove the ability
+	current_ability.queue_free()
+	current_ability = null
+
+	print("Dropped ability")
+
+@rpc("call_local")
+func use_ability() -> void:
+	"""Use the current ability"""
+	if current_ability and current_ability.has_method("use"):
+		current_ability.use()
+
+# Sound effect RPCs
+@rpc("call_local")
+func play_jump_sound() -> void:
+	if jump_sound and jump_sound.stream:
+		jump_sound.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
+		jump_sound.play()
+
+@rpc("call_local")
+func play_spin_sound() -> void:
+	if spin_sound and spin_sound.stream:
+		spin_sound.pitch_scale = randf_range(0.95, 1.05)
+		spin_sound.play()
+
+@rpc("call_local")
+func play_land_sound() -> void:
+	if land_sound and land_sound.stream:
+		land_sound.pitch_scale = randf_range(0.85, 1.15)
+		land_sound.play()
+
+@rpc("call_local")
+func play_hit_sound() -> void:
+	if hit_sound and hit_sound.stream:
+		hit_sound.pitch_scale = randf_range(0.9, 1.1)
+		hit_sound.play()

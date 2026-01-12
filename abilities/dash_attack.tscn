@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bvn4k5h2jm8yr"]
+
+[ext_resource type="Script" path="res://scripts/abilities/dash_attack.gd" id="1_dashattack"]
+
+[node name="DashAttack" type="Node3D"]
+script = ExtResource("1_dashattack")
