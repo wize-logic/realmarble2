@@ -481,7 +481,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
 		print("Shift key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Cooldown: ", spin_cooldown)
 		if event.pressed and not event.echo:
-			if is_grounded and spin_cooldown <= 0.0:
+			# Check if game is active
+			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var game_is_active: bool = world and world.get("game_active")
+
+			if not game_is_active:
+				print("Can't spin dash - game not started yet")
+			elif is_grounded and spin_cooldown <= 0.0:
 				print("Starting spin dash charge!")
 				is_charging_spin = true
 				spin_charge = 0.0
@@ -494,11 +500,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Spin dash - release to dash (Shift key)
 		if not event.pressed:
 			print("Shift released! Charging: ", is_charging_spin, " | Charge amount: ", spin_charge)
-			if is_charging_spin and spin_charge > 0.1:  # Minimum charge threshold
+			# Check if game is active
+			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var game_is_active: bool = world and world.get("game_active")
+
+			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
 				print("Executing spin dash!")
 				execute_spin_dash()
 			elif is_charging_spin:
-				print("Charge too low: ", spin_charge)
+				if not game_is_active:
+					print("Can't spin dash - game not started yet")
+				else:
+					print("Charge too low: ", spin_charge)
 			is_charging_spin = false
 			spin_charge = 0.0
 
