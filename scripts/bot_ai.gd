@@ -4,8 +4,8 @@ extends Node
 ## Provides AI behavior for bot players with advanced combat tactics
 
 @export var target_player: Node = null
-@export var wander_radius: float = 40.0
-@export var aggro_range: float = 50.0
+@export var wander_radius: float = 30.0
+@export var aggro_range: float = 40.0
 @export var attack_range: float = 12.0
 
 var bot: Node = null
@@ -142,20 +142,20 @@ func update_state() -> void:
 	# Priority 2: Collect orbs if not max level and one is nearby
 	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
-		# Collect orbs within range, but not if enemy is very close
-		var orb_priority_range: float = 30.0
-		if not has_combat_target or distance_to_target > aggro_range * 0.6:
+		# Collect orbs more aggressively - bots need to level up
+		var orb_priority_range: float = 35.0
+		if not has_combat_target or distance_to_target > aggro_range * 0.5:
 			orb_priority_range = 50.0
-		# Don't collect orbs if enemy is in active combat range
-		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 2.0):
+		# Don't collect orbs if enemy is actively attacking us (very close)
+		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 1.8):
 			state = "COLLECT_ORB"
 			return
 
 	# Priority 3: Collect abilities if we don't have one and one is nearby
 	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
 		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Abilities are important - collect them unless enemy is in combat range
-		if distance_to_ability < 40.0 and (not has_combat_target or distance_to_target > attack_range * 2.0):
+		# Abilities are critical - collect them more aggressively
+		if distance_to_ability < 45.0 and (not has_combat_target or distance_to_target > attack_range * 1.8):
 			state = "COLLECT_ABILITY"
 			return
 
@@ -231,6 +231,10 @@ func do_chase(delta: float) -> void:
 	else:
 		# Strafe while maintaining distance
 		strafe_around_target(delta, optimal_distance)
+
+	# Use abilities while chasing if in range
+	if bot.current_ability and bot.current_ability.has_method("use"):
+		use_ability_smart(distance_to_target)
 
 	# Smart jumping - more aggressive when target is on higher ground
 	if action_timer <= 0.0:
@@ -382,36 +386,36 @@ func use_ability_smart(distance_to_target: float) -> void:
 	# Determine if we should use ability based on distance and ability type
 	match ability_name:
 		"Gun":
-			# Use gun at medium to long range
-			if distance_to_target > 8.0 and distance_to_target < 40.0:
+			# Use gun at almost any range - guns are versatile
+			if distance_to_target > 3.0 and distance_to_target < 50.0:
 				should_use = true
-				should_charge = distance_to_target > 15.0 and randf() < 0.6
+				should_charge = distance_to_target > 12.0 and randf() < 0.5
 		"Sword":
-			# Use sword at close range
-			if distance_to_target < 5.0:
-				should_use = true
-				should_charge = randf() < 0.4
-		"Dash Attack":
-			# Use dash attack to close distance or escape
-			if distance_to_target > 5.0 and distance_to_target < 15.0:
-				should_use = true
-				should_charge = distance_to_target > 10.0 and randf() < 0.5
-		"Explosion":
-			# Use explosion at close range or when cornered
+			# Use sword at close to medium range
 			if distance_to_target < 8.0:
 				should_use = true
-				should_charge = distance_to_target < 5.0 and randf() < 0.7
+				should_charge = distance_to_target > 4.0 and randf() < 0.3
+		"Dash Attack":
+			# Use dash attack more liberally - it's good for mobility
+			if distance_to_target > 3.0 and distance_to_target < 20.0:
+				should_use = true
+				should_charge = distance_to_target > 8.0 and randf() < 0.4
+		"Explosion":
+			# Use explosion at close to medium range
+			if distance_to_target < 12.0:
+				should_use = true
+				should_charge = distance_to_target < 6.0 and randf() < 0.5
 		_:
 			# Default: use when in reasonable range
-			if distance_to_target < 20.0:
-				should_use = randf() < 0.3
+			if distance_to_target < 25.0:
+				should_use = randf() < 0.5
 
 	# Charging logic
 	if should_use and should_charge and not is_charging_ability:
 		# Start charging
 		if bot.current_ability.has_method("start_charging"):
 			is_charging_ability = true
-			ability_charge_timer = randf_range(0.8, 1.8)  # Charge for 0.8-1.8 seconds
+			ability_charge_timer = randf_range(0.5, 1.2)  # Shorter charge time for faster attacks
 			bot.current_ability.start_charging()
 
 	# Release charged ability or use instantly
@@ -419,11 +423,11 @@ func use_ability_smart(distance_to_target: float) -> void:
 		# Release charge
 		is_charging_ability = false
 		bot.current_ability.use()
-		action_timer = randf_range(0.5, 1.5)
+		action_timer = randf_range(0.3, 1.0)
 	elif should_use and not should_charge and not is_charging_ability:
 		# Use immediately without charging
 		bot.current_ability.use()
-		action_timer = randf_range(0.8, 2.0)
+		action_timer = randf_range(0.5, 1.5)
 
 func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
 	"""Move the bot towards a target position with obstacle detection"""
@@ -437,6 +441,16 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 	var height_diff: float = target_pos.y - bot.global_position.y
 
 	if direction.length() > 0.1:
+		# Check for dangerous edges first - highest priority
+		if check_for_edge(direction, 2.5):
+			# There's an edge ahead - find a safe direction or stop
+			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
+			if safe_direction != Vector3.ZERO:
+				direction = safe_direction
+			else:
+				# No safe direction, stop moving forward
+				return
+
 		# Check for obstacles in the path with improved detection
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
 
@@ -647,6 +661,60 @@ func do_collect_orb(delta: float) -> void:
 ## ============================================================================
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
+
+func check_for_edge(direction: Vector3, check_distance: float = 2.0) -> bool:
+	"""
+	Check if there's a dangerous edge/drop-off in the given direction
+	Returns true if there's an edge that the bot should avoid
+	"""
+	if not bot:
+		return false
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+
+	# Cast a ray downward from a point ahead of the bot
+	var forward_point: Vector3 = bot.global_position + direction.normalized() * check_distance
+	var ray_start: Vector3 = forward_point + Vector3.UP * 0.5  # Start slightly above ground
+	var ray_end: Vector3 = forward_point + Vector3.DOWN * 5.0  # Check down 5 units
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [bot]
+	query.collision_mask = 1  # Only check world geometry
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	# If no ground found within 5 units below, there's an edge
+	if not result:
+		return true
+
+	# If ground is more than 3 units below current position, it's a dangerous drop
+	var ground_y: float = result.position.y
+	var drop_distance: float = bot.global_position.y - ground_y
+
+	return drop_distance > 3.0
+
+func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
+	"""
+	Find a safe direction to move when the desired direction leads to an edge
+	Tries angles perpendicular and away from the edge
+	"""
+	if not bot:
+		return Vector3.ZERO
+
+	# Try angles moving away from the edge
+	var angles_to_try: Array = [90, -90, 120, -120, 150, -150, 180]
+
+	for angle_deg in angles_to_try:
+		var test_direction: Vector3 = dangerous_direction.rotated(Vector3.UP, deg_to_rad(angle_deg))
+		# Check if this direction is safe from edges
+		if not check_for_edge(test_direction, 2.0):
+			# Also check it doesn't lead to obstacles
+			var obstacle_check: Dictionary = check_obstacle_in_direction(test_direction, 2.0)
+			if not obstacle_check.has_obstacle or obstacle_check.can_jump:
+				return test_direction
+
+	# No safe direction found
+	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0) -> Dictionary:
 	"""
