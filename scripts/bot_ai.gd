@@ -39,6 +39,11 @@ var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
 var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
 
+# Target timeout variables - for abandoning unreachable targets
+var target_stuck_timer: float = 0.0
+var target_stuck_position: Vector3 = Vector3.ZERO
+const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds of no progress
+
 # Ability preferences based on situation
 const GUN_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
@@ -49,6 +54,7 @@ func _ready() -> void:
 	bot = get_parent()
 	wander_target = bot.global_position
 	last_position = bot.global_position
+	target_stuck_position = bot.global_position
 	# Randomize aggression for personality variety
 	aggression_level = randf_range(0.5, 0.9)
 	# Randomize reaction time for more human-like behavior
@@ -82,6 +88,9 @@ func _physics_process(delta: float) -> void:
 	if is_stuck and unstuck_timer > 0.0:
 		handle_unstuck_movement(delta)
 		return  # Skip normal AI while unstucking
+
+	# Check if bot is stuck trying to reach a target (ability/orb)
+	check_target_timeout(delta)
 
 	# Find nearest player - check more frequently and aggressively
 	if not target_player or not is_instance_valid(target_player):
@@ -828,6 +837,43 @@ func find_clear_direction(desired_direction: Vector3) -> Vector3:
 	# If no clear path found, try backing up slightly at an angle
 	var retreat_angle: float = deg_to_rad(randf_range(-45, 45))
 	return -desired_direction.rotated(Vector3.UP, retreat_angle) * 0.6
+
+func check_target_timeout(delta: float) -> void:
+	"""Check if bot is stuck trying to reach a collectible target for too long"""
+	if not bot:
+		return
+
+	# Only check when trying to collect abilities or orbs
+	if state in ["COLLECT_ABILITY", "COLLECT_ORB"]:
+		var current_pos: Vector3 = bot.global_position
+		var distance_moved: float = current_pos.distance_to(target_stuck_position)
+
+		# If bot hasn't moved much, increment timer
+		if distance_moved < 0.5:
+			target_stuck_timer += delta
+
+			# After timeout, abandon the target
+			if target_stuck_timer >= TARGET_STUCK_TIMEOUT:
+				print("Bot %s abandoning unreachable target after %0.1f seconds" % [bot.name, target_stuck_timer])
+
+				# Clear the current target
+				if state == "COLLECT_ABILITY":
+					target_ability = null
+				elif state == "COLLECT_ORB":
+					target_orb = null
+
+				# Force state update to find new target
+				target_stuck_timer = 0.0
+				state = "WANDER"
+				find_target()  # Look for combat targets
+		else:
+			# Bot is making progress, reset timer
+			target_stuck_timer = 0.0
+			target_stuck_position = current_pos
+	else:
+		# Not collecting, reset timer
+		target_stuck_timer = 0.0
+		target_stuck_position = bot.global_position
 
 func check_if_stuck() -> void:
 	"""Check if the bot hasn't moved much and might be stuck on an obstacle"""
