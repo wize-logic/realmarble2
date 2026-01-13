@@ -4,10 +4,11 @@
 =======
 
 # Godot-specific ignores
-.import/
 /exports
 export.cfg
 export_presets.cfg
+*.uid
+*.import
 /addons
 *.tmp
 
