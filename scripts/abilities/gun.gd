@@ -14,6 +14,8 @@ func _ready() -> void:
 	ability_name = "Gun"
 	ability_color = Color.CYAN
 	cooldown_time = fire_rate
+	supports_charging = true  # Gun supports charging for more powerful shots
+	max_charge_time = 2.0  # 2 seconds for max charge
 
 	# Create sound effect
 	ability_sound = AudioStreamPlayer3D.new()
@@ -26,7 +28,12 @@ func activate() -> void:
 	if not player:
 		return
 
-	print("BANG!")
+	# Get charge multiplier for scaled damage/speed
+	var charge_multiplier: float = get_charge_multiplier()
+	var charged_damage: int = int(projectile_damage * charge_multiplier)
+	var charged_speed: float = projectile_speed * charge_multiplier
+
+	print("BANG! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
 	# Get firing direction from camera (always shoot where camera is looking)
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -70,13 +77,13 @@ func activate() -> void:
 			if player and "level" in player:
 				level_multiplier = 1.0 + (player.level * 0.25)
 
-			# Projectile velocity = player velocity + fire direction * speed
-			var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * projectile_speed * level_multiplier)
+			# Projectile velocity = player velocity + fire direction * charged speed
+			var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * charged_speed * level_multiplier)
 			projectile.set_velocity(projectile_velocity)
 
-		# Set damage and owner
+		# Set charged damage and owner
 		if projectile.has_method("set_damage"):
-			projectile.set_damage(projectile_damage)
+			projectile.set_damage(charged_damage)
 		if projectile.has_method("set_owner_id"):
 			var owner_id: int = player.name.to_int() if player else -1
 			projectile.set_owner_id(owner_id)

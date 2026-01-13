@@ -23,6 +23,8 @@ func _ready() -> void:
 	ability_name = "Explosion"
 	ability_color = Color.ORANGE
 	cooldown_time = 2.5
+	supports_charging = true  # Explosion supports charging for bigger boom
+	max_charge_time = 2.0  # 2 seconds for max charge
 
 	# Create sound effect
 	ability_sound = AudioStreamPlayer3D.new()
@@ -173,7 +175,10 @@ func activate() -> void:
 	if not player:
 		return
 
-	print("EXPLOSION!")
+	# Get charge multiplier for scaled damage/radius/force
+	var charge_multiplier: float = get_charge_multiplier()
+
+	print("EXPLOSION! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
 	# Start explosion
 	is_exploding = true
@@ -220,10 +225,11 @@ func activate() -> void:
 		await get_tree().create_timer(0.05).timeout  # Small delay for effect
 		damage_nearby_players()
 
-	# Launch player upward (rocket jump effect)
+	# Launch player upward (rocket jump effect) - scaled by charge
 	if player is RigidBody3D:
-		player.apply_central_impulse(Vector3.UP * upward_launch_force)
-		print("Player launched upward!")
+		var charged_launch_force: float = upward_launch_force * charge_multiplier
+		player.apply_central_impulse(Vector3.UP * charged_launch_force)
+		print("Player launched upward with %.1fx force!" % charge_multiplier)
 
 func damage_nearby_players() -> void:
 	"""Damage all players in explosion radius"""
