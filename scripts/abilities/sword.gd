@@ -24,7 +24,8 @@ func _ready() -> void:
 	ability_name = "Sword"
 	ability_color = Color.STEEL_BLUE
 	cooldown_time = 1.0
-	supports_charging = false  # Sword doesn't support charging (yet!)
+	supports_charging = true  # Sword supports charging for more damage
+	max_charge_time = 2.0  # 2 seconds for max charge
 
 	# Create sound effect
 	ability_sound = AudioStreamPlayer3D.new()
@@ -124,7 +125,12 @@ func activate() -> void:
 	if not player:
 		return
 
-	print("SWORD SLASH!")
+	# Get charge multiplier for scaled damage
+	var charge_multiplier: float = get_charge_multiplier()
+	var charged_damage: int = int(slash_damage * charge_multiplier)
+	var charged_knockback: float = 30.0 * charge_multiplier
+
+	print("SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier])
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -165,7 +171,7 @@ func activate() -> void:
 		ability_sound.play()
 
 func _on_slash_hitbox_body_entered(body: Node3D) -> void:
-	if not is_slashing:
+	if not is_slashing or not player:
 		return
 
 	# Don't hit ourselves
@@ -178,6 +184,11 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 
 	# Check if it's another player
 	if body is RigidBody3D and body.has_method("receive_damage_from"):
+		# Get charge multiplier for this hit
+		var charge_multiplier: float = get_charge_multiplier()
+		var charged_damage: int = int(slash_damage * charge_multiplier)
+		var charged_knockback: float = 30.0 * charge_multiplier
+
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1
 		var target_id: int = body.get_multiplayer_authority()
@@ -185,19 +196,19 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
-			body.receive_damage_from(slash_damage, attacker_id)
-			print("Sword slash hit player (local): ", body.name, " | Damage: ", slash_damage)
+			body.receive_damage_from(charged_damage, attacker_id)
+			print("Sword slash hit player (local): ", body.name, " | Damage: ", charged_damage)
 		else:
 			# RPC call for remote network players only
-			body.receive_damage_from.rpc_id(target_id, slash_damage, attacker_id)
-			print("Sword slash hit player (RPC): ", body.name, " | Damage: ", slash_damage)
+			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
+			print("Sword slash hit player (RPC): ", body.name, " | Damage: ", charged_damage)
 
 		hit_players.append(body)
 
-		# Apply knockback to hit player
+		# Apply knockback to hit player (scaled by charge)
 		var knockback_dir: Vector3 = (body.global_position - player.global_position).normalized()
 		knockback_dir.y = 0.2  # Slight upward knockback
-		body.apply_central_impulse(knockback_dir * 30.0)
+		body.apply_central_impulse(knockback_dir * charged_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()

@@ -24,6 +24,8 @@ func _ready() -> void:
 	ability_name = "Dash Attack"
 	ability_color = Color.ORANGE_RED
 	cooldown_time = 1.5
+	supports_charging = true  # Dash attack supports charging for more speed/damage
+	max_charge_time = 2.0  # 2 seconds for max charge
 
 	# Create sound effect
 	ability_sound = AudioStreamPlayer3D.new()
@@ -128,7 +130,13 @@ func activate() -> void:
 	if not player:
 		return
 
-	print("DASH ATTACK!")
+	# Get charge multiplier for scaled damage/force
+	var charge_multiplier: float = get_charge_multiplier()
+	var charged_damage: int = int(damage * charge_multiplier)
+	var charged_dash_force: float = dash_force * charge_multiplier
+	var charged_knockback: float = 40.0 * charge_multiplier
+
+	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -159,8 +167,8 @@ func activate() -> void:
 		if player and "level" in player:
 			level_multiplier = 1.0 + (player.level * 0.3)
 
-		# Apply dash force
-		player.apply_central_impulse(dash_direction * dash_force * level_multiplier)
+		# Apply charged dash force
+		player.apply_central_impulse(dash_direction * charged_dash_force * level_multiplier)
 
 		# Small upward impulse for style
 		player.apply_central_impulse(Vector3.UP * 5.0)
@@ -185,7 +193,7 @@ func activate() -> void:
 		ability_sound.play()
 
 func _on_hitbox_body_entered(body: Node3D) -> void:
-	if not is_dashing:
+	if not is_dashing or not player:
 		return
 
 	# Don't hit ourselves
@@ -198,26 +206,31 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 
 	# Check if it's another player
 	if body is RigidBody3D and body.has_method("receive_damage_from"):
-		# Deal damage (not scaled - dash speed is the scaling)
+		# Get charge multiplier for damage/knockback scaling
+		var charge_multiplier: float = get_charge_multiplier()
+		var charged_damage: int = int(damage * charge_multiplier)
+		var charged_knockback: float = 40.0 * charge_multiplier
+
+		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1
 		var target_id: int = body.get_multiplayer_authority()
 
 		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
-			body.receive_damage_from(damage, attacker_id)
-			print("Dash attack hit player (local): ", body.name, " | Damage: ", damage)
+			body.receive_damage_from(charged_damage, attacker_id)
+			print("Dash attack hit player (local): ", body.name, " | Damage: ", charged_damage)
 		else:
 			# RPC call for remote network players only
-			body.receive_damage_from.rpc_id(target_id, damage, attacker_id)
-			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", damage)
+			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
+			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", charged_damage)
 
 		hit_players.append(body)
 
-		# Apply knockback to hit player
+		# Apply charged knockback to hit player
 		var knockback_dir: Vector3 = (body.global_position - player.global_position).normalized()
 		knockback_dir.y = 0.3  # Slight upward knockback
-		body.apply_central_impulse(knockback_dir * 40.0)
+		body.apply_central_impulse(knockback_dir * charged_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()

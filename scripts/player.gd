@@ -12,6 +12,11 @@ extends RigidBody3D
 @onready var death_sound: AudioStreamPlayer3D = get_node_or_null("DeathSound")
 @onready var spawn_sound: AudioStreamPlayer3D = get_node_or_null("SpawnSound")
 
+# UI Elements
+var charge_meter_ui: Control = null
+var charge_meter_bar: ProgressBar = null
+var charge_meter_label: Label = null
+
 ## Number of hits before respawn
 @export var health: int = 3
 ## The xyz position of the random spawns, you can add as many as you want!
@@ -275,6 +280,9 @@ func _ready() -> void:
 	if camera:
 		camera.current = true
 
+	# Create charge meter UI
+	create_charge_meter_ui()
+
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
 	var spawn_index: int = player_id % spawns.size()
@@ -365,6 +373,9 @@ func _process(delta: float) -> void:
 	# Make camera look at player
 	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
 
+	# Update charge meter UI (for abilities and spin dash)
+	update_charge_meter_ui()
+
 # MARBLE ROLLING ANIMATION - Always update for all marbles (including bots)
 func _physics_process_marble_roll(delta: float) -> void:
 	"""Update marble rolling animation based on velocity"""
@@ -449,11 +460,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
 
-	# Use ability - E key or controller X button
+	# Use ability - E key or controller X button (with charging support)
 	if Input.is_action_just_pressed("use_ability"):
-		if current_ability and current_ability.has_method("use"):
-			print("Using ability!")
-			current_ability.use()
+		# Start charging the ability
+		if current_ability and current_ability.has_method("start_charge"):
+			current_ability.start_charge()
+	elif Input.is_action_just_released("use_ability"):
+		# Release the charged ability
+		if current_ability and current_ability.has_method("release_charge"):
+			current_ability.release_charge()
 
 	# Drop ability - O key
 	if event is InputEventKey and event.keycode == KEY_O:
@@ -466,7 +481,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
 		print("Shift key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Cooldown: ", spin_cooldown)
 		if event.pressed and not event.echo:
-			if is_grounded and spin_cooldown <= 0.0:
+			# Check if game is active
+			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var game_is_active: bool = world and world.get("game_active")
+
+			if not game_is_active:
+				print("Can't spin dash - game not started yet")
+			elif is_grounded and spin_cooldown <= 0.0:
 				print("Starting spin dash charge!")
 				is_charging_spin = true
 				spin_charge = 0.0
@@ -479,22 +500,24 @@ func _unhandled_input(event: InputEvent) -> void:
 		# Spin dash - release to dash (Shift key)
 		if not event.pressed:
 			print("Shift released! Charging: ", is_charging_spin, " | Charge amount: ", spin_charge)
-			if is_charging_spin and spin_charge > 0.1:  # Minimum charge threshold
+			# Check if game is active
+			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var game_is_active: bool = world and world.get("game_active")
+
+			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
 				print("Executing spin dash!")
 				execute_spin_dash()
 			elif is_charging_spin:
-				print("Charge too low: ", spin_charge)
+				if not game_is_active:
+					print("Can't spin dash - game not started yet")
+				else:
+					print("Charge too low: ", spin_charge)
 			is_charging_spin = false
 			spin_charge = 0.0
 
 func _physics_process(delta: float) -> void:
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
-
-	# Freeze ALL players (including bots) during countdown
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.get("countdown_active"):
-		return  # Don't process physics during countdown
 
 	if multiplayer.multiplayer_peer != null:
 		if not is_multiplayer_authority():
@@ -534,6 +557,11 @@ func _physics_process(delta: float) -> void:
 		if charge_sound and charge_sound.playing:
 			charge_sound.stop()
 		charge_spin_rotation = 0.0
+
+	# Freeze movement until game starts (but allow charging and other systems above)
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and not world.get("game_active"):
+		return  # Don't process movement until game is active
 
 	# Get input direction relative to camera
 	var input_dir := Input.get_vector("left", "right", "up", "down")
@@ -857,3 +885,113 @@ func spawn_death_particles() -> void:
 	death_particles.restart()
 
 	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+
+# ============================================================================
+# UI SYSTEM
+# ============================================================================
+
+func create_charge_meter_ui() -> void:
+	"""Create the charge meter UI that shows spin dash charge"""
+	# Create container
+	charge_meter_ui = Control.new()
+	charge_meter_ui.name = "ChargeMeterUI"
+	charge_meter_ui.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	charge_meter_ui.anchor_left = 0.5
+	charge_meter_ui.anchor_right = 0.5
+	charge_meter_ui.anchor_top = 1.0
+	charge_meter_ui.anchor_bottom = 1.0
+	charge_meter_ui.offset_left = -150
+	charge_meter_ui.offset_right = 150
+	charge_meter_ui.offset_top = -120
+	charge_meter_ui.offset_bottom = -80
+	charge_meter_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	charge_meter_ui.visible = false
+	add_child(charge_meter_ui)
+
+	# Create label
+	charge_meter_label = Label.new()
+	charge_meter_label.name = "ChargeLabel"
+	charge_meter_label.text = "CHARGE"
+	charge_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	charge_meter_label.add_theme_font_size_override("font_size", 18)
+	charge_meter_label.add_theme_color_override("font_color", Color.WHITE)
+	charge_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	charge_meter_label.add_theme_constant_override("outline_size", 4)
+	charge_meter_label.position = Vector2(0, 0)
+	charge_meter_label.size = Vector2(300, 20)
+	charge_meter_ui.add_child(charge_meter_label)
+
+	# Create progress bar
+	charge_meter_bar = ProgressBar.new()
+	charge_meter_bar.name = "ChargeBar"
+	charge_meter_bar.min_value = 0.0
+	charge_meter_bar.max_value = 100.0
+	charge_meter_bar.value = 0.0
+	charge_meter_bar.show_percentage = false
+	charge_meter_bar.position = Vector2(0, 22)
+	charge_meter_bar.size = Vector2(300, 18)
+
+	# Style the progress bar
+	var style_box_bg: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_bg.bg_color = Color(0.2, 0.2, 0.2, 0.8)
+	style_box_bg.border_width_left = 2
+	style_box_bg.border_width_right = 2
+	style_box_bg.border_width_top = 2
+	style_box_bg.border_width_bottom = 2
+	style_box_bg.border_color = Color.WHITE
+	charge_meter_bar.add_theme_stylebox_override("background", style_box_bg)
+
+	var style_box_fill: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_fill.bg_color = Color(0.2, 0.8, 1.0, 0.9)  # Cyan
+	charge_meter_bar.add_theme_stylebox_override("fill", style_box_fill)
+
+	charge_meter_ui.add_child(charge_meter_bar)
+
+	print("Charge meter UI created")
+
+func update_charge_meter_ui() -> void:
+	"""Update the charge meter display"""
+	if not charge_meter_ui or not charge_meter_bar or not charge_meter_label:
+		return
+
+	# Check if charging ability
+	var is_charging_ability: bool = current_ability and current_ability.get("is_charging") == true
+
+	if is_charging_ability:
+		# Show meter for ability charging
+		charge_meter_ui.visible = true
+		charge_meter_label.text = current_ability.ability_name.to_upper()
+
+		var max_charge: float = current_ability.get("max_charge_time") if "max_charge_time" in current_ability else 2.0
+		var current_charge: float = current_ability.get("charge_time") if "charge_time" in current_ability else 0.0
+		var charge_percent: float = (current_charge / max_charge) * 100.0
+		charge_meter_bar.value = charge_percent
+
+		# Change color based on charge level
+		var style_box_fill: StyleBoxFlat = charge_meter_bar.get_theme_stylebox("fill")
+		if style_box_fill:
+			if charge_percent < 50.0:
+				style_box_fill.bg_color = Color(1.0, 0.3, 0.3, 0.9)  # Red - level 1
+			elif charge_percent < 100.0:
+				style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow - level 2
+			else:
+				style_box_fill.bg_color = Color(0.2, 1.0, 0.3, 0.9)  # Green - level 3 (max)
+	elif is_charging_spin:
+		# Show meter for spin dash charging
+		charge_meter_ui.visible = true
+		charge_meter_label.text = "SPIN DASH"
+		var charge_percent: float = (spin_charge / max_spin_charge) * 100.0
+		charge_meter_bar.value = charge_percent
+
+		# Change color based on charge level
+		var style_box_fill: StyleBoxFlat = charge_meter_bar.get_theme_stylebox("fill")
+		if style_box_fill:
+			if charge_percent < 33.0:
+				style_box_fill.bg_color = Color(1.0, 0.3, 0.3, 0.9)  # Red - low charge
+			elif charge_percent < 66.0:
+				style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow - medium charge
+			else:
+				style_box_fill.bg_color = Color(0.2, 1.0, 0.3, 0.9)  # Green - high charge
+	else:
+		# Hide meter when not charging anything
+		charge_meter_ui.visible = false
