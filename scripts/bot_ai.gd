@@ -466,7 +466,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
 
 		if obstacle_info.has_obstacle:
-			# Handle slopes and platforms very aggressively
+			# Handle slopes and platforms - try to jump onto them
 			if obstacle_info.is_slope or obstacle_info.is_platform:
 				# Jump onto slopes and platforms proactively - reduced cooldown
 				if obstacle_jump_timer <= 0.0:
@@ -482,36 +482,27 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 					bot.apply_central_force(direction * force)
 					return
 
-			# Handle walls differently - find alternate path immediately
+			# For walls and other obstacles - MOVE OPPOSITE DIRECTION
+			# This prevents getting stuck trying to navigate around
 			if "is_wall" in obstacle_info and obstacle_info.is_wall:
-				# For walls, try to find alternate path first
-				var alternate_direction: Vector3 = find_clear_direction(direction)
-				if alternate_direction != Vector3.ZERO:
-					direction = alternate_direction
-					# Still try to jump if wall is low enough
-					if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
-						bot_jump()
-						obstacle_jump_timer = 0.4
-				else:
-					# No clear path, jump if possible
-					if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
-						bot_jump()
-						obstacle_jump_timer = 0.5
-					# Reduce speed significantly when blocked
-					speed_mult *= 0.2
+				# Wall detected - move in opposite direction
+				print("Bot %s: Wall detected, moving backwards" % bot.name)
+				direction = -direction  # Complete opposite
+				speed_mult *= 0.5  # Slow down while backing up
+
+				# Try to jump if wall is low
+				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
+					bot_jump()
+					obstacle_jump_timer = 0.5
 			else:
-				# Try to jump over other obstacles
+				# Other obstacle - try jumping first, then go opposite if can't jump
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
 					obstacle_jump_timer = 0.4
-
-				# Try to find alternate path
-				var alternate_direction: Vector3 = find_clear_direction(direction)
-				if alternate_direction != Vector3.ZERO:
-					direction = alternate_direction
 				else:
-					# If no clear path found, slow down but keep trying
-					speed_mult *= 0.25
+					# Can't jump - move in opposite direction
+					direction = -direction
+					speed_mult *= 0.5
 
 		# If target is above us and no obstacle blocking, jump to gain height
 		elif height_diff > 1.0 and obstacle_jump_timer <= 0.0 and randf() < 0.5:
@@ -913,25 +904,22 @@ func check_if_stuck() -> void:
 			is_stuck = true
 			unstuck_timer = randf_range(1.0, 2.0)
 
+			# PRIORITY: Move in OPPOSITE direction of current facing
+			# This is the simplest and most effective escape strategy
+			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+
 			# Check if stuck under terrain/slope
 			if is_stuck_under_terrain():
-				# Stuck under slope - move perpendicular and jump
+				# Stuck under slope - move perpendicular AND backwards
 				var random_side: float = 1.0 if randf() > 0.5 else -1.0
-				# Move perpendicular to current facing
 				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
-				obstacle_avoid_direction = perpendicular
-				print("Bot %s is stuck UNDER terrain! Moving sideways" % bot.name)
+				# Mix perpendicular with backwards movement
+				obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
+				print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
 			else:
-				# Normal stuck - try to find a clear direction
-				var random_angle: float = randf() * TAU
-				obstacle_avoid_direction = Vector3(cos(random_angle), 0, sin(random_angle))
-
-				# Check if this direction is clear, if not try another
-				var clear_dir: Vector3 = find_clear_direction(obstacle_avoid_direction)
-				if clear_dir != Vector3.ZERO:
-					obstacle_avoid_direction = clear_dir
-
-				print("Bot %s is stuck! Trying to unstuck... (moved only %0.2f units)" % [bot.name, distance_moved])
+				# Normal stuck - just go BACKWARDS (opposite direction)
+				obstacle_avoid_direction = opposite_dir
+				print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
 	else:
 		# Reset stuck counter if we've moved well
 		if distance_moved > 0.3:
