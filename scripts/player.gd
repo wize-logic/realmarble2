@@ -97,14 +97,11 @@ func _ready() -> void:
 	linear_damp = 0.5   # Moderate damp for better momentum and ramming
 	angular_damp = 0.3   # Low rolling resistance but some friction
 
-	# Physics material properties - optimized for ramming
+	# Physics material properties
 	physics_material_override = PhysicsMaterial.new()
-	physics_material_override.friction = 0.1  # Low friction for better ramming
-	physics_material_override.bounce = 0.8     # High bounce for powerful marble collisions
+	physics_material_override.friction = 0.4  # Higher friction for better control
+	physics_material_override.bounce = 0.6     # More bounce for marble ramming and interaction
 	physics_material_override.rough = false    # Smooth surface
-
-	# Set mass for collision physics - slightly heavier than default (1.0) for better ramming
-	mass = 2.0  # Doubled mass for stronger collisions while maintaining jump ability
 
 	# Enable continuous collision detection for fast movement
 	continuous_cd = true
@@ -115,9 +112,6 @@ func _ready() -> void:
 	# Set collision layers for player interaction
 	collision_layer = 2  # Player layer
 	collision_mask = 7   # Collide with world (1), players (2), projectiles (4)
-
-	# Connect collision signal for ramming physics
-	body_entered.connect(_on_body_collision)
 
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
@@ -863,65 +857,3 @@ func spawn_death_particles() -> void:
 	death_particles.restart()
 
 	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
-
-func _on_body_collision(body: Node) -> void:
-	"""Handle collision with other bodies - apply ramming physics"""
-	# Only apply ramming physics with other players/marbles
-	if not (body is RigidBody3D):
-		return
-
-	# Calculate relative velocity
-	var my_velocity: Vector3 = linear_velocity
-	var their_velocity: Vector3 = body.linear_velocity if body is RigidBody3D else Vector3.ZERO
-	var relative_velocity: Vector3 = my_velocity - their_velocity
-
-	# Only apply extra impulse if we're moving significantly
-	if relative_velocity.length() < 2.0:
-		return
-
-	# Calculate collision direction (from them to us)
-	var collision_dir: Vector3 = (global_position - body.global_position).normalized()
-
-	# Calculate mass ratio for physics (heavier marbles push lighter ones more)
-	var my_mass: float = mass
-	var their_mass: float = body.mass if body is RigidBody3D else 10.0
-	var mass_ratio: float = my_mass / (my_mass + their_mass)
-
-	# Calculate impulse strength based on relative velocity and mass
-	var impulse_strength: float = relative_velocity.length() * mass_ratio * 3.0  # 2-5x harder push
-
-	# Apply extra impulse to the other body (push them away)
-	if body is RigidBody3D:
-		var knockback: Vector3 = collision_dir * impulse_strength
-		knockback.y = abs(knockback.y) * 0.3  # Slight upward component
-		body.apply_central_impulse(knockback)
-
-	# Apply smaller counter-impulse to ourselves (Newton's 3rd law)
-	var counter_impulse: Vector3 = -collision_dir * impulse_strength * 0.3
-	apply_central_impulse(counter_impulse)
-
-	# Add camera shake for local player
-	if is_multiplayer_authority():
-		add_camera_shake(impulse_strength * 0.02)
-
-	print("Collision with %s | Impulse: %.1f | Relative velocity: %.1f" % [body.name, impulse_strength, relative_velocity.length()])
-
-func add_camera_shake(intensity: float) -> void:
-	"""Add camera shake effect for collisions"""
-	if not camera_arm:
-		return
-
-	# Clamp intensity
-	intensity = clamp(intensity, 0.0, 0.5)
-
-	# Apply random offset to camera arm
-	var shake_offset: Vector3 = Vector3(
-		randf_range(-intensity, intensity),
-		randf_range(-intensity, intensity),
-		0
-	)
-
-	# Animate camera shake (smooth return to center)
-	var tween: Tween = create_tween()
-	tween.tween_property(camera_arm, "position", camera_arm.position + shake_offset, 0.05)
-	tween.tween_property(camera_arm, "position", Vector3.ZERO, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)

@@ -33,11 +33,15 @@ func _process(delta: float) -> void:
 
 func spawn_orbs() -> void:
 	"""Spawn orbs at random 3D positions in the map volume"""
+	print("=== ORB SPAWNER: Starting to spawn orbs ===")
+	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
+
 	for i in range(num_orbs):
 		var random_pos: Vector3 = get_random_spawn_position()
+		print("Orb %d spawning at position: %s" % [i+1, random_pos])
 		spawn_orb_at_position(random_pos)
 
-	print("Spawned %d orbs in 3D map volume (Y: %.1f to %.1f)" % [spawned_orbs.size(), spawn_bounds_min.y, spawn_bounds_max.y])
+	print("=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position within the spawn bounds"""

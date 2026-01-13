@@ -41,22 +41,28 @@ func _process(delta: float) -> void:
 
 func spawn_abilities() -> void:
 	"""Spawn ability pickups at random 3D positions in the map volume"""
+	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
+	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
+
 	# Spawn dash attacks
 	for i in range(num_dash_attacks):
 		var pos: Vector3 = get_random_spawn_position()
+		print("Dash Attack %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.ORANGE_RED)
 
 	# Spawn explosions
 	for i in range(num_explosions):
 		var pos: Vector3 = get_random_spawn_position()
+		print("Explosion %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
 
 	# Spawn guns
 	for i in range(num_guns):
 		var pos: Vector3 = get_random_spawn_position()
+		print("Gun %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, GunScene, "Gun", Color.CYAN)
 
-	print("Spawned %d ability pickups in 3D map volume (Y: %.1f to %.1f)" % [spawned_pickups.size(), spawn_bounds_min.y, spawn_bounds_max.y])
+	print("=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position within the spawn bounds"""
