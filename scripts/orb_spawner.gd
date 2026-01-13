@@ -53,10 +53,7 @@ func spawn_orb_at_position(pos: Vector3) -> void:
 	add_child(orb)
 	orb.global_position = pos
 	spawned_orbs.append(orb)
-
-	# Add slight upward velocity if orb is RigidBody3D
-	if orb is RigidBody3D:
-		orb.linear_velocity = Vector3(0, randf_range(0.5, 2.0), 0)
+	# Note: Orbs have built-in bob animation, no need for velocity
 
 func check_and_respawn_orbs() -> void:
 	"""Check collected orbs and respawn them at random locations"""
