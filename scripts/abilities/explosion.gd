@@ -230,6 +230,14 @@ func damage_nearby_players() -> void:
 	if not explosion_area or not player:
 		return
 
+	# Get charge multiplier from base ability class
+	var charge_mult: float = get_charge_multiplier()
+
+	# Scale explosion radius with charge level (charge level 3 = AoE expansion)
+	var current_radius: float = explosion_radius * (1.0 + (charge_level - 1) * 0.5)  # +50% per level
+	if explosion_area.get_child(0) and explosion_area.get_child(0).shape is SphereShape3D:
+		explosion_area.get_child(0).shape.radius = current_radius
+
 	# Get all bodies in the explosion area
 	var bodies: Array[Node3D] = explosion_area.get_overlapping_bodies()
 
@@ -248,23 +256,29 @@ func damage_nearby_players() -> void:
 			var knockback_dir: Vector3 = (body.global_position - explosion_area.global_position).normalized()
 			knockback_dir.y = 0.5  # Add upward component
 
-			# Deal damage (not scaled - magma particles are the scaling)
+			# Deal damage scaled by charge multiplier
+			var scaled_damage: int = int(explosion_damage * charge_mult)
 			var attacker_id: int = player.name.to_int() if player else -1
 			var target_id: int = body.get_multiplayer_authority()
 
-			# Check if target is a bot (ID >= 9000) or no multiplayer
-			if target_id >= 9000 or multiplayer.multiplayer_peer == null:
-				# Local call for bots or no multiplayer
-				body.receive_damage_from(explosion_damage, attacker_id)
+			# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
+			if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+				# Local call for bots, no multiplayer, or local peer
+				body.receive_damage_from(scaled_damage, attacker_id)
+				print("Explosion hit player (local): ", body.name, " | Damage: ", scaled_damage, " (charge x%.1f)" % charge_mult)
 			else:
-				# RPC call for network players
-				body.receive_damage_from.rpc_id(target_id, explosion_damage, attacker_id)
+				# RPC call for remote network players only
+				body.receive_damage_from.rpc_id(target_id, scaled_damage, attacker_id)
+				print("Explosion hit player (RPC): ", body.name, " | Damage: ", scaled_damage, " (charge x%.1f)" % charge_mult)
 
-			# Apply knockback
-			body.apply_central_impulse(knockback_dir * knockback_force)
+			# Apply knockback scaled by charge
+			var scaled_knockback: float = knockback_force * charge_mult
+			body.apply_central_impulse(knockback_dir * scaled_knockback)
+
+			# Play attack hit sound (satisfying feedback for landing a hit)
+			play_attack_hit_sound()
 
 			hit_players.append(body)
-			print("Explosion hit player: ", body.name)
 
 func end_explosion() -> void:
 	is_exploding = false
@@ -273,3 +287,25 @@ func end_explosion() -> void:
 	# Disable damage area
 	if explosion_area:
 		explosion_area.monitoring = false
+
+func play_attack_hit_sound() -> void:
+	"""Play satisfying hit sound when attack lands on enemy"""
+	if not ability_sound:
+		return
+
+	# Create a separate AudioStreamPlayer3D for hit confirmation
+	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+	hit_sound.name = "AttackHitSound"
+	add_child(hit_sound)
+	hit_sound.max_distance = 20.0
+	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
+	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
+
+	# Use same stream as ability sound if available, otherwise skip
+	if ability_sound.stream:
+		hit_sound.stream = ability_sound.stream
+		hit_sound.play()
+
+		# Auto-cleanup after sound finishes
+		await hit_sound.finished
+		hit_sound.queue_free()

@@ -197,22 +197,20 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		return
 
 	# Check if it's another player
-	if body is RigidBody3D and body.has_method("receive_damage"):
+	if body is RigidBody3D and body.has_method("receive_damage_from"):
 		# Deal damage (not scaled - dash speed is the scaling)
 		var attacker_id: int = player.name.to_int() if player else -1
 		var target_id: int = body.get_multiplayer_authority()
 
-		# Don't call RPC on ourselves (additional safety check)
-		if target_id == multiplayer.get_unique_id():
-			return
-
-		# Check if target is a bot (ID >= 9000) or a valid peer
-		if target_id >= 9000 or multiplayer.multiplayer_peer == null:
-			# Local call for bots or no multiplayer
+		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
+		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, attacker_id)
+			print("Dash attack hit player (local): ", body.name, " | Damage: ", damage)
 		else:
-			# RPC call for network players
+			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, attacker_id)
+			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", damage)
 
 		hit_players.append(body)
 
@@ -220,6 +218,9 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		var knockback_dir: Vector3 = (body.global_position - player.global_position).normalized()
 		knockback_dir.y = 0.3  # Slight upward knockback
 		body.apply_central_impulse(knockback_dir * 40.0)
+
+		# Play attack hit sound (satisfying feedback for landing a hit)
+		play_attack_hit_sound()
 
 		print("Dash attack hit player: ", body.name)
 
@@ -242,3 +243,25 @@ func _physics_process(delta: float) -> void:
 			hitbox.global_position = player.global_position
 		if fire_trail:
 			fire_trail.global_position = player.global_position
+
+func play_attack_hit_sound() -> void:
+	"""Play satisfying hit sound when attack lands on enemy"""
+	if not ability_sound:
+		return
+
+	# Create a separate AudioStreamPlayer3D for hit confirmation
+	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+	hit_sound.name = "AttackHitSound"
+	add_child(hit_sound)
+	hit_sound.max_distance = 20.0
+	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
+	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
+
+	# Use same stream as ability sound if available, otherwise skip
+	if ability_sound.stream:
+		hit_sound.stream = ability_sound.stream
+		hit_sound.play()
+
+		# Auto-cleanup after sound finishes
+		await hit_sound.finished
+		hit_sound.queue_free()
