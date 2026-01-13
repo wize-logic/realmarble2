@@ -197,22 +197,20 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		return
 
 	# Check if it's another player
-	if body is RigidBody3D and body.has_method("receive_damage"):
+	if body is RigidBody3D and body.has_method("receive_damage_from"):
 		# Deal damage (not scaled - dash speed is the scaling)
 		var attacker_id: int = player.name.to_int() if player else -1
 		var target_id: int = body.get_multiplayer_authority()
 
-		# Don't call RPC on ourselves (additional safety check)
-		if target_id == multiplayer.get_unique_id():
-			return
-
-		# Check if target is a bot (ID >= 9000) or a valid peer
-		if target_id >= 9000 or multiplayer.multiplayer_peer == null:
-			# Local call for bots or no multiplayer
+		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
+		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, attacker_id)
+			print("Dash attack hit player (local): ", body.name, " | Damage: ", damage)
 		else:
-			# RPC call for network players
+			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, attacker_id)
+			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", damage)
 
 		hit_players.append(body)
 

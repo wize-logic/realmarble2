@@ -9,6 +9,8 @@ extends RigidBody3D
 @onready var land_sound: AudioStreamPlayer3D = get_node_or_null("LandSound")
 @onready var charge_sound: AudioStreamPlayer3D = get_node_or_null("ChargeSound")
 @onready var hit_sound: AudioStreamPlayer3D = get_node_or_null("HitSound")
+@onready var death_sound: AudioStreamPlayer3D = get_node_or_null("DeathSound")
+@onready var spawn_sound: AudioStreamPlayer3D = get_node_or_null("SpawnSound")
 
 ## Number of hits before respawn
 @export var health: int = 3
@@ -73,6 +75,9 @@ var is_grounded: bool = false
 # Ability system
 var current_ability: Node = null  # The currently equipped ability
 
+# Death effects
+var death_particles: CPUParticles3D = null  # Particle effect for death
+
 # Falling death state
 var is_falling_to_death: bool = false
 var fall_death_timer: float = 0.0
@@ -92,11 +97,14 @@ func _ready() -> void:
 	linear_damp = 0.5   # Moderate damp for better momentum and ramming
 	angular_damp = 0.3   # Low rolling resistance but some friction
 
-	# Physics material properties
+	# Physics material properties - optimized for ramming
 	physics_material_override = PhysicsMaterial.new()
-	physics_material_override.friction = 0.4  # Higher friction for better control
-	physics_material_override.bounce = 0.6     # More bounce for marble ramming and interaction
+	physics_material_override.friction = 0.1  # Low friction for better ramming
+	physics_material_override.bounce = 0.8     # High bounce for powerful marble collisions
 	physics_material_override.rough = false    # Smooth surface
+
+	# Set mass for collision physics (scales with speed/health)
+	mass = 20.0  # Base mass for good collision response
 
 	# Enable continuous collision detection for fast movement
 	continuous_cd = true
@@ -107,6 +115,9 @@ func _ready() -> void:
 	# Set collision layers for player interaction
 	collision_layer = 2  # Player layer
 	collision_mask = 7   # Collide with world (1), players (2), projectiles (4)
+
+	# Connect collision signal for ramming physics
+	body_entered.connect(_on_body_collision)
 
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
@@ -159,6 +170,77 @@ func _ready() -> void:
 		add_child(hit_sound)
 		hit_sound.max_distance = 25.0
 		hit_sound.volume_db = 0.0
+
+	if not death_sound:
+		death_sound = AudioStreamPlayer3D.new()
+		death_sound.name = "DeathSound"
+		add_child(death_sound)
+		death_sound.max_distance = 50.0  # Louder and further reaching
+		death_sound.volume_db = 5.0  # Louder than other sounds
+
+	if not spawn_sound:
+		spawn_sound = AudioStreamPlayer3D.new()
+		spawn_sound.name = "SpawnSound"
+		add_child(spawn_sound)
+		spawn_sound.max_distance = 30.0
+		spawn_sound.volume_db = 0.0
+
+	# Create death particle effect
+	if not death_particles:
+		death_particles = CPUParticles3D.new()
+		death_particles.name = "DeathParticles"
+		add_child(death_particles)
+
+		# Configure death particles - explosive burst
+		death_particles.emitting = false
+		death_particles.amount = 200  # Lots of particles for dramatic effect
+		death_particles.lifetime = 2.5
+		death_particles.one_shot = true
+		death_particles.explosiveness = 1.0
+		death_particles.randomness = 0.4
+		death_particles.local_coords = false
+
+		# Set up particle mesh
+		var particle_mesh: QuadMesh = QuadMesh.new()
+		particle_mesh.size = Vector2(0.3, 0.3)
+		death_particles.mesh = particle_mesh
+
+		# Create material for particles
+		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		particle_material.vertex_color_use_as_albedo = true
+		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		particle_material.disable_receive_shadows = true
+		death_particles.mesh.material = particle_material
+
+		# Emission shape - sphere burst
+		death_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		death_particles.emission_sphere_radius = 0.5
+
+		# Movement - explosive burst
+		death_particles.direction = Vector3(0, 1, 0)
+		death_particles.spread = 180.0  # Full sphere
+		death_particles.gravity = Vector3(0, -15.0, 0)
+		death_particles.initial_velocity_min = 10.0
+		death_particles.initial_velocity_max = 20.0
+
+		# Size over lifetime
+		death_particles.scale_amount_min = 2.0
+		death_particles.scale_amount_max = 4.0
+		death_particles.scale_amount_curve = Curve.new()
+		death_particles.scale_amount_curve.add_point(Vector2(0, 1.5))
+		death_particles.scale_amount_curve.add_point(Vector2(0.3, 1.0))
+		death_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+
+		# Color gradient - will be set based on player vs bot in spawn_death_particles()
+		var gradient: Gradient = Gradient.new()
+		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 1.0))  # Gold
+		gradient.add_point(0.3, Color(1.0, 0.3, 0.1, 1.0))  # Red-orange
+		gradient.add_point(0.7, Color(0.8, 0.1, 0.1, 0.6))  # Dark red
+		gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Transparent
+		death_particles.color_ramp = gradient
 
 	# Set up marble mesh and texture
 	if not marble_mesh:
@@ -610,6 +692,12 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		if world and world.has_method("add_score"):
 			world.add_score(attacker_id, 1)
 
+		# Play death effects before respawning
+		spawn_death_particles()
+		play_death_sound.rpc()
+
+		# Delay respawn slightly for death effects to be visible
+		await get_tree().create_timer(0.1).timeout
 		respawn()
 		print("Killed by player %d!" % attacker_id)
 
@@ -632,6 +720,10 @@ func respawn() -> void:
 	var player_id: int = str(name).to_int()
 	var spawn_index: int = player_id % spawns.size()
 	global_position = spawns[spawn_index]
+
+	# Play spawn sound effect
+	if spawn_sound:
+		play_spawn_sound.rpc()
 
 func fall_death() -> void:
 	"""Called when player falls off the map"""
@@ -724,3 +816,112 @@ func play_hit_sound() -> void:
 	if hit_sound and hit_sound.stream:
 		hit_sound.pitch_scale = randf_range(0.9, 1.1)
 		hit_sound.play()
+
+@rpc("call_local")
+func play_death_sound() -> void:
+	"""Play death sound effect - explosion + shatter"""
+	if death_sound and death_sound.stream:
+		death_sound.pitch_scale = randf_range(0.8, 1.0)  # Lower pitch for dramatic effect
+		death_sound.play()
+
+@rpc("call_local")
+func play_spawn_sound() -> void:
+	"""Play spawn sound effect - whoosh/pop"""
+	if spawn_sound and spawn_sound.stream:
+		spawn_sound.pitch_scale = randf_range(0.9, 1.2)  # Random pitch variation
+		spawn_sound.play()
+
+func spawn_death_particles() -> void:
+	"""Spawn death particle effect based on player type (player vs bot)"""
+	if not death_particles:
+		return
+
+	# Determine if this is a bot (ID >= 9000) or player
+	var player_id: int = str(name).to_int()
+	var is_bot: bool = player_id >= 9000
+
+	# Set particle colors based on player type
+	var gradient: Gradient = Gradient.new()
+	if is_bot:
+		# Bot death: Blue/gray particles
+		gradient.add_point(0.0, Color(0.5, 0.7, 1.0, 1.0))  # Light blue
+		gradient.add_point(0.3, Color(0.3, 0.5, 0.9, 1.0))  # Blue
+		gradient.add_point(0.7, Color(0.2, 0.3, 0.6, 0.6))  # Dark blue
+		gradient.add_point(1.0, Color(0.1, 0.1, 0.2, 0.0))  # Transparent
+	else:
+		# Player death: Red/gold particles
+		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 1.0))  # Gold
+		gradient.add_point(0.3, Color(1.0, 0.3, 0.1, 1.0))  # Red-orange
+		gradient.add_point(0.7, Color(0.8, 0.1, 0.1, 0.6))  # Dark red
+		gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Transparent
+
+	death_particles.color_ramp = gradient
+
+	# Trigger particle burst at current position
+	death_particles.global_position = global_position
+	death_particles.emitting = true
+	death_particles.restart()
+
+	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+
+func _on_body_collision(body: Node) -> void:
+	"""Handle collision with other bodies - apply ramming physics"""
+	# Only apply ramming physics with other players/marbles
+	if not (body is RigidBody3D):
+		return
+
+	# Calculate relative velocity
+	var my_velocity: Vector3 = linear_velocity
+	var their_velocity: Vector3 = body.linear_velocity if body is RigidBody3D else Vector3.ZERO
+	var relative_velocity: Vector3 = my_velocity - their_velocity
+
+	# Only apply extra impulse if we're moving significantly
+	if relative_velocity.length() < 2.0:
+		return
+
+	# Calculate collision direction (from them to us)
+	var collision_dir: Vector3 = (global_position - body.global_position).normalized()
+
+	# Calculate mass ratio for physics (heavier marbles push lighter ones more)
+	var my_mass: float = mass
+	var their_mass: float = body.mass if body is RigidBody3D else 10.0
+	var mass_ratio: float = my_mass / (my_mass + their_mass)
+
+	# Calculate impulse strength based on relative velocity and mass
+	var impulse_strength: float = relative_velocity.length() * mass_ratio * 3.0  # 2-5x harder push
+
+	# Apply extra impulse to the other body (push them away)
+	if body is RigidBody3D:
+		var knockback: Vector3 = collision_dir * impulse_strength
+		knockback.y = abs(knockback.y) * 0.3  # Slight upward component
+		body.apply_central_impulse(knockback)
+
+	# Apply smaller counter-impulse to ourselves (Newton's 3rd law)
+	var counter_impulse: Vector3 = -collision_dir * impulse_strength * 0.3
+	apply_central_impulse(counter_impulse)
+
+	# Add camera shake for local player
+	if is_multiplayer_authority():
+		add_camera_shake(impulse_strength * 0.02)
+
+	print("Collision with %s | Impulse: %.1f | Relative velocity: %.1f" % [body.name, impulse_strength, relative_velocity.length()])
+
+func add_camera_shake(intensity: float) -> void:
+	"""Add camera shake effect for collisions"""
+	if not camera_arm:
+		return
+
+	# Clamp intensity
+	intensity = clamp(intensity, 0.0, 0.5)
+
+	# Apply random offset to camera arm
+	var shake_offset: Vector3 = Vector3(
+		randf_range(-intensity, intensity),
+		randf_range(-intensity, intensity),
+		0
+	)
+
+	# Animate camera shake (smooth return to center)
+	var tween: Tween = create_tween()
+	tween.tween_property(camera_arm, "position", camera_arm.position + shake_offset, 0.05)
+	tween.tween_property(camera_arm, "position", Vector3.ZERO, 0.2).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
