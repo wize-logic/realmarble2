@@ -83,6 +83,9 @@ var current_ability: Node = null  # The currently equipped ability
 # Death effects
 var death_particles: CPUParticles3D = null  # Particle effect for death
 
+# Visual effects
+var aura_light: OmniLight3D = null  # Lighting effect around player for visibility
+
 # Falling death state
 var is_falling_to_death: bool = false
 var fall_death_timer: float = 0.0
@@ -271,6 +274,21 @@ func _ready() -> void:
 		mat.albedo_texture = noise_tex
 
 		marble_mesh.material_override = mat
+
+	# Set up aura light effect for player visibility
+	if not aura_light:
+		aura_light = OmniLight3D.new()
+		aura_light.name = "AuraLight"
+		add_child(aura_light)
+
+		# Configure light properties
+		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Soft cyan-white
+		aura_light.light_energy = 1.5  # Moderate brightness
+		aura_light.omni_range = 3.5  # Illumination radius around player
+		aura_light.omni_attenuation = 2.0  # Smooth falloff
+
+		# Shadow settings - disable for performance
+		aura_light.shadow_enabled = false
 
 	if not is_multiplayer_authority():
 		return

@@ -111,6 +111,8 @@ func create_projectile() -> Node3D:
 	projectile.continuous_cd = true
 	projectile.collision_layer = 4  # Projectile layer
 	projectile.collision_mask = 3   # Hit players (layer 2) and world (layer 1)
+	projectile.contact_monitor = true  # Enable contact monitoring for collision detection
+	projectile.max_contacts_reported = 10  # Allow reporting up to 10 contacts
 
 	# Create mesh
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()

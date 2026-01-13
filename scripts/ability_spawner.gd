@@ -123,7 +123,11 @@ func check_and_respawn_pickups() -> void:
 			# Update base_height for the bobbing animation
 			if "base_height" in pickup:
 				pickup.base_height = new_pos.y
-			print("Moved collected pickup to new random location: ", pickup.global_position)
+
+			# Properly reset the pickup state by calling its respawn function
+			if pickup.has_method("respawn_pickup"):
+				pickup.respawn_pickup()
+			print("Respawned pickup at new random location: ", pickup.global_position)
 
 func spawn_random_ability(pos: Vector3) -> void:
 	"""Spawn a random ability at the given position (for debug menu)"""

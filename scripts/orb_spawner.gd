@@ -92,7 +92,11 @@ func check_and_respawn_orbs() -> void:
 			# Update base_height for the bobbing animation
 			if "base_height" in orb:
 				orb.base_height = new_pos.y
-			print("Moved collected orb to new random location: ", orb.global_position)
+
+			# Properly reset the orb state by calling its respawn function
+			if orb.has_method("respawn_orb"):
+				orb.respawn_orb()
+			print("Respawned orb at new random location: ", orb.global_position)
 
 func respawn_all() -> void:
 	"""Clear and respawn all orbs (called when level is regenerated)"""

@@ -21,6 +21,7 @@ var respawn_timer: float = 0.0
 
 # Visual effects
 var glow_material: StandardMaterial3D
+var aura_light: OmniLight3D
 
 func _ready() -> void:
 	# Add to orbs group for bot AI
@@ -46,6 +47,21 @@ func _ready() -> void:
 
 	# Randomize starting animation phase
 	time = randf() * TAU
+
+	# Set up aura light effect for better visibility
+	if not aura_light:
+		aura_light = OmniLight3D.new()
+		aura_light.name = "AuraLight"
+		add_child(aura_light)
+
+		# Configure light properties - bright cyan for orbs
+		aura_light.light_color = Color(0.5, 0.9, 1.0)  # Bright cyan
+		aura_light.light_energy = 2.5  # Brightest to make orbs very visible
+		aura_light.omni_range = 4.5  # Large radius for high visibility
+		aura_light.omni_attenuation = 1.5  # Moderate falloff
+
+		# Shadow settings - disable for performance
+		aura_light.shadow_enabled = false
 
 func _process(delta: float) -> void:
 	if is_collected:
@@ -105,6 +121,8 @@ func collect(player: Node) -> void:
 		mesh_instance.visible = false
 	if collision_shape:
 		collision_shape.set_deferred("disabled", true)
+	if aura_light:
+		aura_light.visible = false
 
 	print("Orb collected by player! Respawning in %.1f seconds" % respawn_time)
 
@@ -117,6 +135,8 @@ func respawn_orb() -> void:
 		mesh_instance.visible = true
 	if collision_shape:
 		collision_shape.set_deferred("disabled", false)
+	if aura_light:
+		aura_light.visible = true
 
 	# Reset animation phase slightly for variety
 	time += randf() * 2.0
