@@ -129,7 +129,7 @@ func _physics_process(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
-	# Priority 0: Retreat if low health and enemy nearby
+	# Priority 0: Retreat if low health and enemy nearby (can retreat without ability)
 	if bot.health <= 1 and target_player and is_instance_valid(target_player):
 		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 		if distance_to_target < attack_range * 1.5:
@@ -143,33 +143,33 @@ func update_state() -> void:
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# Priority 1: Attack if enemy is in immediate attack range (don't get distracted by items)
-	if has_combat_target and distance_to_target < attack_range * 1.5:
+	# Priority 1: CRITICAL - Get an ability if we don't have one (can't fight without it!)
+	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
+		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+		# Abilities are absolutely critical - prioritize above almost everything
+		if distance_to_ability < 60.0:  # Increased range when we have no ability
+			state = "COLLECT_ABILITY"
+			return
+
+	# Priority 2: Combat if we HAVE an ability and enemy is in immediate attack range
+	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.5:
 		state = "ATTACK"
 		return
 
-	# Priority 2: Collect orbs if not max level and one is nearby
+	# Priority 3: Collect orbs if not max level and one is nearby
 	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 		# Collect orbs more aggressively - bots need to level up
 		var orb_priority_range: float = 35.0
 		if not has_combat_target or distance_to_target > aggro_range * 0.5:
 			orb_priority_range = 50.0
-		# Don't collect orbs if enemy is actively attacking us (very close)
-		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 1.8):
+		# Don't collect orbs if enemy is actively attacking us (very close) and we have an ability
+		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 1.8 or not bot.current_ability):
 			state = "COLLECT_ORB"
 			return
 
-	# Priority 3: Collect abilities if we don't have one and one is nearby
-	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Abilities are critical - collect them more aggressively
-		if distance_to_ability < 45.0 and (not has_combat_target or distance_to_target > attack_range * 1.8):
-			state = "COLLECT_ABILITY"
-			return
-
-	# Priority 4: Combat if player is in aggro range
-	if has_combat_target:
+	# Priority 4: Combat if we HAVE an ability and player is in aggro range
+	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.5:
 			state = "ATTACK"
 		elif distance_to_target < aggro_range:
@@ -181,25 +181,21 @@ func update_state() -> void:
 				if distance_to_orb < 50.0:
 					state = "COLLECT_ORB"
 					return
-			if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-				var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-				if distance_to_ability < 40.0:
-					state = "COLLECT_ABILITY"
-					return
 			state = "WANDER"
 	else:
-		# No combat target, aggressively search while collecting items
-		find_target()  # Force target search
+		# No ability or no combat target, prioritize getting ability or collecting items
+		if not bot.current_ability and target_ability and is_instance_valid(target_ability):
+			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+			if distance_to_ability < 60.0:
+				state = "COLLECT_ABILITY"
+				return
 		if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 			var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 			if distance_to_orb < 50.0:
 				state = "COLLECT_ORB"
 				return
-		if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-			if distance_to_ability < 40.0:
-				state = "COLLECT_ABILITY"
-				return
+		# Find targets while wandering
+		find_target()
 		state = "WANDER"
 
 func do_wander(delta: float) -> void:
