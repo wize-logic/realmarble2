@@ -193,7 +193,7 @@ func activate() -> void:
 		ability_sound.play()
 
 func _on_hitbox_body_entered(body: Node3D) -> void:
-	if not is_dashing:
+	if not is_dashing or not player:
 		return
 
 	# Don't hit ourselves
