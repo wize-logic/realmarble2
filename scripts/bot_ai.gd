@@ -29,6 +29,14 @@ var reaction_time: float = 0.0  # Small delay to simulate human reaction
 var dodge_timer: float = 0.0
 var aggression_level: float = 0.7  # 0-1, how aggressive the bot is
 
+# Obstacle detection variables
+var stuck_timer: float = 0.0
+var last_position: Vector3 = Vector3.ZERO
+var stuck_check_interval: float = 0.5
+var is_stuck: bool = false
+var unstuck_timer: float = 0.0
+var obstacle_avoid_direction: Vector3 = Vector3.ZERO
+
 # Ability preferences based on situation
 const GUN_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
@@ -38,6 +46,7 @@ const EXPLOSION_OPTIMAL_RANGE: float = 6.0
 func _ready() -> void:
 	bot = get_parent()
 	wander_target = bot.global_position
+	last_position = bot.global_position
 	# Randomize aggression for personality variety
 	aggression_level = randf_range(0.5, 0.9)
 	# Randomize reaction time for more human-like behavior
@@ -58,6 +67,18 @@ func _physics_process(delta: float) -> void:
 	ability_charge_timer -= delta
 	dodge_timer -= delta
 	reaction_time -= delta
+	stuck_timer += delta
+	unstuck_timer -= delta
+
+	# Check if bot is stuck on obstacles
+	if stuck_timer >= stuck_check_interval:
+		check_if_stuck()
+		stuck_timer = 0.0
+
+	# Handle unstuck behavior
+	if is_stuck and unstuck_timer > 0.0:
+		handle_unstuck_movement(delta)
+		return  # Skip normal AI while unstucking
 
 	# Find nearest player
 	if not target_player or not is_instance_valid(target_player):
@@ -360,7 +381,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 		action_timer = randf_range(0.8, 2.0)
 
 func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
-	"""Move the bot towards a target position"""
+	"""Move the bot towards a target position with obstacle detection"""
 	if not bot:
 		return
 
@@ -368,7 +389,23 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 	direction.y = 0  # Keep horizontal
 
 	if direction.length() > 0.1:
-		# Simulate input by applying force
+		# Check for obstacles in the path
+		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
+
+		if obstacle_info.has_obstacle:
+			# Try to navigate around the obstacle
+			if obstacle_info.can_jump:
+				# Jump over low obstacles
+				if action_timer <= 0.0:
+					bot_jump()
+					action_timer = randf_range(0.3, 0.6)
+			else:
+				# Find alternate path around obstacle
+				var alternate_direction: Vector3 = find_clear_direction(direction)
+				if alternate_direction != Vector3.ZERO:
+					direction = alternate_direction
+
+		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
 		bot.apply_central_force(direction * force)
 
@@ -504,3 +541,140 @@ func do_collect_orb(delta: float) -> void:
 		# Wait a moment then look for new targets
 		await get_tree().create_timer(0.3).timeout
 		target_orb = null
+
+## ============================================================================
+## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
+## ============================================================================
+
+func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0) -> Dictionary:
+	"""
+	Check if there's an obstacle in the given direction using raycasts
+	Returns a dictionary with: {has_obstacle: bool, can_jump: bool, hit_point: Vector3}
+	"""
+	if not bot:
+		return {"has_obstacle": false, "can_jump": false, "hit_point": Vector3.ZERO}
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+	var start_pos: Vector3 = bot.global_position + Vector3.UP * 0.5  # Check at marble center
+	var end_pos: Vector3 = start_pos + direction * check_distance
+
+	# Main forward raycast
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+	query.exclude = [bot]
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	if result:
+		# There's an obstacle, check if we can jump over it
+		var hit_point: Vector3 = result.position
+		var obstacle_height: float = hit_point.y - bot.global_position.y
+
+		# Can jump if obstacle is less than 2 units tall
+		var can_jump: bool = obstacle_height < 2.0 and obstacle_height > -0.5
+
+		return {
+			"has_obstacle": true,
+			"can_jump": can_jump,
+			"hit_point": hit_point,
+			"obstacle_height": obstacle_height
+		}
+
+	return {"has_obstacle": false, "can_jump": false, "hit_point": Vector3.ZERO}
+
+func find_clear_direction(desired_direction: Vector3) -> Vector3:
+	"""
+	Find a clear direction to move when the desired path is blocked
+	Tries left and right of the desired direction
+	"""
+	if not bot:
+		return Vector3.ZERO
+
+	# Try 45 degrees to the right
+	var right_direction: Vector3 = desired_direction.rotated(Vector3.UP, deg_to_rad(45))
+	var right_check: Dictionary = check_obstacle_in_direction(right_direction, 2.5)
+
+	if not right_check.has_obstacle:
+		return right_direction
+
+	# Try 45 degrees to the left
+	var left_direction: Vector3 = desired_direction.rotated(Vector3.UP, deg_to_rad(-45))
+	var left_check: Dictionary = check_obstacle_in_direction(left_direction, 2.5)
+
+	if not left_check.has_obstacle:
+		return left_direction
+
+	# Try 90 degrees right
+	var far_right: Vector3 = desired_direction.rotated(Vector3.UP, deg_to_rad(90))
+	var far_right_check: Dictionary = check_obstacle_in_direction(far_right, 2.0)
+
+	if not far_right_check.has_obstacle:
+		return far_right
+
+	# Try 90 degrees left
+	var far_left: Vector3 = desired_direction.rotated(Vector3.UP, deg_to_rad(-90))
+	var far_left_check: Dictionary = check_obstacle_in_direction(far_left, 2.0)
+
+	if not far_left_check.has_obstacle:
+		return far_left
+
+	# If all else fails, try backing up
+	return -desired_direction * 0.5
+
+func check_if_stuck() -> void:
+	"""Check if the bot hasn't moved much and might be stuck on an obstacle"""
+	if not bot:
+		return
+
+	var current_pos: Vector3 = bot.global_position
+	var distance_moved: float = current_pos.distance_to(last_position)
+
+	# If bot moved less than 0.3 units in the check interval and is trying to move, it's stuck
+	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB"]
+
+	if distance_moved < 0.3 and is_trying_to_move and bot.linear_velocity.length() < 1.0:
+		if not is_stuck:
+			is_stuck = true
+			unstuck_timer = randf_range(1.0, 2.0)
+			# Choose a random direction to try to escape
+			var random_angle: float = randf() * TAU
+			obstacle_avoid_direction = Vector3(cos(random_angle), 0, sin(random_angle))
+			print("Bot %s is stuck! Trying to unstuck..." % bot.name)
+	else:
+		is_stuck = false
+
+	last_position = current_pos
+
+func handle_unstuck_movement(delta: float) -> void:
+	"""Handle movement when bot is stuck - try to get unstuck"""
+	if not bot:
+		return
+
+	# Try multiple strategies to get unstuck
+	var unstuck_strategy: int = randi() % 3
+
+	match unstuck_strategy:
+		0:
+			# Strategy 1: Move in the avoid direction
+			var force: float = bot.current_roll_force * 0.8
+			bot.apply_central_force(obstacle_avoid_direction * force)
+		1:
+			# Strategy 2: Jump
+			if bot.jump_count < bot.max_jumps:
+				bot_jump()
+		2:
+			# Strategy 3: Spin dash away
+			if not bot.is_charging_spin and bot.spin_cooldown <= 0.0:
+				bot.is_charging_spin = true
+				bot.spin_charge = bot.max_spin_charge * 0.5
+				get_tree().create_timer(0.2).timeout.connect(func(): release_spin_dash())
+
+	# If we've been trying to unstuck for a while and still stuck, teleport to wander target
+	if unstuck_timer <= -1.0:
+		# Generate new wander target away from current position
+		var escape_angle: float = randf() * TAU
+		var escape_distance: float = randf_range(5.0, 10.0)
+		wander_target = bot.global_position + Vector3(cos(escape_angle) * escape_distance, 0, sin(escape_angle) * escape_distance)
+		is_stuck = false
+		unstuck_timer = 0.0
+		print("Bot %s escaped from stuck position" % bot.name)
