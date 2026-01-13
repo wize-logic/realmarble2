@@ -275,6 +275,9 @@ func damage_nearby_players() -> void:
 			var scaled_knockback: float = knockback_force * charge_mult
 			body.apply_central_impulse(knockback_dir * scaled_knockback)
 
+			# Play attack hit sound (satisfying feedback for landing a hit)
+			play_attack_hit_sound()
+
 			hit_players.append(body)
 
 func end_explosion() -> void:
@@ -284,3 +287,25 @@ func end_explosion() -> void:
 	# Disable damage area
 	if explosion_area:
 		explosion_area.monitoring = false
+
+func play_attack_hit_sound() -> void:
+	"""Play satisfying hit sound when attack lands on enemy"""
+	if not ability_sound:
+		return
+
+	# Create a separate AudioStreamPlayer3D for hit confirmation
+	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+	hit_sound.name = "AttackHitSound"
+	add_child(hit_sound)
+	hit_sound.max_distance = 20.0
+	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
+	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
+
+	# Use same stream as ability sound if available, otherwise skip
+	if ability_sound.stream:
+		hit_sound.stream = ability_sound.stream
+		hit_sound.play()
+
+		# Auto-cleanup after sound finishes
+		await hit_sound.finished
+		hit_sound.queue_free()

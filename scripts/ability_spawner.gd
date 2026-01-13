@@ -7,15 +7,17 @@ const AbilityPickupScene = preload("res://ability_pickup.tscn")
 const DashAttackScene = preload("res://abilities/dash_attack.tscn")
 const ExplosionScene = preload("res://abilities/explosion.tscn")
 const GunScene = preload("res://abilities/gun.tscn")
+const SwordScene = preload("res://abilities/sword.tscn")
 
 # Map volume bounds for random spawning
-@export var spawn_bounds_min: Vector3 = Vector3(-40, 3, -40)  # Min X, Y, Z
-@export var spawn_bounds_max: Vector3 = Vector3(40, 30, 40)   # Max X, Y, Z
+@export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
+@export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
 
 # Number of each ability type to spawn
 @export var num_dash_attacks: int = 2
 @export var num_explosions: int = 2
 @export var num_guns: int = 3
+@export var num_swords: int = 2
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Check respawn every 10 seconds
@@ -62,6 +64,12 @@ func spawn_abilities() -> void:
 		print("Gun %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, GunScene, "Gun", Color.CYAN)
 
+	# Spawn swords
+	for i in range(num_swords):
+		var pos: Vector3 = get_random_spawn_position()
+		print("Sword %d spawning at: %s" % [i+1, pos])
+		spawn_ability_at(pos, SwordScene, "Sword", Color.STEEL_BLUE)
+
 	print("=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
 func get_random_spawn_position() -> Vector3:
@@ -98,7 +106,8 @@ func spawn_random_ability(pos: Vector3) -> void:
 	var ability_types: Array = [
 		[DashAttackScene, "Dash Attack", Color.ORANGE_RED],
 		[ExplosionScene, "Explosion", Color.ORANGE],
-		[GunScene, "Gun", Color.CYAN]
+		[GunScene, "Gun", Color.CYAN],
+		[SwordScene, "Sword", Color.STEEL_BLUE]
 	]
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]

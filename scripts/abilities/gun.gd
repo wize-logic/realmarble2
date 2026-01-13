@@ -164,6 +164,16 @@ func _on_body_entered(body: Node) -> void:
 			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
 			print('Projectile hit player (RPC): ', body.name, ' | Damage: ', damage)
 
+		# Play attack hit sound (satisfying feedback for landing a hit)
+		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		hit_sound.max_distance = 20.0
+		hit_sound.volume_db = 3.0
+		hit_sound.pitch_scale = randf_range(1.2, 1.4)
+		hit_sound.global_position = global_position
+		get_parent().add_child(hit_sound)
+		hit_sound.play()
+		# Sound will auto-cleanup when it finishes
+
 	# Destroy projectile on hit
 	queue_free()
 """

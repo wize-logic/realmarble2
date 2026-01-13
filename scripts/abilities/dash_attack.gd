@@ -219,6 +219,9 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		knockback_dir.y = 0.3  # Slight upward knockback
 		body.apply_central_impulse(knockback_dir * 40.0)
 
+		# Play attack hit sound (satisfying feedback for landing a hit)
+		play_attack_hit_sound()
+
 		print("Dash attack hit player: ", body.name)
 
 func end_dash() -> void:
@@ -240,3 +243,25 @@ func _physics_process(delta: float) -> void:
 			hitbox.global_position = player.global_position
 		if fire_trail:
 			fire_trail.global_position = player.global_position
+
+func play_attack_hit_sound() -> void:
+	"""Play satisfying hit sound when attack lands on enemy"""
+	if not ability_sound:
+		return
+
+	# Create a separate AudioStreamPlayer3D for hit confirmation
+	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+	hit_sound.name = "AttackHitSound"
+	add_child(hit_sound)
+	hit_sound.max_distance = 20.0
+	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
+	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
+
+	# Use same stream as ability sound if available, otherwise skip
+	if ability_sound.stream:
+		hit_sound.stream = ability_sound.stream
+		hit_sound.play()
+
+		# Auto-cleanup after sound finishes
+		await hit_sound.finished
+		hit_sound.queue_free()
