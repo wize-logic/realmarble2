@@ -32,11 +32,12 @@ var aggression_level: float = 0.7  # 0-1, how aggressive the bot is
 # Obstacle detection variables
 var stuck_timer: float = 0.0
 var last_position: Vector3 = Vector3.ZERO
-var stuck_check_interval: float = 0.3  # Check more frequently
+var stuck_check_interval: float = 0.2  # Check more frequently for faster response
 var is_stuck: bool = false
 var unstuck_timer: float = 0.0
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
+var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
 
 # Ability preferences based on situation
 const GUN_OPTIMAL_RANGE: float = 20.0
@@ -82,8 +83,11 @@ func _physics_process(delta: float) -> void:
 		handle_unstuck_movement(delta)
 		return  # Skip normal AI while unstucking
 
-	# Find nearest player
+	# Find nearest player - check more frequently and aggressively
 	if not target_player or not is_instance_valid(target_player):
+		find_target()
+	# Re-check target periodically even if we have one (in case a closer target appears)
+	elif action_timer <= 0.0 and randf() < 0.3:
 		find_target()
 
 	# Check for abilities periodically
@@ -124,39 +128,59 @@ func update_state() -> void:
 			retreat_timer = randf_range(2.0, 4.0)
 			return
 
-	# Priority 1: Collect orbs if not max level and one is nearby
+	# Check if we have a valid target player for combat decisions
+	var has_combat_target: bool = target_player and is_instance_valid(target_player)
+	var distance_to_target: float = INF
+	if has_combat_target:
+		distance_to_target = bot.global_position.distance_to(target_player.global_position)
+
+	# Priority 1: Combat takes priority if enemy is very close (prevent ignoring nearby threats)
+	if has_combat_target and distance_to_target < attack_range * 2.0:
+		# Enemy is close, prioritize combat over collecting items
+		if distance_to_target < attack_range * 1.5:
+			state = "ATTACK"
+			return
+		else:
+			state = "CHASE"
+			return
+
+	# Priority 2: Collect orbs if not max level and one is nearby (but not if enemy is close)
 	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 		# Higher priority for orbs when not in immediate combat
 		var orb_priority_range: float = 25.0
-		if not target_player or not is_instance_valid(target_player):
+		if not has_combat_target or distance_to_target > aggro_range:
 			orb_priority_range = 50.0
 		if distance_to_orb < orb_priority_range:
 			state = "COLLECT_ORB"
 			return
 
-	# Priority 2: Collect abilities if we don't have one and one is nearby
+	# Priority 3: Collect abilities if we don't have one and one is nearby
 	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
 		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Abilities are very important, prioritize them highly
-		if distance_to_ability < 40.0:
+		# Abilities are very important, but not more important than nearby combat
+		if distance_to_ability < 40.0 and (not has_combat_target or distance_to_target > aggro_range * 0.7):
 			state = "COLLECT_ABILITY"
 			return
 
-	# Priority 3: Combat if player is nearby
-	if not target_player or not is_instance_valid(target_player):
-		state = "WANDER"
-		return
-
-	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
-
-	# More nuanced combat states
-	if distance_to_target < attack_range * 1.5:
-		state = "ATTACK"
-	elif distance_to_target < aggro_range:
-		state = "CHASE"
+	# Priority 4: Combat if player is in range
+	if has_combat_target:
+		# More nuanced combat states
+		if distance_to_target < attack_range * 1.5:
+			state = "ATTACK"
+		elif distance_to_target < aggro_range:
+			state = "CHASE"
+		else:
+			# Player is far, consider collecting items
+			if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
+				state = "COLLECT_ORB"
+			elif not bot.current_ability and target_ability and is_instance_valid(target_ability):
+				state = "COLLECT_ABILITY"
+			else:
+				state = "WANDER"
 	else:
-		# Priority 4: Collect items while wandering
+		# No combat target, aggressively search while collecting items
+		find_target()  # Force target search
 		if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 			state = "COLLECT_ORB"
 		elif not bot.current_ability and target_ability and is_instance_valid(target_ability):
@@ -165,16 +189,18 @@ func update_state() -> void:
 			state = "WANDER"
 
 func do_wander(delta: float) -> void:
-	"""Wander around randomly"""
+	"""Wander around randomly while actively searching for targets"""
 	# Pick new wander target periodically
 	if wander_timer <= 0.0:
 		var angle: float = randf() * TAU
 		var distance: float = randf() * wander_radius
 		wander_target = bot.global_position + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 		wander_timer = randf_range(2.0, 5.0)
+		# Actively search for targets when picking new wander location
+		find_target()
 
-	# Move towards wander target
-	move_towards(wander_target, delta, 0.4)  # Moderate wander speed
+	# Move towards wander target with moderate speed
+	move_towards(wander_target, delta, 0.5)  # Slightly increased wander speed
 
 	# Occasionally jump - more varied timing
 	if action_timer <= 0.0 and randf() < 0.15:
@@ -410,34 +436,57 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
 
 		if obstacle_info.has_obstacle:
-			# Handle slopes and platforms more aggressively
+			# Handle slopes and platforms very aggressively
 			if obstacle_info.is_slope or obstacle_info.is_platform:
-				# Jump onto slopes and platforms proactively
+				# Jump onto slopes and platforms proactively - reduced cooldown
 				if obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.4  # Shorter cooldown for slopes
-					# Continue moving forward while jumping to get on the slope
-					var force: float = bot.current_roll_force * speed_mult * 1.1
+					obstacle_jump_timer = 0.25  # Very short cooldown for slopes/platforms
+					# Continue moving forward while jumping to get on the slope with extra force
+					var force: float = bot.current_roll_force * speed_mult * 1.3
+					bot.apply_central_force(direction * force)
+					return
+				else:
+					# Even if on cooldown, keep moving toward the slope
+					var force: float = bot.current_roll_force * speed_mult
 					bot.apply_central_force(direction * force)
 					return
 
-			# Try to jump over low obstacles
-			if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
-				bot_jump()
-				obstacle_jump_timer = 0.5
-
-			# Always try to find alternate path when obstacle detected
-			var alternate_direction: Vector3 = find_clear_direction(direction)
-			if alternate_direction != Vector3.ZERO:
-				direction = alternate_direction
+			# Handle walls differently - find alternate path immediately
+			if "is_wall" in obstacle_info and obstacle_info.is_wall:
+				# For walls, try to find alternate path first
+				var alternate_direction: Vector3 = find_clear_direction(direction)
+				if alternate_direction != Vector3.ZERO:
+					direction = alternate_direction
+					# Still try to jump if wall is low enough
+					if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
+						bot_jump()
+						obstacle_jump_timer = 0.4
+				else:
+					# No clear path, jump if possible
+					if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
+						bot_jump()
+						obstacle_jump_timer = 0.5
+					# Reduce speed significantly when blocked
+					speed_mult *= 0.2
 			else:
-				# If no clear path found, reduce speed and try to push through
-				speed_mult *= 0.3
+				# Try to jump over other obstacles
+				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
+					bot_jump()
+					obstacle_jump_timer = 0.4
+
+				# Try to find alternate path
+				var alternate_direction: Vector3 = find_clear_direction(direction)
+				if alternate_direction != Vector3.ZERO:
+					direction = alternate_direction
+				else:
+					# If no clear path found, slow down but keep trying
+					speed_mult *= 0.25
 
 		# If target is above us and no obstacle blocking, jump to gain height
-		elif height_diff > 1.5 and obstacle_jump_timer <= 0.0 and randf() < 0.4:
+		elif height_diff > 1.0 and obstacle_jump_timer <= 0.0 and randf() < 0.5:
 			bot_jump()
-			obstacle_jump_timer = 0.6
+			obstacle_jump_timer = 0.5
 
 		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
@@ -594,7 +643,7 @@ func do_collect_orb(delta: float) -> void:
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
 
-func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
+func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0) -> Dictionary:
 	"""
 	Check if there's an obstacle in the given direction using multiple raycasts
 	Returns a dictionary with: {has_obstacle: bool, can_jump: bool, is_slope: bool, hit_point: Vector3}
@@ -605,12 +654,13 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
 	# Use multiple raycasts at different heights to better detect slopes and walls
-	var check_heights: Array = [0.2, 0.5, 1.0, 1.5]  # Check at multiple heights
+	var check_heights: Array = [0.1, 0.3, 0.6, 1.0, 1.5, 2.0]  # More comprehensive height checks
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
 	var lowest_obstacle_height: float = INF
 	var highest_obstacle_height: float = -INF
 	var hits_at_height: Array = []
+	var hit_count: int = 0
 
 	for height in check_heights:
 		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
@@ -624,6 +674,7 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 
 		if result:
 			obstacle_detected = true
+			hit_count += 1
 			var hit_point: Vector3 = result.position
 			var obstacle_height: float = hit_point.y - bot.global_position.y
 
@@ -639,39 +690,48 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 		# Detect if this is a slope by checking if higher raycasts hit at higher Y positions
 		var is_slope: bool = false
 		var is_platform: bool = false
+		var is_wall: bool = false
 
 		# If we hit at multiple heights and the obstacle gets higher, it's likely a slope or platform
 		if hits_at_height.size() >= 2:
 			var height_diff: float = highest_obstacle_height - lowest_obstacle_height
-			# If obstacle height varies by more than 0.5 units across our check heights, it's a slope
-			if height_diff > 0.5:
+			# If obstacle height varies significantly across our check heights, it's a slope
+			if height_diff > 0.3:
 				is_slope = true
 			# If the lowest hit is above ground level, it's a platform edge
-			if lowest_obstacle_height > 0.3:
+			if lowest_obstacle_height > 0.2 and lowest_obstacle_height < 2.5:
 				is_platform = true
+			# If we hit at all heights, it's likely a vertical wall
+			if hit_count >= check_heights.size() - 1:
+				is_wall = true
 
 		# Check if we can jump onto this obstacle
 		var distance_to_obstacle: float = bot.global_position.distance_to(closest_hit)
 
-		# More lenient jump detection for slopes and platforms
+		# More aggressive jump detection for slopes and platforms
 		var can_jump: bool = false
 		if is_slope or is_platform:
-			# For slopes/platforms, jump if reachable height and not too close
-			can_jump = lowest_obstacle_height < 3.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.8
+			# For slopes/platforms, be more aggressive about jumping
+			can_jump = lowest_obstacle_height < 4.0 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.5
+		elif is_wall:
+			# For walls, only jump if they're low enough
+			can_jump = lowest_obstacle_height < 2.0 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.8
 		else:
-			# For walls, only jump if low
-			can_jump = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 1.0
+			# For other obstacles, use moderate jump detection
+			can_jump = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.6
 
 		return {
 			"has_obstacle": true,
 			"can_jump": can_jump,
 			"is_slope": is_slope,
 			"is_platform": is_platform,
+			"is_wall": is_wall,
 			"hit_point": closest_hit,
-			"obstacle_height": lowest_obstacle_height
+			"obstacle_height": lowest_obstacle_height,
+			"distance_to_obstacle": distance_to_obstacle
 		}
 
-	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "hit_point": Vector3.ZERO}
+	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "hit_point": Vector3.ZERO}
 
 func find_clear_direction(desired_direction: Vector3) -> Vector3:
 	"""
@@ -704,13 +764,17 @@ func check_if_stuck() -> void:
 	var current_pos: Vector3 = bot.global_position
 	var distance_moved: float = current_pos.distance_to(last_position)
 
-	# More aggressive stuck detection: if bot moved less than 0.2 units in check interval
+	# More sensitive stuck detection: check if bot is trying to move but not making progress
 	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB"]
 
-	if distance_moved < 0.2 and is_trying_to_move:
-		if not is_stuck:
+	# Detect stuck based on movement - lowered threshold for faster detection
+	if distance_moved < 0.15 and is_trying_to_move:
+		consecutive_stuck_checks += 1
+
+		# Trigger stuck state after 2 consecutive failed movement checks
+		if consecutive_stuck_checks >= 2 and not is_stuck:
 			is_stuck = true
-			unstuck_timer = randf_range(1.5, 2.5)
+			unstuck_timer = randf_range(1.0, 2.0)
 			# Choose a direction away from the obstacle
 			# Try to find a clear direction
 			var random_angle: float = randf() * TAU
@@ -721,10 +785,11 @@ func check_if_stuck() -> void:
 			if clear_dir != Vector3.ZERO:
 				obstacle_avoid_direction = clear_dir
 
-			print("Bot %s is stuck! Trying to unstuck..." % bot.name)
+			print("Bot %s is stuck! Trying to unstuck... (moved only %0.2f units)" % [bot.name, distance_moved])
 	else:
-		# Only mark as not stuck if we've actually moved
-		if distance_moved > 0.5:
+		# Reset stuck counter if we've moved well
+		if distance_moved > 0.3:
+			consecutive_stuck_checks = 0
 			is_stuck = false
 
 	last_position = current_pos
@@ -736,37 +801,46 @@ func handle_unstuck_movement(delta: float) -> void:
 
 	# More aggressive unstuck behavior - try multiple things at once
 
-	# Always try to move in the avoid direction
-	var force: float = bot.current_roll_force * 1.2  # Extra force to break free
+	# Always try to move in the avoid direction with extra force
+	var force: float = bot.current_roll_force * 1.5  # Increased force to break free
 	bot.apply_central_force(obstacle_avoid_direction * force)
 
-	# Jump frequently to get over obstacles
-	if bot.jump_count < bot.max_jumps and randf() < 0.3:
+	# Jump very frequently to get over obstacles - increased probability
+	if bot.jump_count < bot.max_jumps and randf() < 0.5:
 		bot_jump()
 
-	# Occasionally use spin dash to break free
-	if unstuck_timer > 0.5 and not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.15:
+	# Use spin dash more often to break free
+	if unstuck_timer > 0.3 and not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.25:
 		bot.is_charging_spin = true
-		bot.spin_charge = bot.max_spin_charge * 0.6
-		get_tree().create_timer(0.3).timeout.connect(func(): release_spin_dash())
+		bot.spin_charge = bot.max_spin_charge * 0.7
+		get_tree().create_timer(0.25).timeout.connect(func(): release_spin_dash())
 
-	# Change direction periodically while stuck
-	if int(unstuck_timer * 10) % 5 == 0:  # Every 0.5 seconds
+	# Change direction more frequently while stuck (every 0.3 seconds)
+	var time_slot: int = int(unstuck_timer * 10)
+	if time_slot % 3 == 0 and time_slot != int((unstuck_timer + delta) * 10) % 3:
+		# Find a completely different direction
 		var new_angle: float = randf() * TAU
 		var new_avoid_dir: Vector3 = Vector3(cos(new_angle), 0, sin(new_angle))
 		var clear_dir: Vector3 = find_clear_direction(new_avoid_dir)
 		if clear_dir != Vector3.ZERO:
 			obstacle_avoid_direction = clear_dir
+			print("Bot %s changing unstuck direction" % bot.name)
+
+	# Also try moving backward occasionally
+	if randf() < 0.1:
+		bot.apply_central_force(-obstacle_avoid_direction * force * 0.5)
 
 	# If stuck for too long, give up on current target
 	if unstuck_timer <= 0.0:
-		print("Bot %s gave up on current target, finding new path" % bot.name)
+		print("Bot %s successfully unstuck or timeout, resuming normal behavior" % bot.name)
 		is_stuck = false
 		unstuck_timer = 0.0
+		consecutive_stuck_checks = 0
 		# Clear current targets to force re-evaluation
 		if state == "CHASE" or state == "ATTACK":
 			# Move to a different area
 			var escape_angle: float = randf() * TAU
-			var escape_distance: float = randf_range(8.0, 15.0)
+			var escape_distance: float = randf_range(10.0, 20.0)
 			wander_target = bot.global_position + Vector3(cos(escape_angle) * escape_distance, 0, sin(escape_angle) * escape_distance)
 			state = "WANDER"
+			wander_timer = randf_range(2.0, 4.0)
