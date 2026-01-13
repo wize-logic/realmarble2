@@ -40,8 +40,11 @@ func activate() -> void:
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
-	if camera_arm:
-		# Shoot in camera forward direction
+	if camera and camera_arm:
+		# Shoot in camera forward direction (use camera, not camera_arm, to include pitch)
+		fire_direction = -camera.global_transform.basis.z
+	elif camera_arm:
+		# Fallback to camera_arm if camera not found
 		fire_direction = -camera_arm.global_transform.basis.z
 	else:
 		# Fallback: use player's velocity direction
