@@ -103,8 +103,8 @@ func _ready() -> void:
 	physics_material_override.bounce = 0.8     # High bounce for powerful marble collisions
 	physics_material_override.rough = false    # Smooth surface
 
-	# Set mass for collision physics (scales with speed/health)
-	mass = 20.0  # Base mass for good collision response
+	# Set mass for collision physics - slightly heavier than default (1.0) for better ramming
+	mass = 2.0  # Doubled mass for stronger collisions while maintaining jump ability
 
 	# Enable continuous collision detection for fast movement
 	continuous_cd = true

@@ -9,8 +9,8 @@ const ExplosionScene = preload("res://abilities/explosion.tscn")
 const GunScene = preload("res://abilities/gun.tscn")
 
 # Map volume bounds for random spawning
-@export var spawn_bounds_min: Vector3 = Vector3(-50, 10, -50)  # Min X, Y, Z
-@export var spawn_bounds_max: Vector3 = Vector3(50, 100, 50)   # Max X, Y, Z
+@export var spawn_bounds_min: Vector3 = Vector3(-40, 3, -40)  # Min X, Y, Z
+@export var spawn_bounds_max: Vector3 = Vector3(40, 30, 40)   # Max X, Y, Z
 
 # Number of each ability type to spawn
 @export var num_dash_attacks: int = 2

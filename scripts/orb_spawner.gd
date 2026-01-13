@@ -5,8 +5,8 @@ extends Node3D
 const OrbScene = preload("res://collectible_orb.tscn")
 
 # Map volume bounds for random spawning
-@export var spawn_bounds_min: Vector3 = Vector3(-50, 10, -50)  # Min X, Y, Z
-@export var spawn_bounds_max: Vector3 = Vector3(50, 100, 50)   # Max X, Y, Z
+@export var spawn_bounds_min: Vector3 = Vector3(-40, 3, -40)  # Min X, Y, Z
+@export var spawn_bounds_max: Vector3 = Vector3(40, 30, 40)   # Max X, Y, Z
 @export var num_orbs: int = 9  # Number of orbs to spawn
 
 # Respawn settings
