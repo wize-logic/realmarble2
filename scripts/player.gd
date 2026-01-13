@@ -410,6 +410,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_multiplayer_authority():
 		return
 
+	# Freeze all input (except UI) during countdown
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and world.get("countdown_active"):
+		# Allow mouse capture toggle even during countdown
+		if Input.is_action_just_pressed("capture"):
+			if mouse_captured:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				mouse_captured = false
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+				mouse_captured = true
+		return  # Block all other input during countdown
+
 	# Respawn on command
 	if Input.is_action_just_pressed("respawn"):
 		receive_damage(health)
