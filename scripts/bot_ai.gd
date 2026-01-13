@@ -225,6 +225,9 @@ func do_chase(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
+	# CRITICAL: Make bot face the target for aiming
+	look_at_target(target_player.global_position)
+
 	# Determine optimal distance based on current ability
 	var optimal_distance: float = get_optimal_combat_distance()
 
@@ -263,6 +266,9 @@ func do_attack(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
+
+	# CRITICAL: Make bot face the target for aiming
+	look_at_target(target_player.global_position)
 
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + 2.0:
@@ -531,6 +537,22 @@ func bot_jump() -> void:
 		bot.linear_velocity = vel
 		bot.apply_central_impulse(Vector3.UP * jump_strength)
 		bot.jump_count += 1
+
+func look_at_target(target_position: Vector3) -> void:
+	"""Rotate bot to face target for aiming"""
+	if not bot:
+		return
+
+	# Calculate direction to target (only horizontal rotation)
+	var target_dir: Vector3 = target_position - bot.global_position
+	target_dir.y = 0  # Keep rotation horizontal only
+
+	if target_dir.length() > 0.1:
+		# Calculate the angle to face the target
+		var desired_rotation: float = atan2(target_dir.x, target_dir.z)
+
+		# Smoothly rotate toward target (instant rotation for now, can be smoothed later)
+		bot.rotation.y = desired_rotation
 
 func release_spin_dash() -> void:
 	"""Release spin dash"""
@@ -890,17 +912,26 @@ func check_if_stuck() -> void:
 		if consecutive_stuck_checks >= 2 and not is_stuck:
 			is_stuck = true
 			unstuck_timer = randf_range(1.0, 2.0)
-			# Choose a direction away from the obstacle
-			# Try to find a clear direction
-			var random_angle: float = randf() * TAU
-			obstacle_avoid_direction = Vector3(cos(random_angle), 0, sin(random_angle))
 
-			# Check if this direction is clear, if not try another
-			var clear_dir: Vector3 = find_clear_direction(obstacle_avoid_direction)
-			if clear_dir != Vector3.ZERO:
-				obstacle_avoid_direction = clear_dir
+			# Check if stuck under terrain/slope
+			if is_stuck_under_terrain():
+				# Stuck under slope - move perpendicular and jump
+				var random_side: float = 1.0 if randf() > 0.5 else -1.0
+				# Move perpendicular to current facing
+				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+				obstacle_avoid_direction = perpendicular
+				print("Bot %s is stuck UNDER terrain! Moving sideways" % bot.name)
+			else:
+				# Normal stuck - try to find a clear direction
+				var random_angle: float = randf() * TAU
+				obstacle_avoid_direction = Vector3(cos(random_angle), 0, sin(random_angle))
 
-			print("Bot %s is stuck! Trying to unstuck... (moved only %0.2f units)" % [bot.name, distance_moved])
+				# Check if this direction is clear, if not try another
+				var clear_dir: Vector3 = find_clear_direction(obstacle_avoid_direction)
+				if clear_dir != Vector3.ZERO:
+					obstacle_avoid_direction = clear_dir
+
+				print("Bot %s is stuck! Trying to unstuck... (moved only %0.2f units)" % [bot.name, distance_moved])
 	else:
 		# Reset stuck counter if we've moved well
 		if distance_moved > 0.3:
@@ -909,10 +940,33 @@ func check_if_stuck() -> void:
 
 	last_position = current_pos
 
+func is_stuck_under_terrain() -> bool:
+	"""Check if bot is stuck underneath terrain/slope"""
+	if not bot:
+		return false
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+
+	# Check if there's terrain directly above the bot (within 2 units)
+	var ray_start: Vector3 = bot.global_position + Vector3.UP * 0.5
+	var ray_end: Vector3 = bot.global_position + Vector3.UP * 2.5
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [bot]
+	query.collision_mask = 1  # Only check world geometry
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	# If we hit something above us, we're stuck under terrain
+	return result.size() > 0
+
 func handle_unstuck_movement(delta: float) -> void:
 	"""Handle movement when bot is stuck - try to get unstuck"""
 	if not bot:
 		return
+
+	# Check if we're stuck under terrain
+	var under_terrain: bool = is_stuck_under_terrain()
 
 	# More aggressive unstuck behavior - try multiple things at once
 
@@ -920,8 +974,9 @@ func handle_unstuck_movement(delta: float) -> void:
 	var force: float = bot.current_roll_force * 1.5  # Increased force to break free
 	bot.apply_central_force(obstacle_avoid_direction * force)
 
-	# Jump very frequently to get over obstacles - increased probability
-	if bot.jump_count < bot.max_jumps and randf() < 0.5:
+	# Jump very frequently to get over obstacles - VERY aggressive if under terrain
+	var jump_chance: float = 0.7 if under_terrain else 0.5
+	if bot.jump_count < bot.max_jumps and randf() < jump_chance:
 		bot_jump()
 
 	# Use spin dash more often to break free
