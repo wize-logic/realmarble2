@@ -84,7 +84,7 @@ var current_ability: Node = null  # The currently equipped ability
 var death_particles: CPUParticles3D = null  # Particle effect for death
 
 # Visual effects
-var aura_particles: CPUParticles3D = null  # Aura effect around player for visibility
+var aura_light: OmniLight3D = null  # Lighting effect around player for visibility
 
 # Falling death state
 var is_falling_to_death: bool = false
@@ -275,60 +275,20 @@ func _ready() -> void:
 
 		marble_mesh.material_override = mat
 
-	# Set up aura particle effect for player visibility
-	if not aura_particles:
-		aura_particles = CPUParticles3D.new()
-		aura_particles.name = "AuraParticles"
-		add_child(aura_particles)
+	# Set up aura light effect for player visibility
+	if not aura_light:
+		aura_light = OmniLight3D.new()
+		aura_light.name = "AuraLight"
+		add_child(aura_light)
 
-		# Configure aura particles
-		aura_particles.emitting = true
-		aura_particles.amount = 20
-		aura_particles.lifetime = 1.0
-		aura_particles.explosiveness = 0.0
-		aura_particles.randomness = 0.3
-		aura_particles.local_coords = true
+		# Configure light properties
+		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Soft cyan-white
+		aura_light.light_energy = 1.5  # Moderate brightness
+		aura_light.omni_range = 3.5  # Illumination radius around player
+		aura_light.omni_attenuation = 2.0  # Smooth falloff
 
-		# Set up particle mesh
-		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.15, 0.15)
-		aura_particles.mesh = particle_mesh
-
-		# Create glowing material for aura
-		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		particle_material.vertex_color_use_as_albedo = true
-		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		particle_material.disable_receive_shadows = true
-		aura_particles.mesh.material = particle_material
-
-		# Emission shape - sphere around player
-		aura_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		aura_particles.emission_sphere_radius = 0.8
-
-		# Movement - gentle floating upward
-		aura_particles.direction = Vector3.UP
-		aura_particles.spread = 20.0
-		aura_particles.gravity = Vector3(0, -1.0, 0)  # Slight downward pull
-		aura_particles.initial_velocity_min = 0.3
-		aura_particles.initial_velocity_max = 0.8
-
-		# Size over lifetime - start small, grow, then fade
-		aura_particles.scale_amount_min = 0.8
-		aura_particles.scale_amount_max = 1.2
-		aura_particles.scale_amount_curve = Curve.new()
-		aura_particles.scale_amount_curve.add_point(Vector2(0, 0.5))
-		aura_particles.scale_amount_curve.add_point(Vector2(0.5, 1.0))
-		aura_particles.scale_amount_curve.add_point(Vector2(1, 0.2))
-
-		# Color - soft white/cyan glow that fades
-		var gradient: Gradient = Gradient.new()
-		gradient.add_point(0.0, Color(0.8, 0.9, 1.0, 0.6))  # Soft cyan-white
-		gradient.add_point(0.5, Color(0.5, 0.7, 1.0, 0.4))  # Cyan
-		gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade to transparent
-		aura_particles.color_ramp = gradient
+		# Shadow settings - disable for performance
+		aura_light.shadow_enabled = false
 
 	if not is_multiplayer_authority():
 		return

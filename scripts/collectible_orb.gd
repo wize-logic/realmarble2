@@ -21,7 +21,7 @@ var respawn_timer: float = 0.0
 
 # Visual effects
 var glow_material: StandardMaterial3D
-var aura_particles: CPUParticles3D
+var aura_light: OmniLight3D
 
 func _ready() -> void:
 	# Add to orbs group for bot AI
@@ -48,60 +48,20 @@ func _ready() -> void:
 	# Randomize starting animation phase
 	time = randf() * TAU
 
-	# Set up aura particle effect for better visibility
-	if not aura_particles:
-		aura_particles = CPUParticles3D.new()
-		aura_particles.name = "AuraParticles"
-		add_child(aura_particles)
+	# Set up aura light effect for better visibility
+	if not aura_light:
+		aura_light = OmniLight3D.new()
+		aura_light.name = "AuraLight"
+		add_child(aura_light)
 
-		# Configure aura particles
-		aura_particles.emitting = true
-		aura_particles.amount = 20
-		aura_particles.lifetime = 1.5
-		aura_particles.explosiveness = 0.0
-		aura_particles.randomness = 0.3
-		aura_particles.local_coords = true
+		# Configure light properties - bright cyan for orbs
+		aura_light.light_color = Color(0.5, 0.9, 1.0)  # Bright cyan
+		aura_light.light_energy = 2.5  # Brightest to make orbs very visible
+		aura_light.omni_range = 4.5  # Large radius for high visibility
+		aura_light.omni_attenuation = 1.5  # Moderate falloff
 
-		# Set up particle mesh
-		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.15, 0.15)
-		aura_particles.mesh = particle_mesh
-
-		# Create glowing material for aura
-		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		particle_material.vertex_color_use_as_albedo = true
-		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		particle_material.disable_receive_shadows = true
-		aura_particles.mesh.material = particle_material
-
-		# Emission shape - sphere around orb
-		aura_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		aura_particles.emission_sphere_radius = 0.6
-
-		# Movement - gentle sparkle effect
-		aura_particles.direction = Vector3.UP
-		aura_particles.spread = 45.0
-		aura_particles.gravity = Vector3(0, -0.3, 0)
-		aura_particles.initial_velocity_min = 0.5
-		aura_particles.initial_velocity_max = 1.2
-
-		# Size over lifetime
-		aura_particles.scale_amount_min = 1.2
-		aura_particles.scale_amount_max = 1.8
-		aura_particles.scale_amount_curve = Curve.new()
-		aura_particles.scale_amount_curve.add_point(Vector2(0, 0.5))
-		aura_particles.scale_amount_curve.add_point(Vector2(0.3, 1.0))
-		aura_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
-
-		# Color - cyan sparkle effect
-		var gradient: Gradient = Gradient.new()
-		gradient.add_point(0.0, Color(0.7, 1.0, 1.0, 0.8))  # Bright cyan
-		gradient.add_point(0.5, Color(0.4, 0.9, 1.0, 0.6))  # Cyan
-		gradient.add_point(1.0, Color(0.2, 0.5, 0.8, 0.0))  # Dark transparent
-		aura_particles.color_ramp = gradient
+		# Shadow settings - disable for performance
+		aura_light.shadow_enabled = false
 
 func _process(delta: float) -> void:
 	if is_collected:
@@ -161,8 +121,8 @@ func collect(player: Node) -> void:
 		mesh_instance.visible = false
 	if collision_shape:
 		collision_shape.set_deferred("disabled", true)
-	if aura_particles:
-		aura_particles.emitting = false
+	if aura_light:
+		aura_light.visible = false
 
 	print("Orb collected by player! Respawning in %.1f seconds" % respawn_time)
 
@@ -175,8 +135,8 @@ func respawn_orb() -> void:
 		mesh_instance.visible = true
 	if collision_shape:
 		collision_shape.set_deferred("disabled", false)
-	if aura_particles:
-		aura_particles.emitting = true
+	if aura_light:
+		aura_light.visible = true
 
 	# Reset animation phase slightly for variety
 	time += randf() * 2.0
