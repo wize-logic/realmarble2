@@ -15,8 +15,11 @@ const OrbScene = preload("res://collectible_orb.tscn")
 
 var spawned_orbs: Array[Area3D] = []
 var respawn_timer: float = 0.0
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
+	# Initialize RNG with unique seed
+	rng.randomize()
 	# Only spawn on server (authoritative)
 	if multiplayer.is_server() or multiplayer.multiplayer_peer == null:
 		call_deferred("spawn_orbs")
@@ -46,9 +49,9 @@ func spawn_orbs() -> void:
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position within the spawn bounds"""
 	return Vector3(
-		randf_range(spawn_bounds_min.x, spawn_bounds_max.x),
-		randf_range(spawn_bounds_min.y, spawn_bounds_max.y),
-		randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
+		rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x),
+		rng.randf_range(spawn_bounds_min.y, spawn_bounds_max.y),
+		rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
 	)
 
 func spawn_orb_at_position(pos: Vector3) -> void:

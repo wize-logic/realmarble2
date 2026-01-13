@@ -172,9 +172,6 @@ func _on_multiplayer_button_pressed() -> void:
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots"""
-	# Freeze players immediately before spawning
-	countdown_active = true
-
 	if main_menu:
 		main_menu.hide()
 	if has_node("Menu/DollyCamera"):
