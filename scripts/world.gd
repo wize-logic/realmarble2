@@ -641,6 +641,15 @@ func generate_procedural_level() -> void:
 	# Update player spawn points from generated level
 	update_player_spawns()
 
+	# Respawn all orbs and abilities on the new level
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("respawn_all"):
+		orb_spawner.respawn_all()
+
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("respawn_all"):
+		ability_spawner.respawn_all()
+
 	# Create skybox
 	skybox_generator = Node3D.new()
 	skybox_generator.name = "SkyboxGenerator"

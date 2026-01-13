@@ -47,12 +47,29 @@ func spawn_orbs() -> void:
 	print("=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
 
 func get_random_spawn_position() -> Vector3:
-	"""Generate a random position within the spawn bounds"""
-	return Vector3(
-		rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x),
-		rng.randf_range(spawn_bounds_min.y, spawn_bounds_max.y),
-		rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
-	)
+	"""Generate a random position on top of the ground"""
+	# Generate random X and Z within bounds
+	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
+	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
+
+	# Raycast from high up to find the ground
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
+	var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	if result:
+		# Found ground - spawn 1 unit above it
+		return result.position + Vector3.UP * 1.0
+	else:
+		# No ground found - use middle Y as fallback
+		return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
 
 func spawn_orb_at_position(pos: Vector3) -> void:
 	"""Spawn a single orb at the given position"""
@@ -69,6 +86,24 @@ func check_and_respawn_orbs() -> void:
 
 	for orb in spawned_orbs:
 		if orb and orb.get("is_collected") == true:
-			# Move orb to new random location
-			orb.global_position = get_random_spawn_position()
+			# Move orb to new random location on the ground
+			var new_pos: Vector3 = get_random_spawn_position()
+			orb.global_position = new_pos
+			# Update base_height for the bobbing animation
+			if "base_height" in orb:
+				orb.base_height = new_pos.y
 			print("Moved collected orb to new random location: ", orb.global_position)
+
+func respawn_all() -> void:
+	"""Clear and respawn all orbs (called when level is regenerated)"""
+	# Clear existing orbs
+	for orb in spawned_orbs:
+		if orb:
+			orb.queue_free()
+	spawned_orbs.clear()
+
+	# Wait a frame for cleanup
+	await get_tree().process_frame
+
+	# Respawn all orbs
+	spawn_orbs()

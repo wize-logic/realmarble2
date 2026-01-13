@@ -76,12 +76,29 @@ func spawn_abilities() -> void:
 	print("=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
 func get_random_spawn_position() -> Vector3:
-	"""Generate a random position within the spawn bounds"""
-	return Vector3(
-		rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x),
-		rng.randf_range(spawn_bounds_min.y, spawn_bounds_max.y),
-		rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
-	)
+	"""Generate a random position on top of the ground"""
+	# Generate random X and Z within bounds
+	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
+	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
+
+	# Raycast from high up to find the ground
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
+	var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	if result:
+		# Found ground - spawn 1 unit above it
+		return result.position + Vector3.UP * 1.0
+	else:
+		# No ground found - use middle Y as fallback
+		return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
 
 func spawn_ability_at(pos: Vector3, ability_scene: PackedScene, ability_name: String, ability_color: Color) -> void:
 	"""Spawn an ability pickup at the given position"""
@@ -100,8 +117,12 @@ func check_and_respawn_pickups() -> void:
 
 	for pickup in spawned_pickups:
 		if pickup and pickup.get("is_collected") == true:
-			# Move pickup to new random location
-			pickup.global_position = get_random_spawn_position()
+			# Move pickup to new random location on the ground
+			var new_pos: Vector3 = get_random_spawn_position()
+			pickup.global_position = new_pos
+			# Update base_height for the bobbing animation
+			if "base_height" in pickup:
+				pickup.base_height = new_pos.y
 			print("Moved collected pickup to new random location: ", pickup.global_position)
 
 func spawn_random_ability(pos: Vector3) -> void:
@@ -115,3 +136,17 @@ func spawn_random_ability(pos: Vector3) -> void:
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]
 	spawn_ability_at(pos, random_ability[0], random_ability[1], random_ability[2])
+
+func respawn_all() -> void:
+	"""Clear and respawn all abilities (called when level is regenerated)"""
+	# Clear existing pickups
+	for pickup in spawned_pickups:
+		if pickup:
+			pickup.queue_free()
+	spawned_pickups.clear()
+
+	# Wait a frame for cleanup
+	await get_tree().process_frame
+
+	# Respawn all abilities
+	spawn_abilities()

@@ -491,10 +491,10 @@ func _physics_process(delta: float) -> void:
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
-	# Freeze ALL players (including bots) during countdown
+	# Freeze ALL players (including bots) until game starts
 	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.get("countdown_active"):
-		return  # Don't process physics during countdown
+	if world and not world.get("game_active"):
+		return  # Don't process physics until game is active
 
 	if multiplayer.multiplayer_peer != null:
 		if not is_multiplayer_authority():
