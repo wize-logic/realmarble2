@@ -187,6 +187,7 @@ func do_chase(delta: float) -> void:
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
 	# Determine optimal distance based on current ability
 	var optimal_distance: float = get_optimal_combat_distance()
@@ -200,11 +201,16 @@ func do_chase(delta: float) -> void:
 		# Strafe while maintaining distance
 		strafe_around_target(delta, optimal_distance)
 
-	# Smart jumping - jump if target is higher or to maintain momentum
+	# Smart jumping - more aggressive when target is on higher ground
 	if action_timer <= 0.0:
-		if target_player.global_position.y > bot.global_position.y + 1.0:
+		if height_diff > 1.0:
+			# Target is significantly higher - jump frequently to reach them
 			bot_jump()
-			action_timer = randf_range(0.4, 1.0)
+			action_timer = randf_range(0.3, 0.6)
+		elif height_diff > 0.5 and randf() < 0.6:
+			# Target is slightly higher - jump often
+			bot_jump()
+			action_timer = randf_range(0.4, 0.8)
 		elif randf() < 0.25:  # Random jumps for unpredictability
 			bot_jump()
 			action_timer = randf_range(0.5, 1.5)
@@ -215,6 +221,7 @@ func do_attack(delta: float) -> void:
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
 
 	# Tactical positioning - maintain optimal range while strafing
@@ -240,9 +247,14 @@ func do_attack(delta: float) -> void:
 			get_tree().create_timer(randf_range(0.2, 0.5)).timeout.connect(func(): release_spin_dash())
 			action_timer = randf_range(2.0, 3.5)
 
-	# Jump tactically - when target jumps or randomly to dodge
+	# Jump tactically - more aggressive when target is higher
 	if action_timer <= 0.0:
-		if target_player.global_position.y > bot.global_position.y + 0.5:
+		if height_diff > 0.8:
+			# Target is higher - jump to reach them
+			bot_jump()
+			action_timer = randf_range(0.3, 0.7)
+		elif height_diff > 0.3 and randf() < 0.5:
+			# Target is slightly higher - jump often
 			bot_jump()
 			action_timer = randf_range(0.3, 0.8)
 		elif randf() < 0.2:
@@ -390,14 +402,27 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 	var direction: Vector3 = (target_pos - bot.global_position).normalized()
 	direction.y = 0  # Keep horizontal
 
+	# Check if target is significantly above us (platform or higher ground)
+	var height_diff: float = target_pos.y - bot.global_position.y
+
 	if direction.length() > 0.1:
 		# Check for obstacles in the path with improved detection
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
 
 		if obstacle_info.has_obstacle:
-			# Try to navigate around the obstacle
+			# Handle slopes and platforms more aggressively
+			if obstacle_info.is_slope or obstacle_info.is_platform:
+				# Jump onto slopes and platforms proactively
+				if obstacle_jump_timer <= 0.0:
+					bot_jump()
+					obstacle_jump_timer = 0.4  # Shorter cooldown for slopes
+					# Continue moving forward while jumping to get on the slope
+					var force: float = bot.current_roll_force * speed_mult * 1.1
+					bot.apply_central_force(direction * force)
+					return
+
+			# Try to jump over low obstacles
 			if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
-				# Jump over low obstacles (use separate timer to avoid conflicts)
 				bot_jump()
 				obstacle_jump_timer = 0.5
 
@@ -408,6 +433,11 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 			else:
 				# If no clear path found, reduce speed and try to push through
 				speed_mult *= 0.3
+
+		# If target is above us and no obstacle blocking, jump to gain height
+		elif height_diff > 1.5 and obstacle_jump_timer <= 0.0 and randf() < 0.4:
+			bot_jump()
+			obstacle_jump_timer = 0.6
 
 		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
@@ -479,12 +509,19 @@ func do_collect_ability(delta: float) -> void:
 		state = "WANDER"
 		return
 
+	var height_diff: float = target_ability.global_position.y - bot.global_position.y
+
 	# Move towards ability with urgency
 	move_towards(target_ability.global_position, delta, 1.0)
 
-	# Jump if ability is higher or obstacles in the way
+	# Jump more aggressively if ability is on higher ground
 	if action_timer <= 0.0:
-		if target_ability.global_position.y > bot.global_position.y + 1.0 or randf() < 0.3:
+		if height_diff > 1.0:
+			# Ability is significantly higher - jump frequently
+			bot_jump()
+			action_timer = randf_range(0.3, 0.5)
+		elif height_diff > 0.5 or randf() < 0.4:
+			# Ability is slightly higher or random jump
 			bot_jump()
 			action_timer = randf_range(0.4, 0.9)
 
@@ -529,12 +566,19 @@ func do_collect_orb(delta: float) -> void:
 		state = "WANDER"
 		return
 
+	var height_diff: float = target_orb.global_position.y - bot.global_position.y
+
 	# Move towards orb with high priority
 	move_towards(target_orb.global_position, delta, 1.0)
 
-	# Jump if orb is higher
+	# Jump more aggressively if orb is on higher ground
 	if action_timer <= 0.0:
-		if target_orb.global_position.y > bot.global_position.y + 1.0 or randf() < 0.25:
+		if height_diff > 1.0:
+			# Orb is significantly higher - jump frequently
+			bot_jump()
+			action_timer = randf_range(0.3, 0.5)
+		elif height_diff > 0.5 or randf() < 0.35:
+			# Orb is slightly higher or random jump
 			bot_jump()
 			action_timer = randf_range(0.4, 0.9)
 
@@ -553,10 +597,10 @@ func do_collect_orb(delta: float) -> void:
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
 	"""
 	Check if there's an obstacle in the given direction using multiple raycasts
-	Returns a dictionary with: {has_obstacle: bool, can_jump: bool, hit_point: Vector3}
+	Returns a dictionary with: {has_obstacle: bool, can_jump: bool, is_slope: bool, hit_point: Vector3}
 	"""
 	if not bot:
-		return {"has_obstacle": false, "can_jump": false, "hit_point": Vector3.ZERO}
+		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "hit_point": Vector3.ZERO}
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
@@ -565,6 +609,8 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
 	var lowest_obstacle_height: float = INF
+	var highest_obstacle_height: float = -INF
+	var hits_at_height: Array = []
 
 	for height in check_heights:
 		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
@@ -581,23 +627,51 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			var hit_point: Vector3 = result.position
 			var obstacle_height: float = hit_point.y - bot.global_position.y
 
+			hits_at_height.append({"height": height, "obstacle_height": obstacle_height, "hit_point": hit_point})
+
 			if obstacle_height < lowest_obstacle_height:
 				lowest_obstacle_height = obstacle_height
 				closest_hit = hit_point
+			if obstacle_height > highest_obstacle_height:
+				highest_obstacle_height = obstacle_height
 
 	if obstacle_detected:
-		# Can jump if obstacle is less than 2.5 units tall and not too close
+		# Detect if this is a slope by checking if higher raycasts hit at higher Y positions
+		var is_slope: bool = false
+		var is_platform: bool = false
+
+		# If we hit at multiple heights and the obstacle gets higher, it's likely a slope or platform
+		if hits_at_height.size() >= 2:
+			var height_diff: float = highest_obstacle_height - lowest_obstacle_height
+			# If obstacle height varies by more than 0.5 units across our check heights, it's a slope
+			if height_diff > 0.5:
+				is_slope = true
+			# If the lowest hit is above ground level, it's a platform edge
+			if lowest_obstacle_height > 0.3:
+				is_platform = true
+
+		# Check if we can jump onto this obstacle
 		var distance_to_obstacle: float = bot.global_position.distance_to(closest_hit)
-		var can_jump: bool = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 1.0
+
+		# More lenient jump detection for slopes and platforms
+		var can_jump: bool = false
+		if is_slope or is_platform:
+			# For slopes/platforms, jump if reachable height and not too close
+			can_jump = lowest_obstacle_height < 3.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.8
+		else:
+			# For walls, only jump if low
+			can_jump = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 1.0
 
 		return {
 			"has_obstacle": true,
 			"can_jump": can_jump,
+			"is_slope": is_slope,
+			"is_platform": is_platform,
 			"hit_point": closest_hit,
 			"obstacle_height": lowest_obstacle_height
 		}
 
-	return {"has_obstacle": false, "can_jump": false, "hit_point": Vector3.ZERO}
+	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "hit_point": Vector3.ZERO}
 
 func find_clear_direction(desired_direction: Vector3) -> Vector3:
 	"""
