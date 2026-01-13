@@ -557,11 +557,14 @@ func create_countdown_ui() -> void:
 	countdown_label.visible = false
 	countdown_control.add_child(countdown_label)
 
-	# Create countdown sound player
-	countdown_sound = AudioStreamPlayer.new()
-	countdown_sound.name = "CountdownSound"
-	countdown_sound.volume_db = 0.0
-	add_child(countdown_sound)
+	# Try to find existing countdown sound node, or create one
+	countdown_sound = get_node_or_null("CountdownSound")
+	if not countdown_sound:
+		countdown_sound = AudioStreamPlayer.new()
+		countdown_sound.name = "CountdownSound"
+		countdown_sound.volume_db = 0.0
+		add_child(countdown_sound)
+		print("Created countdown sound player (no audio file loaded)")
 
 	print("Countdown UI created")
 
@@ -592,17 +595,12 @@ func play_countdown_beep() -> void:
 	if not countdown_sound:
 		return
 
-	# Generate a simple beep sound using an AudioStreamGenerator
-	# For now, we'll use a simple sine wave
-	var generator: AudioStreamGenerator = AudioStreamGenerator.new()
-	generator.mix_rate = 44100.0
-	generator.buffer_length = 0.1
-
-	countdown_sound.stream = generator
-	countdown_sound.play()
-
-	# Note: For better sounds, you could load actual sound files here
-	# Example: countdown_sound.stream = load("res://sounds/beep.wav")
+	# Only play if a sound file is loaded
+	if countdown_sound.stream:
+		countdown_sound.pitch_scale = 1.0
+		countdown_sound.play()
+	# If no sound file is loaded, silently skip
+	# To add a countdown sound: load an audio file in the World scene and assign it to CountdownSound node
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION

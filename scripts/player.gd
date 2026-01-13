@@ -12,6 +12,11 @@ extends RigidBody3D
 @onready var death_sound: AudioStreamPlayer3D = get_node_or_null("DeathSound")
 @onready var spawn_sound: AudioStreamPlayer3D = get_node_or_null("SpawnSound")
 
+# UI Elements
+var charge_meter_ui: Control = null
+var charge_meter_bar: ProgressBar = null
+var charge_meter_label: Label = null
+
 ## Number of hits before respawn
 @export var health: int = 3
 ## The xyz position of the random spawns, you can add as many as you want!
@@ -275,6 +280,9 @@ func _ready() -> void:
 	if camera:
 		camera.current = true
 
+	# Create charge meter UI
+	create_charge_meter_ui()
+
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
 	var spawn_index: int = player_id % spawns.size()
@@ -491,11 +499,6 @@ func _physics_process(delta: float) -> void:
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
-	# Freeze ALL players (including bots) until game starts
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and not world.get("game_active"):
-		return  # Don't process physics until game is active
-
 	if multiplayer.multiplayer_peer != null:
 		if not is_multiplayer_authority():
 			return
@@ -527,6 +530,9 @@ func _physics_process(delta: float) -> void:
 		if charge_sound and not charge_sound.playing:
 			charge_sound.play()
 
+		# Update charge meter UI
+		update_charge_meter_ui()
+
 		# Don't allow movement while charging
 		return
 	else:
@@ -534,6 +540,14 @@ func _physics_process(delta: float) -> void:
 		if charge_sound and charge_sound.playing:
 			charge_sound.stop()
 		charge_spin_rotation = 0.0
+
+		# Hide charge meter
+		update_charge_meter_ui()
+
+	# Freeze movement until game starts (but allow charging and other systems above)
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and not world.get("game_active"):
+		return  # Don't process movement until game is active
 
 	# Get input direction relative to camera
 	var input_dir := Input.get_vector("left", "right", "up", "down")
@@ -857,3 +871,90 @@ func spawn_death_particles() -> void:
 	death_particles.restart()
 
 	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+
+# ============================================================================
+# UI SYSTEM
+# ============================================================================
+
+func create_charge_meter_ui() -> void:
+	"""Create the charge meter UI that shows spin dash charge"""
+	# Create container
+	charge_meter_ui = Control.new()
+	charge_meter_ui.name = "ChargeMeterUI"
+	charge_meter_ui.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	charge_meter_ui.anchor_left = 0.5
+	charge_meter_ui.anchor_right = 0.5
+	charge_meter_ui.anchor_top = 1.0
+	charge_meter_ui.anchor_bottom = 1.0
+	charge_meter_ui.offset_left = -150
+	charge_meter_ui.offset_right = 150
+	charge_meter_ui.offset_top = -120
+	charge_meter_ui.offset_bottom = -80
+	charge_meter_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	charge_meter_ui.visible = false
+	add_child(charge_meter_ui)
+
+	# Create label
+	charge_meter_label = Label.new()
+	charge_meter_label.name = "ChargeLabel"
+	charge_meter_label.text = "CHARGE"
+	charge_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	charge_meter_label.add_theme_font_size_override("font_size", 18)
+	charge_meter_label.add_theme_color_override("font_color", Color.WHITE)
+	charge_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	charge_meter_label.add_theme_constant_override("outline_size", 4)
+	charge_meter_label.position = Vector2(0, 0)
+	charge_meter_label.size = Vector2(300, 20)
+	charge_meter_ui.add_child(charge_meter_label)
+
+	# Create progress bar
+	charge_meter_bar = ProgressBar.new()
+	charge_meter_bar.name = "ChargeBar"
+	charge_meter_bar.min_value = 0.0
+	charge_meter_bar.max_value = 100.0
+	charge_meter_bar.value = 0.0
+	charge_meter_bar.show_percentage = false
+	charge_meter_bar.position = Vector2(0, 22)
+	charge_meter_bar.size = Vector2(300, 18)
+
+	# Style the progress bar
+	var style_box_bg: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_bg.bg_color = Color(0.2, 0.2, 0.2, 0.8)
+	style_box_bg.border_width_left = 2
+	style_box_bg.border_width_right = 2
+	style_box_bg.border_width_top = 2
+	style_box_bg.border_width_bottom = 2
+	style_box_bg.border_color = Color.WHITE
+	charge_meter_bar.add_theme_stylebox_override("background", style_box_bg)
+
+	var style_box_fill: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_fill.bg_color = Color(0.2, 0.8, 1.0, 0.9)  # Cyan
+	charge_meter_bar.add_theme_stylebox_override("fill", style_box_fill)
+
+	charge_meter_ui.add_child(charge_meter_bar)
+
+	print("Charge meter UI created")
+
+func update_charge_meter_ui() -> void:
+	"""Update the charge meter display"""
+	if not charge_meter_ui or not charge_meter_bar:
+		return
+
+	if is_charging_spin:
+		# Show meter and update value
+		charge_meter_ui.visible = true
+		var charge_percent: float = (spin_charge / max_spin_charge) * 100.0
+		charge_meter_bar.value = charge_percent
+
+		# Change color based on charge level
+		var style_box_fill: StyleBoxFlat = charge_meter_bar.get_theme_stylebox("fill")
+		if style_box_fill:
+			if charge_percent < 33.0:
+				style_box_fill.bg_color = Color(1.0, 0.3, 0.3, 0.9)  # Red - low charge
+			elif charge_percent < 66.0:
+				style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow - medium charge
+			else:
+				style_box_fill.bg_color = Color(0.2, 1.0, 0.3, 0.9)  # Green - high charge
+	else:
+		# Hide meter when not charging
+		charge_meter_ui.visible = false
