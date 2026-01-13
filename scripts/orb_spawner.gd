@@ -57,8 +57,8 @@ func get_random_spawn_position() -> Vector3:
 func spawn_orb_at_position(pos: Vector3) -> void:
 	"""Spawn a single orb at the given position"""
 	var orb: Area3D = OrbScene.instantiate()
+	orb.position = pos  # Set position BEFORE add_child so _ready() captures correct base_height
 	add_child(orb)
-	orb.global_position = pos
 	spawned_orbs.append(orb)
 	# Note: Orbs have built-in bob animation, no need for velocity
 

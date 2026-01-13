@@ -89,8 +89,8 @@ func spawn_ability_at(pos: Vector3, ability_scene: PackedScene, ability_name: St
 	pickup.ability_scene = ability_scene
 	pickup.ability_name = ability_name
 	pickup.ability_color = ability_color
+	pickup.position = pos  # Set position BEFORE add_child so _ready() captures correct base_height
 	add_child(pickup)
-	pickup.global_position = pos
 	spawned_pickups.append(pickup)
 
 func check_and_respawn_pickups() -> void:
