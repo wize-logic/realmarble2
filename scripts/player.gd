@@ -311,30 +311,33 @@ func _ready() -> void:
 	angular_velocity = Vector3.ZERO
 
 func _process(delta: float) -> void:
-	if not is_multiplayer_authority():
-		return
-
-	if not camera or not camera_arm:
-		return
-
-	# Handle falling death state
+	# Handle falling death state - MUST run for ALL entities (players AND bots)
 	if is_falling_to_death:
 		fall_death_timer += delta
 
-		# Keep camera at fixed position watching the marble fall
-		if not fall_camera_detached:
-			fall_camera_position = camera_arm.global_position
-			fall_camera_detached = true
+		# For players with cameras: keep camera watching the fall
+		if is_multiplayer_authority() and camera and camera_arm:
+			if not fall_camera_detached:
+				fall_camera_position = camera_arm.global_position
+				fall_camera_detached = true
 
-		camera_arm.global_position = fall_camera_position
-		camera.look_at(global_position, Vector3.UP)
+			camera_arm.global_position = fall_camera_position
+			camera.look_at(global_position, Vector3.UP)
 
-		# Respawn after 2 seconds
+		# Respawn after 2 seconds (works for both players and bots)
 		if fall_death_timer >= 2.0:
+			print("Fall death timer reached 2.0s, respawning %s" % name)
 			respawn()
 			is_falling_to_death = false
 			fall_camera_detached = false
 			fall_death_timer = 0.0
+		return  # Skip normal processing while falling to death
+
+	# Early return for non-authority (bots)
+	if not is_multiplayer_authority():
+		return
+
+	if not camera or not camera_arm:
 		return
 
 	sensitivity = Global.sensitivity
@@ -773,10 +776,20 @@ func respawn() -> void:
 
 func fall_death() -> void:
 	"""Called when player falls off the map"""
-	if is_falling_to_death or god_mode:
+	var player_id: int = str(name).to_int()
+	var is_bot: bool = player_id >= 9000
+
+	print("fall_death() called for %s (is_bot: %s, position: %s)" % [name, is_bot, global_position])
+
+	if is_falling_to_death:
+		print("  Already falling to death, ignoring")
 		return
 
-	print("Player fell off the map!")
+	if god_mode:
+		print("  God mode enabled, ignoring")
+		return
+
+	print("  Starting fall death sequence")
 	is_falling_to_death = true
 	fall_death_timer = 0.0
 	fall_camera_detached = false
