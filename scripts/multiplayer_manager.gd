@@ -168,14 +168,7 @@ func add_bot_to_lobby() -> void:
 	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000
 	var bot_name: String = "Bot " + str(bot_counter)
 
-	register_player(bot_id, {
-		"name": bot_name,
-		"ready": true,  # Bots are always ready
-		"score": 0,
-		"is_bot": true
-	})
-
-	# Sync to all clients
+	# Sync to all clients (including host via call_local)
 	rpc("sync_bot_added", bot_id, bot_name)
 	print("Bot added to lobby: ", bot_name)
 
