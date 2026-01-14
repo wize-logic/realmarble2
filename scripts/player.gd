@@ -1303,15 +1303,23 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	if not jump_bounce_particles:
 		return
 
-	# Particles always trail downward under the player
-	jump_bounce_particles.direction = Vector3.DOWN
+	# Check if player is falling or rising
+	var trail_direction: Vector3
+	if linear_velocity.y < 0:
+		# Player is falling - trail upward (opposite direction)
+		trail_direction = Vector3.UP
+	else:
+		# Player is rising/jumping - trail downward
+		trail_direction = Vector3.DOWN
+
+	jump_bounce_particles.direction = trail_direction
 
 	# Position particles inside the marble's center
 	jump_bounce_particles.global_position = global_position  # Inside the marble
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing downward) spawned for %s (intensity: %.2fx)" % [name, intensity_multiplier])
+	print("Jump/Bounce effect (3 dark blue circles trailing %s) spawned for %s (intensity: %.2fx)" % ["upward" if linear_velocity.y < 0 else "downward", name, intensity_multiplier])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
