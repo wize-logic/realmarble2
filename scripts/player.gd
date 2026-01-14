@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move backwards from player to trail away very slowly
+		# Movement - particles move backwards from player to trail away slowly
 		jump_bounce_particles.direction = Vector3.ZERO  # Set dynamically in spawn function
 		jump_bounce_particles.spread = 60.0  # Wider spread for better spacing between circles
 		jump_bounce_particles.gravity = Vector3(0, -1.5, 0)  # Light gravity for gentle arc
-		jump_bounce_particles.initial_velocity_min = 0.3  # Move backwards very slowly from player
-		jump_bounce_particles.initial_velocity_max = 0.6
+		jump_bounce_particles.initial_velocity_min = 0.5  # Move backwards slowly from player
+		jump_bounce_particles.initial_velocity_max = 0.9
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
@@ -1317,8 +1317,8 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	# Set particle direction for trailing
 	jump_bounce_particles.direction = trail_direction
 
-	# Position particles below player in world space
-	jump_bounce_particles.global_position = global_position + Vector3(0, -0.8, 0)  # Below the marble
+	# Position particles inside the marble's center
+	jump_bounce_particles.global_position = global_position  # Inside the marble
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
