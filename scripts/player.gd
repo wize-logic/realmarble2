@@ -359,11 +359,11 @@ func _ready() -> void:
 		# Configure jump/bounce particles - 3 dark blue circles that trail below player
 		jump_bounce_particles.emitting = false
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 0.6  # Last until player lands
+		jump_bounce_particles.lifetime = 0.5  # How long each circle lasts
 		jump_bounce_particles.one_shot = true
-		jump_bounce_particles.explosiveness = 0.8  # Stagger slightly for trail effect
+		jump_bounce_particles.explosiveness = 0.1  # Low value so they spawn spread over time
 		jump_bounce_particles.randomness = 0.0  # No randomness
-		jump_bounce_particles.local_coords = true  # Move with player for trailing effect
+		jump_bounce_particles.local_coords = false  # World space - stay where spawned to create trail
 
 		# Set up particle mesh - use sphere for perfect circles (not squares)
 		var jump_particle_mesh: SphereMesh = SphereMesh.new()
@@ -384,9 +384,8 @@ func _ready() -> void:
 
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
-		jump_bounce_particles.emission_sphere_radius = 0.0
 
-		# Movement - stay below player (no velocity)
+		# Movement - no velocity, particles stay where they spawn
 		jump_bounce_particles.direction = Vector3.ZERO
 		jump_bounce_particles.spread = 0.0
 		jump_bounce_particles.gravity = Vector3.ZERO
@@ -1304,8 +1303,8 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	if not jump_bounce_particles:
 		return
 
-	# Position particles below player in local space (so they trail with the player)
-	jump_bounce_particles.position = Vector3(0, -0.8, 0)  # Below the marble
+	# Position particles below player in world space
+	jump_bounce_particles.global_position = global_position + Vector3(0, -0.8, 0)  # Below the marble
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
