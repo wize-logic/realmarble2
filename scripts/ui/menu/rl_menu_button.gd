@@ -9,8 +9,14 @@ signal button_pressed
 @export var subtitle_text: String = ""
 @export var is_highlighted: bool = false
 
-var is_hovered: bool = false
-var is_focused: bool = false
+var is_hovered: bool = false:
+	set(value):
+		is_hovered = value
+		update_appearance()
+var is_focused: bool = false:
+	set(value):
+		is_focused = value
+		update_appearance()
 
 @onready var main_label: Label = $MainLabel
 @onready var subtitle_label: Label = $SubtitleLabel
@@ -19,6 +25,7 @@ var is_focused: bool = false
 
 var hover_sound: AudioStreamPlayer
 var select_sound: AudioStreamPlayer
+var pulse_time: float = 0.0
 
 func _ready() -> void:
 	if main_label:
@@ -40,7 +47,12 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 
 func _process(delta: float) -> void:
-	update_appearance()
+	# Only animate pulse when active
+	if is_hovered or is_focused or is_highlighted:
+		pulse_time += delta
+		if edge_glow:
+			var pulse: float = (sin(pulse_time * 3.0) + 1.0) * 0.5
+			edge_glow.modulate = Color(1.0, 0.6, 0.2, 0.4 + pulse * 0.3)
 
 func update_appearance() -> void:
 	var active: bool = is_hovered or is_focused or is_highlighted
@@ -52,8 +64,8 @@ func update_appearance() -> void:
 
 	if edge_glow:
 		edge_glow.visible = active
-		var pulse: float = (sin(Time.get_ticks_msec() * 0.002) + 1.0) * 0.5
-		edge_glow.modulate = Color(1.0, 0.6, 0.2, 0.4 + pulse * 0.3) if active else Color.TRANSPARENT
+		if not active:
+			edge_glow.modulate = Color.TRANSPARENT
 
 func _on_mouse_entered() -> void:
 	is_hovered = true

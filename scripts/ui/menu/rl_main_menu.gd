@@ -1,20 +1,21 @@
 extends Control
 class_name RLMainMenu
 
-## True Rocket League-style main menu with left sidebar
+## Rocket League-style main menu positioned in bottom left
 
-signal play_pressed
+signal practice_pressed
+signal multiplayer_pressed
 signal item_shop_pressed
 signal garage_pressed
 signal profile_pressed
 signal options_pressed
 signal quit_pressed
-signal multiplayer_pressed
 
-@onready var buttons_container: VBoxContainer = $LeftSidebar/MenuButtons
-@onready var player_card: Control = $BottomLeft/PlayerCard
-@onready var player_name_label: Label = $BottomLeft/PlayerCard/PlayerName
-@onready var player_level_label: Label = $BottomLeft/PlayerCard/Level
+@onready var main_buttons_container: VBoxContainer = $BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons
+@onready var submenu_buttons_container: VBoxContainer = $PlaySubmenu/MarginContainer/VBoxContainer/SubmenuButtons
+@onready var play_submenu: PanelContainer = $PlaySubmenu
+@onready var player_name_label: Label = $BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox/PlayerName
+@onready var player_level_label: Label = $BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox/Level
 @onready var music_notification: PanelContainer = $BottomRight/MusicNotification
 @onready var track_title_label: Label = $BottomRight/MusicNotification/HBox/VBox/TrackTitle
 @onready var track_artist_label: Label = $BottomRight/MusicNotification/HBox/VBox/TrackArtist
@@ -22,7 +23,9 @@ signal multiplayer_pressed
 @onready var select_sound: AudioStreamPlayer = $SelectSound
 
 var menu_buttons: Array[RLMenuButton] = []
+var submenu_buttons: Array[RLMenuButton] = []
 var current_focus_index: int = 0
+var in_submenu: bool = false
 
 func _ready() -> void:
 	# Generate placeholder sounds
@@ -34,6 +37,8 @@ func _ready() -> void:
 	# Set up button sounds
 	for button in menu_buttons:
 		button.set_sounds(hover_sound, select_sound)
+	for button in submenu_buttons:
+		button.set_sounds(hover_sound, select_sound)
 
 	# Focus first button
 	if menu_buttons.size() > 0:
@@ -42,7 +47,9 @@ func _ready() -> void:
 	# Set up player card
 	setup_player_card()
 
-	# Initially hide music notification
+	# Initially hide submenu and music notification
+	if play_submenu:
+		play_submenu.visible = false
 	if music_notification:
 		music_notification.visible = false
 
@@ -63,43 +70,57 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_accept"):
 		activate_current_button()
 		accept_event()
+	elif event.is_action_pressed("ui_cancel"):
+		if in_submenu:
+			hide_submenu()
+			accept_event()
 
 func collect_buttons() -> void:
 	menu_buttons.clear()
-	for child in buttons_container.get_children():
+	for child in main_buttons_container.get_children():
 		if child is RLMenuButton:
 			menu_buttons.append(child)
-			child.button_pressed.connect(_on_button_pressed.bind(child))
+			child.button_pressed.connect(_on_main_button_pressed.bind(child))
+
+	submenu_buttons.clear()
+	for child in submenu_buttons_container.get_children():
+		if child is RLMenuButton:
+			submenu_buttons.append(child)
+			child.button_pressed.connect(_on_submenu_button_pressed.bind(child))
 
 func navigate_down() -> void:
-	if menu_buttons.size() == 0:
+	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
+	if buttons.size() == 0:
 		return
-	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
-		menu_buttons[current_focus_index].focus_exited()
-	current_focus_index = (current_focus_index + 1) % menu_buttons.size()
+	if current_focus_index >= 0 and current_focus_index < buttons.size():
+		buttons[current_focus_index].focus_exited()
+	current_focus_index = (current_focus_index + 1) % buttons.size()
 	focus_button(current_focus_index)
 
 func navigate_up() -> void:
-	if menu_buttons.size() == 0:
+	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
+	if buttons.size() == 0:
 		return
-	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
-		menu_buttons[current_focus_index].focus_exited()
-	current_focus_index = (current_focus_index - 1 + menu_buttons.size()) % menu_buttons.size()
+	if current_focus_index >= 0 and current_focus_index < buttons.size():
+		buttons[current_focus_index].focus_exited()
+	current_focus_index = (current_focus_index - 1 + buttons.size()) % buttons.size()
 	focus_button(current_focus_index)
 
 func focus_button(index: int) -> void:
-	if index >= 0 and index < menu_buttons.size():
+	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
+	if index >= 0 and index < buttons.size():
 		current_focus_index = index
-		menu_buttons[index].focus_entered()
+		buttons[index].focus_entered()
 
 func activate_current_button() -> void:
-	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
-		menu_buttons[current_focus_index]._activate()
+	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
+	if current_focus_index >= 0 and current_focus_index < buttons.size():
+		buttons[current_focus_index]._activate()
 
-func _on_button_pressed(button: RLMenuButton) -> void:
+func _on_main_button_pressed(button: RLMenuButton) -> void:
 	match button.name:
 		"PlayButton":
-			play_pressed.emit()
+			show_submenu()
 		"ItemShopButton":
 			item_shop_pressed.emit()
 		"GarageButton":
@@ -111,11 +132,50 @@ func _on_button_pressed(button: RLMenuButton) -> void:
 		"QuitButton":
 			quit_pressed.emit()
 
+func _on_submenu_button_pressed(button: RLMenuButton) -> void:
+	match button.name:
+		"PracticeButton":
+			practice_pressed.emit()
+			hide_submenu()
+		"MultiplayerButton":
+			multiplayer_pressed.emit()
+			hide_submenu()
+		"BackButton":
+			hide_submenu()
+
+func show_submenu() -> void:
+	in_submenu = true
+	if play_submenu:
+		play_submenu.visible = true
+
+	# Clear focus from main menu
+	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
+		menu_buttons[current_focus_index].focus_exited()
+
+	# Focus first submenu button
+	current_focus_index = 0
+	if submenu_buttons.size() > 0:
+		submenu_buttons[0].focus_entered()
+
+func hide_submenu() -> void:
+	in_submenu = false
+	if play_submenu:
+		play_submenu.visible = false
+
+	# Clear focus from submenu
+	if current_focus_index >= 0 and current_focus_index < submenu_buttons.size():
+		submenu_buttons[current_focus_index].focus_exited()
+
+	# Focus first main menu button
+	current_focus_index = 0
+	if menu_buttons.size() > 0:
+		menu_buttons[0].focus_entered()
+
 func setup_player_card() -> void:
 	if player_name_label:
 		player_name_label.text = "Player"
 	if player_level_label:
-		player_level_label.text = "25"
+		player_level_label.text = "Level 25"
 
 func show_music_notification(track_title: String, artist: String) -> void:
 	if music_notification and track_title_label and track_artist_label:
