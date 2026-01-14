@@ -19,8 +19,9 @@ var room_code: String = ""
 var max_players: int = 16
 
 # Player info
-var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
+var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int, is_bot: bool}
 var local_player_name: String = "Player"
+var bot_counter: int = 0  # Counter for bot IDs
 
 # WebSocket settings (for production, point to your relay server)
 var use_websocket: bool = true
@@ -68,7 +69,8 @@ func create_game(player_name: String) -> String:
 	register_player(1, {
 		"name": player_name,
 		"ready": false,
-		"score": 0
+		"score": 0,
+		"is_bot": false
 	})
 
 	print("Game created! Room code: ", room_code)
@@ -147,13 +149,46 @@ func sync_player_ready(peer_id: int, ready: bool) -> void:
 
 func all_players_ready() -> bool:
 	"""Check if all players are ready"""
-	if players.size() < 2:
-		return false  # Need at least 2 players
+	if players.size() < 1:
+		return false  # Need at least 1 player or bot
 
+	# Check if all human players are ready (bots are always ready)
 	for player in players.values():
-		if not player.ready:
+		if not player.get("is_bot", false) and not player.ready:
 			return false
 	return true
+
+func add_bot_to_lobby() -> void:
+	"""Add a bot to the lobby (host only)"""
+	if network_mode != NetworkMode.HOST:
+		print("Only host can add bots")
+		return
+
+	bot_counter += 1
+	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000
+	var bot_name: String = "Bot " + str(bot_counter)
+
+	register_player(bot_id, {
+		"name": bot_name,
+		"ready": true,  # Bots are always ready
+		"score": 0,
+		"is_bot": true
+	})
+
+	# Sync to all clients
+	rpc("sync_bot_added", bot_id, bot_name)
+	print("Bot added to lobby: ", bot_name)
+
+@rpc("authority", "call_local", "reliable")
+func sync_bot_added(bot_id: int, bot_name: String) -> void:
+	"""Sync bot addition across network"""
+	if not players.has(bot_id):
+		register_player(bot_id, {
+			"name": bot_name,
+			"ready": true,
+			"score": 0,
+			"is_bot": true
+		})
 
 func start_game() -> void:
 	"""Start the game (host only)"""
@@ -172,10 +207,26 @@ func start_game() -> void:
 func on_game_started() -> void:
 	"""Called on all peers when game starts"""
 	print("Game starting!")
-	# Signal to world to start match
+	# Signal to world to start match and spawn bots
 	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.has_method("start_deathmatch"):
-		world.start_deathmatch()
+	if world:
+		# Spawn bots from lobby list (host only)
+		if network_mode == NetworkMode.HOST and world.has_method("spawn_bots_from_lobby"):
+			world.spawn_bots_from_lobby(get_bot_list())
+
+		if world.has_method("start_deathmatch"):
+			world.start_deathmatch()
+
+func get_bot_list() -> Array:
+	"""Get list of bot player IDs"""
+	var bot_list: Array = []
+	for peer_id in players.keys():
+		if players[peer_id].get("is_bot", false):
+			bot_list.append({
+				"id": peer_id,
+				"name": players[peer_id].name
+			})
+	return bot_list
 
 func register_player(peer_id: int, player_info: Dictionary) -> void:
 	"""Register a new player"""

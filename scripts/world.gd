@@ -34,7 +34,7 @@ var controller: bool = false
 # Deathmatch Game State
 var game_time_remaining: float = 300.0  # 5 minutes in seconds
 var game_active: bool = false
-var player_scores: Dictionary = {}  # player_id: score
+var player_scores: Dictionary = {}  # player_id: {name: String, score: int}
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
@@ -218,7 +218,7 @@ func _on_practice_start_button_pressed() -> void:
 	local_player.name = "1"
 	add_child(local_player)
 	local_player.add_to_group("players")
-	player_scores[1] = 0
+	player_scores[1] = {"name": "Player", "score": 0}
 
 	# Spawn bots based on user selection
 	for i in range(bot_count):
@@ -301,8 +301,11 @@ func add_player(peer_id: int) -> void:
 	# Add to players group for AI targeting
 	player.add_to_group("players")
 
-	# Initialize player score
-	player_scores[peer_id] = 0
+	# Initialize player score (get name from multiplayer manager)
+	var player_name: String = "Player"
+	if MultiplayerManager and MultiplayerManager.players.has(peer_id):
+		player_name = MultiplayerManager.players[peer_id].get("name", "Player")
+	player_scores[peer_id] = {"name": player_name, "score": 0}
 
 func remove_player(peer_id: int) -> void:
 	var player: Node = get_node_or_null(str(peer_id))
@@ -374,7 +377,10 @@ func start_deathmatch() -> void:
 	"""Start a 5-minute deathmatch with countdown"""
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
-	player_scores.clear()
+
+	# Reset all scores to 0 but keep player names
+	for player_id in player_scores.keys():
+		player_scores[player_id].score = 0
 
 	# Start countdown
 	countdown_active = true
@@ -395,29 +401,123 @@ func end_deathmatch() -> void:
 	# Find winner
 	var winner_id: int = -1
 	var highest_score: int = -1
+	var winner_name: String = ""
 
 	for player_id: int in player_scores:
-		if player_scores[player_id] > highest_score:
-			highest_score = player_scores[player_id]
+		var score: int = player_scores[player_id].score
+		if score > highest_score:
+			highest_score = score
 			winner_id = player_id
+			winner_name = player_scores[player_id].name
 
 	if winner_id != -1:
-		print("Winner: Player %d with %d kills!" % [winner_id, highest_score])
+		print("Winner: %s with %d kills!" % [winner_name, highest_score])
 	else:
 		print("No winner - no kills recorded!")
 
-	# TODO: Display winner screen UI
+	# Show leaderboard
+	show_leaderboard()
 
 func add_score(player_id: int, points: int = 1) -> void:
 	"""Add points to a player's score"""
 	if not player_scores.has(player_id):
-		player_scores[player_id] = 0
-	player_scores[player_id] += points
-	print("Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
+		player_scores[player_id] = {"name": "Unknown", "score": 0}
+	player_scores[player_id].score += points
+	print("Player %s scored! Total: %d" % [player_scores[player_id].name, player_scores[player_id].score])
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
-	return player_scores.get(player_id, 0)
+	if player_scores.has(player_id):
+		return player_scores[player_id].score
+	return 0
+
+func show_leaderboard() -> void:
+	"""Show the leaderboard screen with final scores"""
+	var leaderboard: Control = get_node_or_null("%Leaderboard")
+	var player_list_container: VBoxContainer = get_node_or_null("%PlayerList")
+
+	if not leaderboard or not player_list_container:
+		print("ERROR: Leaderboard UI not found!")
+		return
+
+	# Clear existing list
+	for child in player_list_container.get_children():
+		child.queue_free()
+
+	# Sort players by score (descending)
+	var sorted_players: Array = []
+	for player_id in player_scores.keys():
+		sorted_players.append({
+			"id": player_id,
+			"name": player_scores[player_id].name,
+			"score": player_scores[player_id].score
+		})
+
+	sorted_players.sort_custom(func(a, b): return a.score > b.score)
+
+	# Add players to list
+	for i in range(sorted_players.size()):
+		var player_data: Dictionary = sorted_players[i]
+		var rank: int = i + 1
+		var rank_emoji: String = ""
+
+		# Add medal emojis for top 3
+		match rank:
+			1: rank_emoji = "🥇 "
+			2: rank_emoji = "🥈 "
+			3: rank_emoji = "🥉 "
+			_: rank_emoji = str(rank) + ". "
+
+		var player_label: Label = Label.new()
+		player_label.text = "%s%s - %d kills" % [rank_emoji, player_data.name, player_data.score]
+		player_label.add_theme_font_size_override("font_size", 24)
+
+		# Highlight top 3 with colors
+		match rank:
+			1: player_label.add_theme_color_override("font_color", Color.GOLD)
+			2: player_label.add_theme_color_override("font_color", Color.SILVER)
+			3: player_label.add_theme_color_override("font_color", Color(0.8, 0.5, 0.2))  # Bronze
+
+		player_list_container.add_child(player_label)
+
+	# Show the leaderboard
+	leaderboard.show()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _on_leaderboard_continue_pressed() -> void:
+	"""Handle leaderboard continue button"""
+	var leaderboard: Control = get_node_or_null("%Leaderboard")
+	if leaderboard:
+		leaderboard.hide()
+
+	# Clear all players and reset game state
+	var players: Array = get_tree().get_nodes_in_group("players")
+	for player in players:
+		player.queue_free()
+
+	player_scores.clear()
+	game_active = false
+
+	# Return to appropriate menu
+	if MultiplayerManager and MultiplayerManager.network_mode != MultiplayerManager.NetworkMode.OFFLINE:
+		# Return to multiplayer lobby
+		if lobby_ui:
+			lobby_ui.show()
+		# Clear player scores in multiplayer manager too
+		if MultiplayerManager:
+			for player_id in MultiplayerManager.players.keys():
+				MultiplayerManager.players[player_id].score = 0
+	else:
+		# Return to main menu for practice mode
+		if main_menu:
+			main_menu.show()
+		if has_node("Menu/DollyCamera"):
+			$Menu/DollyCamera.show()
+		if has_node("Menu/Blur"):
+			$Menu/Blur.show()
+		if menu_music:
+			menu_music.play()
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func get_time_remaining_formatted() -> String:
 	"""Get formatted time string (MM:SS)"""
@@ -569,10 +669,15 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 # ============================================================================
 
 func spawn_bot() -> void:
-	"""Spawn an AI-controlled bot player"""
+	"""Spawn an AI-controlled bot player (for practice mode)"""
 	bot_counter += 1
 	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000
+	var bot_name: String = "Bot " + str(bot_counter)
 
+	spawn_bot_with_id(bot_id, bot_name)
+
+func spawn_bot_with_id(bot_id: int, bot_name: String) -> void:
+	"""Spawn a bot with a specific ID and name"""
 	var bot: Node = Player.instantiate()
 	bot.name = str(bot_id)
 	add_child(bot)
@@ -595,9 +700,15 @@ func spawn_bot() -> void:
 	bot.add_to_group("players")
 
 	# Initialize bot score
-	player_scores[bot_id] = 0
+	player_scores[bot_id] = {"name": bot_name, "score": 0}
 
-	print("Spawned bot with ID: %d" % bot_id)
+	print("Spawned bot with ID: %d, Name: %s" % [bot_id, bot_name])
+
+func spawn_bots_from_lobby(bot_list: Array) -> void:
+	"""Spawn bots from lobby list (called when starting multiplayer game)"""
+	for bot_info in bot_list:
+		spawn_bot_with_id(bot_info.id, bot_info.name)
+	print("Spawned %d bots from lobby" % bot_list.size())
 
 # ============================================================================
 # COUNTDOWN SYSTEM

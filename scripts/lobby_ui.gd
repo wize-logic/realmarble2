@@ -39,7 +39,7 @@ func _ready() -> void:
 
 	# Create spawn bot button (host only)
 	spawn_bot_button = Button.new()
-	spawn_bot_button.text = "Spawn Bot"
+	spawn_bot_button.text = "Add Bot"
 	spawn_bot_button.visible = false
 	spawn_bot_button.pressed.connect(_on_spawn_bot_pressed)
 	# Add it to the VBox before the start game button
@@ -188,16 +188,15 @@ func _on_start_game_pressed() -> void:
 			status_label.text = "Not all players are ready!"
 
 func _on_spawn_bot_pressed() -> void:
-	"""Spawn a bot in the game (host only)"""
+	"""Add a bot to the lobby (host only)"""
 	if not multiplayer_manager or not multiplayer_manager.is_host():
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.has_method("spawn_bot"):
-		world.spawn_bot()
-		status_label.text = "Bot spawned!"
+	if multiplayer_manager.has_method("add_bot_to_lobby"):
+		multiplayer_manager.add_bot_to_lobby()
+		status_label.text = "Bot added to lobby!"
 	else:
-		status_label.text = "Failed to spawn bot!"
+		status_label.text = "Failed to add bot!"
 
 func _on_leave_lobby_pressed() -> void:
 	"""Leave the current lobby"""
@@ -240,9 +239,11 @@ func _update_player_list() -> void:
 	var players: Array = multiplayer_manager.get_player_list()
 	for player in players:
 		var player_label: Label = Label.new()
+		var is_bot: bool = player.get("is_bot", false)
 		var ready_icon: String = " ✓" if player.ready else ""
 		var host_icon: String = " 👑" if player.peer_id == 1 else ""
-		player_label.text = player.name + host_icon + ready_icon
+		var bot_icon: String = " 🤖" if is_bot else ""
+		player_label.text = player.name + host_icon + bot_icon + ready_icon
 
 		if player.ready:
 			player_label.add_theme_color_override("font_color", Color.GREEN)

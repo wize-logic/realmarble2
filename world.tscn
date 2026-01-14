@@ -516,7 +516,7 @@ text = "Number of Bots:"
 unique_name_in_owner = true
 layout_mode = 2
 min_value = 1.0
-max_value = 7.0
+max_value = 15.0
 value = 3.0
 
 [node name="ButtonContainer" type="HBoxContainer" parent="Menu/PracticeSetup/MarginContainer/VBoxContainer"]
@@ -530,6 +530,52 @@ text = "Start"
 [node name="CancelButton" type="Button" parent="Menu/PracticeSetup/MarginContainer/VBoxContainer/ButtonContainer"]
 layout_mode = 2
 text = "Cancel"
+
+[node name="Leaderboard" type="PanelContainer" parent="Menu"]
+unique_name_in_owner = true
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="Menu/Leaderboard"]
+layout_mode = 2
+theme_override_constants/margin_left = 30
+theme_override_constants/margin_top = 30
+theme_override_constants/margin_right = 30
+theme_override_constants/margin_bottom = 30
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Menu/Leaderboard/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="Menu/Leaderboard/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "MATCH RESULTS"
+horizontal_alignment = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Menu/Leaderboard/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerList" type="VBoxContainer" parent="Menu/Leaderboard/MarginContainer/VBoxContainer/ScrollContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="ContinueButton" type="Button" parent="Menu/Leaderboard/MarginContainer/VBoxContainer"]
+layout_mode = 2
+text = "Continue"
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
 _spawnable_scenes = PackedStringArray("res://marble_player.tscn")
@@ -548,6 +594,7 @@ spawn_path = NodePath("..")
 [connection signal="pressed" from="Menu/MainMenu/MarginContainer/VBoxContainer/PracticeButton" to="." method="_on_practice_button_pressed"]
 [connection signal="pressed" from="Menu/PracticeSetup/MarginContainer/VBoxContainer/ButtonContainer/StartButton" to="." method="_on_practice_start_button_pressed"]
 [connection signal="pressed" from="Menu/PracticeSetup/MarginContainer/VBoxContainer/ButtonContainer/CancelButton" to="." method="_on_practice_cancel_button_pressed"]
+[connection signal="pressed" from="Menu/Leaderboard/MarginContainer/VBoxContainer/ContinueButton" to="." method="_on_leaderboard_continue_pressed"]
 [connection signal="toggled" from="Menu/MainMenu/MarginContainer/VBoxContainer/OptionsButton" to="." method="_on_options_button_toggled"]
 [connection signal="toggled" from="Menu/MainMenu/MarginContainer/VBoxContainer/OptionsButton" to="Menu/Options/MarginContainer/VBoxContainer/Fullscreen" method="_on_options_button_toggled"]
 [connection signal="pressed" from="Menu/MainMenu/MarginContainer/VBoxContainer/MusicDirectoryButton" to="." method="_on_music_directory_button_pressed"]

@@ -994,11 +994,9 @@ func fall_death() -> void:
 		print("  God mode enabled, ignoring")
 		return
 
-	print("  Starting fall death sequence")
+	print("  Starting fall death sequence (items lost to void)")
 
-	# Drop orbs and ability before falling to death
-	spawn_death_orb()
-	drop_ability()
+	# Don't drop orbs/ability when falling - they're lost to the void
 
 	is_falling_to_death = true
 	fall_death_timer = 0.0
