@@ -2,6 +2,13 @@ extends RigidBody3D
 
 # Preload orb scene for dropping on death
 const OrbScene = preload("res://collectible_orb.tscn")
+# Preload ability pickup scene for dropping on death
+const AbilityPickupScene = preload("res://ability_pickup.tscn")
+# Preload ability scenes for dropping
+const DashAttackScene = preload("res://abilities/dash_attack.tscn")
+const ExplosionScene = preload("res://abilities/explosion.tscn")
+const GunScene = preload("res://abilities/gun.tscn")
+const SwordScene = preload("res://abilities/sword.tscn")
 
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
 @onready var camera_arm: Node3D = get_node_or_null("CameraArm")
@@ -1030,19 +1037,89 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	print("Picked up ability: ", ability_name)
 
 func drop_ability() -> void:
-	"""Drop the current ability"""
+	"""Drop the current ability and spawn it as a pickup on the ground"""
 	if not current_ability:
 		return
+
+	# Get ability properties before removing it
+	var ability_name: String = current_ability.ability_name if "ability_name" in current_ability else "Unknown"
+	var ability_color: Color = current_ability.ability_color if "ability_color" in current_ability else Color.WHITE
+
+	# Map ability name to scene
+	var ability_scene: PackedScene = get_ability_scene_from_name(ability_name)
 
 	# Tell the ability it was dropped
 	if current_ability.has_method("drop"):
 		current_ability.drop()
 
-	# Remove the ability
+	# Remove the ability from player
 	current_ability.queue_free()
 	current_ability = null
 
-	print("Dropped ability")
+	# Spawn the ability pickup on the ground if we have a valid scene
+	if ability_scene:
+		spawn_ability_pickup(ability_scene, ability_name, ability_color)
+		print("Dropped ability: %s" % ability_name)
+	else:
+		print("Dropped ability but couldn't spawn pickup: %s" % ability_name)
+
+func get_ability_scene_from_name(ability_name: String) -> PackedScene:
+	"""Map ability name to its scene"""
+	match ability_name:
+		"Dash Attack":
+			return DashAttackScene
+		"Explosion":
+			return ExplosionScene
+		"Gun":
+			return GunScene
+		"Sword":
+			return SwordScene
+		_:
+			print("WARNING: Unknown ability name: %s" % ability_name)
+			return null
+
+func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, ability_color: Color) -> void:
+	"""Spawn an ability pickup on the ground near the player"""
+	# Get the world node (parent) to add the pickup to
+	var world: Node = get_parent()
+	if not world:
+		print("ERROR: No parent node to spawn ability pickup into!")
+		return
+
+	# Find ground position near player
+	var placement_offset: Vector3 = Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0))
+	var raycast_start: Vector3 = global_position + placement_offset + Vector3.UP * 10.0
+	var raycast_end: Vector3 = global_position + placement_offset + Vector3.DOWN * 20.0
+
+	# Raycast down to find ground
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(raycast_start, raycast_end)
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	# Determine spawn position
+	var spawn_pos: Vector3
+	if result:
+		# Found ground - spawn 1 unit above it
+		spawn_pos = result.position + Vector3.UP * 1.0
+	else:
+		# No ground found - use current height as fallback
+		spawn_pos = global_position + placement_offset
+
+	# Instantiate the ability pickup
+	var pickup: Area3D = AbilityPickupScene.instantiate()
+	pickup.ability_scene = ability_scene
+	pickup.ability_name = ability_name
+	pickup.ability_color = ability_color
+	pickup.position = spawn_pos
+
+	# Add the pickup to the world
+	world.add_child(pickup)
+
+	print("Ability pickup '%s' spawned on ground at position %s" % [ability_name, spawn_pos])
 
 @rpc("call_local")
 func use_ability() -> void:
@@ -1149,7 +1226,7 @@ func spawn_collection_effect() -> void:
 	print("Collection effect spawned for %s at position %s" % [name, global_position])
 
 func spawn_death_orb() -> void:
-	"""Spawn orbs at the player's death position - shoots out one orb per level"""
+	"""Spawn orbs at the player's death position - places them on the ground nearby"""
 	# Only spawn orbs if player has collected any (level > 0)
 	if level <= 0:
 		print("No orbs to drop - player level is 0")
@@ -1163,31 +1240,49 @@ func spawn_death_orb() -> void:
 
 	# Spawn one orb for each level (1-3 orbs)
 	var num_orbs: int = level
-	var shoot_radius: float = 3.0  # How far out to shoot the orbs
-	var shoot_height: float = 2.5  # Height variation for shot trajectory
+	var placement_radius: float = 1.5  # How far from death point to place orbs (on ground)
 
 	for i in range(num_orbs):
 		# Calculate angle for even distribution around the death point
 		var angle: float = (TAU / num_orbs) * i + randf_range(-0.2, 0.2)  # Add slight randomness
 
-		# Calculate offset position (shooting outward in a circle)
-		var offset: Vector3 = Vector3(
-			cos(angle) * shoot_radius,
-			shoot_height + randf_range(-0.5, 0.5),  # Slight height variation
-			sin(angle) * shoot_radius
+		# Calculate horizontal offset position (ground placement in a circle)
+		var horizontal_offset: Vector3 = Vector3(
+			cos(angle) * placement_radius,
+			0,
+			sin(angle) * placement_radius
 		)
+
+		# Start position for raycast (high above death point + offset)
+		var raycast_start: Vector3 = global_position + horizontal_offset + Vector3.UP * 10.0
+		var raycast_end: Vector3 = global_position + horizontal_offset + Vector3.DOWN * 20.0
+
+		# Raycast down to find ground
+		var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(raycast_start, raycast_end)
+		query.collision_mask = 1  # Only check world geometry (layer 1)
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		# Determine spawn position
+		var spawn_pos: Vector3
+		if result:
+			# Found ground - spawn 1 unit above it
+			spawn_pos = result.position + Vector3.UP * 1.0
+		else:
+			# No ground found - use current height as fallback
+			spawn_pos = global_position + horizontal_offset
 
 		# Instantiate the orb
 		var orb: Area3D = OrbScene.instantiate()
-
-		# Position the orb at death location plus offset
-		var spawn_pos: Vector3 = global_position + offset
 		orb.position = spawn_pos
 
 		# Add the orb to the world
 		world.add_child(orb)
 
-		print("Orb #%d shot out at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
+		print("Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
 
 	print("Total %d orbs dropped by player %s" % [num_orbs, name])
 
