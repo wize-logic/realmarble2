@@ -121,7 +121,7 @@ static func _extract_ogg_metadata(file_path: String) -> AudioMetadata:
 
 	# Try to find common comment patterns in the file
 	var file_size := file.get_length()
-	var search_size := min(file_size, 100000)  # Search first 100KB
+	var search_size: int = min(file_size, 100000)  # Search first 100KB
 	var buffer := file.get_buffer(search_size)
 	var buffer_str := buffer.get_string_from_utf8()
 
