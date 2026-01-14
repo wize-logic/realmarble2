@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://bvn4k5h2jm8yr"]
+[gd_scene load_steps=3 format=3 uid="uid://bvn4k5h2jm8yr"]
 
-[ext_resource type="Script" path="res://scripts/abilities/dash_attack.gd" id="1_dashattack"]
+[ext_resource type="Script" uid="uid://daxra3ywuwcpg" path="res://scripts/abilities/dash_attack.gd" id="1_dashattack"]
+[ext_resource type="AudioStream" uid="uid://dgumik0udjgh7" path="res://audio/Shooting.wav" id="2_wvolw"]
 
 [node name="DashAttack" type="Node3D"]
 script = ExtResource("1_dashattack")
+
+[node name="DashSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_wvolw")

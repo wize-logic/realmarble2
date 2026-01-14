@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://c8vghf7y4w8mn"]
+[gd_scene load_steps=3 format=3 uid="uid://c8vghf7y4w8mn"]
 
-[ext_resource type="Script" path="res://scripts/abilities/gun.gd" id="1_gun"]
+[ext_resource type="Script" uid="uid://ctdwstxbstedi" path="res://scripts/abilities/gun.gd" id="1_gun"]
+[ext_resource type="AudioStream" uid="uid://dc7puupetsakp" path="res://audio/Raygun.wav" id="2_7kaa4"]
 
 [node name="Gun" type="Node3D"]
 script = ExtResource("1_gun")
+
+[node name="GunSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_7kaa4")

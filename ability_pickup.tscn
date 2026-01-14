@@ -1,16 +1,13 @@
 [gd_scene load_steps=5 format=3 uid="uid://d3s6mw8hy4nfp"]
 
-[ext_resource type="Script" path="res://scripts/ability_pickup.gd" id="1_abilitypickup"]
+[ext_resource type="Script" uid="uid://r3jxg40rqhrg" path="res://scripts/ability_pickup.gd" id="1_abilitypickup"]
+[ext_resource type="AudioStream" uid="uid://cyrr0q36eey00" path="res://audio/ChaosDrive.wav" id="2_7x6gj"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_ability"]
 size = Vector3(0.4, 0.4, 0.4)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_ability"]
 size = Vector3(0.5, 0.5, 0.5)
-
-[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_ability"]
-mix_rate = 44100.0
-buffer_length = 0.1
 
 [node name="AbilityPickup" type="Area3D"]
 collision_layer = 16
@@ -24,6 +21,6 @@ mesh = SubResource("BoxMesh_ability")
 shape = SubResource("BoxShape3D_ability")
 
 [node name="PickupSound" type="AudioStreamPlayer3D" parent="."]
-stream = SubResource("AudioStreamGenerator_ability")
+stream = ExtResource("2_7x6gj")
 volume_db = -3.0
 max_distance = 25.0

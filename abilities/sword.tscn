@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://c7m8k9n2sword1"]
+[gd_scene load_steps=3 format=3 uid="uid://d01ti83ismvfw"]
 
-[ext_resource type="Script" path="res://scripts/abilities/sword.gd" id="1_sword"]
+[ext_resource type="Script" uid="uid://ipeiddln55rs" path="res://scripts/abilities/sword.gd" id="1_sword"]
+[ext_resource type="AudioStream" uid="uid://wbnfriqrmr8a" path="res://audio/Strong Sword Smack.wav" id="2_wd3aj"]
 
 [node name="Sword" type="Node3D"]
 script = ExtResource("1_sword")
+
+[node name="SwordSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_wd3aj")

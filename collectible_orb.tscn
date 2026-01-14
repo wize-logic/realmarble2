@@ -1,6 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://c5ymvn3qp2xhe"]
 
-[ext_resource type="Script" path="res://scripts/collectible_orb.gd" id="1_orb"]
+[ext_resource type="Script" uid="uid://1n5ljlijl1e7" path="res://scripts/collectible_orb.gd" id="1_orb"]
+[ext_resource type="AudioStream" uid="uid://brkh1rpgs0aaf" path="res://audio/Ring.wav" id="2_bqnhl"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_orb"]
 radius = 0.25
@@ -8,10 +9,6 @@ height = 0.5
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_orb"]
 radius = 0.3
-
-[sub_resource type="AudioStreamGenerator" id="AudioStreamGenerator_orb"]
-mix_rate = 44100.0
-buffer_length = 0.1
 
 [node name="CollectibleOrb" type="Area3D"]
 collision_layer = 8
@@ -25,6 +22,6 @@ mesh = SubResource("SphereMesh_orb")
 shape = SubResource("SphereShape3D_orb")
 
 [node name="CollectionSound" type="AudioStreamPlayer3D" parent="."]
-stream = SubResource("AudioStreamGenerator_orb")
+stream = ExtResource("2_bqnhl")
 volume_db = -5.0
 max_distance = 20.0

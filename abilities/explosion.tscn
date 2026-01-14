@@ -1,6 +1,10 @@
-[gd_scene load_steps=2 format=3 uid="uid://dv2k8h5j3mnxy"]
+[gd_scene load_steps=3 format=3 uid="uid://dv2k8h5j3mnxy"]
 
-[ext_resource type="Script" path="res://scripts/abilities/explosion.gd" id="1_explosion"]
+[ext_resource type="Script" uid="uid://b6xjprkfgiil7" path="res://scripts/abilities/explosion.gd" id="1_explosion"]
+[ext_resource type="AudioStream" uid="uid://ba4el4a3y4ih0" path="res://audio/Explosion.wav" id="2_wtx4c"]
 
 [node name="Explosion" type="Node3D"]
 script = ExtResource("1_explosion")
+
+[node name="ExplosionSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_wtx4c")
