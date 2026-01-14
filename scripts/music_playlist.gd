@@ -81,12 +81,12 @@ func stop_playlist() -> void:
 
 func pause_playlist() -> void:
 	"""Pause the current track"""
-	if audio_player.playing:
+	if audio_player.playing and not audio_player.stream_paused:
 		audio_player.stream_paused = true
 
 func resume_playlist() -> void:
 	"""Resume the current track"""
-	if audio_player.playing:
+	if audio_player.stream_paused:
 		audio_player.stream_paused = false
 
 func next_track() -> void:
