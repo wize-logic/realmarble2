@@ -356,61 +356,59 @@ func _ready() -> void:
 		jump_bounce_particles.name = "JumpBounceParticles"
 		add_child(jump_bounce_particles)
 
-		# Configure jump/bounce particles - 3 expanding blue circles
+		# Configure jump/bounce particles - 3 dark blue circles that trail below player
 		jump_bounce_particles.emitting = false
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 0.5  # Short duration for clean effect
+		jump_bounce_particles.lifetime = 0.6  # Last until player lands
 		jump_bounce_particles.one_shot = true
-		jump_bounce_particles.explosiveness = 1.0  # All emit at once
-		jump_bounce_particles.randomness = 0.0  # No randomness for uniform circles
-		jump_bounce_particles.local_coords = false
+		jump_bounce_particles.explosiveness = 0.8  # Stagger slightly for trail effect
+		jump_bounce_particles.randomness = 0.0  # No randomness
+		jump_bounce_particles.local_coords = true  # Move with player for trailing effect
 
-		# Set up particle mesh - larger circles
-		var jump_particle_mesh: QuadMesh = QuadMesh.new()
-		jump_particle_mesh.size = Vector2(0.6, 0.6)  # Larger for visible circles
+		# Set up particle mesh - use sphere for perfect circles (not squares)
+		var jump_particle_mesh: SphereMesh = SphereMesh.new()
+		jump_particle_mesh.radius = 0.5  # Same as marble radius
+		jump_particle_mesh.height = 1.0  # Same as marble diameter
+		jump_particle_mesh.radial_segments = 16  # Smooth circle
+		jump_particle_mesh.rings = 8
 		jump_bounce_particles.mesh = jump_particle_mesh
 
-		# Create material for particles with blue color
+		# Create material for dark blue semi-transparent circles
 		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		jump_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
 		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.3, 0.7, 1.0, 0.7)  # Blue base color
-		jump_particle_material.vertex_color_use_as_albedo = true
+		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.5)  # Dark blue, semi-transparent
 		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		jump_particle_material.disable_receive_shadows = true
 		jump_bounce_particles.mesh.material = jump_particle_material
 
-		# Emission shape - ring expanding outward
-		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-		jump_bounce_particles.emission_ring_axis = Vector3.UP
-		jump_bounce_particles.emission_ring_height = 0.1
-		jump_bounce_particles.emission_ring_radius = 0.2  # Start small
-		jump_bounce_particles.emission_ring_inner_radius = 0.15
+		# Emission shape - point below player
+		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
+		jump_bounce_particles.emission_sphere_radius = 0.0
 
-		# Movement - expand outward horizontally (no upward velocity)
-		jump_bounce_particles.direction = Vector3(0, 0, 0)  # No directional velocity
+		# Movement - stay below player (no velocity)
+		jump_bounce_particles.direction = Vector3.ZERO
 		jump_bounce_particles.spread = 0.0
-		jump_bounce_particles.gravity = Vector3.ZERO  # No gravity
+		jump_bounce_particles.gravity = Vector3.ZERO
 		jump_bounce_particles.initial_velocity_min = 0.0
 		jump_bounce_particles.initial_velocity_max = 0.0
-		jump_bounce_particles.radial_accel_min = 8.0  # Fast outward expansion
-		jump_bounce_particles.radial_accel_max = 8.0
 
-		# Size over lifetime - grow rapidly then fade
-		jump_bounce_particles.scale_amount_min = 4.0  # Large circles
-		jump_bounce_particles.scale_amount_max = 5.0
+		# Size - constant, same as marble
+		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
+		jump_bounce_particles.scale_amount_max = 1.0
+
+		# Fade curve - stay visible then fade at end
 		var jump_scale_curve: Curve = Curve.new()
-		jump_scale_curve.add_point(Vector2(0, 0.3))  # Start small
-		jump_scale_curve.add_point(Vector2(0.4, 1.2))  # Grow quickly
+		jump_scale_curve.add_point(Vector2(0, 1.0))  # Full size
+		jump_scale_curve.add_point(Vector2(0.7, 1.0))  # Stay full size
 		jump_scale_curve.add_point(Vector2(1, 0.0))  # Fade out
 		jump_bounce_particles.scale_amount_curve = jump_scale_curve
 
-		# Color gradient - bright blue fading to transparent
+		# Color gradient - dark blue staying visible then fading
 		var jump_gradient: Gradient = Gradient.new()
-		jump_gradient.add_point(0.0, Color(0.3, 0.7, 1.0, 0.8))  # Bright blue
-		jump_gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.5))  # Lighter blue
-		jump_gradient.add_point(1.0, Color(0.5, 0.9, 1.0, 0.0))  # Transparent
+		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.5))  # Dark blue, semi-transparent
+		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.5))  # Stay dark blue
+		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
 	# Set up marble mesh and texture
@@ -1302,20 +1300,16 @@ func spawn_collection_effect() -> void:
 	print("Collection effect spawned for %s at position %s" % [name, global_position])
 
 func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
-	"""Spawn 3 blue circle burst effect for jumps and bounces (Sonic Adventure 2 style)"""
+	"""Spawn 3 dark blue circles that trail below player (Sonic Adventure 2 style)"""
 	if not jump_bounce_particles:
 		return
 
-	# Scale expansion speed based on intensity (for consecutive bounces)
-	jump_bounce_particles.radial_accel_min = 8.0 * intensity_multiplier
-	jump_bounce_particles.radial_accel_max = 8.0 * intensity_multiplier
-
-	# Position particles slightly below player (at feet level)
-	jump_bounce_particles.global_position = global_position + Vector3(0, -0.3, 0)
+	# Position particles below player in local space (so they trail with the player)
+	jump_bounce_particles.position = Vector3(0, -0.8, 0)  # Below the marble
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 blue circles) spawned for %s (intensity: %.2fx)" % [name, intensity_multiplier])
+	print("Jump/Bounce effect (3 dark blue circles trailing) spawned for %s (intensity: %.2fx)" % [name, intensity_multiplier])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
