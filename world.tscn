@@ -18,7 +18,7 @@
 [ext_resource type="Script" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
 [ext_resource type="Script" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
 [ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="18_orbitcam"]
-[ext_resource type="PackedScene" uid="uid://rocket_league_menu" path="res://rocket_league_menu.tscn" id="19_rocketmenu"]
+[ext_resource type="PackedScene" uid="uid://rl_main_menu" path="res://rl_main_menu.tscn" id="19_rlmenu"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
 energy_multiplier = 1.25
@@ -427,7 +427,7 @@ layout_mode = 2
 text = "Quit"
 script = ExtResource("9_ucmny")
 
-[node name="MainMenu" parent="Menu" instance=ExtResource("19_rocketmenu")]
+[node name="MainMenu" parent="Menu" instance=ExtResource("19_rlmenu")]
 
 [node name="MusicDirectoryDialog" type="FileDialog" parent="Menu"]
 title = "Select Music Directory"
@@ -453,7 +453,9 @@ spawn_path = NodePath("..")
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Resume" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Options" to="." method="_on_options_pressed"]
 [connection signal="play_pressed" from="Menu/MainMenu" to="." method="_on_play_pressed"]
-[connection signal="multiplayer_pressed" from="Menu/MainMenu" to="." method="_on_multiplayer_button_pressed"]
-[connection signal="settings_pressed" from="Menu/MainMenu" to="." method="_on_settings_pressed"]
+[connection signal="item_shop_pressed" from="Menu/MainMenu" to="." method="_on_item_shop_pressed"]
+[connection signal="garage_pressed" from="Menu/MainMenu" to="." method="_on_garage_pressed"]
+[connection signal="profile_pressed" from="Menu/MainMenu" to="." method="_on_profile_pressed"]
+[connection signal="options_pressed" from="Menu/MainMenu" to="." method="_on_settings_pressed"]
 [connection signal="quit_pressed" from="Menu/MainMenu" to="." method="_on_quit_pressed"]
 [connection signal="dir_selected" from="Menu/MusicDirectoryDialog" to="." method="_on_music_directory_selected"]

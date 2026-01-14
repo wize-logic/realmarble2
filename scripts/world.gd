@@ -223,6 +223,18 @@ func _on_quit_pressed() -> void:
 	"""Quit the game"""
 	get_tree().quit()
 
+func _on_item_shop_pressed() -> void:
+	"""Item Shop placeholder"""
+	print("Item Shop - Not implemented yet")
+
+func _on_garage_pressed() -> void:
+	"""Garage placeholder"""
+	print("Garage - Not implemented yet")
+
+func _on_profile_pressed() -> void:
+	"""Profile placeholder"""
+	print("Profile - Not implemented yet")
+
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
