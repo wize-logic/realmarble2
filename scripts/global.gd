@@ -9,7 +9,7 @@ var sensitivity: float = 0.005
 var controller_sensitivity: float = 0.010
 
 # Game settings
-var music_directory: String = "res://music"
+var music_directory: String = OS.get_executable_path().get_base_dir() + "/music"
 
 func _ready() -> void:
 	# Load settings from file if exists
@@ -40,7 +40,7 @@ func load_settings() -> void:
 	player_name = config.get_value("player", "name", "Player")
 	sensitivity = config.get_value("settings", "sensitivity", 0.005)
 	controller_sensitivity = config.get_value("settings", "controller_sensitivity", 0.010)
-	music_directory = config.get_value("settings", "music_directory", "res://music")
+	music_directory = config.get_value("settings", "music_directory", OS.get_executable_path().get_base_dir() + "/music")
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:

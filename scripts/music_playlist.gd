@@ -3,6 +3,8 @@ extends Node
 ## Music Playlist Manager - Rocket League style
 ## Plays background music during gameplay with playlist support
 
+signal track_started(track_name: String)
+
 @export var playlist: Array[AudioStream] = []  # Add songs here in the editor
 @export var shuffle: bool = true  # Shuffle playlist
 @export var volume_db: float = -15.0  # Music volume
@@ -128,6 +130,9 @@ func _play_current_track() -> void:
 
 	# Fade in
 	_fade_in()
+
+	# Emit signal with track name
+	track_started.emit(get_current_track_name())
 
 func _advance_track() -> void:
 	"""Move to next track in playlist"""

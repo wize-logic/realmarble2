@@ -7,6 +7,7 @@ extends Node
 @onready var address_entry: LineEdit = get_node_or_null("%AddressEntry")
 @onready var menu_music: AudioStreamPlayer = get_node_or_null("%MenuMusic")
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
+@onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
 
 # Multiplayer UI
 var lobby_ui: Control = null
@@ -70,6 +71,10 @@ func _ready() -> void:
 
 	# Create countdown UI
 	create_countdown_ui()
+
+	# Connect music notification
+	if gameplay_music and music_notification and gameplay_music.has_signal("track_started"):
+		gameplay_music.track_started.connect(_on_track_started)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
@@ -670,3 +675,8 @@ func update_player_spawns() -> void:
 		if "spawns" in player:
 			player.spawns = new_spawns
 			print("Updated spawns for player: ", player.name)
+
+func _on_track_started(track_name: String) -> void:
+	"""Called when a new music track starts playing"""
+	if music_notification and music_notification.has_method("show_notification"):
+		music_notification.show_notification("♪ " + track_name)
