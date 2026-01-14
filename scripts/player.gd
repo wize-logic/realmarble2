@@ -108,6 +108,9 @@ var current_ability: Node = null  # The currently equipped ability
 # Death effects
 var death_particles: CPUParticles3D = null  # Particle effect for death
 
+# Collection effects
+var collection_particles: CPUParticles3D = null  # Particle effect for collecting orbs/abilities
+
 # Visual effects
 var aura_light: OmniLight3D = null  # Lighting effect around player for visibility
 
@@ -275,6 +278,69 @@ func _ready() -> void:
 		gradient.add_point(0.7, Color(0.8, 0.1, 0.1, 0.6))  # Dark red
 		gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Transparent
 		death_particles.color_ramp = gradient
+
+	# Create collection particle effect (blue aura rising upward)
+	if not collection_particles:
+		collection_particles = CPUParticles3D.new()
+		collection_particles.name = "CollectionParticles"
+		add_child(collection_particles)
+
+		# Configure collection particles - upward blue aura
+		collection_particles.emitting = false
+		collection_particles.amount = 80  # Moderate amount for smooth aura
+		collection_particles.lifetime = 1.5  # Duration of effect
+		collection_particles.one_shot = true
+		collection_particles.explosiveness = 0.2  # Slightly delayed emission for flowing effect
+		collection_particles.randomness = 0.3
+		collection_particles.local_coords = false
+
+		# Set up particle mesh
+		var collection_particle_mesh: QuadMesh = QuadMesh.new()
+		collection_particle_mesh.size = Vector2(0.2, 0.2)
+		collection_particles.mesh = collection_particle_mesh
+
+		# Create material for particles
+		var collection_particle_material: StandardMaterial3D = StandardMaterial3D.new()
+		collection_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		collection_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
+		collection_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		collection_particle_material.vertex_color_use_as_albedo = true
+		collection_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		collection_particle_material.disable_receive_shadows = true
+		collection_particles.mesh.material = collection_particle_material
+
+		# Emission shape - ring at base of player
+		collection_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		collection_particles.emission_ring_axis = Vector3.UP
+		collection_particles.emission_ring_height = 0.1
+		collection_particles.emission_ring_radius = 0.6  # Slightly larger than player radius
+		collection_particles.emission_ring_inner_radius = 0.3
+
+		# Movement - upward flow from ground
+		collection_particles.direction = Vector3.UP
+		collection_particles.spread = 15.0  # Slight spread for natural look
+		collection_particles.gravity = Vector3(0, -2.0, 0)  # Slight downward gravity for arc
+		collection_particles.initial_velocity_min = 4.0
+		collection_particles.initial_velocity_max = 6.0
+
+		# Size over lifetime - start small, grow, then shrink
+		collection_particles.scale_amount_min = 1.5
+		collection_particles.scale_amount_max = 2.5
+		var scale_curve: Curve = Curve.new()
+		scale_curve.add_point(Vector2(0, 0.3))
+		scale_curve.add_point(Vector2(0.2, 1.2))
+		scale_curve.add_point(Vector2(0.6, 1.0))
+		scale_curve.add_point(Vector2(1, 0.0))
+		collection_particles.scale_amount_curve = scale_curve
+
+		# Color gradient - bright blue aura fading out
+		var collection_gradient: Gradient = Gradient.new()
+		collection_gradient.add_point(0.0, Color(0.3, 0.7, 1.0, 1.0))  # Bright cyan-blue
+		collection_gradient.add_point(0.2, Color(0.4, 0.8, 1.0, 0.9))  # Light blue
+		collection_gradient.add_point(0.5, Color(0.5, 0.9, 1.0, 0.7))  # Lighter blue
+		collection_gradient.add_point(0.8, Color(0.6, 0.95, 1.0, 0.3))  # Very light blue, fading
+		collection_gradient.add_point(1.0, Color(0.7, 1.0, 1.0, 0.0))  # Transparent
+		collection_particles.color_ramp = collection_gradient
 
 	# Set up marble mesh and texture
 	if not marble_mesh:
@@ -924,6 +990,9 @@ func fall_death() -> void:
 
 func collect_orb() -> void:
 	"""Call this when player collects a level-up orb"""
+	# Spawn collection effect
+	spawn_collection_effect()
+
 	if level < MAX_LEVEL:
 		level += 1
 		update_stats()
@@ -943,6 +1012,9 @@ func update_stats() -> void:
 
 func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	"""Pickup a new ability"""
+	# Spawn collection effect
+	spawn_collection_effect()
+
 	# Drop current ability if we have one
 	if current_ability:
 		drop_ability()
@@ -1063,6 +1135,18 @@ func spawn_death_particles() -> void:
 	death_particles.restart()
 
 	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+
+func spawn_collection_effect() -> void:
+	"""Spawn blue aura collection effect rising from beneath the player"""
+	if not collection_particles:
+		return
+
+	# Position particles at base of player (slightly below for upward flow)
+	collection_particles.global_position = global_position + Vector3(0, -0.4, 0)
+	collection_particles.emitting = true
+	collection_particles.restart()
+
+	print("Collection effect spawned for %s at position %s" % [name, global_position])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - shoots out one orb per level"""
