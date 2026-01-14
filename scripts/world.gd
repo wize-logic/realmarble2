@@ -426,31 +426,41 @@ func _auto_load_music() -> void:
 
 func _load_music_from_directory(dir: String) -> int:
 	"""Load all music files from a directory and return count of songs loaded"""
+	print("Attempting to open directory: %s" % dir)
 	var dir_access: DirAccess = DirAccess.open(dir)
 	if not dir_access:
+		print("Failed to open directory: %s" % dir)
 		return 0
 
+	print("Successfully opened directory: %s" % dir)
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
+	var files_found: int = 0
 
 	while file_name != "":
 		if not dir_access.current_is_dir():
+			files_found += 1
 			var ext: String = file_name.get_extension().to_lower()
+			print("Found file: %s (extension: %s)" % [file_name, ext])
 
 			# Check if it's a supported audio format
 			if ext in ["mp3", "ogg", "wav"]:
 				var file_path: String = dir.path_join(file_name)
+				print("Attempting to load audio file: %s" % file_path)
 				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 				if audio_stream and gameplay_music.has_method("add_song"):
 					gameplay_music.add_song(audio_stream)
 					songs_loaded += 1
-					print("Loaded: %s" % file_name)
+					print("Successfully loaded: %s" % file_name)
+				else:
+					print("Failed to load or add: %s" % file_name)
 
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
+	print("Directory scan complete. Files found: %d, Songs loaded: %d" % [files_found, songs_loaded])
 	return songs_loaded
 
 func _on_music_directory_button_pressed() -> void:
@@ -483,6 +493,17 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 	"""Load an audio file and return an AudioStream"""
 	var audio_stream: AudioStream = null
 
+	# For res:// paths, try ResourceLoader first (for imported files)
+	if file_path.begins_with("res://"):
+		audio_stream = ResourceLoader.load(file_path)
+		if audio_stream:
+			print("Loaded via ResourceLoader: %s" % file_path)
+			return audio_stream
+		else:
+			print("ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
+			# Fall through to FileAccess method below
+
+	# For external files (or res:// files that aren't imported), use FileAccess
 	match extension:
 		"mp3":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
