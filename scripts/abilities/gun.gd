@@ -47,9 +47,9 @@ func activate() -> void:
 		# Fallback to camera_arm if camera not found
 		fire_direction = -camera_arm.global_transform.basis.z
 	else:
-		# Fallback: use player's velocity direction
-		if player.linear_velocity.length() > 0.1:
-			fire_direction = player.linear_velocity.normalized()
+		# Fallback for bots: use player's facing direction (rotation.y)
+		# This is CRITICAL for bots to aim properly
+		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Calculate gun barrel position (offset in front of player in camera direction)
 	var barrel_offset: float = 1.0  # Distance in front of player

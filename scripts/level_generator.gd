@@ -207,10 +207,15 @@ func generate_death_zone() -> void:
 
 func _on_death_zone_entered(body: Node3D) -> void:
 	"""Handle player falling into death zone"""
+	print("Death zone entered by: %s (type: %s)" % [body.name, body.get_class()])
 	if body.has_method("fall_death"):
+		print("Calling fall_death() on %s" % body.name)
 		body.fall_death()
 	elif body.has_method("respawn"):
+		print("Calling respawn() directly on %s" % body.name)
 		body.respawn()
+	else:
+		print("WARNING: %s has neither fall_death() nor respawn() method!" % body.name)
 
 func apply_procedural_textures() -> void:
 	"""Apply procedurally generated textures to all platforms"""

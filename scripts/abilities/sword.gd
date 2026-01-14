@@ -142,10 +142,8 @@ func activate() -> void:
 		slash_direction.y = 0
 		slash_direction = slash_direction.normalized()
 	else:
-		# Fallback: use player's current velocity direction
-		if player.linear_velocity.length() > 0.1:
-			slash_direction = player.linear_velocity.normalized()
-			slash_direction.y = 0
+		# Fallback for bots: use player's facing direction (rotation.y)
+		slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Start slash
 	is_slashing = true
