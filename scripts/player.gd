@@ -862,6 +862,10 @@ func check_ground() -> void:
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
+		# Clear particle trails immediately on landing
+		if jump_bounce_particles:
+			jump_bounce_particles.emitting = false
+
 		# Reset bounce counter if landing normally (not from a bounce)
 		if not just_bounce_landed:
 			if bounce_count > 0:
@@ -1299,17 +1303,17 @@ func spawn_collection_effect() -> void:
 	print("Collection effect spawned for %s at position %s" % [name, global_position])
 
 func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
-	"""Spawn 3 dark blue circles that trail below player (Sonic Adventure 2 style)"""
+	"""Spawn 3 dark blue circles that trail behind player motion (Sonic Adventure 2 style)"""
 	if not jump_bounce_particles:
 		return
 
-	# Check if player is falling or rising
+	# Trail in the opposite direction of player's velocity to show motion through air
 	var trail_direction: Vector3
-	if linear_velocity.y < 0:
-		# Player is falling - trail upward (opposite direction)
-		trail_direction = Vector3.UP
+	if linear_velocity.length() > 0.5:
+		# Player is moving - trail in opposite direction of movement
+		trail_direction = -linear_velocity.normalized()
 	else:
-		# Player is rising/jumping - trail downward
+		# Player barely moving - default to downward trail
 		trail_direction = Vector3.DOWN
 
 	jump_bounce_particles.direction = trail_direction
@@ -1319,7 +1323,7 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing %s) spawned for %s (intensity: %.2fx)" % ["upward" if linear_velocity.y < 0 else "downward", name, intensity_multiplier])
+	print("Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
