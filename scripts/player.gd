@@ -359,11 +359,11 @@ func _ready() -> void:
 		# Configure jump/bounce particles - 3 dark blue circles that trail below player
 		jump_bounce_particles.emitting = false
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 0.6  # Longer lifetime for slow trail
+		jump_bounce_particles.lifetime = 1.2  # Longer lifetime to see slow trail
 		jump_bounce_particles.one_shot = true
 		jump_bounce_particles.explosiveness = 1.0  # All spawn at once for immediate trail
 		jump_bounce_particles.randomness = 0.0  # No randomness
-		jump_bounce_particles.local_coords = false  # World space - stay where spawned to create trail
+		jump_bounce_particles.local_coords = true  # Local space - slightly follow player while trailing
 
 		# Set up particle mesh - use sphere for perfect circles (not squares)
 		var jump_particle_mesh: SphereMesh = SphereMesh.new()
@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move backwards from player to trail away slowly
+		# Movement - particles move backwards from player to trail away very slowly
 		jump_bounce_particles.direction = Vector3.ZERO  # Set dynamically in spawn function
-		jump_bounce_particles.spread = 15.0  # Spread for spacing between circles
-		jump_bounce_particles.gravity = Vector3(0, -2.0, 0)  # Light gravity for gentle arc
-		jump_bounce_particles.initial_velocity_min = 2.5  # Move backwards slowly from player
-		jump_bounce_particles.initial_velocity_max = 4.0
+		jump_bounce_particles.spread = 60.0  # Wider spread for better spacing between circles
+		jump_bounce_particles.gravity = Vector3(0, -1.5, 0)  # Light gravity for gentle arc
+		jump_bounce_particles.initial_velocity_min = 0.3  # Move backwards very slowly from player
+		jump_bounce_particles.initial_velocity_max = 0.6
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
