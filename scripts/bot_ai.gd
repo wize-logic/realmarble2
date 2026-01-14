@@ -684,44 +684,54 @@ func do_collect_orb(delta: float) -> void:
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
 
-func check_for_edge(direction: Vector3, check_distance: float = 3.5) -> bool:
+func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 	"""
 	Check if there's a dangerous edge/drop-off in the given direction
 	Returns true if there's an edge that the bot should avoid
-	EXTRA CAREFUL - Uses multiple raycasts at different distances
 	"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Check at multiple distances for better edge detection
-	var check_distances: Array = [1.5, 2.5, 3.5]  # Check near, medium, and far
+	# First, check current ground level for reference
+	var current_ground_check: Vector3 = bot.global_position + Vector3.UP * 0.5
+	var current_ground_end: Vector3 = bot.global_position + Vector3.DOWN * 3.0
 
-	for dist in check_distances:
-		# Cast a ray downward from a point ahead of the bot
-		var forward_point: Vector3 = bot.global_position + direction.normalized() * dist
-		var ray_start: Vector3 = forward_point + Vector3.UP * 0.5  # Start slightly above ground
-		var ray_end: Vector3 = forward_point + Vector3.DOWN * 8.0  # Check down 8 units (increased)
+	var current_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(current_ground_check, current_ground_end)
+	current_query.exclude = [bot]
+	current_query.collision_mask = 1
 
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-		query.exclude = [bot]
-		query.collision_mask = 1  # Only check world geometry
+	var current_result: Dictionary = space_state.intersect_ray(current_query)
 
-		var result: Dictionary = space_state.intersect_ray(query)
+	# If bot isn't even on ground, don't do edge checks (prevents false positives)
+	if not current_result:
+		return false
 
-		# If no ground found within 8 units below, there's an edge
-		if not result:
-			return true
+	var current_ground_y: float = current_result.position.y
 
-		# If ground is more than 2 units below current position, it's a dangerous drop (more conservative)
-		var ground_y: float = result.position.y
-		var drop_distance: float = bot.global_position.y - ground_y
+	# Now check ahead for edges
+	var forward_point: Vector3 = bot.global_position + direction.normalized() * check_distance
+	var ray_start: Vector3 = forward_point + Vector3.UP * 0.5
+	var ray_end: Vector3 = forward_point + Vector3.DOWN * 10.0
 
-		if drop_distance > 2.0:  # Reduced from 3.0 to be more careful
-			return true
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [bot]
+	query.collision_mask = 1
 
-	return false
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	# If no ground found ahead, there's definitely an edge
+	if not result:
+		return true
+
+	# Compare ground ahead to current ground level
+	var ahead_ground_y: float = result.position.y
+	var ground_drop: float = current_ground_y - ahead_ground_y
+
+	# Only consider it an edge if the drop is significant (4 units or more)
+	# This prevents false positives on normal slopes
+	return ground_drop > 4.0
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""
