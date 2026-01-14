@@ -19,15 +19,24 @@ var charge_meter_label: Label = null
 
 ## Number of hits before respawn
 @export var health: int = 3
-## The xyz position of the random spawns, you can add as many as you want!
+## The xyz position of the random spawns, you can add as many as you want! (16 spawns for 16 players)
 @export var spawns: PackedVector3Array = [
-	Vector3(-18, 2, 0),
-	Vector3(18, 2, 0),
-	Vector3(-2.8, 2, -6),
-	Vector3(-17, 2, 17),
-	Vector3(17, 2, 17),
-	Vector3(17, 2, -17),
-	Vector3(-17, 2, -17)
+	Vector3(0, 2, 0),      # Center
+	Vector3(10, 2, 0),     # Ring 1
+	Vector3(-10, 2, 0),
+	Vector3(0, 2, 10),
+	Vector3(0, 2, -10),
+	Vector3(10, 2, 10),    # Ring 2 (diagonals)
+	Vector3(-10, 2, 10),
+	Vector3(10, 2, -10),
+	Vector3(-10, 2, -10),
+	Vector3(20, 2, 0),     # Ring 3 (further out)
+	Vector3(-20, 2, 0),
+	Vector3(0, 2, 20),
+	Vector3(0, 2, -20),
+	Vector3(15, 2, 15),    # Ring 4 (additional positions)
+	Vector3(-15, 2, -15),
+	Vector3(15, 2, -15)
 ]
 
 # Camera settings - 3rd person shooter style
