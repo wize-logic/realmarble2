@@ -7,6 +7,7 @@ extends RigidBody3D
 @onready var jump_sound: AudioStreamPlayer3D = get_node_or_null("JumpSound")
 @onready var spin_sound: AudioStreamPlayer3D = get_node_or_null("SpinSound")
 @onready var land_sound: AudioStreamPlayer3D = get_node_or_null("LandSound")
+@onready var bounce_sound: AudioStreamPlayer3D = get_node_or_null("BounceSound")
 @onready var charge_sound: AudioStreamPlayer3D = get_node_or_null("ChargeSound")
 @onready var hit_sound: AudioStreamPlayer3D = get_node_or_null("HitSound")
 @onready var death_sound: AudioStreamPlayer3D = get_node_or_null("DeathSound")
@@ -65,6 +66,13 @@ var current_spin_dash_force: float = 150.0
 # Jump system
 var jump_count: int = 0
 var max_jumps: int = 2  # Double jump!
+
+# Bounce mechanic (Sonic Adventure 2 style)
+var is_bouncing: bool = false  # Currently performing bounce attack
+var bounce_velocity: float = 40.0  # Strong downward velocity
+var bounce_back_impulse: float = 90.0  # Upward impulse on ground hit
+var bounce_cooldown: float = 0.0  # Cooldown timer
+var bounce_cooldown_time: float = 0.3  # Cooldown duration
 
 # Spin dash properties
 var is_charging_spin: bool = false
@@ -167,6 +175,13 @@ func _ready() -> void:
 		add_child(land_sound)
 		land_sound.max_distance = 15.0
 		land_sound.volume_db = -8.0
+
+	if not bounce_sound:
+		bounce_sound = AudioStreamPlayer3D.new()
+		bounce_sound.name = "BounceSound"
+		add_child(bounce_sound)
+		bounce_sound.max_distance = 20.0
+		bounce_sound.volume_db = -2.0
 
 	if not charge_sound:
 		charge_sound = AudioStreamPlayer3D.new()
@@ -490,6 +505,21 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
 
+	# Bounce attack - Right mouse button (Sonic Adventure 2 style)
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.pressed and not event.echo:
+			# Can only bounce in the air and if not on cooldown
+			if not is_grounded and bounce_cooldown <= 0.0 and not is_bouncing:
+				print("BOUNCE ATTACK!")
+				start_bounce()
+			else:
+				if is_grounded:
+					print("Can't bounce - on ground")
+				elif bounce_cooldown > 0.0:
+					print("Can't bounce - on cooldown (%.2f)" % bounce_cooldown)
+				elif is_bouncing:
+					print("Already bouncing")
+
 	# Use ability - E key or controller X button (with charging support)
 	if Input.is_action_just_pressed("use_ability"):
 		# Start charging the ability
@@ -555,6 +585,10 @@ func _physics_process(delta: float) -> void:
 
 	# Check if marble is on ground using raycast
 	check_ground()
+
+	# Update bounce cooldown
+	if bounce_cooldown > 0.0:
+		bounce_cooldown -= delta
 
 	# Update spin dash cooldown
 	if spin_cooldown > 0.0:
@@ -641,13 +675,33 @@ func check_ground() -> void:
 	var was_grounded: bool = is_grounded
 	is_grounded = ground_ray.is_colliding()
 
+	# Handle bounce landing
+	if is_grounded and not was_grounded and is_bouncing:
+		print("BOUNCE IMPACT! Launching upward with impulse: %.1f" % bounce_back_impulse)
+
+		# Cancel vertical velocity and apply strong upward impulse
+		var vel: Vector3 = linear_velocity
+		vel.y = 0
+		linear_velocity = vel
+		apply_central_impulse(Vector3.UP * bounce_back_impulse)
+
+		# End bounce state and start cooldown
+		is_bouncing = false
+		bounce_cooldown = bounce_cooldown_time
+
+		# Play bounce sound again for impact
+		if bounce_sound and bounce_sound.stream:
+			play_bounce_sound.rpc()
+
+		print("Bounce complete! Cooldown started")
+
 	# Reset jump count when landing
 	if is_grounded and not was_grounded:
 		jump_count = 0
 		print("Landed! Jump count reset")
 
-		# Play landing sound
-		if land_sound and land_sound.stream:
+		# Play landing sound (only if not bouncing, since bounce has its own sound)
+		if land_sound and land_sound.stream and not is_bouncing:
 			play_land_sound.rpc()
 
 	# Debug logging every 60 frames (about once per second)
@@ -716,6 +770,27 @@ func execute_spin_dash() -> void:
 		play_spin_sound.rpc()
 
 	print("Spin dash! Charge: %.1f%% | Force: %.1f" % [charge_multiplier * 100, dash_impulse])
+
+func start_bounce() -> void:
+	"""Start the bounce attack - Sonic Adventure 2 style"""
+	if is_bouncing:
+		return
+
+	print("Starting bounce attack!")
+	is_bouncing = true
+
+	# Cancel all horizontal velocity and apply strong downward velocity
+	var vel: Vector3 = linear_velocity
+	vel.x = 0
+	vel.z = 0
+	vel.y = -bounce_velocity  # Strong downward velocity
+	linear_velocity = vel
+
+	# Play bounce sound
+	if bounce_sound and bounce_sound.stream:
+		play_bounce_sound.rpc()
+
+	print("Bounce velocity applied: y=%.1f" % vel.y)
 
 @rpc("any_peer")
 func receive_damage(damage: int = 1) -> void:
@@ -878,6 +953,12 @@ func play_land_sound() -> void:
 	if land_sound and land_sound.stream:
 		land_sound.pitch_scale = randf_range(0.85, 1.15)
 		land_sound.play()
+
+@rpc("call_local")
+func play_bounce_sound() -> void:
+	if bounce_sound and bounce_sound.stream:
+		bounce_sound.pitch_scale = randf_range(0.9, 1.2)
+		bounce_sound.play()
 
 @rpc("call_local")
 func play_hit_sound() -> void:
