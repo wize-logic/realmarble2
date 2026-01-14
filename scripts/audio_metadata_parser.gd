@@ -69,7 +69,7 @@ static func _extract_mp3_metadata(file_path: String) -> AudioMetadata:
 		var frame_id := file.get_buffer(4).get_string_from_ascii()
 
 		# Check for padding (null bytes)
-		if frame_id[0] == char(0):
+		if frame_id.is_empty() or frame_id.unicode_at(0) == 0:
 			break
 
 		# Read frame size
@@ -129,9 +129,7 @@ static func _extract_ogg_metadata(file_path: String) -> AudioMetadata:
 	var title_idx := buffer_str.find("TITLE=")
 	if title_idx >= 0:
 		var start := title_idx + 6
-		var end := buffer_str.find(char(0), start)
-		if end < 0:
-			end = buffer_str.find("\n", start)
+		var end := _find_null_or_newline(buffer_str, start)
 		if end > start:
 			metadata.title = buffer_str.substr(start, end - start)
 
@@ -139,9 +137,7 @@ static func _extract_ogg_metadata(file_path: String) -> AudioMetadata:
 	var artist_idx := buffer_str.find("ARTIST=")
 	if artist_idx >= 0:
 		var start := artist_idx + 7
-		var end := buffer_str.find(char(0), start)
-		if end < 0:
-			end = buffer_str.find("\n", start)
+		var end := _find_null_or_newline(buffer_str, start)
 		if end > start:
 			metadata.artist = buffer_str.substr(start, end - start)
 
@@ -149,9 +145,7 @@ static func _extract_ogg_metadata(file_path: String) -> AudioMetadata:
 	var album_idx := buffer_str.find("ALBUM=")
 	if album_idx >= 0:
 		var start := album_idx + 6
-		var end := buffer_str.find(char(0), start)
-		if end < 0:
-			end = buffer_str.find("\n", start)
+		var end := _find_null_or_newline(buffer_str, start)
 		if end > start:
 			metadata.album = buffer_str.substr(start, end - start)
 
@@ -162,6 +156,14 @@ static func _extract_ogg_metadata(file_path: String) -> AudioMetadata:
 		metadata.title = file_path.get_file().get_basename()
 
 	return metadata
+
+## Helper function to find null character or newline in a string
+static func _find_null_or_newline(text: String, start: int) -> int:
+	for i in range(start, text.length()):
+		var code := text.unicode_at(i)
+		if code == 0 or code == 10:  # null or newline
+			return i
+	return text.length()
 
 ## Read a synchsafe integer (used in ID3v2)
 static func _read_synchsafe_int(file: FileAccess) -> int:
