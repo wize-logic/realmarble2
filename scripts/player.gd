@@ -385,9 +385,9 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move backwards from player to trail away slowly
+		# Movement - particles move backwards from player to trail away slowly in a line
 		jump_bounce_particles.direction = Vector3.ZERO  # Set dynamically in spawn function
-		jump_bounce_particles.spread = 60.0  # Wider spread for better spacing between circles
+		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
 		jump_bounce_particles.gravity = Vector3(0, -1.5, 0)  # Light gravity for gentle arc
 		jump_bounce_particles.initial_velocity_min = 0.5  # Move backwards slowly from player
 		jump_bounce_particles.initial_velocity_max = 0.9
