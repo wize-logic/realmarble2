@@ -1033,9 +1033,9 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	# Spawn collection effect
 	spawn_collection_effect()
 
-	# Drop current ability if we have one
+	# Remove current ability if we have one (don't drop it, just remove it)
 	if current_ability:
-		drop_ability()
+		remove_ability()
 
 	# Instantiate and equip the new ability
 	current_ability = ability_scene.instantiate()
@@ -1046,6 +1046,19 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 		current_ability.pickup(self)
 
 	print("Picked up ability: ", ability_name)
+
+func remove_ability() -> void:
+	"""Remove the current ability without dropping it (used when picking up a new one)"""
+	if not current_ability:
+		return
+
+	# Tell the ability it was dropped (for cleanup)
+	if current_ability.has_method("drop"):
+		current_ability.drop()
+
+	# Remove the ability from player
+	current_ability.queue_free()
+	current_ability = null
 
 func drop_ability() -> void:
 	"""Drop the current ability and spawn it as a pickup on the ground"""
