@@ -1,7 +1,7 @@
 extends Node
 
 # UI References
-@onready var main_menu: PanelContainer = $Menu/MainMenu if has_node("Menu/MainMenu") else null
+@onready var main_menu: Control = $Menu/MainMenu if has_node("Menu/MainMenu") else null
 @onready var options_menu: PanelContainer = $Menu/Options if has_node("Menu/Options") else null
 @onready var pause_menu: PanelContainer = $Menu/PauseMenu if has_node("Menu/PauseMenu") else null
 @onready var address_entry: LineEdit = get_node_or_null("%AddressEntry")
