@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles aggressively trail behind player motion
+		# Movement - particles trail behind player motion at moderate speed
 		jump_bounce_particles.direction = Vector3.DOWN  # Default direction (set dynamically)
 		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
 		jump_bounce_particles.gravity = Vector3(0, -3.0, 0)  # Moderate gravity for natural arc
-		jump_bounce_particles.initial_velocity_min = 3.0  # Trail aggressively behind player
-		jump_bounce_particles.initial_velocity_max = 5.0
+		jump_bounce_particles.initial_velocity_min = 1.5  # Trail behind player at moderate speed
+		jump_bounce_particles.initial_velocity_max = 2.5
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
