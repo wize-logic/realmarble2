@@ -75,21 +75,22 @@ func activate() -> void:
 		projectile.global_position = barrel_position
 
 		# Set velocity - inherit player velocity + projectile velocity in fire direction
-		if projectile.has_method("set_velocity"):
-			var level_multiplier: float = 1.0
-			if player and "level" in player:
-				level_multiplier = 1.0 + (player.level * 0.25)
+		var level_multiplier: float = 1.0
+		if player and "level" in player:
+			level_multiplier = 1.0 + (player.level * 0.25)
 
-			# Projectile velocity = player velocity + fire direction * charged speed
-			var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * charged_speed * level_multiplier)
-			projectile.set_velocity(projectile_velocity)
+		# Projectile velocity = player velocity + fire direction * charged speed
+		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * charged_speed * level_multiplier)
+		if projectile is RigidBody3D:
+			projectile.linear_velocity = projectile_velocity
 
-		# Set charged damage and owner
-		if projectile.has_method("set_damage"):
-			projectile.set_damage(charged_damage)
-		if projectile.has_method("set_owner_id"):
-			var owner_id: int = player.name.to_int() if player else -1
-			projectile.set_owner_id(owner_id)
+		# Set charged damage and owner via metadata
+		var owner_id: int = player.name.to_int() if player else -1
+		projectile.set_meta("damage", charged_damage)
+		projectile.set_meta("owner_id", owner_id)
+
+		# Auto-destroy after lifetime
+		get_tree().create_timer(projectile_lifetime).timeout.connect(projectile.queue_free)
 
 	# Spawn muzzle flash particles at barrel position
 	spawn_muzzle_flash(barrel_position, fire_direction)
@@ -98,6 +99,43 @@ func activate() -> void:
 	if ability_sound:
 		ability_sound.global_position = barrel_position
 		ability_sound.play()
+
+func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
+	"""Handle projectile collision with another body"""
+	# Get projectile metadata
+	var damage: int = projectile.get_meta("damage", 1)
+	var owner_id: int = projectile.get_meta("owner_id", -1)
+
+	# Don't hit the owner
+	if body.name == str(owner_id):
+		return
+
+	# Check if it's a player
+	if body.has_method('receive_damage_from'):
+		var target_id: int = body.get_multiplayer_authority()
+		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
+		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			# Local call for bots, no multiplayer, or local peer
+			body.receive_damage_from(damage, owner_id)
+			print('Projectile hit player (local): ', body.name, ' | Damage: ', damage)
+		else:
+			# RPC call for remote network players only
+			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
+			print('Projectile hit player (RPC): ', body.name, ' | Damage: ', damage)
+
+		# Play attack hit sound (satisfying feedback for landing a hit)
+		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		hit_sound.max_distance = 20.0
+		hit_sound.volume_db = 3.0
+		hit_sound.pitch_scale = randf_range(1.2, 1.4)
+		hit_sound.global_position = projectile.global_position
+		if player and player.get_parent():
+			player.get_parent().add_child(hit_sound)
+			hit_sound.play()
+			# Sound will auto-cleanup when it finishes
+
+	# Destroy projectile on hit
+	projectile.queue_free()
 
 func create_projectile() -> Node3D:
 	"""Create a projectile node"""
@@ -137,66 +175,14 @@ func create_projectile() -> Node3D:
 	collision.shape = shape
 	projectile.add_child(collision)
 
-	# Add script for projectile behavior
-	var script_text: String = """
-extends RigidBody3D
+	# Store projectile data as metadata (no dynamic script needed)
+	projectile.set_meta("damage", 1)
+	projectile.set_meta("owner_id", -1)
+	projectile.set_meta("lifetime", projectile_lifetime)
 
-var damage: int = 1
-var owner_id: int = -1
-var lifetime: float = 3.0
-
-func _ready() -> void:
-	# Auto-destroy after lifetime
-	get_tree().create_timer(lifetime).timeout.connect(queue_free)
-
-func set_velocity(vel: Vector3) -> void:
-	linear_velocity = vel
-
-func set_damage(dmg: int) -> void:
-	damage = dmg
-
-func set_owner_id(id: int) -> void:
-	owner_id = id
-
-func _on_body_entered(body: Node) -> void:
-	# Don't hit the owner
-	if body.name == str(owner_id):
-		return
-
-	# Check if it's a player
-	if body.has_method('receive_damage_from'):
-		var target_id: int = body.get_multiplayer_authority()
-		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
-		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
-			# Local call for bots, no multiplayer, or local peer
-			body.receive_damage_from(damage, owner_id)
-			print('Projectile hit player (local): ', body.name, ' | Damage: ', damage)
-		else:
-			# RPC call for remote network players only
-			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
-			print('Projectile hit player (RPC): ', body.name, ' | Damage: ', damage)
-
-		# Play attack hit sound (satisfying feedback for landing a hit)
-		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-		hit_sound.max_distance = 20.0
-		hit_sound.volume_db = 3.0
-		hit_sound.pitch_scale = randf_range(1.2, 1.4)
-		hit_sound.global_position = global_position
-		get_parent().add_child(hit_sound)
-		hit_sound.play()
-		# Sound will auto-cleanup when it finishes
-
-	# Destroy projectile on hit
-	queue_free()
-"""
-
-	var script: GDScript = GDScript.new()
-	script.source_code = script_text
-	script.reload()
-	projectile.set_script(script)
-
-	# Connect body entered signal
-	projectile.body_entered.connect(projectile._on_body_entered)
+	# Connect body_entered signal to Gun ability's handler
+	# Use Callable.bind to pass projectile reference to the handler
+	projectile.body_entered.connect(_on_projectile_body_entered.bind(projectile))
 
 	# Add trail particles to projectile
 	add_projectile_trail(projectile)
