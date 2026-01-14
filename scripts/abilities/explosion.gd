@@ -8,6 +8,7 @@ extends Ability
 @export var explosion_radius: float = 5.0
 @export var upward_launch_force: float = 100.0
 @export var knockback_force: float = 60.0
+@onready var ability_sound: AudioStreamPlayer3D = $ExplosionSound
 
 var is_exploding: bool = false
 var explosion_duration: float = 0.3
@@ -25,13 +26,6 @@ func _ready() -> void:
 	cooldown_time = 2.5
 	supports_charging = true  # Explosion supports charging for bigger boom
 	max_charge_time = 2.0  # 2 seconds for max charge
-
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "ExplosionSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 40.0
-	ability_sound.volume_db = 5.0
 
 	# Create explosion particle effect
 	explosion_particles = CPUParticles3D.new()

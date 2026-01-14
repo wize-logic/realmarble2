@@ -5,6 +5,15 @@
 
 [node name="Explosion" type="Node3D"]
 script = ExtResource("1_explosion")
+explosion_damage = null
+explosion_radius = null
+upward_launch_force = null
+knockback_force = null
+ability_name = null
+ability_color = null
+cooldown_time = null
+supports_charging = null
+max_charge_time = null
 
 [node name="ExplosionSound" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("2_wtx4c")

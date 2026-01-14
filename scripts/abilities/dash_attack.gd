@@ -7,6 +7,7 @@ extends Ability
 @export var dash_force: float = 80.0
 @export var dash_duration: float = 0.5
 @export var damage: int = 1
+@onready var ability_sound: AudioStreamPlayer3D = $DashSound
 
 var is_dashing: bool = false
 var dash_timer: float = 0.0
@@ -26,13 +27,6 @@ func _ready() -> void:
 	cooldown_time = 1.5
 	supports_charging = true  # Dash attack supports charging for more speed/damage
 	max_charge_time = 2.0  # 2 seconds for max charge
-
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "DashSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 30.0
-	ability_sound.volume_db = 2.0
 
 	# Create hitbox for detecting hits
 	hitbox = Area3D.new()

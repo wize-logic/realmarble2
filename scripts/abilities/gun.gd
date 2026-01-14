@@ -8,6 +8,7 @@ extends Ability
 @export var projectile_speed: float = 40.0
 @export var projectile_lifetime: float = 3.0
 @export var fire_rate: float = 0.3  # Shots per second
+@onready var ability_sound: AudioStreamPlayer3D = $GunSound
 
 func _ready() -> void:
 	super._ready()
@@ -16,13 +17,6 @@ func _ready() -> void:
 	cooldown_time = fire_rate
 	supports_charging = true  # Gun supports charging for more powerful shots
 	max_charge_time = 2.0  # 2 seconds for max charge
-
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "GunSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 35.0
-	ability_sound.volume_db = 0.0
 
 func activate() -> void:
 	if not player:

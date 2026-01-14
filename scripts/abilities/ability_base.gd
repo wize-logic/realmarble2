@@ -13,7 +13,6 @@ class_name Ability
 var player: Node = null  # Reference to the player who has this ability
 var is_on_cooldown: bool = false
 var cooldown_timer: float = 0.0
-var ability_sound: AudioStreamPlayer3D = null  # Sound effect for this ability
 
 # Charging system
 var is_charging: bool = false

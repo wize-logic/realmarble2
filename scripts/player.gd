@@ -1082,9 +1082,6 @@ func collect_orb() -> void:
 		level += 1
 		update_stats()
 		print("⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force])
-		# Play jump sound as level up feedback (temporary)
-		if jump_sound and jump_sound.stream:
-			play_jump_sound.rpc()
 	else:
 		print("Already at MAX_LEVEL (%d)" % MAX_LEVEL)
 

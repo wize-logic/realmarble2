@@ -8,6 +8,7 @@ extends Ability
 @export var slash_range: float = 3.0  # Range of the sword swing
 @export var slash_arc_angle: float = 90.0  # Degrees of arc (90 = quarter circle)
 @export var slash_duration: float = 0.3  # How long the slash hitbox is active
+@onready var ability_sound: AudioStreamPlayer3D = $SwordSound
 
 var is_slashing: bool = false
 var slash_timer: float = 0.0
@@ -26,13 +27,6 @@ func _ready() -> void:
 	cooldown_time = 1.0
 	supports_charging = true  # Sword supports charging for more damage
 	max_charge_time = 2.0  # 2 seconds for max charge
-
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "SwordSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 25.0
-	ability_sound.volume_db = 1.0
 
 	# Create slash hitbox
 	slash_hitbox = Area3D.new()
