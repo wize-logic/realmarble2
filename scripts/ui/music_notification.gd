@@ -39,12 +39,18 @@ func show_notification(metadata: Dictionary) -> void:
 	var artist: String = metadata.get("artist", "")
 	var album_art_texture: ImageTexture = metadata.get("album_art", null)
 
-	# Set the song title
-	title_label.text = title
+	# Set the song title (cap at 20 characters)
+	if title.length() > 20:
+		title_label.text = title.substr(0, 20) + "..."
+	else:
+		title_label.text = title
 
-	# Set the artist (if available)
+	# Set the artist (if available, cap at 18 characters)
 	if artist and not artist.is_empty():
-		artist_label.text = artist
+		if artist.length() > 18:
+			artist_label.text = artist.substr(0, 18) + "..."
+		else:
+			artist_label.text = artist
 		artist_label.show()
 	else:
 		artist_label.hide()
