@@ -1062,8 +1062,8 @@ func remove_ability() -> void:
 
 func drop_ability() -> void:
 	"""Drop the current ability and spawn it as a pickup on the ground"""
-	# Only spawn on server/host or in single player (avoid duplicate spawns in multiplayer)
-	if multiplayer.multiplayer_peer != null and not is_multiplayer_authority():
+	# Only spawn on server/host or in single player (match ability_spawner pattern)
+	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		# Still remove the ability from the player even if we don't spawn the pickup
 		if current_ability:
 			if current_ability.has_method("drop"):
@@ -1261,8 +1261,8 @@ func spawn_collection_effect() -> void:
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
-	# Only spawn on server/host or in single player (avoid duplicate spawns in multiplayer)
-	if multiplayer.multiplayer_peer != null and not is_multiplayer_authority():
+	# Only spawn on server/host or in single player (match orb_spawner pattern)
+	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
 	# Only spawn orbs if player has collected any (level > 0)
