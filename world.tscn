@@ -436,6 +436,21 @@ text = "🌐 Multiplayer"
 layout_mode = 2
 text = "🎮 Practice vs Bots"
 
+[node name="BotCountContainer" type="HBoxContainer" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="BotCountLabel" type="Label" parent="Menu/MainMenu/MarginContainer/VBoxContainer/BotCountContainer"]
+layout_mode = 2
+text = "Number of Bots:"
+
+[node name="BotCountSpinBox" type="SpinBox" parent="Menu/MainMenu/MarginContainer/VBoxContainer/BotCountContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 1.0
+max_value = 7.0
+value = 3.0
+
 [node name="HSeparator" type="HSeparator" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
 layout_mode = 2
 

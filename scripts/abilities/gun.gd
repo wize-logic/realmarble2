@@ -17,12 +17,12 @@ func _ready() -> void:
 	supports_charging = true  # Gun supports charging for more powerful shots
 	max_charge_time = 2.0  # 2 seconds for max charge
 
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "GunSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 35.0
-	ability_sound.volume_db = 0.0
+## Override pickup to reference player's ability sound
+func pickup(p_player: Node) -> void:
+	super.pickup(p_player)
+	# Reference the player's shared ability sound node
+	if player:
+		ability_sound = player.get_node_or_null("AbilitySound")
 
 func activate() -> void:
 	if not player:

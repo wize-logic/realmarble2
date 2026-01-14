@@ -27,13 +27,6 @@ func _ready() -> void:
 	supports_charging = true  # Sword supports charging for more damage
 	max_charge_time = 2.0  # 2 seconds for max charge
 
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "SwordSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 25.0
-	ability_sound.volume_db = 1.0
-
 	# Create slash hitbox
 	slash_hitbox = Area3D.new()
 	slash_hitbox.name = "SwordSlashHitbox"
@@ -110,6 +103,13 @@ func _ready() -> void:
 	gradient.add_point(0.7, Color(0.5, 0.6, 0.9, 0.4))  # Darker blue
 	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
+
+## Override pickup to reference player's ability sound
+func pickup(p_player: Node) -> void:
+	super.pickup(p_player)
+	# Reference the player's shared ability sound node
+	if player:
+		ability_sound = player.get_node_or_null("AbilitySound")
 
 func _process(delta: float) -> void:
 	super._process(delta)

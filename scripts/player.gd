@@ -229,6 +229,15 @@ func _ready() -> void:
 		spawn_sound.max_distance = 30.0
 		spawn_sound.volume_db = 0.0
 
+	# Create ability sound (shared by all abilities to reduce audio nodes)
+	var ability_sound: AudioStreamPlayer3D = get_node_or_null("AbilitySound")
+	if not ability_sound:
+		ability_sound = AudioStreamPlayer3D.new()
+		ability_sound.name = "AbilitySound"
+		add_child(ability_sound)
+		ability_sound.max_distance = 35.0
+		ability_sound.volume_db = 2.0
+
 	# Create death particle effect
 	if not death_particles:
 		death_particles = CPUParticles3D.new()
@@ -1040,6 +1049,16 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 
 func drop_ability() -> void:
 	"""Drop the current ability and spawn it as a pickup on the ground"""
+	# Only spawn on server/host or in single player (avoid duplicate spawns in multiplayer)
+	if multiplayer.multiplayer_peer != null and not is_multiplayer_authority():
+		# Still remove the ability from the player even if we don't spawn the pickup
+		if current_ability:
+			if current_ability.has_method("drop"):
+				current_ability.drop()
+			current_ability.queue_free()
+			current_ability = null
+		return
+
 	if not current_ability:
 		return
 
@@ -1229,6 +1248,10 @@ func spawn_collection_effect() -> void:
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
+	# Only spawn on server/host or in single player (avoid duplicate spawns in multiplayer)
+	if multiplayer.multiplayer_peer != null and not is_multiplayer_authority():
+		return
+
 	# Only spawn orbs if player has collected any (level > 0)
 	if level <= 0:
 		print("No orbs to drop - player level is 0")

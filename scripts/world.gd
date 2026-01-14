@@ -180,6 +180,12 @@ func _on_multiplayer_button_pressed() -> void:
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots"""
+	# Get bot count from the SpinBox
+	var bot_count_spinbox: SpinBox = get_node_or_null("%BotCountSpinBox")
+	var bot_count: int = 3  # Default value
+	if bot_count_spinbox:
+		bot_count = int(bot_count_spinbox.value)
+
 	if main_menu:
 		main_menu.hide()
 	if has_node("Menu/DollyCamera"):
@@ -203,8 +209,8 @@ func _on_practice_button_pressed() -> void:
 	local_player.add_to_group("players")
 	player_scores[1] = 0
 
-	# Spawn some bots for practice
-	for i in range(3):
+	# Spawn bots based on user selection
+	for i in range(bot_count):
 		await get_tree().create_timer(0.5).timeout
 		spawn_bot()
 

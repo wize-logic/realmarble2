@@ -65,6 +65,11 @@ func _physics_process(delta: float) -> void:
 	if not bot:
 		return
 
+	# Freeze bot movement until game starts
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and not world.get("game_active"):
+		return  # Don't process AI until game is active
+
 	# Update timers
 	wander_timer -= delta
 	action_timer -= delta

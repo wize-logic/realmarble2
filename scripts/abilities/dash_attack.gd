@@ -27,13 +27,6 @@ func _ready() -> void:
 	supports_charging = true  # Dash attack supports charging for more speed/damage
 	max_charge_time = 2.0  # 2 seconds for max charge
 
-	# Create sound effect
-	ability_sound = AudioStreamPlayer3D.new()
-	ability_sound.name = "DashSound"
-	add_child(ability_sound)
-	ability_sound.max_distance = 30.0
-	ability_sound.volume_db = 2.0
-
 	# Create hitbox for detecting hits
 	hitbox = Area3D.new()
 	hitbox.name = "DashAttackHitbox"
@@ -110,6 +103,13 @@ func _ready() -> void:
 	gradient.add_point(0.6, Color(1.0, 0.2, 0.1, 0.8))  # Red
 	gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Dark/transparent
 	fire_trail.color_ramp = gradient
+
+## Override pickup to reference player's ability sound
+func pickup(p_player: Node) -> void:
+	super.pickup(p_player)
+	# Reference the player's shared ability sound node
+	if player:
+		ability_sound = player.get_node_or_null("AbilitySound")
 
 func _process(delta: float) -> void:
 	super._process(delta)
