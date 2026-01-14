@@ -62,7 +62,7 @@ theme_override_constants/separation = 5
 [node name="PlayButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2
 button_text = "PLAY"
-subtitle_text = "HIT THE FIELD"
+subtitle_text = "MARBLE AWAY"
 is_highlighted = true
 
 [node name="ItemShopButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]

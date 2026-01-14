@@ -1,7 +1,7 @@
 extends Control
 class_name RLMenuButton
 
-## Rocket League-style left sidebar menu button
+## Rocket League-style menu button
 
 signal button_pressed
 
@@ -9,14 +9,8 @@ signal button_pressed
 @export var subtitle_text: String = ""
 @export var is_highlighted: bool = false
 
-var is_hovered: bool = false:
-	set(value):
-		is_hovered = value
-		update_appearance()
-var is_focused: bool = false:
-	set(value):
-		is_focused = value
-		update_appearance()
+var is_hovered: bool = false
+var is_focused: bool = false
 
 @onready var main_label: Label = $MainLabel
 @onready var subtitle_label: Label = $SubtitleLabel
@@ -40,32 +34,26 @@ func _ready() -> void:
 		main_label.offset_bottom = 4.0
 		custom_minimum_size.y = 65.0
 
-	update_appearance()
-
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
 
 func _process(delta: float) -> void:
-	# Only animate pulse when active
-	if is_hovered or is_focused or is_highlighted:
-		pulse_time += delta
-		if edge_glow:
-			var pulse: float = (sin(pulse_time * 3.0) + 1.0) * 0.5
-			edge_glow.modulate = Color(1.0, 0.6, 0.2, 0.4 + pulse * 0.3)
-
-func update_appearance() -> void:
 	var active: bool = is_hovered or is_focused or is_highlighted
 
+	# Update highlight visibility
 	if highlight:
 		highlight.visible = active
-		if active:
-			highlight.modulate = Color(0.4, 0.8, 1.0, 0.3)
 
+	# Update edge glow with pulse animation
 	if edge_glow:
 		edge_glow.visible = active
-		if not active:
-			edge_glow.modulate = Color.TRANSPARENT
+		if active:
+			pulse_time += delta
+			var pulse: float = (sin(pulse_time * 3.0) + 1.0) * 0.5
+			edge_glow.modulate = Color(1.0, 0.6, 0.2, 0.4 + pulse * 0.3)
+		else:
+			pulse_time = 0.0
 
 func _on_mouse_entered() -> void:
 	is_hovered = true

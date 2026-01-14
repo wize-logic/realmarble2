@@ -118,8 +118,10 @@ func activate_current_button() -> void:
 		buttons[current_focus_index]._activate()
 
 func _on_main_button_pressed(button: RLMenuButton) -> void:
+	print("Main button pressed: ", button.name)
 	match button.name:
 		"PlayButton":
+			print("Showing submenu")
 			show_submenu()
 		"ItemShopButton":
 			item_shop_pressed.emit()
@@ -144,9 +146,12 @@ func _on_submenu_button_pressed(button: RLMenuButton) -> void:
 			hide_submenu()
 
 func show_submenu() -> void:
+	print("show_submenu called")
 	in_submenu = true
 	if play_submenu:
+		print("Setting play_submenu visible")
 		play_submenu.visible = true
+		print("Submenu is now visible: ", play_submenu.visible)
 
 	# Clear focus from main menu
 	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
@@ -155,7 +160,10 @@ func show_submenu() -> void:
 	# Focus first submenu button
 	current_focus_index = 0
 	if submenu_buttons.size() > 0:
+		print("Focusing first submenu button")
 		submenu_buttons[0].focus_entered()
+	else:
+		print("No submenu buttons found!")
 
 func hide_submenu() -> void:
 	in_submenu = false
