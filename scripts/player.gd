@@ -507,7 +507,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Bounce attack - Right mouse button (Sonic Adventure 2 style)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
-		if event.pressed and not event.echo:
+		if event.pressed:
 			# Can only bounce in the air and if not on cooldown
 			if not is_grounded and bounce_cooldown <= 0.0 and not is_bouncing:
 				print("BOUNCE ATTACK!")
