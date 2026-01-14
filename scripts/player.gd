@@ -359,11 +359,11 @@ func _ready() -> void:
 		# Configure jump/bounce particles - 3 dark blue circles that trail below player
 		jump_bounce_particles.emitting = false
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 1.2  # Longer lifetime to see slow trail
+		jump_bounce_particles.lifetime = 0.6  # Shorter lifetime for tighter trail
 		jump_bounce_particles.one_shot = true
 		jump_bounce_particles.explosiveness = 0.9  # Very slight staggered spawn for delayed movement
 		jump_bounce_particles.randomness = 0.0  # No randomness
-		jump_bounce_particles.local_coords = true  # Local space - slightly follow player while trailing
+		jump_bounce_particles.local_coords = true  # Local space - aggressively follow player while trailing
 
 		# Set up particle mesh - use sphere for perfect circles (not squares)
 		var jump_particle_mesh: SphereMesh = SphereMesh.new()
@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move downward under player to trail away very slowly in a line
-		jump_bounce_particles.direction = Vector3.DOWN  # Trail downward under player
+		# Movement - particles aggressively trail behind player motion
+		jump_bounce_particles.direction = Vector3.DOWN  # Default direction (set dynamically)
 		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
-		jump_bounce_particles.gravity = Vector3(0, -1.0, 0)  # Very light gravity
-		jump_bounce_particles.initial_velocity_min = 0.2  # Move downward very slowly
-		jump_bounce_particles.initial_velocity_max = 0.4
+		jump_bounce_particles.gravity = Vector3(0, -3.0, 0)  # Moderate gravity for natural arc
+		jump_bounce_particles.initial_velocity_min = 3.0  # Trail aggressively behind player
+		jump_bounce_particles.initial_velocity_max = 5.0
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
@@ -399,14 +399,14 @@ func _ready() -> void:
 		# Fade curve - stay visible then fade at end
 		var jump_scale_curve: Curve = Curve.new()
 		jump_scale_curve.add_point(Vector2(0, 1.0))  # Full size
-		jump_scale_curve.add_point(Vector2(0.7, 1.0))  # Stay full size
+		jump_scale_curve.add_point(Vector2(0.5, 1.0))  # Stay full size
 		jump_scale_curve.add_point(Vector2(1, 0.0))  # Fade out
 		jump_bounce_particles.scale_amount_curve = jump_scale_curve
 
 		# Color gradient - dark blue staying visible then fading
 		var jump_gradient: Gradient = Gradient.new()
 		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.12))  # Dark blue, almost entirely transparent
-		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.12))  # Stay dark blue
+		jump_gradient.add_point(0.5, Color(0.1, 0.2, 0.5, 0.12))  # Stay dark blue
 		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
@@ -862,9 +862,10 @@ func check_ground() -> void:
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
-		# Clear particle trails immediately on landing
+		# Clear particle trails immediately on landing - hide and stop emission
 		if jump_bounce_particles:
 			jump_bounce_particles.emitting = false
+			jump_bounce_particles.visible = false
 
 		# Reset bounce counter if landing normally (not from a bounce)
 		if not just_bounce_landed:
@@ -1320,6 +1321,7 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 
 	# Position particles inside the marble's center
 	jump_bounce_particles.global_position = global_position  # Inside the marble
+	jump_bounce_particles.visible = true  # Make visible when spawning
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
