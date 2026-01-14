@@ -361,7 +361,7 @@ func _ready() -> void:
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
 		jump_bounce_particles.lifetime = 1.2  # Longer lifetime to see slow trail
 		jump_bounce_particles.one_shot = true
-		jump_bounce_particles.explosiveness = 1.0  # All spawn at once for immediate trail
+		jump_bounce_particles.explosiveness = 0.9  # Very slight staggered spawn for delayed movement
 		jump_bounce_particles.randomness = 0.0  # No randomness
 		jump_bounce_particles.local_coords = true  # Local space - slightly follow player while trailing
 
@@ -377,7 +377,7 @@ func _ready() -> void:
 		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.5)  # Dark blue, semi-transparent
+		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.25)  # Dark blue, more transparent
 		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		jump_particle_material.disable_receive_shadows = true
 		jump_bounce_particles.mesh.material = jump_particle_material
@@ -405,8 +405,8 @@ func _ready() -> void:
 
 		# Color gradient - dark blue staying visible then fading
 		var jump_gradient: Gradient = Gradient.new()
-		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.5))  # Dark blue, semi-transparent
-		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.5))  # Stay dark blue
+		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.25))  # Dark blue, more transparent
+		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.25))  # Stay dark blue
 		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
