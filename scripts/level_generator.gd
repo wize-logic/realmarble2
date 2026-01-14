@@ -240,17 +240,32 @@ func apply_procedural_textures() -> void:
 	print("Applied procedural materials to ", platforms.size(), " objects")
 
 func get_spawn_points() -> PackedVector3Array:
-	"""Generate spawn points on platforms"""
+	"""Generate spawn points on platforms - supports up to 16 players"""
 	var spawns: PackedVector3Array = PackedVector3Array()
 
-	# Main floor spawns
-	spawns.append(Vector3(0, 2, 0))
+	# Main floor spawns - 16 guaranteed spawns in a circular pattern
+	spawns.append(Vector3(0, 2, 0))  # Center
+	# Ring 1 - 4 spawns
 	spawns.append(Vector3(10, 2, 0))
 	spawns.append(Vector3(-10, 2, 0))
 	spawns.append(Vector3(0, 2, 10))
 	spawns.append(Vector3(0, 2, -10))
+	# Ring 2 - 4 spawns (diagonals)
+	spawns.append(Vector3(10, 2, 10))
+	spawns.append(Vector3(-10, 2, 10))
+	spawns.append(Vector3(10, 2, -10))
+	spawns.append(Vector3(-10, 2, -10))
+	# Ring 3 - 4 spawns (further out)
+	spawns.append(Vector3(20, 2, 0))
+	spawns.append(Vector3(-20, 2, 0))
+	spawns.append(Vector3(0, 2, 20))
+	spawns.append(Vector3(0, 2, -20))
+	# Ring 4 - 3 spawns (additional positions)
+	spawns.append(Vector3(15, 2, 15))
+	spawns.append(Vector3(-15, 2, -15))
+	spawns.append(Vector3(15, 2, -15))
 
-	# Platform spawns
+	# Platform spawns - additional variety
 	for platform in platforms:
 		if platform.name.begins_with("Platform"):
 			var spawn_pos: Vector3 = platform.position
