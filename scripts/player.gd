@@ -680,8 +680,13 @@ func check_ground() -> void:
 	var was_grounded: bool = is_grounded
 	is_grounded = ground_ray.is_colliding()
 
+	# Track if we just landed from a bounce (before modifying is_bouncing)
+	var just_bounce_landed: bool = false
+
 	# Handle bounce landing
 	if is_grounded and not was_grounded and is_bouncing:
+		just_bounce_landed = true
+
 		# Increment bounce counter (caps at max_bounce_count)
 		bounce_count = min(bounce_count + 1, max_bounce_count)
 
@@ -713,16 +718,16 @@ func check_ground() -> void:
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
-		# Reset bounce counter if landing normally (not bouncing)
-		if not is_bouncing:
+		# Reset bounce counter if landing normally (not from a bounce)
+		if not just_bounce_landed:
 			if bounce_count > 0:
 				print("Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count)
 			else:
 				print("Landed! Jump count reset")
 			bounce_count = 0
 
-		# Play landing sound (only if not bouncing, since bounce has its own sound)
-		if land_sound and land_sound.stream and not is_bouncing:
+		# Play landing sound (only if not from a bounce, since bounce has its own sound)
+		if land_sound and land_sound.stream and not just_bounce_landed:
 			play_land_sound.rpc()
 
 	# Debug logging every 60 frames (about once per second)
