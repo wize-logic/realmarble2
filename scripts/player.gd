@@ -377,7 +377,7 @@ func _ready() -> void:
 		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.25)  # Dark blue, more transparent
+		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.12)  # Dark blue, almost entirely transparent
 		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		jump_particle_material.disable_receive_shadows = true
 		jump_bounce_particles.mesh.material = jump_particle_material
@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move backwards from player to trail away slowly in a line
-		jump_bounce_particles.direction = Vector3.ZERO  # Set dynamically in spawn function
+		# Movement - particles move downward under player to trail away very slowly in a line
+		jump_bounce_particles.direction = Vector3.DOWN  # Trail downward under player
 		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
-		jump_bounce_particles.gravity = Vector3(0, -1.5, 0)  # Light gravity for gentle arc
-		jump_bounce_particles.initial_velocity_min = 0.5  # Move backwards slowly from player
-		jump_bounce_particles.initial_velocity_max = 0.9
+		jump_bounce_particles.gravity = Vector3(0, -1.0, 0)  # Very light gravity
+		jump_bounce_particles.initial_velocity_min = 0.2  # Move downward very slowly
+		jump_bounce_particles.initial_velocity_max = 0.4
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
@@ -405,8 +405,8 @@ func _ready() -> void:
 
 		# Color gradient - dark blue staying visible then fading
 		var jump_gradient: Gradient = Gradient.new()
-		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.25))  # Dark blue, more transparent
-		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.25))  # Stay dark blue
+		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.12))  # Dark blue, almost entirely transparent
+		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.12))  # Stay dark blue
 		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
@@ -1303,26 +1303,15 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	if not jump_bounce_particles:
 		return
 
-	# Calculate direction opposite to player's horizontal movement for trailing effect
-	var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-	var trail_direction: Vector3
-
-	if horizontal_vel.length() > 0.5:
-		# Player is moving - trail backwards from movement direction
-		trail_direction = -horizontal_vel.normalized()
-	else:
-		# Player not moving much - trail downward
-		trail_direction = Vector3.DOWN
-
-	# Set particle direction for trailing
-	jump_bounce_particles.direction = trail_direction
+	# Particles always trail downward under the player
+	jump_bounce_particles.direction = Vector3.DOWN
 
 	# Position particles inside the marble's center
 	jump_bounce_particles.global_position = global_position  # Inside the marble
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
+	print("Jump/Bounce effect (3 dark blue circles trailing downward) spawned for %s (intensity: %.2fx)" % [name, intensity_multiplier])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
