@@ -758,8 +758,14 @@ func respawn() -> void:
 
 	# Move to fixed spawn based on player ID
 	var player_id: int = str(name).to_int()
-	var spawn_index: int = player_id % spawns.size()
-	global_position = spawns[spawn_index]
+	var is_bot: bool = player_id >= 9000
+
+	if spawns.size() > 0:
+		var spawn_index: int = player_id % spawns.size()
+		global_position = spawns[spawn_index]
+		print("Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot])
+	else:
+		print("ERROR: No spawn points available for player %s!" % name)
 
 	# Play spawn sound effect
 	if spawn_sound:

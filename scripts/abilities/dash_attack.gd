@@ -147,12 +147,8 @@ func activate() -> void:
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
 	else:
-		# Fallback: use player's current velocity direction
-		if player.linear_velocity.length() > 0.1:
-			dash_direction = player.linear_velocity.normalized()
-			dash_direction.y = 0
-		else:
-			dash_direction = Vector3.FORWARD
+		# Fallback for bots: use player's facing direction (rotation.y)
+		dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Apply initial dash impulse
 	if player is RigidBody3D:

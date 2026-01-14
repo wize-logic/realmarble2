@@ -452,14 +452,18 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 	var height_diff: float = target_pos.y - bot.global_position.y
 
 	if direction.length() > 0.1:
-		# Check for dangerous edges first - highest priority
-		if check_for_edge(direction, 2.5):
+		# Check for dangerous edges first - HIGHEST PRIORITY - EXTRA CAREFUL
+		if check_for_edge(direction, 3.5):
 			# There's an edge ahead - find a safe direction or stop
 			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
 			if safe_direction != Vector3.ZERO:
 				direction = safe_direction
+				speed_mult *= 0.6  # Slow down when avoiding edges
 			else:
-				# No safe direction, stop moving forward
+				# No safe direction, STOP COMPLETELY and move backwards
+				var backwards: Vector3 = -direction
+				bot.apply_central_force(backwards * bot.current_roll_force * 0.8)
+				print("Bot %s: Edge detected, moving backwards!" % bot.name)
 				return
 
 		# Check for obstacles in the path with improved detection
@@ -680,36 +684,44 @@ func do_collect_orb(delta: float) -> void:
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
 
-func check_for_edge(direction: Vector3, check_distance: float = 2.0) -> bool:
+func check_for_edge(direction: Vector3, check_distance: float = 3.5) -> bool:
 	"""
 	Check if there's a dangerous edge/drop-off in the given direction
 	Returns true if there's an edge that the bot should avoid
+	EXTRA CAREFUL - Uses multiple raycasts at different distances
 	"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Cast a ray downward from a point ahead of the bot
-	var forward_point: Vector3 = bot.global_position + direction.normalized() * check_distance
-	var ray_start: Vector3 = forward_point + Vector3.UP * 0.5  # Start slightly above ground
-	var ray_end: Vector3 = forward_point + Vector3.DOWN * 5.0  # Check down 5 units
+	# Check at multiple distances for better edge detection
+	var check_distances: Array = [1.5, 2.5, 3.5]  # Check near, medium, and far
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-	query.exclude = [bot]
-	query.collision_mask = 1  # Only check world geometry
+	for dist in check_distances:
+		# Cast a ray downward from a point ahead of the bot
+		var forward_point: Vector3 = bot.global_position + direction.normalized() * dist
+		var ray_start: Vector3 = forward_point + Vector3.UP * 0.5  # Start slightly above ground
+		var ray_end: Vector3 = forward_point + Vector3.DOWN * 8.0  # Check down 8 units (increased)
 
-	var result: Dictionary = space_state.intersect_ray(query)
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.exclude = [bot]
+		query.collision_mask = 1  # Only check world geometry
 
-	# If no ground found within 5 units below, there's an edge
-	if not result:
-		return true
+		var result: Dictionary = space_state.intersect_ray(query)
 
-	# If ground is more than 3 units below current position, it's a dangerous drop
-	var ground_y: float = result.position.y
-	var drop_distance: float = bot.global_position.y - ground_y
+		# If no ground found within 8 units below, there's an edge
+		if not result:
+			return true
 
-	return drop_distance > 3.0
+		# If ground is more than 2 units below current position, it's a dangerous drop (more conservative)
+		var ground_y: float = result.position.y
+		var drop_distance: float = bot.global_position.y - ground_y
+
+		if drop_distance > 2.0:  # Reduced from 3.0 to be more careful
+			return true
+
+	return false
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""
