@@ -120,6 +120,7 @@ var collection_particles: CPUParticles3D = null  # Particle effect for collectin
 
 # Visual effects
 var aura_light: OmniLight3D = null  # Lighting effect around player for visibility
+var jump_bounce_particles: CPUParticles3D = null  # Particle effect for jumps and bounces
 
 # Falling death state
 var is_falling_to_death: bool = false
@@ -348,6 +349,70 @@ func _ready() -> void:
 		collection_gradient.add_point(0.8, Color(0.6, 0.95, 1.0, 0.3))  # Very light blue, fading
 		collection_gradient.add_point(1.0, Color(0.7, 1.0, 1.0, 0.0))  # Transparent
 		collection_particles.color_ramp = collection_gradient
+
+	# Create jump/bounce particle effect (Sonic Adventure 2 style blue circles)
+	if not jump_bounce_particles:
+		jump_bounce_particles = CPUParticles3D.new()
+		jump_bounce_particles.name = "JumpBounceParticles"
+		add_child(jump_bounce_particles)
+
+		# Configure jump/bounce particles - expanding blue ring burst
+		jump_bounce_particles.emitting = false
+		jump_bounce_particles.amount = 40  # Moderate amount for clean circle effect
+		jump_bounce_particles.lifetime = 0.8  # Short duration for snappy feel
+		jump_bounce_particles.one_shot = true
+		jump_bounce_particles.explosiveness = 0.9  # Quick burst emission
+		jump_bounce_particles.randomness = 0.2
+		jump_bounce_particles.local_coords = false
+
+		# Set up particle mesh
+		var jump_particle_mesh: QuadMesh = QuadMesh.new()
+		jump_particle_mesh.size = Vector2(0.25, 0.25)
+		jump_bounce_particles.mesh = jump_particle_mesh
+
+		# Create material for particles
+		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
+		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		jump_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
+		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		jump_particle_material.vertex_color_use_as_albedo = true
+		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		jump_particle_material.disable_receive_shadows = true
+		jump_bounce_particles.mesh.material = jump_particle_material
+
+		# Emission shape - ring at player position for outward burst
+		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		jump_bounce_particles.emission_ring_axis = Vector3.UP
+		jump_bounce_particles.emission_ring_height = 0.2
+		jump_bounce_particles.emission_ring_radius = 0.5  # Start at player radius
+		jump_bounce_particles.emission_ring_inner_radius = 0.3
+
+		# Movement - outward and slightly upward burst
+		jump_bounce_particles.direction = Vector3.UP
+		jump_bounce_particles.spread = 25.0  # Spread outward with slight upward bias
+		jump_bounce_particles.gravity = Vector3(0, -5.0, 0)  # Slight gravity for arc
+		jump_bounce_particles.initial_velocity_min = 6.0
+		jump_bounce_particles.initial_velocity_max = 9.0
+		jump_bounce_particles.radial_accel_min = 3.0  # Accelerate outward
+		jump_bounce_particles.radial_accel_max = 5.0
+
+		# Size over lifetime - grow then fade
+		jump_bounce_particles.scale_amount_min = 1.5
+		jump_bounce_particles.scale_amount_max = 2.0
+		var jump_scale_curve: Curve = Curve.new()
+		jump_scale_curve.add_point(Vector2(0, 0.5))
+		jump_scale_curve.add_point(Vector2(0.3, 1.3))
+		jump_scale_curve.add_point(Vector2(0.7, 1.0))
+		jump_scale_curve.add_point(Vector2(1, 0.0))
+		jump_bounce_particles.scale_amount_curve = jump_scale_curve
+
+		# Color gradient - bright blue circles fading out (Sonic Adventure 2 style)
+		var jump_gradient: Gradient = Gradient.new()
+		jump_gradient.add_point(0.0, Color(0.4, 0.8, 1.0, 0.9))  # Bright cyan-blue
+		jump_gradient.add_point(0.3, Color(0.5, 0.85, 1.0, 0.8))  # Light blue
+		jump_gradient.add_point(0.6, Color(0.6, 0.9, 1.0, 0.5))  # Lighter blue, fading
+		jump_gradient.add_point(1.0, Color(0.7, 0.95, 1.0, 0.0))  # Transparent
+		jump_bounce_particles.color_ramp = jump_gradient
 
 	# Set up marble mesh and texture
 	if not marble_mesh:
@@ -583,6 +648,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				# Play jump sound
 				if jump_sound and jump_sound.stream:
 					play_jump_sound.rpc()
+
+				# Spawn jump particle effect
+				spawn_jump_bounce_effect(1.0)
 			else:
 				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
 
@@ -788,6 +856,10 @@ func check_ground() -> void:
 			var pitch_multiplier: float = 1.0 + (bounce_count - 1) * 0.15
 			play_bounce_sound_with_pitch.rpc(pitch_multiplier)
 
+		# Spawn bounce landing particle effect (scales with consecutive bounces)
+		var particle_intensity: float = 1.0 + (bounce_count - 1) * 0.3  # 1.0, 1.3, 1.6
+		spawn_jump_bounce_effect(particle_intensity)
+
 		print("Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count])
 
 	# Reset jump count when landing
@@ -893,6 +965,9 @@ func start_bounce() -> void:
 	# Play bounce sound
 	if bounce_sound and bounce_sound.stream:
 		play_bounce_sound.rpc()
+
+	# Spawn bounce particle effect (initiating bounce)
+	spawn_jump_bounce_effect(1.2)
 
 	print("Bounce velocity applied: y=%.1f" % vel.y)
 
@@ -1226,6 +1301,27 @@ func spawn_collection_effect() -> void:
 	collection_particles.restart()
 
 	print("Collection effect spawned for %s at position %s" % [name, global_position])
+
+func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
+	"""Spawn blue circle burst effect for jumps and bounces (Sonic Adventure 2 style)"""
+	if not jump_bounce_particles:
+		return
+
+	# Scale particle amount and velocity based on intensity (for consecutive bounces)
+	var base_amount: int = 40
+	var scaled_amount: int = int(base_amount * clamp(intensity_multiplier, 1.0, 2.0))
+	jump_bounce_particles.amount = scaled_amount
+
+	# Scale velocity for more dramatic effect on higher bounces
+	jump_bounce_particles.initial_velocity_min = 6.0 * intensity_multiplier
+	jump_bounce_particles.initial_velocity_max = 9.0 * intensity_multiplier
+
+	# Position particles at player position
+	jump_bounce_particles.global_position = global_position
+	jump_bounce_particles.emitting = true
+	jump_bounce_particles.restart()
+
+	print("Jump/Bounce effect spawned for %s (intensity: %.2fx)" % [name, intensity_multiplier])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
