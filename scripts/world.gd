@@ -179,12 +179,23 @@ func _on_multiplayer_button_pressed() -> void:
 	show_multiplayer_lobby()
 
 func _on_practice_button_pressed() -> void:
+	"""Show practice mode setup dialog"""
+	var practice_setup: Control = get_node_or_null("%PracticeSetup")
+	if practice_setup:
+		practice_setup.show()
+
+func _on_practice_start_button_pressed() -> void:
 	"""Start practice mode with bots"""
 	# Get bot count from the SpinBox
 	var bot_count_spinbox: SpinBox = get_node_or_null("%BotCountSpinBox")
 	var bot_count: int = 3  # Default value
 	if bot_count_spinbox:
 		bot_count = int(bot_count_spinbox.value)
+
+	# Hide practice setup dialog
+	var practice_setup: Control = get_node_or_null("%PracticeSetup")
+	if practice_setup:
+		practice_setup.hide()
 
 	if main_menu:
 		main_menu.hide()
@@ -216,6 +227,12 @@ func _on_practice_button_pressed() -> void:
 
 	# Start the deathmatch
 	start_deathmatch()
+
+func _on_practice_cancel_button_pressed() -> void:
+	"""Cancel practice mode setup"""
+	var practice_setup: Control = get_node_or_null("%PracticeSetup")
+	if practice_setup:
+		practice_setup.hide()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
