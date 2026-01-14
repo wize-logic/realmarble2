@@ -26,7 +26,7 @@ func _ready() -> void:
 
 func _create_placeholder_texture() -> void:
 	"""Create a simple placeholder image for songs without album art"""
-	var img := Image.create(200, 200, false, Image.FORMAT_RGBA8)
+	var img := Image.create(80, 80, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0.2, 0.2, 0.2, 1.0))  # Dark gray
 	placeholder_texture = ImageTexture.create_from_image(img)
 

@@ -65,6 +65,10 @@ static func _extract_mp3_metadata(file_path: String) -> AudioMetadata:
 
 	# Parse frames
 	while file.get_position() < tag_end:
+		# Check if we have enough space for a frame header
+		if file.get_position() + 10 > tag_end:
+			break
+
 		# Read frame header (10 bytes in ID3v2.3/v2.4)
 		var frame_id := file.get_buffer(4).get_string_from_ascii()
 
@@ -81,6 +85,10 @@ static func _extract_mp3_metadata(file_path: String) -> AudioMetadata:
 
 		var frame_flags := file.get_16()
 
+		# Validate frame size
+		if frame_size <= 0 or file.get_position() + frame_size > tag_end:
+			break
+
 		# Store frame data position
 		var frame_data_pos := file.get_position()
 
@@ -95,7 +103,7 @@ static func _extract_mp3_metadata(file_path: String) -> AudioMetadata:
 			"APIC":  # Attached picture (album art)
 				metadata.album_art = _read_apic_frame(file, frame_size)
 
-		# Move to next frame
+		# Always move to next frame position
 		file.seek(frame_data_pos + frame_size)
 
 	file.close()
