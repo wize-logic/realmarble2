@@ -359,11 +359,11 @@ func _ready() -> void:
 		# Configure jump/bounce particles - 3 dark blue circles that trail below player
 		jump_bounce_particles.emitting = false
 		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 0.6  # Longer lifetime for slow trail
+		jump_bounce_particles.lifetime = 0.6  # Shorter lifetime for tighter trail
 		jump_bounce_particles.one_shot = true
-		jump_bounce_particles.explosiveness = 1.0  # All spawn at once for immediate trail
+		jump_bounce_particles.explosiveness = 0.9  # Very slight staggered spawn for delayed movement
 		jump_bounce_particles.randomness = 0.0  # No randomness
-		jump_bounce_particles.local_coords = false  # World space - stay where spawned to create trail
+		jump_bounce_particles.local_coords = true  # Local space - aggressively follow player while trailing
 
 		# Set up particle mesh - use sphere for perfect circles (not squares)
 		var jump_particle_mesh: SphereMesh = SphereMesh.new()
@@ -377,7 +377,7 @@ func _ready() -> void:
 		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.5)  # Dark blue, semi-transparent
+		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.12)  # Dark blue, almost entirely transparent
 		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		jump_particle_material.disable_receive_shadows = true
 		jump_bounce_particles.mesh.material = jump_particle_material
@@ -385,12 +385,12 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles move backwards from player to trail away slowly
-		jump_bounce_particles.direction = Vector3.ZERO  # Set dynamically in spawn function
-		jump_bounce_particles.spread = 15.0  # Spread for spacing between circles
-		jump_bounce_particles.gravity = Vector3(0, -2.0, 0)  # Light gravity for gentle arc
-		jump_bounce_particles.initial_velocity_min = 2.5  # Move backwards slowly from player
-		jump_bounce_particles.initial_velocity_max = 4.0
+		# Movement - particles trail behind player motion at moderate speed
+		jump_bounce_particles.direction = Vector3.DOWN  # Default direction (set dynamically)
+		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
+		jump_bounce_particles.gravity = Vector3(0, -3.0, 0)  # Moderate gravity for natural arc
+		jump_bounce_particles.initial_velocity_min = 1.5  # Trail behind player at moderate speed
+		jump_bounce_particles.initial_velocity_max = 2.5
 
 		# Size - constant, same as marble
 		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
@@ -399,14 +399,14 @@ func _ready() -> void:
 		# Fade curve - stay visible then fade at end
 		var jump_scale_curve: Curve = Curve.new()
 		jump_scale_curve.add_point(Vector2(0, 1.0))  # Full size
-		jump_scale_curve.add_point(Vector2(0.7, 1.0))  # Stay full size
+		jump_scale_curve.add_point(Vector2(0.5, 1.0))  # Stay full size
 		jump_scale_curve.add_point(Vector2(1, 0.0))  # Fade out
 		jump_bounce_particles.scale_amount_curve = jump_scale_curve
 
 		# Color gradient - dark blue staying visible then fading
 		var jump_gradient: Gradient = Gradient.new()
-		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.5))  # Dark blue, semi-transparent
-		jump_gradient.add_point(0.7, Color(0.1, 0.2, 0.5, 0.5))  # Stay dark blue
+		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.12))  # Dark blue, almost entirely transparent
+		jump_gradient.add_point(0.5, Color(0.1, 0.2, 0.5, 0.12))  # Stay dark blue
 		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
@@ -862,6 +862,11 @@ func check_ground() -> void:
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
+		# Clear particle trails immediately on landing - hide and stop emission
+		if jump_bounce_particles:
+			jump_bounce_particles.emitting = false
+			jump_bounce_particles.visible = false
+
 		# Reset bounce counter if landing normally (not from a bounce)
 		if not just_bounce_landed:
 			if bounce_count > 0:
@@ -1299,30 +1304,28 @@ func spawn_collection_effect() -> void:
 	print("Collection effect spawned for %s at position %s" % [name, global_position])
 
 func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
-	"""Spawn 3 dark blue circles that trail below player (Sonic Adventure 2 style)"""
+	"""Spawn 3 dark blue circles that trail behind player motion (Sonic Adventure 2 style)"""
 	if not jump_bounce_particles:
 		return
 
-	# Calculate direction opposite to player's horizontal movement for trailing effect
-	var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+	# Trail in the opposite direction of player's velocity to show motion through air
 	var trail_direction: Vector3
-
-	if horizontal_vel.length() > 0.5:
-		# Player is moving - trail backwards from movement direction
-		trail_direction = -horizontal_vel.normalized()
+	if linear_velocity.length() > 0.5:
+		# Player is moving - trail in opposite direction of movement
+		trail_direction = -linear_velocity.normalized()
 	else:
-		# Player not moving much - trail downward
+		# Player barely moving - default to downward trail
 		trail_direction = Vector3.DOWN
 
-	# Set particle direction for trailing
 	jump_bounce_particles.direction = trail_direction
 
-	# Position particles below player in world space
-	jump_bounce_particles.global_position = global_position + Vector3(0, -0.8, 0)  # Below the marble
+	# Position particles inside the marble's center
+	jump_bounce_particles.global_position = global_position  # Inside the marble
+	jump_bounce_particles.visible = true  # Make visible when spawning
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
+	print("Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
