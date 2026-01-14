@@ -70,9 +70,13 @@ var max_jumps: int = 2  # Double jump!
 # Bounce mechanic (Sonic Adventure 2 style)
 var is_bouncing: bool = false  # Currently performing bounce attack
 var bounce_velocity: float = 40.0  # Strong downward velocity
-var bounce_back_impulse: float = 90.0  # Upward impulse on ground hit
+var base_bounce_back_impulse: float = 90.0  # Base upward impulse on ground hit
+var current_bounce_back_impulse: float = 90.0  # Current bounce impulse (scales with level)
 var bounce_cooldown: float = 0.0  # Cooldown timer
 var bounce_cooldown_time: float = 0.3  # Cooldown duration
+var bounce_count: int = 0  # Consecutive bounce counter
+var max_bounce_count: int = 3  # Maximum consecutive bounces for scaling
+var bounce_scale_per_count: float = 1.3  # Multiplier per consecutive bounce (30% increase)
 
 # Spin dash properties
 var is_charging_spin: bool = false
@@ -90,6 +94,7 @@ const MAX_LEVEL: int = 3
 const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 30.0   # Spin dash boost per level
+const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
 # Ground detection
 var is_grounded: bool = false
@@ -677,28 +682,44 @@ func check_ground() -> void:
 
 	# Handle bounce landing
 	if is_grounded and not was_grounded and is_bouncing:
-		print("BOUNCE IMPACT! Launching upward with impulse: %.1f" % bounce_back_impulse)
+		# Increment bounce counter (caps at max_bounce_count)
+		bounce_count = min(bounce_count + 1, max_bounce_count)
 
-		# Cancel vertical velocity and apply strong upward impulse
+		# Calculate scaled bounce impulse based on consecutive bounces
+		var bounce_multiplier: float = pow(bounce_scale_per_count, bounce_count - 1)
+		var scaled_impulse: float = current_bounce_back_impulse * bounce_multiplier
+
+		print("BOUNCE IMPACT #%d! Multiplier: %.2fx | Impulse: %.1f" % [bounce_count, bounce_multiplier, scaled_impulse])
+
+		# Cancel vertical velocity and apply scaled upward impulse
 		var vel: Vector3 = linear_velocity
 		vel.y = 0
 		linear_velocity = vel
-		apply_central_impulse(Vector3.UP * bounce_back_impulse)
+		apply_central_impulse(Vector3.UP * scaled_impulse)
 
 		# End bounce state and start cooldown
 		is_bouncing = false
 		bounce_cooldown = bounce_cooldown_time
 
-		# Play bounce sound again for impact
+		# Play bounce sound again for impact (higher pitch for higher bounces)
 		if bounce_sound and bounce_sound.stream:
-			play_bounce_sound.rpc()
+			# Pitch increases with each consecutive bounce (1.0, 1.15, 1.3)
+			var pitch_multiplier: float = 1.0 + (bounce_count - 1) * 0.15
+			play_bounce_sound_with_pitch.rpc(pitch_multiplier)
 
-		print("Bounce complete! Cooldown started")
+		print("Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count])
 
 	# Reset jump count when landing
 	if is_grounded and not was_grounded:
 		jump_count = 0
-		print("Landed! Jump count reset")
+
+		# Reset bounce counter if landing normally (not bouncing)
+		if not is_bouncing:
+			if bounce_count > 0:
+				print("Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count)
+			else:
+				print("Landed! Jump count reset")
+			bounce_count = 0
 
 		# Play landing sound (only if not bouncing, since bounce has its own sound)
 		if land_sound and land_sound.stream and not is_bouncing:
@@ -832,6 +853,7 @@ func respawn() -> void:
 	health = 3
 	level = 0  # Reset level on death
 	jump_count = 0  # Reset jumps
+	bounce_count = 0  # Reset bounce streak
 	update_stats()
 
 	# Reset death state
@@ -897,6 +919,7 @@ func update_stats() -> void:
 	current_roll_force = base_roll_force + (level * SPEED_BOOST_PER_LEVEL)
 	current_jump_impulse = base_jump_impulse + (level * JUMP_BOOST_PER_LEVEL)
 	current_spin_dash_force = base_spin_dash_force + (level * SPIN_BOOST_PER_LEVEL)
+	current_bounce_back_impulse = base_bounce_back_impulse + (level * BOUNCE_BOOST_PER_LEVEL)
 
 func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	"""Pickup a new ability"""
@@ -953,6 +976,14 @@ func play_land_sound() -> void:
 	if land_sound and land_sound.stream:
 		land_sound.pitch_scale = randf_range(0.85, 1.15)
 		land_sound.play()
+
+@rpc("call_local")
+func play_bounce_sound_with_pitch(pitch_multiplier: float = 1.0) -> void:
+	if bounce_sound and bounce_sound.stream:
+		# Base pitch with variation, scaled by bounce count
+		var base_pitch: float = randf_range(0.9, 1.0)
+		bounce_sound.pitch_scale = base_pitch * pitch_multiplier
+		bounce_sound.play()
 
 @rpc("call_local")
 func play_bounce_sound() -> void:
