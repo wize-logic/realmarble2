@@ -837,17 +837,19 @@ func execute_spin_dash() -> void:
 		cam_right = cam_right.normalized()
 
 		dash_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
-	elif camera_arm:
-		# No input - dash forward relative to camera
-		dash_direction = -camera_arm.global_transform.basis.z
-		dash_direction.y = 0
-		dash_direction = dash_direction.normalized()
 	else:
-		# Fallback - dash in current velocity direction or forward
-		if linear_velocity.length() > 0.1:
-			dash_direction = linear_velocity.normalized()
+		# No input - prioritize velocity direction (where player is moving/facing)
+		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		if horizontal_velocity.length() > 0.1:
+			# Use current movement direction
+			dash_direction = horizontal_velocity.normalized()
+		elif camera_arm:
+			# Not moving - use camera forward direction
+			dash_direction = -camera_arm.global_transform.basis.z
 			dash_direction.y = 0
+			dash_direction = dash_direction.normalized()
 		else:
+			# Fallback - dash forward
 			dash_direction = Vector3.FORWARD
 
 	# Calculate dash force based on charge (50% to 100% of max force)
