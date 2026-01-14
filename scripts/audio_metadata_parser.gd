@@ -1,5 +1,3 @@
-extends Node
-
 ## Audio Metadata Parser
 ## Extracts metadata (title, artist, album art) from MP3 and OGG files
 
