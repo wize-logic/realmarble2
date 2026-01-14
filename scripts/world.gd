@@ -414,8 +414,8 @@ func _auto_load_music() -> void:
 	var music_dir: String = Global.music_directory
 	var songs_loaded: int = _load_music_from_directory(music_dir)
 
-	# Fallback to res://music if no songs were found
-	if songs_loaded == 0:
+	# Fallback to res://music if no songs were found (and we're not already using it)
+	if songs_loaded == 0 and music_dir != "res://music":
 		print("No music found in %s, falling back to res://music" % music_dir)
 		songs_loaded = _load_music_from_directory("res://music")
 
