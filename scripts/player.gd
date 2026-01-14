@@ -827,8 +827,9 @@ func receive_damage(damage: int = 1) -> void:
 		return  # Immune to damage
 	health -= damage
 	if health <= 0:
-		# Drop an orb before respawning
+		# Drop orbs and ability before respawning
 		spawn_death_orb()
+		drop_ability()
 		respawn()
 
 @rpc("any_peer")
@@ -845,8 +846,9 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		play_hit_sound.rpc()
 
 	if health <= 0:
-		# Drop an orb before death
+		# Drop orbs and ability before death
 		spawn_death_orb()
+		drop_ability()
 
 		# Notify world of kill
 		var world: Node = get_parent()
@@ -910,8 +912,9 @@ func fall_death() -> void:
 
 	print("  Starting fall death sequence")
 
-	# Drop an orb before falling to death
+	# Drop orbs and ability before falling to death
 	spawn_death_orb()
+	drop_ability()
 
 	is_falling_to_death = true
 	fall_death_timer = 0.0
@@ -1062,25 +1065,47 @@ func spawn_death_particles() -> void:
 	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
 
 func spawn_death_orb() -> void:
-	"""Spawn an orb at the player's death position"""
-	# Get the world node (parent) to add the orb to
-	var world: Node = get_parent()
-	if not world:
-		print("ERROR: No parent node to spawn orb into!")
+	"""Spawn orbs at the player's death position - shoots out one orb per level"""
+	# Only spawn orbs if player has collected any (level > 0)
+	if level <= 0:
+		print("No orbs to drop - player level is 0")
 		return
 
-	# Instantiate the orb
-	var orb: Area3D = OrbScene.instantiate()
+	# Get the world node (parent) to add the orbs to
+	var world: Node = get_parent()
+	if not world:
+		print("ERROR: No parent node to spawn orbs into!")
+		return
 
-	# Position the orb at the player's current position (slightly above ground)
-	var spawn_pos: Vector3 = global_position
-	spawn_pos.y += 1.0  # Spawn 1 unit above the player's position
-	orb.position = spawn_pos
+	# Spawn one orb for each level (1-3 orbs)
+	var num_orbs: int = level
+	var shoot_radius: float = 3.0  # How far out to shoot the orbs
+	var shoot_height: float = 2.5  # Height variation for shot trajectory
 
-	# Add the orb to the world
-	world.add_child(orb)
+	for i in range(num_orbs):
+		# Calculate angle for even distribution around the death point
+		var angle: float = (TAU / num_orbs) * i + randf_range(-0.2, 0.2)  # Add slight randomness
 
-	print("Orb dropped at position %s by player %s (level: %d)" % [spawn_pos, name, level])
+		# Calculate offset position (shooting outward in a circle)
+		var offset: Vector3 = Vector3(
+			cos(angle) * shoot_radius,
+			shoot_height + randf_range(-0.5, 0.5),  # Slight height variation
+			sin(angle) * shoot_radius
+		)
+
+		# Instantiate the orb
+		var orb: Area3D = OrbScene.instantiate()
+
+		# Position the orb at death location plus offset
+		var spawn_pos: Vector3 = global_position + offset
+		orb.position = spawn_pos
+
+		# Add the orb to the world
+		world.add_child(orb)
+
+		print("Orb #%d shot out at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
+
+	print("Total %d orbs dropped by player %s" % [num_orbs, name])
 
 # ============================================================================
 # UI SYSTEM
