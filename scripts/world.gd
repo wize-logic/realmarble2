@@ -76,6 +76,9 @@ func _ready() -> void:
 	if gameplay_music and music_notification and gameplay_music.has_signal("track_started"):
 		gameplay_music.track_started.connect(_on_track_started)
 
+	# Auto-load music from default directory with fallback
+	_auto_load_music()
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
@@ -403,29 +406,29 @@ func get_time_remaining_formatted() -> String:
 # MUSIC DIRECTORY FUNCTIONS
 # ============================================================================
 
-func _on_music_directory_button_pressed() -> void:
-	"""Open file dialog to select music directory"""
-	var dialog: FileDialog = get_node_or_null("Menu/MusicDirectoryDialog")
-	if dialog:
-		dialog.popup_centered()
-
-func _on_music_directory_selected(dir: String) -> void:
-	"""Load all music files from selected directory"""
-	print("Loading music from directory: %s" % dir)
-
+func _auto_load_music() -> void:
+	"""Auto-load music from default directory with fallback to res://music"""
 	if not gameplay_music:
-		print("Error: GameplayMusic node not found")
 		return
 
-	# Clear existing playlist
-	if gameplay_music.has_method("clear_playlist"):
-		gameplay_music.clear_playlist()
+	var music_dir: String = Global.music_directory
+	var songs_loaded: int = _load_music_from_directory(music_dir)
 
-	# Scan directory for music files
+	# Fallback to res://music if no songs were found
+	if songs_loaded == 0:
+		print("No music found in %s, falling back to res://music" % music_dir)
+		songs_loaded = _load_music_from_directory("res://music")
+
+	if songs_loaded > 0:
+		print("Auto-loaded %d songs from music directory" % songs_loaded)
+	else:
+		print("No music files found in either %s or res://music" % music_dir)
+
+func _load_music_from_directory(dir: String) -> int:
+	"""Load all music files from a directory and return count of songs loaded"""
 	var dir_access: DirAccess = DirAccess.open(dir)
 	if not dir_access:
-		print("Error: Could not open directory %s" % dir)
-		return
+		return 0
 
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
@@ -448,7 +451,33 @@ func _on_music_directory_selected(dir: String) -> void:
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
+	return songs_loaded
+
+func _on_music_directory_button_pressed() -> void:
+	"""Open file dialog to select music directory"""
+	var dialog: FileDialog = get_node_or_null("Menu/MusicDirectoryDialog")
+	if dialog:
+		dialog.popup_centered()
+
+func _on_music_directory_selected(dir: String) -> void:
+	"""Load all music files from selected directory"""
+	print("Loading music from directory: %s" % dir)
+
+	if not gameplay_music:
+		print("Error: GameplayMusic node not found")
+		return
+
+	# Clear existing playlist
+	if gameplay_music.has_method("clear_playlist"):
+		gameplay_music.clear_playlist()
+
+	# Load music from selected directory
+	var songs_loaded: int = _load_music_from_directory(dir)
 	print("Music directory loaded: %d songs added to playlist" % songs_loaded)
+
+	# Save this as the new music directory
+	Global.music_directory = dir
+	Global.save_settings()
 
 func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 	"""Load an audio file and return an AudioStream"""
