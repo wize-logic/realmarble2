@@ -451,7 +451,7 @@ func _load_music_from_directory(dir: String) -> int:
 				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 				if audio_stream and gameplay_music.has_method("add_song"):
-					gameplay_music.add_song(audio_stream)
+					gameplay_music.add_song(audio_stream, file_path)
 					songs_loaded += 1
 					print("Successfully loaded: %s" % file_name)
 				else:
@@ -726,7 +726,7 @@ func update_player_spawns() -> void:
 			player.spawns = new_spawns
 			print("Updated spawns for player: ", player.name)
 
-func _on_track_started(track_name: String) -> void:
+func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
 	if music_notification and music_notification.has_method("show_notification"):
-		music_notification.show_notification("♪ " + track_name)
+		music_notification.show_notification(metadata)

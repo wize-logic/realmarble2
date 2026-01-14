@@ -214,27 +214,48 @@ anchor_left = 1.0
 anchor_top = 0.5
 anchor_right = 1.0
 anchor_bottom = 0.5
-offset_left = -350.0
-offset_top = -40.0
+offset_left = -200.0
+offset_top = -80.0
 offset_right = -20.0
-offset_bottom = 40.0
+offset_bottom = 80.0
 grow_horizontal = 0
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_music_notification")
 
 [node name="MarginContainer" type="MarginContainer" parent="MusicNotification/NotificationUI/Panel"]
 layout_mode = 2
-theme_override_constants/margin_left = 15
+theme_override_constants/margin_left = 10
 theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 15
+theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="Label" type="Label" parent="MusicNotification/NotificationUI/Panel/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="MusicNotification/NotificationUI/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="AlbumArt" type="TextureRect" parent="MusicNotification/NotificationUI/Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+texture_filter = 1
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Artist" type="Label" parent="MusicNotification/NotificationUI/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 12
+text = "Artist Name"
+horizontal_alignment = 1
+
+[node name="Title" type="Label" parent="MusicNotification/NotificationUI/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 20
-text = "♪ Now Playing: Song Name"
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 14
+text = "Song Title"
+horizontal_alignment = 1
 
 [node name="Menu" type="CanvasLayer" parent="."]
 

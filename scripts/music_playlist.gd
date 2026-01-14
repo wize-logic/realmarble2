@@ -3,7 +3,7 @@ extends Node
 ## Music Playlist Manager - Rocket League style
 ## Plays background music during gameplay with playlist support
 
-signal track_started(track_name: String)
+signal track_started(metadata: Dictionary)
 
 @export var playlist: Array[AudioStream] = []  # Add songs here in the editor
 @export var shuffle: bool = true  # Shuffle playlist
@@ -21,6 +21,10 @@ var start_volume: float = 0.0
 
 # Shuffled playlist order
 var shuffled_indices: Array[int] = []
+
+# Metadata storage (parallel array to playlist)
+# Each entry is a Dictionary with: title, artist, album, album_art (ImageTexture)
+var metadata_list: Array[Dictionary] = []
 
 func _ready() -> void:
 	# Create audio player
@@ -131,8 +135,8 @@ func _play_current_track() -> void:
 	# Fade in
 	_fade_in()
 
-	# Emit signal with track name
-	track_started.emit(get_current_track_name())
+	# Emit signal with track metadata
+	track_started.emit(get_current_track_metadata())
 
 func _advance_track() -> void:
 	"""Move to next track in playlist"""
@@ -185,33 +189,64 @@ func _on_track_finished() -> void:
 	_advance_track()
 	_play_current_track()
 
-func add_song(song: AudioStream) -> void:
-	"""Add a song to the playlist"""
+func add_song(song: AudioStream, file_path: String = "") -> void:
+	"""Add a song to the playlist with metadata extraction"""
 	if song:
 		playlist.append(song)
-		print("Added song to playlist (total: %d)" % playlist.size())
+
+		# Extract metadata from file
+		var metadata: Dictionary = {}
+		if file_path and not file_path.is_empty():
+			var parsed_metadata = AudioMetadataParser.extract_metadata(file_path)
+			metadata["title"] = parsed_metadata.title
+			metadata["artist"] = parsed_metadata.artist
+			metadata["album"] = parsed_metadata.album
+			metadata["album_art"] = parsed_metadata.album_art
+		else:
+			# Fallback: use resource path if available
+			if song.resource_path:
+				metadata["title"] = song.resource_path.get_file().get_basename()
+			else:
+				metadata["title"] = "Unknown"
+			metadata["artist"] = ""
+			metadata["album"] = ""
+			metadata["album_art"] = null
+
+		metadata_list.append(metadata)
+		print("Added song to playlist: %s (total: %d)" % [metadata["title"], playlist.size()])
 
 func remove_song(index: int) -> void:
 	"""Remove a song from the playlist"""
 	if index >= 0 and index < playlist.size():
 		playlist.remove_at(index)
+		metadata_list.remove_at(index)
 		print("Removed song from playlist (total: %d)" % playlist.size())
 
 func clear_playlist() -> void:
 	"""Clear all songs from playlist"""
 	playlist.clear()
+	metadata_list.clear()
 	shuffled_indices.clear()
 	print("Playlist cleared")
 
-func get_current_track_name() -> String:
-	"""Get the name of the currently playing track"""
+func get_current_track_metadata() -> Dictionary:
+	"""Get the metadata of the currently playing track"""
 	if playlist.is_empty() or current_track_index >= playlist.size():
-		return "No track"
+		return {
+			"title": "No track",
+			"artist": "",
+			"album": "",
+			"album_art": null
+		}
 
 	var track_index: int = shuffled_indices[current_track_index] if shuffle else current_track_index
-	var track: AudioStream = playlist[track_index]
 
-	if track and track.resource_path:
-		return track.resource_path.get_file().get_basename()
+	if track_index < metadata_list.size():
+		return metadata_list[track_index]
 
-	return "Unknown track"
+	return {
+		"title": "Unknown track",
+		"artist": "",
+		"album": "",
+		"album_art": null
+	}
