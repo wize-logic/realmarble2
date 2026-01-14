@@ -178,6 +178,10 @@ func _on_multiplayer_button_pressed() -> void:
 	"""Show the multiplayer lobby"""
 	show_multiplayer_lobby()
 
+func _on_play_pressed() -> void:
+	"""Start practice mode with bots (renamed from practice button)"""
+	_on_practice_button_pressed()
+
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots"""
 	if main_menu:
@@ -210,6 +214,14 @@ func _on_practice_button_pressed() -> void:
 
 	# Start the deathmatch
 	start_deathmatch()
+
+func _on_settings_pressed() -> void:
+	"""Open settings menu from main menu"""
+	_on_options_button_toggled(true)
+
+func _on_quit_pressed() -> void:
+	"""Quit the game"""
+	get_tree().quit()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:

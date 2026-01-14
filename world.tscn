@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://b57uspbprxc8"]
+[gd_scene load_steps=25 format=3 uid="uid://b57uspbprxc8"]
 
 [ext_resource type="Script" uid="uid://bd81ysdlqd6oy" path="res://scripts/world.gd" id="1_ho7yh"]
 [ext_resource type="Script" uid="uid://chl816vkrpda8" path="res://scripts/ui/fps_counter.gd" id="4_2328u"]
@@ -17,6 +17,8 @@
 [ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
 [ext_resource type="Script" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
 [ext_resource type="Script" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
+[ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="18_orbitcam"]
+[ext_resource type="PackedScene" uid="uid://rocket_league_menu" path="res://rocket_league_menu.tscn" id="19_rocketmenu"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
 energy_multiplier = 1.25
@@ -283,7 +285,8 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="DollyCamera" type="Camera3D" parent="Menu"]
-transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 0.702964, 13.2434)
+transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 5.0, 15.0)
+script = ExtResource("18_orbitcam")
 
 [node name="Options" type="PanelContainer" parent="Menu"]
 unique_name_in_owner = true
@@ -424,64 +427,7 @@ layout_mode = 2
 text = "Quit"
 script = ExtResource("9_ucmny")
 
-[node name="MainMenu" type="PanelContainer" parent="Menu"]
-anchors_preset = 9
-anchor_bottom = 1.0
-offset_right = 391.0
-grow_vertical = 2
-theme = SubResource("Theme_utqnk")
-
-[node name="MarginContainer" type="MarginContainer" parent="Menu/MainMenu"]
-layout_mode = 2
-theme_override_constants/margin_left = 15
-theme_override_constants/margin_top = 15
-theme_override_constants/margin_right = 15
-theme_override_constants/margin_bottom = 15
-
-[node name="VBoxContainer" type="VBoxContainer" parent="Menu/MainMenu/MarginContainer"]
-layout_mode = 2
-size_flags_vertical = 4
-theme_override_constants/separation = 10
-
-[node name="MainMenuLabel" type="Label" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "MARBLE MULTIPLAYER"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="MultiplayerButton" type="Button" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "🌐 Multiplayer"
-
-[node name="PracticeButton" type="Button" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "🎮 Practice vs Bots"
-
-[node name="HSeparator" type="HSeparator" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-
-[node name="OptionsButton" type="Button" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-toggle_mode = true
-text = "Options"
-script = ExtResource("6_7g7sm")
-
-[node name="MusicDirectoryButton" type="Button" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Music Directory"
-
-[node name="Quit" type="Button" parent="Menu/MainMenu/MarginContainer/VBoxContainer"]
-layout_mode = 2
-text = "Quit"
-script = ExtResource("9_ucmny")
-
-[node name="MusicToggle" type="CheckButton" parent="Menu/MainMenu"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 8
-button_pressed = true
-text = "Music"
+[node name="MainMenu" parent="Menu" instance=ExtResource("19_rocketmenu")]
 
 [node name="MusicDirectoryDialog" type="FileDialog" parent="Menu"]
 title = "Select Music Directory"
@@ -504,13 +450,10 @@ spawn_path = NodePath("..")
 [connection signal="value_changed" from="Menu/Options/MarginContainer/VBoxContainer/HBoxContainer2/ControllerSensitivity" to="Menu/Options/MarginContainer/VBoxContainer/HBoxContainer2/ControllerSensitivity" method="_on_value_changed"]
 [connection signal="pressed" from="Menu/Options/MarginContainer/VBoxContainer/Back" to="." method="_on_back_pressed"]
 [connection signal="pressed" from="Menu/Options/MarginContainer/VBoxContainer/Back" to="Menu/PauseMenu/MarginContainer/VBoxContainer/Options" method="_on_back_pressed"]
-[connection signal="pressed" from="Menu/Options/MarginContainer/VBoxContainer/Back" to="Menu/MainMenu/MarginContainer/VBoxContainer/OptionsButton" method="_on_back_pressed"]
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Resume" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Options" to="." method="_on_options_pressed"]
-[connection signal="pressed" from="Menu/MainMenu/MarginContainer/VBoxContainer/MultiplayerButton" to="." method="_on_multiplayer_button_pressed"]
-[connection signal="pressed" from="Menu/MainMenu/MarginContainer/VBoxContainer/PracticeButton" to="." method="_on_practice_button_pressed"]
-[connection signal="toggled" from="Menu/MainMenu/MarginContainer/VBoxContainer/OptionsButton" to="." method="_on_options_button_toggled"]
-[connection signal="toggled" from="Menu/MainMenu/MarginContainer/VBoxContainer/OptionsButton" to="Menu/Options/MarginContainer/VBoxContainer/Fullscreen" method="_on_options_button_toggled"]
-[connection signal="pressed" from="Menu/MainMenu/MarginContainer/VBoxContainer/MusicDirectoryButton" to="." method="_on_music_directory_button_pressed"]
+[connection signal="play_pressed" from="Menu/MainMenu" to="." method="_on_play_pressed"]
+[connection signal="multiplayer_pressed" from="Menu/MainMenu" to="." method="_on_multiplayer_button_pressed"]
+[connection signal="settings_pressed" from="Menu/MainMenu" to="." method="_on_settings_pressed"]
+[connection signal="quit_pressed" from="Menu/MainMenu" to="." method="_on_quit_pressed"]
 [connection signal="dir_selected" from="Menu/MusicDirectoryDialog" to="." method="_on_music_directory_selected"]
-[connection signal="toggled" from="Menu/MainMenu/MusicToggle" to="." method="_on_music_toggle_toggled"]
