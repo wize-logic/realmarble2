@@ -956,90 +956,174 @@ func spawn_bot() -> void:
 # COUNTDOWN SYSTEM
 # ============================================================================
 
+func _apply_button_style(button: Button, font_size: int = 20) -> void:
+	"""Apply style guide button styling to a button"""
+	# Normal state
+	var button_normal = StyleBoxFlat.new()
+	button_normal.bg_color = Color(0.15, 0.15, 0.2, 0.8)
+	button_normal.set_corner_radius_all(8)
+	button_normal.border_color = Color(0.3, 0.7, 1, 0.4)
+	button_normal.set_border_width_all(2)
+
+	# Hover state
+	var button_hover = StyleBoxFlat.new()
+	button_hover.bg_color = Color(0.2, 0.3, 0.4, 0.9)
+	button_hover.set_corner_radius_all(8)
+	button_hover.border_color = Color(0.3, 0.7, 1, 0.8)
+	button_hover.set_border_width_all(2)
+
+	# Pressed state
+	var button_pressed = StyleBoxFlat.new()
+	button_pressed.bg_color = Color(0.3, 0.5, 0.7, 1)
+	button_pressed.set_corner_radius_all(8)
+	button_pressed.border_color = Color(0.4, 0.8, 1, 1)
+	button_pressed.set_border_width_all(2)
+
+	# Apply styles
+	button.add_theme_stylebox_override("normal", button_normal)
+	button.add_theme_stylebox_override("hover", button_hover)
+	button.add_theme_stylebox_override("pressed", button_pressed)
+	button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	button.add_theme_font_size_override("font_size", font_size)
+
 func _create_profile_panel() -> void:
-	"""Create the profile panel UI"""
+	"""Create the profile panel UI following style guide"""
 	profile_panel = PanelContainer.new()
 	profile_panel.name = "ProfilePanel"
 	profile_panel.set_script(ProfilePanelScript)
 
-	# Center the panel
+	# Center the panel (600x700px as per style guide)
 	profile_panel.set_anchors_preset(Control.PRESET_CENTER)
 	profile_panel.anchor_left = 0.5
 	profile_panel.anchor_right = 0.5
 	profile_panel.anchor_top = 0.5
 	profile_panel.anchor_bottom = 0.5
-	profile_panel.offset_left = -400
-	profile_panel.offset_right = 400
-	profile_panel.offset_top = -300
-	profile_panel.offset_bottom = 300
-	profile_panel.custom_minimum_size = Vector2(800, 600)
+	profile_panel.offset_left = -300
+	profile_panel.offset_right = 300
+	profile_panel.offset_top = -350
+	profile_panel.offset_bottom = 350
+	profile_panel.custom_minimum_size = Vector2(600, 700)
 
-	# Add structure for the panel
+	# Apply panel style from style guide
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	panel_style.set_border_width_all(3)
+	profile_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 25px margins as per style guide
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	margin.add_theme_constant_override("margin_left", 25)
+	margin.add_theme_constant_override("margin_right", 25)
+	margin.add_theme_constant_override("margin_top", 25)
+	margin.add_theme_constant_override("margin_bottom", 25)
 	profile_panel.add_child(margin)
 
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
+	vbox.add_theme_constant_override("separation", 15)
 	margin.add_child(vbox)
 
-	# Header
+	# Header with title
 	var header = HBoxContainer.new()
 	header.name = "Header"
 	vbox.add_child(header)
 
 	var username_label = Label.new()
 	username_label.name = "Username"
-	username_label.text = "Profile"
+	username_label.text = "PROFILE"
 	username_label.add_theme_font_size_override("font_size", 32)
+	username_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
 	username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(username_label)
 
-	var auth_status = Label.new()
-	auth_status.name = "AuthStatus"
-	auth_status.text = "Guest"
-	header.add_child(auth_status)
-
-	var login_btn = Button.new()
-	login_btn.name = "LoginButton"
-	login_btn.text = "Login"
-	header.add_child(login_btn)
-
-	var link_btn = Button.new()
-	link_btn.name = "LinkAccountButton"
-	link_btn.text = "Link Account"
-	link_btn.visible = false
-	header.add_child(link_btn)
-
+	# Close button with style
 	var close_btn = Button.new()
 	close_btn.name = "CloseButton"
 	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(50, 50)
+	_apply_button_style(close_btn, 20)
 	header.add_child(close_btn)
+
+	# Separator
+	var sep1 = HSeparator.new()
+	vbox.add_child(sep1)
+
+	# Auth section
+	var auth_hbox = HBoxContainer.new()
+	auth_hbox.add_theme_constant_override("separation", 10)
+	vbox.add_child(auth_hbox)
+
+	var auth_status = Label.new()
+	auth_status.name = "AuthStatus"
+	auth_status.text = "GUEST"
+	auth_status.add_theme_font_size_override("font_size", 16)
+	auth_status.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	auth_hbox.add_child(auth_status)
+
+	var spacer1 = Control.new()
+	spacer1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	auth_hbox.add_child(spacer1)
+
+	var login_btn = Button.new()
+	login_btn.name = "LoginButton"
+	login_btn.text = "LOGIN"
+	login_btn.custom_minimum_size = Vector2(120, 40)
+	_apply_button_style(login_btn, 18)
+	auth_hbox.add_child(login_btn)
+
+	var link_btn = Button.new()
+	link_btn.name = "LinkAccountButton"
+	link_btn.text = "LINK ACCOUNT"
+	link_btn.custom_minimum_size = Vector2(150, 40)
+	link_btn.visible = false
+	_apply_button_style(link_btn, 18)
+	auth_hbox.add_child(link_btn)
 
 	# Placeholder for profile picture
 	var pic = TextureRect.new()
 	pic.name = "ProfilePicture"
 	pic.custom_minimum_size = Vector2(100, 100)
-	header.add_child(pic)
+	pic.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	vbox.add_child(pic)
 
-	# Stats section
+	# Stats section header
+	var stats_header = Label.new()
+	stats_header.text = "STATISTICS"
+	stats_header.add_theme_font_size_override("font_size", 24)
+	stats_header.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	stats_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(stats_header)
+
+	# Separator
+	var sep2 = HSeparator.new()
+	vbox.add_child(sep2)
+
+	# Stats grid
 	var stats_grid = GridContainer.new()
 	stats_grid.name = "Stats"
 	stats_grid.columns = 2
+	stats_grid.add_theme_constant_override("h_separation", 20)
+	stats_grid.add_theme_constant_override("v_separation", 10)
 	vbox.add_child(stats_grid)
 
-	# Add stat labels
-	for stat_name in ["Kills", "Deaths", "K/D", "Matches", "Wins", "WinRate"]:
+	# Add stat labels with proper styling
+	var stat_names = ["KILLS", "DEATHS", "K/D RATIO", "MATCHES", "WINS", "WIN RATE"]
+	var stat_keys = ["Kills", "Deaths", "KD", "Matches", "Wins", "WinRate"]
+
+	for i in stat_names.size():
 		var label = Label.new()
-		label.text = stat_name + ":"
+		label.text = stat_names[i] + ":"
+		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
 		stats_grid.add_child(label)
 
 		var value = Label.new()
-		value.name = stat_name + "Value"
+		value.name = stat_keys[i] + "Value"
 		value.text = "0"
+		value.add_theme_font_size_override("font_size", 18)
+		value.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 		stats_grid.add_child(value)
 
 	add_child(profile_panel)
@@ -1052,71 +1136,107 @@ func _create_profile_panel() -> void:
 	print("Profile panel created")
 
 func _create_friends_panel() -> void:
-	"""Create the friends panel UI"""
+	"""Create the friends panel UI following style guide"""
 	friends_panel = PanelContainer.new()
 	friends_panel.name = "FriendsPanel"
 	friends_panel.set_script(FriendsPanelScript)
 
-	# Center the panel
+	# Center the panel (600x700px as per style guide)
 	friends_panel.set_anchors_preset(Control.PRESET_CENTER)
 	friends_panel.anchor_left = 0.5
 	friends_panel.anchor_right = 0.5
 	friends_panel.anchor_top = 0.5
 	friends_panel.anchor_bottom = 0.5
-	friends_panel.offset_left = -400
-	friends_panel.offset_right = 400
-	friends_panel.offset_top = -300
-	friends_panel.offset_bottom = 300
-	friends_panel.custom_minimum_size = Vector2(800, 600)
+	friends_panel.offset_left = -300
+	friends_panel.offset_right = 300
+	friends_panel.offset_top = -350
+	friends_panel.offset_bottom = 350
+	friends_panel.custom_minimum_size = Vector2(600, 700)
 
-	# Add structure for the panel
+	# Apply panel style from style guide
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	panel_style.set_border_width_all(3)
+	friends_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 25px margins as per style guide
 	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 20)
-	margin.add_theme_constant_override("margin_right", 20)
-	margin.add_theme_constant_override("margin_top", 20)
-	margin.add_theme_constant_override("margin_bottom", 20)
+	margin.add_theme_constant_override("margin_left", 25)
+	margin.add_theme_constant_override("margin_right", 25)
+	margin.add_theme_constant_override("margin_top", 25)
+	margin.add_theme_constant_override("margin_bottom", 25)
 	friends_panel.add_child(margin)
 
 	var vbox = VBoxContainer.new()
 	vbox.name = "VBox"
+	vbox.add_theme_constant_override("separation", 15)
 	margin.add_child(vbox)
 
 	# Header
 	var header = HBoxContainer.new()
 	header.name = "Header"
+	header.add_theme_constant_override("separation", 10)
 	vbox.add_child(header)
 
 	var title = Label.new()
-	title.text = "Friends"
+	title.text = "FRIENDS"
 	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 
-	var online_count = Label.new()
-	online_count.name = "OnlineCount"
-	online_count.text = "Online: 0"
-	header.add_child(online_count)
-
-	var total_count = Label.new()
-	total_count.name = "TotalCount"
-	total_count.text = "Total: 0"
-	header.add_child(total_count)
-
 	var refresh_btn = Button.new()
 	refresh_btn.name = "RefreshButton"
-	refresh_btn.text = "Refresh"
+	refresh_btn.text = "REFRESH"
+	refresh_btn.custom_minimum_size = Vector2(100, 40)
+	_apply_button_style(refresh_btn, 16)
 	header.add_child(refresh_btn)
 
 	var close_btn = Button.new()
 	close_btn.name = "CloseButton"
 	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(50, 50)
+	_apply_button_style(close_btn, 20)
 	header.add_child(close_btn)
+
+	# Separator
+	var sep1 = HSeparator.new()
+	vbox.add_child(sep1)
+
+	# Friend count section
+	var count_hbox = HBoxContainer.new()
+	count_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(count_hbox)
+
+	var online_count = Label.new()
+	online_count.name = "OnlineCount"
+	online_count.text = "ONLINE: 0"
+	online_count.add_theme_font_size_override("font_size", 16)
+	online_count.add_theme_color_override("font_color", Color(0.3, 1, 0.3, 1))
+	count_hbox.add_child(online_count)
+
+	var total_count = Label.new()
+	total_count.name = "TotalCount"
+	total_count.text = "TOTAL: 0"
+	total_count.add_theme_font_size_override("font_size", 16)
+	total_count.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	count_hbox.add_child(total_count)
+
+	# Separator
+	var sep2 = HSeparator.new()
+	vbox.add_child(sep2)
 
 	# No friends message
 	var no_friends = Label.new()
 	no_friends.name = "NoFriends"
-	no_friends.text = "No friends yet. Add friends on CrazyGames!"
+	no_friends.text = "NO FRIENDS YET\nAdd friends on CrazyGames!"
+	no_friends.add_theme_font_size_override("font_size", 18)
+	no_friends.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	no_friends.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	no_friends.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	no_friends.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(no_friends)
 
 	# Scroll container for friends list
@@ -1127,6 +1247,7 @@ func _create_friends_panel() -> void:
 
 	var friends_list = VBoxContainer.new()
 	friends_list.name = "FriendsList"
+	friends_list.add_theme_constant_override("separation", 8)
 	scroll.add_child(friends_list)
 
 	add_child(friends_panel)
