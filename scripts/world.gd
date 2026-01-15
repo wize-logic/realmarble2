@@ -169,10 +169,6 @@ func _process(delta: float) -> void:
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
-	# Rotate marble preview slowly in main menu (Rocket League style)
-	if marble_preview and main_menu and main_menu.visible:
-		marble_preview.rotate_y(delta * 0.5)  # Slow rotation
-
 # ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
