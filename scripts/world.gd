@@ -112,16 +112,21 @@ func _process(delta: float) -> void:
 
 		if countdown_time <= 0:
 			# Countdown finished - start the game
+			print("Countdown finished! Starting match...")
 			countdown_active = false
 			game_active = true
 			if countdown_label:
 				countdown_label.visible = false
-			print("GO! Match started!")
+			print("GO! Match started! game_active is now: ", game_active)
 
 	# Handle deathmatch timer
 	if game_active:
 		game_time_remaining -= delta
+		# Log every 30 seconds
+		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
+			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 		if game_time_remaining <= 0:
+			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
 # ============================================================================
@@ -373,6 +378,14 @@ func upnp_setup() -> void:
 
 func start_deathmatch() -> void:
 	"""Start a 5-minute deathmatch with countdown"""
+	print("======================================")
+	print("start_deathmatch() CALLED!")
+	print("Stack trace:")
+	print_stack()
+	print("Current game_active: ", game_active)
+	print("Current countdown_active: ", countdown_active)
+	print("======================================")
+
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
 	player_scores.clear()
@@ -386,7 +399,13 @@ func start_deathmatch() -> void:
 
 func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
+	print("======================================")
+	print("end_deathmatch() CALLED!")
+	print("Game time was: %.2f seconds" % game_time_remaining)
+	print("======================================")
+
 	game_active = false
+	countdown_active = false  # Make sure countdown is also stopped
 	print("Deathmatch ended!")
 
 	# Stop gameplay music
