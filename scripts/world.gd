@@ -386,6 +386,12 @@ func start_deathmatch() -> void:
 	print("Current countdown_active: ", countdown_active)
 	print("======================================")
 
+	# Prevent starting a new match if one is already active or counting down
+	if game_active or countdown_active:
+		print("WARNING: Match already active or counting down! Ignoring start_deathmatch() call.")
+		print("======================================")
+		return
+
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
 	player_scores.clear()
@@ -403,6 +409,12 @@ func end_deathmatch() -> void:
 	print("end_deathmatch() CALLED!")
 	print("Game time was: %.2f seconds" % game_time_remaining)
 	print("======================================")
+
+	# Prevent ending if already ended
+	if not game_active and not countdown_active:
+		print("WARNING: Match already ended! Ignoring end_deathmatch() call.")
+		print("======================================")
+		return
 
 	game_active = false
 	countdown_active = false  # Make sure countdown is also stopped
