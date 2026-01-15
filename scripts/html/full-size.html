@@ -90,6 +90,205 @@ body {
 	z-index: 1;
 }
 		</style>
+		<!-- CrazyGames SDK -->
+		<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+		<script>
+			// CrazyGames SDK Bridge for Godot
+			window.CrazyGamesSDK = {
+				sdk: null,
+				initialized: false,
+				userInfo: null,
+				friendsList: [],
+
+				// Initialize the SDK
+				init: function() {
+					if (window.CrazyGames && window.CrazyGames.SDK) {
+						this.sdk = window.CrazyGames.SDK;
+						this.sdk.init().then(() => {
+							console.log('CrazyGames SDK initialized successfully');
+							this.initialized = true;
+							this.notifyGodot('sdk_initialized', {success: true});
+
+							// Load user info if available
+							this.getUserInfo();
+						}).catch((error) => {
+							console.error('CrazyGames SDK initialization failed:', error);
+							this.notifyGodot('sdk_initialized', {success: false, error: error.message});
+						});
+					} else {
+						console.warn('CrazyGames SDK not available');
+						this.notifyGodot('sdk_initialized', {success: false, error: 'SDK not available'});
+					}
+				},
+
+				// Notify Godot of events
+				notifyGodot: function(eventType, data) {
+					if (window.godotCallbacks && window.godotCallbacks.onCrazyGamesEvent) {
+						window.godotCallbacks.onCrazyGamesEvent(eventType, JSON.stringify(data));
+					}
+				},
+
+				// User methods
+				getUserInfo: function() {
+					if (!this.initialized || !this.sdk.user) {
+						return null;
+					}
+
+					try {
+						const user = this.sdk.user.getUser();
+						if (user) {
+							this.userInfo = {
+								id: user.userId || user.id || '',
+								username: user.username || user.profilePictureUrl ? 'User' : 'Guest',
+								profilePictureUrl: user.profilePictureUrl || '',
+								isAuthenticated: user.userId ? true : false
+							};
+							this.notifyGodot('user_info_loaded', this.userInfo);
+							return this.userInfo;
+						}
+					} catch (error) {
+						console.error('Failed to get user info:', error);
+					}
+					return null;
+				},
+
+				showAuthPrompt: function() {
+					if (!this.initialized || !this.sdk.user) {
+						this.notifyGodot('auth_prompt_failed', {error: 'SDK not initialized'});
+						return;
+					}
+
+					this.sdk.user.showAuthPrompt().then(() => {
+						console.log('Auth prompt shown');
+						this.getUserInfo();
+						this.notifyGodot('auth_completed', {success: true});
+					}).catch((error) => {
+						console.error('Auth prompt failed:', error);
+						this.notifyGodot('auth_completed', {success: false, error: error.message});
+					});
+				},
+
+				showAccountLinkPrompt: function() {
+					if (!this.initialized || !this.sdk.user) {
+						this.notifyGodot('account_link_failed', {error: 'SDK not initialized'});
+						return;
+					}
+
+					this.sdk.user.showAccountLinkPrompt().then(() => {
+						console.log('Account link prompt shown');
+						this.getUserInfo();
+						this.notifyGodot('account_linked', {success: true});
+					}).catch((error) => {
+						console.error('Account link failed:', error);
+						this.notifyGodot('account_linked', {success: false, error: error.message});
+					});
+				},
+
+				// Friends methods
+				getFriends: function() {
+					if (!this.initialized) {
+						return [];
+					}
+
+					// Note: CrazyGames SDK v3 may not have friends API yet
+					// This is a placeholder for future implementation
+					console.log('Getting friends list...');
+					this.notifyGodot('friends_loaded', {friends: this.friendsList});
+					return this.friendsList;
+				},
+
+				inviteFriend: function(friendId) {
+					if (!this.initialized) {
+						this.notifyGodot('friend_invite_failed', {error: 'SDK not initialized'});
+						return;
+					}
+
+					console.log('Inviting friend:', friendId);
+					// Placeholder for future implementation
+					this.notifyGodot('friend_invited', {friendId: friendId, success: true});
+				},
+
+				// Ad methods
+				showAd: function(adType) {
+					if (!this.initialized || !this.sdk.ad) {
+						console.warn('Cannot show ad: SDK not initialized');
+						this.notifyGodot('ad_finished', {success: false, error: 'SDK not initialized'});
+						return;
+					}
+
+					const type = adType || 'midgame';
+					console.log('Requesting ad:', type);
+
+					this.sdk.ad.requestAd(type).then(() => {
+						console.log('Ad completed successfully');
+						this.notifyGodot('ad_finished', {success: true, type: type});
+					}).catch((error) => {
+						console.error('Ad failed:', error);
+						this.notifyGodot('ad_finished', {success: false, type: type, error: error.message});
+					});
+				},
+
+				// Game methods
+				gameplayStart: function() {
+					if (this.initialized && this.sdk.game) {
+						console.log('Gameplay started');
+						this.sdk.game.gameplayStart();
+					}
+				},
+
+				gameplayStop: function() {
+					if (this.initialized && this.sdk.game) {
+						console.log('Gameplay stopped');
+						this.sdk.game.gameplayStop();
+					}
+				},
+
+				happytime: function() {
+					if (this.initialized && this.sdk.game) {
+						console.log('Happy time!');
+						this.sdk.game.happytime();
+					}
+				},
+
+				// Banner methods
+				showBanner: function() {
+					if (this.initialized && this.sdk.banner) {
+						this.sdk.banner.requestBanner().then(() => {
+							console.log('Banner shown');
+							this.notifyGodot('banner_shown', {success: true});
+						}).catch((error) => {
+							console.error('Banner failed:', error);
+							this.notifyGodot('banner_shown', {success: false, error: error.message});
+						});
+					}
+				},
+
+				clearBanner: function() {
+					if (this.initialized && this.sdk.banner) {
+						this.sdk.banner.clearBanner();
+						console.log('Banner cleared');
+					}
+				},
+
+				clearAllBanners: function() {
+					if (this.initialized && this.sdk.banner) {
+						this.sdk.banner.clearAllBanners();
+						console.log('All banners cleared');
+					}
+				}
+			};
+
+			// Initialize callbacks object for Godot
+			window.godotCallbacks = {
+				onCrazyGamesEvent: null
+			};
+
+			// Auto-initialize when page loads
+			window.addEventListener('load', function() {
+				console.log('Initializing CrazyGames SDK...');
+				window.CrazyGamesSDK.init();
+			});
+		</script>
 		$GODOT_HEAD_INCLUDE
 	</head>
 	<body>

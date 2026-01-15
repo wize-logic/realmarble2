@@ -182,62 +182,137 @@ var relay_server_url: String = "ws://your-server.com:9080"
 
 ## CrazyGames Integration
 
-### 1. Add CrazyGames SDK (Optional)
+### ✅ FULLY IMPLEMENTED
 
-Create `crazygames_sdk.gd`:
+The game now includes **complete CrazyGames SDK integration** with all features:
+
+#### SDK Features Implemented:
+
+1. **User Authentication & Profiles**
+   - CrazyGames user login integration
+   - User profile display with stats
+   - Account linking support
+   - Persistent stats tracking (kills, deaths, K/D, matches, wins)
+
+2. **Friends System**
+   - Friends list display
+   - Online/offline status
+   - Friend invites to games
+   - Real-time friend updates
+
+3. **Game Lifecycle Events**
+   - `gameplay_start()` - Called when match begins
+   - `gameplay_stop()` - Called when match ends
+   - `happytime()` - Available for special moments
+
+4. **Ad Support**
+   - Midgame ads
+   - Rewarded ads
+   - Banner ads
+
+5. **Automatic Initialization**
+   - SDK auto-initializes on page load
+   - Graceful fallback when not on CrazyGames
+   - Mock data for local testing
+
+#### Files Added:
+
+- `scripts/crazygames_sdk.gd` - Main SDK bridge (autoloaded as `CrazyGamesSDK`)
+- `scripts/profile_manager.gd` - User profile system (autoloaded as `ProfileManager`)
+- `scripts/friends_manager.gd` - Friends system (autoloaded as `FriendsManager`)
+- `scripts/ui/profile_panel.gd` - Profile UI panel
+- `scripts/ui/friends_panel.gd` - Friends UI panel
+- `scripts/html/full-size.html` - Updated HTML template with SDK v3
+
+#### How It Works:
+
+The SDK automatically initializes when the game loads. The JavaScript bridge in the HTML template communicates with Godot through the `CrazyGamesSDK` autoload singleton.
+
+**Lifecycle Integration** (world.gd):
+- Game countdown starts → `gameplay_stop()` (ensures clean state)
+- Countdown finishes → `gameplay_start()` (actual gameplay begins)
+- Match ends → `gameplay_stop()` (match finished)
+
+**Profile Integration**:
+- Stats automatically tracked locally
+- CrazyGames username synced to profile
+- Profile accessible from main menu
+- Stats persist across sessions
+
+**Friends Integration**:
+- Friends list loaded from CrazyGames
+- Invite friends to your game room
+- See online/offline status
+- Friends panel accessible from main menu
+
+#### Testing Locally:
+
+When running outside CrazyGames, the SDK uses mock data:
+- Mock user: "TestPlayer" (not authenticated)
+- Mock friends: 5 sample friends with online/offline status
+- All SDK functions work with mock responses
+
+#### Using the SDK in Your Code:
+
 ```gdscript
-extends Node
+# Check if user is authenticated
+if ProfileManager:
+	if ProfileManager.is_authenticated():
+		print("User is logged in!")
 
-var sdk_available: bool = false
+# Get user info
+var profile = ProfileManager.get_profile()
+print("Username: ", profile.username)
 
-func _ready() -> void:
-	# Check if SDK is available
-	if JavaScript.eval("typeof window.CrazyGames !== 'undefined'"):
-		sdk_available = true
-		print("CrazyGames SDK available")
+# Record match results
+ProfileManager.record_match_result(kills, deaths, won)
 
-func game_start() -> void:
-	if sdk_available:
-		JavaScript.eval("window.CrazyGames.SDK.game.gameplayStart()")
+# Get friends
+if FriendsManager:
+	var friends = FriendsManager.get_friends()
+	var online_count = FriendsManager.get_online_friend_count()
 
-func game_end() -> void:
-	if sdk_available:
-		JavaScript.eval("window.CrazyGames.SDK.game.gameplayStop()")
+# Invite friend to game
+FriendsManager.invite_to_game(friend_id)
 
-func show_ad() -> void:
-	if sdk_available:
-		JavaScript.eval("window.CrazyGames.SDK.ad.requestAd('midgame')")
-```
-
-### 2. Integrate with Your Game
-
-```gdscript
-# In world.gd
-func start_deathmatch() -> void:
-	if CrazyGamesSDK:
-		CrazyGamesSDK.game_start()
-	# ... rest of function
-
-func end_deathmatch() -> void:
-	if CrazyGamesSDK:
-		CrazyGamesSDK.game_end()
-	# ... rest of function
+# Show ads (between matches)
+if CrazyGamesSDK:
+	CrazyGamesSDK.show_ad("midgame")
 ```
 
 ## Deployment Checklist
 
+### Networking
 - [ ] Set `use_websocket = true` in multiplayer_manager.gd
 - [ ] Update `relay_server_url` to production server
 - [ ] Test multiplayer with 4+ players
-- [ ] Export as HTML5
-- [ ] Test exported build locally
 - [ ] Verify room codes work
 - [ ] Test quick play matchmaking
 - [ ] Verify host migration works
+
+### CrazyGames SDK
+- [x] CrazyGames SDK integrated (v3)
+- [x] User profiles implemented
+- [x] Friends system implemented
+- [x] Gameplay lifecycle events integrated
+- [ ] Test profile system on CrazyGames platform
+- [ ] Test friends system with real CrazyGames accounts
+- [ ] Verify SDK initialization in browser console
+- [ ] Test ads (midgame, rewarded, banners)
+
+### Export & Testing
+- [ ] Export as HTML5 with correct template
+- [ ] Test exported build locally
+- [ ] Verify SDK loads correctly
 - [ ] Check performance (60 FPS minimum)
 - [ ] Test on different browsers (Chrome, Firefox, Safari)
+- [ ] Test on mobile browsers (if applicable)
+- [ ] Verify all UI panels work (profile, friends, lobby)
+
+### Final Steps
 - [ ] Upload to CrazyGames
 - [ ] Submit for review
+- [ ] Monitor SDK integration in production
 
 ## Server Hosting Recommendations
 

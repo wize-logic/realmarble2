@@ -13,6 +13,12 @@ extends Node
 var lobby_ui: Control = null
 const LobbyUI = preload("res://lobby_ui.tscn")
 
+# Profile and Friends UI
+var profile_panel: PanelContainer = null
+var friends_panel: PanelContainer = null
+const ProfilePanelScript = preload("res://scripts/ui/profile_panel.gd")
+const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
+
 # Countdown UI (created dynamically)
 var countdown_label: Label = null
 var countdown_sound: AudioStreamPlayer = null
@@ -72,6 +78,12 @@ func _ready() -> void:
 	add_child(lobby_ui)
 	lobby_ui.visible = false  # Hidden by default
 
+	# Initialize profile panel
+	_create_profile_panel()
+
+	# Initialize friends panel
+	_create_friends_panel()
+
 	# Connect multiplayer manager signals
 	if MultiplayerManager:
 		MultiplayerManager.player_connected.connect(_on_multiplayer_player_connected)
@@ -126,6 +138,10 @@ func _process(delta: float) -> void:
 			if countdown_label:
 				countdown_label.visible = false
 			print("GO! Match started! game_active is now: ", game_active)
+
+			# Notify CrazyGames SDK that gameplay has started
+			if CrazyGamesSDK:
+				CrazyGamesSDK.gameplay_start()
 
 	# Handle deathmatch timer
 	if game_active:
@@ -434,12 +450,18 @@ func _on_garage_pressed() -> void:
 	print("Garage - Not implemented yet")
 
 func _on_profile_pressed() -> void:
-	"""Profile placeholder"""
-	print("Profile - Not implemented yet")
+	"""Show profile panel"""
+	if profile_panel:
+		profile_panel.show_panel()
+		if main_menu:
+			main_menu.hide()
 
 func _on_friends_pressed() -> void:
-	"""Friends placeholder"""
-	print("Friends - Not implemented yet")
+	"""Show friends panel"""
+	if friends_panel:
+		friends_panel.show_panel()
+		if main_menu:
+			main_menu.hide()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
@@ -599,6 +621,10 @@ func start_deathmatch() -> void:
 	player_scores.clear()
 	player_deaths.clear()
 
+	# Notify CrazyGames SDK that gameplay is about to start
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()  # Ensure clean state
+
 	# Start countdown
 	countdown_active = true
 	countdown_time = 3.0  # 3 seconds: "READY" (1s), "SET" (1s), "GO!" (1s)
@@ -622,6 +648,10 @@ func end_deathmatch() -> void:
 	game_active = false
 	countdown_active = false  # Make sure countdown is also stopped
 	print("Deathmatch ended!")
+
+	# Notify CrazyGames SDK that gameplay has stopped
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()
 
 	# Stop gameplay music
 	if gameplay_music and gameplay_music.has_method("stop_playlist"):
@@ -925,6 +955,198 @@ func spawn_bot() -> void:
 # ============================================================================
 # COUNTDOWN SYSTEM
 # ============================================================================
+
+func _create_profile_panel() -> void:
+	"""Create the profile panel UI"""
+	profile_panel = PanelContainer.new()
+	profile_panel.name = "ProfilePanel"
+	profile_panel.set_script(ProfilePanelScript)
+
+	# Center the panel
+	profile_panel.set_anchors_preset(Control.PRESET_CENTER)
+	profile_panel.anchor_left = 0.5
+	profile_panel.anchor_right = 0.5
+	profile_panel.anchor_top = 0.5
+	profile_panel.anchor_bottom = 0.5
+	profile_panel.offset_left = -400
+	profile_panel.offset_right = 400
+	profile_panel.offset_top = -300
+	profile_panel.offset_bottom = 300
+	profile_panel.custom_minimum_size = Vector2(800, 600)
+
+	# Add structure for the panel
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	profile_panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBox"
+	margin.add_child(vbox)
+
+	# Header
+	var header = HBoxContainer.new()
+	header.name = "Header"
+	vbox.add_child(header)
+
+	var username_label = Label.new()
+	username_label.name = "Username"
+	username_label.text = "Profile"
+	username_label.add_theme_font_size_override("font_size", 32)
+	username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(username_label)
+
+	var auth_status = Label.new()
+	auth_status.name = "AuthStatus"
+	auth_status.text = "Guest"
+	header.add_child(auth_status)
+
+	var login_btn = Button.new()
+	login_btn.name = "LoginButton"
+	login_btn.text = "Login"
+	header.add_child(login_btn)
+
+	var link_btn = Button.new()
+	link_btn.name = "LinkAccountButton"
+	link_btn.text = "Link Account"
+	link_btn.visible = false
+	header.add_child(link_btn)
+
+	var close_btn = Button.new()
+	close_btn.name = "CloseButton"
+	close_btn.text = "X"
+	header.add_child(close_btn)
+
+	# Placeholder for profile picture
+	var pic = TextureRect.new()
+	pic.name = "ProfilePicture"
+	pic.custom_minimum_size = Vector2(100, 100)
+	header.add_child(pic)
+
+	# Stats section
+	var stats_grid = GridContainer.new()
+	stats_grid.name = "Stats"
+	stats_grid.columns = 2
+	vbox.add_child(stats_grid)
+
+	# Add stat labels
+	for stat_name in ["Kills", "Deaths", "K/D", "Matches", "Wins", "WinRate"]:
+		var label = Label.new()
+		label.text = stat_name + ":"
+		stats_grid.add_child(label)
+
+		var value = Label.new()
+		value.name = stat_name + "Value"
+		value.text = "0"
+		stats_grid.add_child(value)
+
+	add_child(profile_panel)
+	profile_panel.visible = false
+
+	# Connect close signal
+	if profile_panel.has_signal("closed"):
+		profile_panel.closed.connect(_on_profile_panel_closed)
+
+	print("Profile panel created")
+
+func _create_friends_panel() -> void:
+	"""Create the friends panel UI"""
+	friends_panel = PanelContainer.new()
+	friends_panel.name = "FriendsPanel"
+	friends_panel.set_script(FriendsPanelScript)
+
+	# Center the panel
+	friends_panel.set_anchors_preset(Control.PRESET_CENTER)
+	friends_panel.anchor_left = 0.5
+	friends_panel.anchor_right = 0.5
+	friends_panel.anchor_top = 0.5
+	friends_panel.anchor_bottom = 0.5
+	friends_panel.offset_left = -400
+	friends_panel.offset_right = 400
+	friends_panel.offset_top = -300
+	friends_panel.offset_bottom = 300
+	friends_panel.custom_minimum_size = Vector2(800, 600)
+
+	# Add structure for the panel
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 20)
+	margin.add_theme_constant_override("margin_right", 20)
+	margin.add_theme_constant_override("margin_top", 20)
+	margin.add_theme_constant_override("margin_bottom", 20)
+	friends_panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBox"
+	margin.add_child(vbox)
+
+	# Header
+	var header = HBoxContainer.new()
+	header.name = "Header"
+	vbox.add_child(header)
+
+	var title = Label.new()
+	title.text = "Friends"
+	title.add_theme_font_size_override("font_size", 32)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+
+	var online_count = Label.new()
+	online_count.name = "OnlineCount"
+	online_count.text = "Online: 0"
+	header.add_child(online_count)
+
+	var total_count = Label.new()
+	total_count.name = "TotalCount"
+	total_count.text = "Total: 0"
+	header.add_child(total_count)
+
+	var refresh_btn = Button.new()
+	refresh_btn.name = "RefreshButton"
+	refresh_btn.text = "Refresh"
+	header.add_child(refresh_btn)
+
+	var close_btn = Button.new()
+	close_btn.name = "CloseButton"
+	close_btn.text = "X"
+	header.add_child(close_btn)
+
+	# No friends message
+	var no_friends = Label.new()
+	no_friends.name = "NoFriends"
+	no_friends.text = "No friends yet. Add friends on CrazyGames!"
+	no_friends.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(no_friends)
+
+	# Scroll container for friends list
+	var scroll = ScrollContainer.new()
+	scroll.name = "ScrollContainer"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	var friends_list = VBoxContainer.new()
+	friends_list.name = "FriendsList"
+	scroll.add_child(friends_list)
+
+	add_child(friends_panel)
+	friends_panel.visible = false
+
+	# Connect close signal
+	if friends_panel.has_signal("closed"):
+		friends_panel.closed.connect(_on_friends_panel_closed)
+
+	print("Friends panel created")
+
+func _on_profile_panel_closed() -> void:
+	"""Handle profile panel closed"""
+	if main_menu:
+		main_menu.show()
+
+func _on_friends_panel_closed() -> void:
+	"""Handle friends panel closed"""
+	if main_menu:
+		main_menu.show()
 
 func create_countdown_ui() -> void:
 	"""Create the countdown UI elements"""
