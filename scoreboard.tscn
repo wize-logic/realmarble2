@@ -1,0 +1,78 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1h5k8v2n9p4t"]
+
+[ext_resource type="Script" path="res://scripts/scoreboard.gd" id="1_scoreboard"]
+
+[node name="Scoreboard" type="Control"]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_scoreboard")
+
+[node name="Panel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -250.0
+offset_right = 300.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Panel/VBoxContainer"]
+layout_mode = 2
+text = "SCOREBOARD"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Header" type="HBoxContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayerLabel" type="Label" parent="Panel/VBoxContainer/Header"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "Player"
+horizontal_alignment = 1
+
+[node name="KillsLabel" type="Label" parent="Panel/VBoxContainer/Header"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Kills"
+horizontal_alignment = 1
+
+[node name="DeathsLabel" type="Label" parent="Panel/VBoxContainer/Header"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Deaths"
+horizontal_alignment = 1
+
+[node name="KDLabel" type="Label" parent="Panel/VBoxContainer/Header"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "K/D Ratio"
+horizontal_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/VBoxContainer"]
+custom_minimum_size = Vector2(0, 350)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerList" type="VBoxContainer" parent="Panel/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3

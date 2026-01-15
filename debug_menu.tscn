@@ -38,6 +38,22 @@ layout_mode = 2
 layout_mode = 2
 text = "Spawn Bot"
 
+[node name="BotCount" type="HBoxContainer" parent="Panel/VBoxContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panel/VBoxContainer/BotCount"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Bots: 0"
+
+[node name="RemoveBotButton" type="Button" parent="Panel/VBoxContainer/BotCount"]
+layout_mode = 2
+text = "-"
+
+[node name="AddBotButton" type="Button" parent="Panel/VBoxContainer/BotCount"]
+layout_mode = 2
+text = "+"
+
 [node name="GodModeButton" type="Button" parent="Panel/VBoxContainer"]
 layout_mode = 2
 text = "God Mode: OFF"
@@ -62,6 +78,10 @@ text = "Spawn Random Ability"
 layout_mode = 2
 text = "Kill Player (Respawn)"
 
+[node name="KillAllButton" type="Button" parent="Panel/VBoxContainer"]
+layout_mode = 2
+text = "Kill All Other Players/Bots"
+
 [node name="AddScoreButton" type="Button" parent="Panel/VBoxContainer"]
 layout_mode = 2
 text = "Add 5 Score"
@@ -69,6 +89,10 @@ text = "Add 5 Score"
 [node name="ResetTimerButton" type="Button" parent="Panel/VBoxContainer"]
 layout_mode = 2
 text = "Reset Match Timer"
+
+[node name="EndMatchButton" type="Button" parent="Panel/VBoxContainer"]
+layout_mode = 2
+text = "End Match Immediately"
 
 [node name="CollisionShapesButton" type="Button" parent="Panel/VBoxContainer"]
 layout_mode = 2

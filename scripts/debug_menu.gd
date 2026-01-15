@@ -5,14 +5,19 @@ extends Control
 
 @onready var panel: PanelContainer = $Panel
 @onready var spawn_bot_button: Button = $Panel/VBoxContainer/SpawnBotButton
+@onready var bot_count_label: Label = $Panel/VBoxContainer/BotCount/Label
+@onready var remove_bot_button: Button = $Panel/VBoxContainer/BotCount/RemoveBotButton
+@onready var add_bot_button: Button = $Panel/VBoxContainer/BotCount/AddBotButton
 @onready var god_mode_button: Button = $Panel/VBoxContainer/GodModeButton
 @onready var max_level_button: Button = $Panel/VBoxContainer/MaxLevelButton
 @onready var teleport_button: Button = $Panel/VBoxContainer/TeleportButton
 @onready var clear_abilities_button: Button = $Panel/VBoxContainer/ClearAbilitiesButton
 @onready var spawn_ability_button: Button = $Panel/VBoxContainer/SpawnAbilityButton
 @onready var kill_player_button: Button = $Panel/VBoxContainer/KillPlayerButton
+@onready var kill_all_button: Button = $Panel/VBoxContainer/KillAllButton
 @onready var add_score_button: Button = $Panel/VBoxContainer/AddScoreButton
 @onready var reset_timer_button: Button = $Panel/VBoxContainer/ResetTimerButton
+@onready var end_match_button: Button = $Panel/VBoxContainer/EndMatchButton
 @onready var collision_shapes_button: Button = $Panel/VBoxContainer/CollisionShapesButton
 @onready var regenerate_level_button: Button = $Panel/VBoxContainer/RegenerateLevelButton
 @onready var change_skybox_button: Button = $Panel/VBoxContainer/ChangeSkyboxButton
@@ -31,6 +36,10 @@ func _ready() -> void:
 	# Connect signals
 	if spawn_bot_button:
 		spawn_bot_button.pressed.connect(_on_spawn_bot_pressed)
+	if add_bot_button:
+		add_bot_button.pressed.connect(_on_add_bot_pressed)
+	if remove_bot_button:
+		remove_bot_button.pressed.connect(_on_remove_bot_pressed)
 	if god_mode_button:
 		god_mode_button.pressed.connect(_on_god_mode_pressed)
 	if max_level_button:
@@ -43,10 +52,14 @@ func _ready() -> void:
 		spawn_ability_button.pressed.connect(_on_spawn_ability_pressed)
 	if kill_player_button:
 		kill_player_button.pressed.connect(_on_kill_player_pressed)
+	if kill_all_button:
+		kill_all_button.pressed.connect(_on_kill_all_pressed)
 	if add_score_button:
 		add_score_button.pressed.connect(_on_add_score_pressed)
 	if reset_timer_button:
 		reset_timer_button.pressed.connect(_on_reset_timer_pressed)
+	if end_match_button:
+		end_match_button.pressed.connect(_on_end_match_pressed)
 	if collision_shapes_button:
 		collision_shapes_button.pressed.connect(_on_collision_shapes_pressed)
 	if regenerate_level_button:
@@ -56,6 +69,9 @@ func _ready() -> void:
 	if speed_mult_slider:
 		speed_mult_slider.value_changed.connect(_on_speed_changed)
 		speed_mult_slider.value = 1.0
+
+	# Update bot count on startup
+	update_bot_count()
 
 func _input(event: InputEvent) -> void:
 	# Toggle debug menu with F3
@@ -84,8 +100,46 @@ func _on_spawn_bot_pressed() -> void:
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("spawn_bot"):
 		world.spawn_bot()
+		update_bot_count()
 	else:
 		print("Error: Could not spawn bot - World node not found or missing spawn_bot method")
+
+func _on_add_bot_pressed() -> void:
+	"""Add a bot"""
+	_on_spawn_bot_pressed()
+
+func _on_remove_bot_pressed() -> void:
+	"""Remove the last bot"""
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bot_removed: bool = false
+
+	# Find and remove the last bot (ID >= 9000)
+	for i in range(players.size() - 1, -1, -1):
+		var player: Node = players[i]
+		var player_id: int = player.name.to_int()
+		if player_id >= 9000:  # Bot IDs start at 9000
+			print("Removing bot: ", player_id)
+			player.queue_free()
+			bot_removed = true
+			break
+
+	if bot_removed:
+		update_bot_count()
+	else:
+		print("No bots to remove")
+
+func update_bot_count() -> void:
+	"""Update the bot count label"""
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bot_count: int = 0
+
+	for player in players:
+		var player_id: int = player.name.to_int()
+		if player_id >= 9000:  # Bot IDs start at 9000
+			bot_count += 1
+
+	if bot_count_label:
+		bot_count_label.text = "Bots: %d" % bot_count
 
 func _on_god_mode_pressed() -> void:
 	"""Toggle god mode for local player"""
@@ -163,6 +217,18 @@ func _on_kill_player_pressed() -> void:
 		player.respawn()
 		print("Player killed - respawning...")
 
+func _on_kill_all_pressed() -> void:
+	"""Kill all players except the local player"""
+	var local_player: Node = get_local_player()
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+
+	for player in players:
+		if player != local_player and player.has_method("receive_damage"):
+			# Deal massive damage to kill them instantly
+			player.receive_damage(999)
+
+	print("Killed all other players/bots")
+
 func _on_add_score_pressed() -> void:
 	"""Add score to local player"""
 	var player: Node = get_local_player()
@@ -179,6 +245,13 @@ func _on_reset_timer_pressed() -> void:
 	if world:
 		world.game_time_remaining = 300.0
 		print("Match timer reset to 5 minutes")
+
+func _on_end_match_pressed() -> void:
+	"""End the match immediately"""
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if world and world.has_method("end_deathmatch"):
+		world.end_deathmatch()
+		print("Match ended immediately")
 
 func _on_collision_shapes_pressed() -> void:
 	"""Toggle collision shape visualization"""

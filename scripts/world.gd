@@ -35,6 +35,7 @@ var controller: bool = false
 var game_time_remaining: float = 300.0  # 5 minutes in seconds
 var game_active: bool = false
 var player_scores: Dictionary = {}  # player_id: score
+var player_deaths: Dictionary = {}  # player_id: death_count
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
@@ -44,6 +45,9 @@ const BotAI = preload("res://scripts/bot_ai.gd")
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
+
+# Scoreboard
+const Scoreboard = preload("res://scoreboard.tscn")
 
 # Procedural level generation
 const LevelGenerator = preload("res://scripts/level_generator.gd")
@@ -58,6 +62,10 @@ func _ready() -> void:
 	# Initialize debug menu
 	var debug_menu_instance: Control = DebugMenu.instantiate()
 	add_child(debug_menu_instance)
+
+	# Initialize scoreboard
+	var scoreboard_instance: Control = Scoreboard.instantiate()
+	add_child(scoreboard_instance)
 
 	# Initialize lobby UI
 	lobby_ui = LobbyUI.instantiate()
@@ -231,6 +239,7 @@ func _on_practice_button_pressed() -> void:
 	add_child(local_player)
 	local_player.add_to_group("players")
 	player_scores[1] = 0
+	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
 	# Spawn some bots for practice
@@ -334,8 +343,9 @@ func add_player(peer_id: int) -> void:
 	# Add to players group for AI targeting
 	player.add_to_group("players")
 
-	# Initialize player score
+	# Initialize player score and deaths
 	player_scores[peer_id] = 0
+	player_deaths[peer_id] = 0
 
 func remove_player(peer_id: int) -> void:
 	var player: Node = get_node_or_null(str(peer_id))
@@ -422,6 +432,7 @@ func start_deathmatch() -> void:
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
 	player_scores.clear()
+	player_deaths.clear()
 
 	# Start countdown
 	countdown_active = true
@@ -474,9 +485,28 @@ func add_score(player_id: int, points: int = 1) -> void:
 	player_scores[player_id] += points
 	print("Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
 
+func add_death(player_id: int) -> void:
+	"""Add a death to a player's death count"""
+	if not player_deaths.has(player_id):
+		player_deaths[player_id] = 0
+	player_deaths[player_id] += 1
+	print("Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
 	return player_scores.get(player_id, 0)
+
+func get_deaths(player_id: int) -> int:
+	"""Get a player's death count"""
+	return player_deaths.get(player_id, 0)
+
+func get_kd_ratio(player_id: int) -> float:
+	"""Get a player's K/D ratio"""
+	var kills: int = get_score(player_id)
+	var deaths: int = get_deaths(player_id)
+	if deaths == 0:
+		return float(kills)  # If no deaths, return kills as ratio
+	return float(kills) / float(deaths)
 
 func get_time_remaining_formatted() -> String:
 	"""Get formatted time string (MM:SS)"""
@@ -659,8 +689,9 @@ func spawn_bot() -> void:
 	# Add bot to players group
 	bot.add_to_group("players")
 
-	# Initialize bot score
+	# Initialize bot score and deaths
 	player_scores[bot_id] = 0
+	player_deaths[bot_id] = 0
 
 	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
 	print("--- spawn_bot() complete ---")

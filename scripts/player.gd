@@ -978,6 +978,12 @@ func receive_damage(damage: int = 1) -> void:
 		return  # Immune to damage
 	health -= damage
 	if health <= 0:
+		# Track death
+		var world: Node = get_parent()
+		if world and world.has_method("add_death"):
+			var player_id: int = name.to_int()
+			world.add_death(player_id)
+
 		# Drop orbs and ability before respawning
 		spawn_death_orb()
 		drop_ability()
@@ -1001,10 +1007,14 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		spawn_death_orb()
 		drop_ability()
 
-		# Notify world of kill
+		# Notify world of kill and death
 		var world: Node = get_parent()
-		if world and world.has_method("add_score"):
-			world.add_score(attacker_id, 1)
+		if world:
+			if world.has_method("add_score"):
+				world.add_score(attacker_id, 1)
+			if world.has_method("add_death"):
+				var player_id: int = name.to_int()
+				world.add_death(player_id)
 
 		# Play death effects before respawning
 		spawn_death_particles()
@@ -1062,6 +1072,11 @@ func fall_death() -> void:
 		return
 
 	print("  Starting fall death sequence")
+
+	# Track death
+	var world: Node = get_parent()
+	if world and world.has_method("add_death"):
+		world.add_death(player_id)
 
 	# Drop orbs and ability before falling to death
 	spawn_death_orb()
