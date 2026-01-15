@@ -1044,6 +1044,7 @@ func _create_profile_panel() -> void:
 	close_btn.text = "X"
 	close_btn.custom_minimum_size = Vector2(50, 50)
 	_apply_button_style(close_btn, 20)
+	close_btn.pressed.connect(_on_profile_panel_close_pressed)
 	header.add_child(close_btn)
 
 	# Separator
@@ -1126,12 +1127,11 @@ func _create_profile_panel() -> void:
 		value.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 		stats_grid.add_child(value)
 
+	# Set mouse filter to stop clicks from going through
+	profile_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
 	add_child(profile_panel)
 	profile_panel.visible = false
-
-	# Connect close signal
-	if profile_panel.has_signal("closed"):
-		profile_panel.closed.connect(_on_profile_panel_closed)
 
 	print("Profile panel created")
 
@@ -1199,6 +1199,7 @@ func _create_friends_panel() -> void:
 	close_btn.text = "X"
 	close_btn.custom_minimum_size = Vector2(50, 50)
 	_apply_button_style(close_btn, 20)
+	close_btn.pressed.connect(_on_friends_panel_close_pressed)
 	header.add_child(close_btn)
 
 	# Separator
@@ -1250,22 +1251,25 @@ func _create_friends_panel() -> void:
 	friends_list.add_theme_constant_override("separation", 8)
 	scroll.add_child(friends_list)
 
+	# Set mouse filter to stop clicks from going through
+	friends_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
 	add_child(friends_panel)
 	friends_panel.visible = false
 
-	# Connect close signal
-	if friends_panel.has_signal("closed"):
-		friends_panel.closed.connect(_on_friends_panel_closed)
-
 	print("Friends panel created")
 
-func _on_profile_panel_closed() -> void:
-	"""Handle profile panel closed"""
+func _on_profile_panel_close_pressed() -> void:
+	"""Handle profile panel close button pressed"""
+	if profile_panel:
+		profile_panel.hide()
 	if main_menu:
 		main_menu.show()
 
-func _on_friends_panel_closed() -> void:
-	"""Handle friends panel closed"""
+func _on_friends_panel_close_pressed() -> void:
+	"""Handle friends panel close button pressed"""
+	if friends_panel:
+		friends_panel.hide()
 	if main_menu:
 		main_menu.show()
 
