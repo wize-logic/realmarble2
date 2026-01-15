@@ -416,8 +416,6 @@ func start_practice_mode(bot_count: int) -> void:
 
 	if main_menu:
 		main_menu.hide()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 	if menu_music:
@@ -488,8 +486,6 @@ func _on_friends_pressed() -> void:
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 	if menu_music:
@@ -1297,11 +1293,7 @@ func _create_friends_panel() -> void:
 	print("Friends panel created")
 
 func _create_marble_preview() -> void:
-	"""Create marble preview for main menu (replaces dolly camera)"""
-	# Hide the dolly camera
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.visible = false
-
+	"""Create marble preview for main menu"""
 	# Create a container for the marble preview
 	var preview_container = Node3D.new()
 	preview_container.name = "MarblePreview"
