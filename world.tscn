@@ -321,9 +321,9 @@ root_node = NodePath("../Blur")
 libraries = {
 &"": SubResource("AnimationLibrary_lekn2")
 }
-autoplay = "Dolly"
 
 [node name="Blur" type="ColorRect" parent="Menu"]
+visible = false
 material = SubResource("ShaderMaterial_nou27")
 anchors_preset = 15
 anchor_right = 1.0
@@ -334,6 +334,8 @@ mouse_filter = 2
 
 [node name="DollyCamera" type="Camera3D" parent="Menu"]
 transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 5.0, 15.0)
+visible = false
+current = false
 script = ExtResource("18_orbitcam")
 
 [node name="Options" type="PanelContainer" parent="Menu"]

@@ -1329,6 +1329,8 @@ func _create_marble_preview() -> void:
 	# Look at the marble
 	preview_camera.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_container.add_child(preview_camera)
+	# Make this the current camera
+	preview_camera.make_current()
 
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
