@@ -169,6 +169,10 @@ func _process(delta: float) -> void:
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
+	# Rotate marble preview slowly in main menu (Rocket League style)
+	if marble_preview and main_menu and main_menu.visible:
+		marble_preview.rotate_y(delta * 0.5)  # Slow rotation
+
 # ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
@@ -1307,25 +1311,50 @@ func _create_friends_panel() -> void:
 	print("Friends panel created")
 
 func _create_marble_preview() -> void:
-	"""Create marble preview for main menu"""
+	"""Create marble preview for main menu - matches player's actual marble"""
 	# Create a container for the marble preview
 	var preview_container = Node3D.new()
 	preview_container.name = "MarblePreview"
 
-	# Create the marble (just the visual mesh, not the full player)
+	# Create the marble mesh matching the player's marble
 	marble_preview = MeshInstance3D.new()
 	marble_preview.name = "Marble"
-	marble_preview.mesh = SphereMesh.new()
+	var sphere = SphereMesh.new()
+	sphere.radius = 0.5  # Same as player marble
+	sphere.height = 1.0  # Same as player marble
+	marble_preview.mesh = sphere
 	marble_preview.position = Vector3(0, 0, 0)
 
-	# Apply a nice material to the marble
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(0.2, 0.5, 1.0)  # Blue color
-	material.metallic = 0.7
-	material.roughness = 0.3
-	marble_preview.set_surface_override_material(0, material)
+	# Create material matching the player's marble (from player.gd line 426-442)
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint - same as player
+	mat.metallic = 0.3
+	mat.roughness = 0.4
+	mat.uv1_scale = Vector3(2.0, 2.0, 2.0)  # Tile the texture
+
+	# Add procedural noise texture pattern (same as player)
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.5
+	var noise_tex = NoiseTexture2D.new()
+	noise_tex.noise = noise
+	noise_tex.width = 512
+	noise_tex.height = 512
+	mat.albedo_texture = noise_tex
+
+	marble_preview.material_override = mat
 
 	preview_container.add_child(marble_preview)
+
+	# Add aura light effect (same as player marble - from player.gd line 445-456)
+	var aura_light = OmniLight3D.new()
+	aura_light.name = "AuraLight"
+	aura_light.light_color = Color(0.6, 0.8, 1.0)  # Soft cyan-white
+	aura_light.light_energy = 1.5  # Moderate brightness
+	aura_light.omni_range = 3.5  # Illumination radius around marble
+	aura_light.omni_attenuation = 2.0  # Smooth falloff
+	aura_light.shadow_enabled = false  # Disable for performance
+	marble_preview.add_child(aura_light)
 
 	# Create preview camera positioned like Rocket League showcase
 	preview_camera = Camera3D.new()
