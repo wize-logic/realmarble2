@@ -250,30 +250,41 @@ func _on_practice_button_pressed() -> void:
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
-	# Create a clean dialog with proper layout
+	# Create a beautiful, centered dialog
 	var dialog = AcceptDialog.new()
-	dialog.title = "Select Number of Bots"
+	dialog.title = "Practice Mode"
 	dialog.dialog_hide_on_ok = false
+	dialog.exclusive = true
+	dialog.unresizable = false
+	dialog.size = Vector2(500, 400)  # Fixed size for consistency
 
-	# Create main container with proper margins
+	# Create main container with generous margins
 	var margin_container = MarginContainer.new()
-	margin_container.add_theme_constant_override("margin_left", 20)
-	margin_container.add_theme_constant_override("margin_right", 20)
-	margin_container.add_theme_constant_override("margin_top", 20)
-	margin_container.add_theme_constant_override("margin_bottom", 20)
+	margin_container.add_theme_constant_override("margin_left", 40)
+	margin_container.add_theme_constant_override("margin_right", 40)
+	margin_container.add_theme_constant_override("margin_top", 30)
+	margin_container.add_theme_constant_override("margin_bottom", 30)
 
 	# Create VBoxContainer for organized layout
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 10)
+	vbox.add_theme_constant_override("separation", 20)
 	margin_container.add_child(vbox)
+
+	# Add title label with larger font
+	var title_label = Label.new()
+	title_label.text = "Select Number of Bots"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 24)
+	vbox.add_child(title_label)
 
 	# Add descriptive label
 	var desc_label = Label.new()
-	desc_label.text = "Choose how many bots to practice against:"
+	desc_label.text = "How many bots do you want to practice against?"
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
-	# Add separator
+	# Add separator for visual separation
 	var separator = HSeparator.new()
 	vbox.add_child(separator)
 
@@ -281,18 +292,22 @@ func ask_bot_count() -> int:
 	var bot_counts = [1, 3, 5, 7, 10, 15]
 	var selected_count = 3  # Default
 
-	# Create grid container for buttons (2 columns)
-	var grid = GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 10)
-	vbox.add_child(grid)
+	# Create centered grid container for buttons (3 columns for better layout)
+	var grid_container = CenterContainer.new()
+	vbox.add_child(grid_container)
 
-	# Create buttons for each option
+	var grid = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 15)
+	grid.add_theme_constant_override("v_separation", 15)
+	grid_container.add_child(grid)
+
+	# Create buttons for each option with better styling
 	for count in bot_counts:
 		var button = Button.new()
 		button.text = "%d Bot%s" % [count, "s" if count > 1 else ""]
-		button.custom_minimum_size = Vector2(120, 45)
+		button.custom_minimum_size = Vector2(130, 50)
+		button.add_theme_font_size_override("font_size", 18)
 		# Store the count in metadata
 		button.set_meta("bot_count", count)
 		button.pressed.connect(func():
@@ -300,6 +315,11 @@ func ask_bot_count() -> int:
 			dialog.hide()
 		)
 		grid.add_child(button)
+
+	# Add bottom spacing
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 10)
+	vbox.add_child(spacer)
 
 	# Override the dialog's content with our custom layout
 	dialog.add_child(margin_container)

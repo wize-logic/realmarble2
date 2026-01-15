@@ -570,8 +570,19 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID VERTICAL SPINNING during spindash - spin like a wheel rolling forward
-		marble_mesh.rotate_z(delta * 50.0)  # Fast vertical spin (up/down rotation)
+		# RAPID SPINNING during spindash - use same rolling logic as normal movement but much faster
+		# This ensures the spin matches the forward rolling motion
+		var spin_speed: float = 100.0  # Very fast rolling speed for visual effect
+
+		# Get the dash direction (assuming forward if not stored)
+		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		if horizontal_vel.length() > 0.1:
+			var move_dir: Vector3 = horizontal_vel.normalized()
+			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # Perpendicular to movement
+			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
+		else:
+			# Fallback: spin around X axis (forward rolling)
+			marble_mesh.rotate_x(spin_speed * delta)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
