@@ -189,6 +189,26 @@ func _on_play_pressed() -> void:
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots"""
+	print("======================================")
+	print("_on_practice_button_pressed() CALLED!")
+	print("Current player count: ", get_tree().get_nodes_in_group("players").size())
+	print("Current bot_counter: ", bot_counter)
+	print("game_active: ", game_active, " | countdown_active: ", countdown_active)
+	print("======================================")
+
+	# Prevent starting practice mode if a game is already active or counting down
+	if game_active or countdown_active:
+		print("WARNING: Cannot start practice mode - game already active or counting down!")
+		print("======================================")
+		return
+
+	# Prevent starting if players already exist (game already started)
+	var existing_players: int = get_tree().get_nodes_in_group("players").size()
+	if existing_players > 0:
+		print("WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
+		print("======================================")
+		return
+
 	if main_menu:
 		main_menu.hide()
 	if has_node("Menu/DollyCamera"):
@@ -211,11 +231,14 @@ func _on_practice_button_pressed() -> void:
 	add_child(local_player)
 	local_player.add_to_group("players")
 	player_scores[1] = 0
+	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
 	# Spawn some bots for practice
+	print("Spawning 3 bots for practice mode...")
 	for i in range(3):
 		await get_tree().create_timer(0.5).timeout
 		spawn_bot()
+	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
 	# Start the deathmatch
 	start_deathmatch()
@@ -602,6 +625,10 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 func spawn_bot() -> void:
 	"""Spawn an AI-controlled bot player"""
+	print("--- spawn_bot() called ---")
+	print("Bot counter before: ", bot_counter)
+	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
+
 	bot_counter += 1
 	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000
 
@@ -617,11 +644,13 @@ func spawn_bot() -> void:
 			# Spawn at appropriate position
 			var spawn_index: int = bot_id % spawn_points.size()
 			bot.global_position = spawn_points[spawn_index]
+			print("Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
 	# Add AI controller to bot
 	var ai: Node = BotAI.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
+	print("BotAI added to bot %d" % bot_id)
 
 	# Add bot to players group
 	bot.add_to_group("players")
@@ -629,7 +658,8 @@ func spawn_bot() -> void:
 	# Initialize bot score
 	player_scores[bot_id] = 0
 
-	print("Spawned bot with ID: %d" % bot_id)
+	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
+	print("--- spawn_bot() complete ---")
 
 # ============================================================================
 # COUNTDOWN SYSTEM
