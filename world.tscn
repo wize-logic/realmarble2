@@ -457,6 +457,7 @@ spawn_path = NodePath("..")
 [connection signal="item_shop_pressed" from="Menu/MainMenu" to="." method="_on_item_shop_pressed"]
 [connection signal="garage_pressed" from="Menu/MainMenu" to="." method="_on_garage_pressed"]
 [connection signal="profile_pressed" from="Menu/MainMenu" to="." method="_on_profile_pressed"]
+[connection signal="friends_pressed" from="Menu/MainMenu" to="." method="_on_friends_pressed"]
 [connection signal="options_pressed" from="Menu/MainMenu" to="." method="_on_settings_pressed"]
 [connection signal="quit_pressed" from="Menu/MainMenu" to="." method="_on_quit_pressed"]
 [connection signal="dir_selected" from="Menu/MusicDirectoryDialog" to="." method="_on_music_directory_selected"]

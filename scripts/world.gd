@@ -263,6 +263,10 @@ func _on_profile_pressed() -> void:
 	"""Profile placeholder"""
 	print("Profile - Not implemented yet")
 
+func _on_friends_pressed() -> void:
+	"""Friends placeholder"""
+	print("Friends - Not implemented yet")
+
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()

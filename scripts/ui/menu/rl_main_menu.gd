@@ -8,6 +8,7 @@ signal multiplayer_pressed
 signal item_shop_pressed
 signal garage_pressed
 signal profile_pressed
+signal friends_pressed
 signal options_pressed
 signal quit_pressed
 
@@ -137,6 +138,8 @@ func _on_main_button_pressed(button: RLMenuButton) -> void:
 			garage_pressed.emit()
 		"ProfileButton":
 			profile_pressed.emit()
+		"FriendsButton":
+			friends_pressed.emit()
 		"OptionsButton":
 			options_pressed.emit()
 		"QuitButton":

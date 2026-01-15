@@ -62,7 +62,6 @@ theme_override_constants/separation = 5
 [node name="PlayButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2
 button_text = "PLAY"
-subtitle_text = "MARBLE AWAY"
 is_highlighted = true
 
 [node name="ItemShopButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
@@ -76,6 +75,10 @@ button_text = "GARAGE"
 [node name="ProfileButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2
 button_text = "PROFILE"
+
+[node name="FriendsButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "FRIENDS"
 
 [node name="OptionsButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2
