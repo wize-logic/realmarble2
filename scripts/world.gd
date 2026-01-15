@@ -988,6 +988,14 @@ func _apply_button_style(button: Button, font_size: int = 20) -> void:
 
 func _create_profile_panel() -> void:
 	"""Create the profile panel UI following style guide"""
+	# Create backdrop
+	var backdrop = ColorRect.new()
+	backdrop.name = "ProfileBackdrop"
+	backdrop.color = Color(0, 0, 0, 0.7)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Create the panel
 	profile_panel = PanelContainer.new()
 	profile_panel.name = "ProfilePanel"
 	profile_panel.set_script(ProfilePanelScript)
@@ -1003,6 +1011,9 @@ func _create_profile_panel() -> void:
 	profile_panel.offset_top = -350
 	profile_panel.offset_bottom = 350
 	profile_panel.custom_minimum_size = Vector2(600, 700)
+
+	# Add panel to backdrop
+	backdrop.add_child(profile_panel)
 
 	# Apply panel style from style guide
 	var panel_style = StyleBoxFlat.new()
@@ -1130,13 +1141,25 @@ func _create_profile_panel() -> void:
 	# Set mouse filter to stop clicks from going through
 	profile_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	add_child(profile_panel)
-	profile_panel.visible = false
+	# Add backdrop to scene (which contains the panel)
+	add_child(backdrop)
+	backdrop.visible = false
+
+	# Store backdrop reference for show/hide
+	profile_panel.set_meta("backdrop", backdrop)
 
 	print("Profile panel created")
 
 func _create_friends_panel() -> void:
 	"""Create the friends panel UI following style guide"""
+	# Create backdrop
+	var backdrop = ColorRect.new()
+	backdrop.name = "FriendsBackdrop"
+	backdrop.color = Color(0, 0, 0, 0.7)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Create the panel
 	friends_panel = PanelContainer.new()
 	friends_panel.name = "FriendsPanel"
 	friends_panel.set_script(FriendsPanelScript)
@@ -1152,6 +1175,9 @@ func _create_friends_panel() -> void:
 	friends_panel.offset_top = -350
 	friends_panel.offset_bottom = 350
 	friends_panel.custom_minimum_size = Vector2(600, 700)
+
+	# Add panel to backdrop
+	backdrop.add_child(friends_panel)
 
 	# Apply panel style from style guide
 	var panel_style = StyleBoxFlat.new()
@@ -1254,22 +1280,28 @@ func _create_friends_panel() -> void:
 	# Set mouse filter to stop clicks from going through
 	friends_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	add_child(friends_panel)
-	friends_panel.visible = false
+	# Add backdrop to scene (which contains the panel)
+	add_child(backdrop)
+	backdrop.visible = false
+
+	# Store backdrop reference for show/hide
+	friends_panel.set_meta("backdrop", backdrop)
 
 	print("Friends panel created")
 
 func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
-	if profile_panel:
-		profile_panel.hide()
+	if profile_panel and profile_panel.has_meta("backdrop"):
+		var backdrop = profile_panel.get_meta("backdrop")
+		backdrop.hide()
 	if main_menu:
 		main_menu.show()
 
 func _on_friends_panel_close_pressed() -> void:
 	"""Handle friends panel close button pressed"""
-	if friends_panel:
-		friends_panel.hide()
+	if friends_panel and friends_panel.has_meta("backdrop"):
+		var backdrop = friends_panel.get_meta("backdrop")
+		backdrop.hide()
 	if main_menu:
 		main_menu.show()
 

@@ -107,4 +107,9 @@ func _on_close_pressed() -> void:
 
 func show_panel() -> void:
 	_update_profile_display()
-	show()
+	# Show the backdrop (which contains this panel)
+	if has_meta("backdrop"):
+		var backdrop = get_meta("backdrop")
+		backdrop.show()
+	else:
+		show()
