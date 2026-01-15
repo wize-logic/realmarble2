@@ -8,6 +8,7 @@ extends Node
 @onready var menu_music: AudioStreamPlayer = get_node_or_null("%MenuMusic")
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
 @onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
+@onready var game_hud: Control = get_node_or_null("GameHUD/HUD")
 
 # Multiplayer UI
 var lobby_ui: Control = null
@@ -22,6 +23,11 @@ const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
 # Countdown UI (created dynamically)
 var countdown_label: Label = null
 var countdown_sound: AudioStreamPlayer = null
+
+# Marble Preview (for main menu)
+var marble_preview: Node3D = null
+var preview_camera: Camera3D = null
+var preview_light: DirectionalLight3D = null
 
 # Game Settings
 var sensitivity: float = 0.005
@@ -84,6 +90,9 @@ func _ready() -> void:
 	# Initialize friends panel
 	_create_friends_panel()
 
+	# Initialize marble preview (replaces dolly camera)
+	_create_marble_preview()
+
 	# Connect multiplayer manager signals
 	if MultiplayerManager:
 		MultiplayerManager.player_connected.connect(_on_multiplayer_player_connected)
@@ -98,6 +107,10 @@ func _ready() -> void:
 
 	# Auto-load music from default directory with fallback
 	_auto_load_music()
+
+	# Hide HUD initially (only shown during active gameplay)
+	if game_hud:
+		game_hud.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
@@ -137,6 +150,9 @@ func _process(delta: float) -> void:
 			game_active = true
 			if countdown_label:
 				countdown_label.visible = false
+			# Show HUD when game starts
+			if game_hud:
+				game_hud.visible = true
 			print("GO! Match started! game_active is now: ", game_active)
 
 			# Notify CrazyGames SDK that gameplay has started
@@ -584,11 +600,9 @@ func show_main_menu() -> void:
 	"""Show the main menu"""
 	if main_menu:
 		main_menu.visible = true
-	# Show blur and camera
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.show()
+	# Make preview camera current
+	if preview_camera:
+		preview_camera.make_current()
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
@@ -653,6 +667,9 @@ func end_deathmatch() -> void:
 
 	game_active = false
 	countdown_active = false  # Make sure countdown is also stopped
+	# Hide HUD when game ends
+	if game_hud:
+		game_hud.visible = false
 	print("Deathmatch ended!")
 
 	# Notify CrazyGames SDK that gameplay has stopped
@@ -717,19 +734,19 @@ func return_to_main_menu() -> void:
 	# Reset bot counter
 	bot_counter = 0
 
-	# Hide countdown label if visible
+	# Hide countdown label and HUD if visible
 	if countdown_label:
 		countdown_label.visible = false
+	if game_hud:
+		game_hud.visible = false
 
 	# Show main menu
 	if main_menu:
 		main_menu.show()
 
-	# Show blur and dolly camera
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.show()
+	# Make preview camera current
+	if preview_camera:
+		preview_camera.make_current()
 
 	# Start menu music
 	if menu_music:
@@ -1278,6 +1295,63 @@ func _create_friends_panel() -> void:
 	friends_panel.visible = false
 
 	print("Friends panel created")
+
+func _create_marble_preview() -> void:
+	"""Create marble preview for main menu (replaces dolly camera)"""
+	# Hide the dolly camera
+	if has_node("Menu/DollyCamera"):
+		$Menu/DollyCamera.visible = false
+
+	# Create a container for the marble preview
+	var preview_container = Node3D.new()
+	preview_container.name = "MarblePreview"
+
+	# Create the marble (just the visual mesh, not the full player)
+	marble_preview = MeshInstance3D.new()
+	marble_preview.name = "Marble"
+	marble_preview.mesh = SphereMesh.new()
+	marble_preview.position = Vector3(0, 0, 0)
+
+	# Apply a nice material to the marble
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.2, 0.5, 1.0)  # Blue color
+	material.metallic = 0.7
+	material.roughness = 0.3
+	marble_preview.set_surface_override_material(0, material)
+
+	preview_container.add_child(marble_preview)
+
+	# Create preview camera positioned like Rocket League showcase
+	preview_camera = Camera3D.new()
+	preview_camera.name = "PreviewCamera"
+	# Position camera to showcase the marble (slightly above and in front)
+	preview_camera.position = Vector3(-2, 1.5, 3)
+	# Look at the marble
+	preview_camera.look_at(Vector3(0, 0, 0), Vector3.UP)
+	preview_container.add_child(preview_camera)
+
+	# Create directional light for good lighting
+	preview_light = DirectionalLight3D.new()
+	preview_light.name = "PreviewLight"
+	preview_light.light_energy = 1.2
+	preview_light.rotation_degrees = Vector3(-45, 45, 0)
+	preview_light.shadow_enabled = true
+	preview_container.add_child(preview_light)
+
+	# Add an additional fill light for better showcase
+	var fill_light = OmniLight3D.new()
+	fill_light.name = "FillLight"
+	fill_light.light_energy = 0.5
+	fill_light.position = Vector3(2, 1, 2)
+	preview_container.add_child(fill_light)
+
+	# Add to Menu node or root
+	if has_node("Menu"):
+		get_node("Menu").add_child(preview_container)
+	else:
+		add_child(preview_container)
+
+	print("Marble preview created")
 
 func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
