@@ -12,9 +12,6 @@ extends PanelContainer
 
 signal closed
 
-# Friend entry scene (will be created dynamically)
-const FriendEntryScene = preload("res://scripts/ui/friend_entry.gd")
-
 func _ready() -> void:
 	# Connect signals
 	if FriendsManager:
