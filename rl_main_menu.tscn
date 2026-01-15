@@ -1,0 +1,226 @@
+[gd_scene load_steps=5 format=3 uid="uid://rl_main_menu"]
+
+[ext_resource type="Script" path="res://scripts/ui/menu/rl_main_menu.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://rl_menu_button" path="res://rl_menu_button.tscn" id="2"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sidebar"]
+bg_color = Color(0, 0, 0, 0.75)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_music"]
+bg_color = Color(0, 0, 0, 0.8)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.7, 1, 0.5)
+
+[node name="RLMainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="BottomLeftMenu" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -300.0
+offset_right = 320.0
+offset_bottom = -20.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_sidebar")
+
+[node name="MarginContainer" type="MarginContainer" parent="BottomLeftMenu"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="BottomLeftMenu/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MenuButtons" type="VBoxContainer" parent="BottomLeftMenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="PlayButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "PLAY"
+is_highlighted = true
+
+[node name="ItemShopButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "ITEM SHOP"
+
+[node name="GarageButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "GARAGE"
+
+[node name="ProfileButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "PROFILE"
+
+[node name="FriendsButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "FRIENDS"
+
+[node name="OptionsButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "OPTIONS"
+
+[node name="QuitButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "QUIT"
+
+[node name="HSeparator" type="HSeparator" parent="BottomLeftMenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayerInfo" type="HBoxContainer" parent="BottomLeftMenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Avatar" type="ColorRect" parent="BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo"]
+custom_minimum_size = Vector2(40, 40)
+layout_mode = 2
+color = Color(0.3, 0.3, 0.4, 1)
+
+[node name="VBox" type="VBoxContainer" parent="BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PlayerName" type="Label" parent="BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "Player"
+
+[node name="Level" type="Label" parent="BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Level 25"
+
+[node name="PlaySubmenu" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 340.0
+offset_top = -300.0
+offset_right = 640.0
+offset_bottom = -20.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_sidebar")
+
+[node name="MarginContainer" type="MarginContainer" parent="PlaySubmenu"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlaySubmenu/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleLabel" type="Label" parent="PlaySubmenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 20
+text = "PLAY"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="PlaySubmenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="SubmenuButtons" type="VBoxContainer" parent="PlaySubmenu/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="PracticeButton" parent="PlaySubmenu/MarginContainer/VBoxContainer/SubmenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "PRACTICE"
+subtitle_text = "Play vs Bots"
+
+[node name="MultiplayerButton" parent="PlaySubmenu/MarginContainer/VBoxContainer/SubmenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "MULTIPLAYER"
+subtitle_text = "Online Match"
+
+[node name="BackButton" parent="PlaySubmenu/MarginContainer/VBoxContainer/SubmenuButtons" instance=ExtResource("2")]
+layout_mode = 2
+button_text = "BACK"
+
+[node name="BottomRight" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -430.0
+offset_top = -120.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="MusicNotification" type="PanelContainer" parent="BottomRight"]
+visible = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -400.0
+offset_top = -80.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_music")
+
+[node name="HBox" type="HBoxContainer" parent="BottomRight/MusicNotification"]
+layout_mode = 2
+
+[node name="AlbumArt" type="ColorRect" parent="BottomRight/MusicNotification/HBox"]
+custom_minimum_size = Vector2(50, 50)
+layout_mode = 2
+color = Color(0.2, 0.2, 0.3, 1)
+
+[node name="VBox" type="VBoxContainer" parent="BottomRight/MusicNotification/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TrackTitle" type="Label" parent="BottomRight/MusicNotification/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "Track Title"
+
+[node name="TrackArtist" type="Label" parent="BottomRight/MusicNotification/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "🎵 Listen on Spotify"
+
+[node name="HoverSound" type="AudioStreamPlayer" parent="."]
+volume_db = -10.0
+
+[node name="SelectSound" type="AudioStreamPlayer" parent="."]
+volume_db = -5.0

@@ -1,7 +1,7 @@
 extends Node
 
 # UI References
-@onready var main_menu: PanelContainer = $Menu/MainMenu if has_node("Menu/MainMenu") else null
+@onready var main_menu: Control = $Menu/MainMenu if has_node("Menu/MainMenu") else null
 @onready var options_menu: PanelContainer = $Menu/Options if has_node("Menu/Options") else null
 @onready var pause_menu: PanelContainer = $Menu/PauseMenu if has_node("Menu/PauseMenu") else null
 @onready var address_entry: LineEdit = get_node_or_null("%AddressEntry")
@@ -112,16 +112,21 @@ func _process(delta: float) -> void:
 
 		if countdown_time <= 0:
 			# Countdown finished - start the game
+			print("Countdown finished! Starting match...")
 			countdown_active = false
 			game_active = true
 			if countdown_label:
 				countdown_label.visible = false
-			print("GO! Match started!")
+			print("GO! Match started! game_active is now: ", game_active)
 
 	# Handle deathmatch timer
 	if game_active:
 		game_time_remaining -= delta
+		# Log every 30 seconds
+		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
+			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 		if game_time_remaining <= 0:
+			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
 # ============================================================================
@@ -178,8 +183,32 @@ func _on_multiplayer_button_pressed() -> void:
 	"""Show the multiplayer lobby"""
 	show_multiplayer_lobby()
 
+func _on_play_pressed() -> void:
+	"""Start practice mode with bots (renamed from practice button)"""
+	_on_practice_button_pressed()
+
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots"""
+	print("======================================")
+	print("_on_practice_button_pressed() CALLED!")
+	print("Current player count: ", get_tree().get_nodes_in_group("players").size())
+	print("Current bot_counter: ", bot_counter)
+	print("game_active: ", game_active, " | countdown_active: ", countdown_active)
+	print("======================================")
+
+	# Prevent starting practice mode if a game is already active or counting down
+	if game_active or countdown_active:
+		print("WARNING: Cannot start practice mode - game already active or counting down!")
+		print("======================================")
+		return
+
+	# Prevent starting if players already exist (game already started)
+	var existing_players: int = get_tree().get_nodes_in_group("players").size()
+	if existing_players > 0:
+		print("WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
+		print("======================================")
+		return
+
 	if main_menu:
 		main_menu.hide()
 	if has_node("Menu/DollyCamera"):
@@ -202,14 +231,41 @@ func _on_practice_button_pressed() -> void:
 	add_child(local_player)
 	local_player.add_to_group("players")
 	player_scores[1] = 0
+	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
 	# Spawn some bots for practice
+	print("Spawning 3 bots for practice mode...")
 	for i in range(3):
 		await get_tree().create_timer(0.5).timeout
 		spawn_bot()
+	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
 	# Start the deathmatch
 	start_deathmatch()
+
+func _on_settings_pressed() -> void:
+	"""Open settings menu from main menu"""
+	_on_options_button_toggled(true)
+
+func _on_quit_pressed() -> void:
+	"""Quit the game"""
+	get_tree().quit()
+
+func _on_item_shop_pressed() -> void:
+	"""Item Shop placeholder"""
+	print("Item Shop - Not implemented yet")
+
+func _on_garage_pressed() -> void:
+	"""Garage placeholder"""
+	print("Garage - Not implemented yet")
+
+func _on_profile_pressed() -> void:
+	"""Profile placeholder"""
+	print("Profile - Not implemented yet")
+
+func _on_friends_pressed() -> void:
+	"""Friends placeholder"""
+	print("Friends - Not implemented yet")
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
@@ -349,6 +405,20 @@ func upnp_setup() -> void:
 
 func start_deathmatch() -> void:
 	"""Start a 5-minute deathmatch with countdown"""
+	print("======================================")
+	print("start_deathmatch() CALLED!")
+	print("Stack trace:")
+	print_stack()
+	print("Current game_active: ", game_active)
+	print("Current countdown_active: ", countdown_active)
+	print("======================================")
+
+	# Prevent starting a new match if one is already active or counting down
+	if game_active or countdown_active:
+		print("WARNING: Match already active or counting down! Ignoring start_deathmatch() call.")
+		print("======================================")
+		return
+
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
 	player_scores.clear()
@@ -362,7 +432,19 @@ func start_deathmatch() -> void:
 
 func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
+	print("======================================")
+	print("end_deathmatch() CALLED!")
+	print("Game time was: %.2f seconds" % game_time_remaining)
+	print("======================================")
+
+	# Prevent ending if already ended
+	if not game_active and not countdown_active:
+		print("WARNING: Match already ended! Ignoring end_deathmatch() call.")
+		print("======================================")
+		return
+
 	game_active = false
+	countdown_active = false  # Make sure countdown is also stopped
 	print("Deathmatch ended!")
 
 	# Stop gameplay music
@@ -547,6 +629,10 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 func spawn_bot() -> void:
 	"""Spawn an AI-controlled bot player"""
+	print("--- spawn_bot() called ---")
+	print("Bot counter before: ", bot_counter)
+	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
+
 	bot_counter += 1
 	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000
 
@@ -562,11 +648,13 @@ func spawn_bot() -> void:
 			# Spawn at appropriate position
 			var spawn_index: int = bot_id % spawn_points.size()
 			bot.global_position = spawn_points[spawn_index]
+			print("Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
 	# Add AI controller to bot
 	var ai: Node = BotAI.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
+	print("BotAI added to bot %d" % bot_id)
 
 	# Add bot to players group
 	bot.add_to_group("players")
@@ -574,7 +662,8 @@ func spawn_bot() -> void:
 	# Initialize bot score
 	player_scores[bot_id] = 0
 
-	print("Spawned bot with ID: %d" % bot_id)
+	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
+	print("--- spawn_bot() complete ---")
 
 # ============================================================================
 # COUNTDOWN SYSTEM

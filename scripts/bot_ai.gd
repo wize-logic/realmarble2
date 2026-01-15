@@ -52,6 +52,11 @@ const EXPLOSION_OPTIMAL_RANGE: float = 6.0
 
 func _ready() -> void:
 	bot = get_parent()
+	if not bot:
+		print("ERROR: BotAI could not find parent bot!")
+		return
+
+	print("BotAI ready for bot: ", bot.name)
 	wander_target = bot.global_position
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
@@ -59,10 +64,16 @@ func _ready() -> void:
 	aggression_level = randf_range(0.5, 0.9)
 	# Randomize reaction time for more human-like behavior
 	reaction_time = randf_range(0.1, 0.3)
+	print("BotAI initialized: aggression=%.2f, reaction_time=%.2f" % [aggression_level, reaction_time])
 	call_deferred("find_target")
 
 func _physics_process(delta: float) -> void:
 	if not bot:
+		print("ERROR: BotAI has no bot parent in _physics_process!")
+		return
+
+	if not is_instance_valid(bot):
+		print("ERROR: BotAI bot parent is not valid!")
 		return
 
 	# Update timers
