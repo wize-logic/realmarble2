@@ -70,8 +70,8 @@ var current_roll_force: float = 300.0
 var current_jump_impulse: float = 70.0
 var max_speed: float = 12.0  # Slightly higher max speed
 var air_control: float = 0.4  # Better air control for shooter feel
-var base_spin_dash_force: float = 150.0
-var current_spin_dash_force: float = 150.0
+var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
+var current_spin_dash_force: float = 250.0
 
 # Jump system
 var jump_count: int = 0
@@ -103,7 +103,7 @@ var level: int = 0
 const MAX_LEVEL: int = 3
 const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
-const SPIN_BOOST_PER_LEVEL: float = 30.0   # Spin dash boost per level
+const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
 # Ground detection
@@ -570,9 +570,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID SPINNING during spindash - spin on all axes
-		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin
-		marble_mesh.rotate_y(delta * 25.0)  # Add some tumble
+		# RAPID VERTICAL SPINNING during spindash - spin like a wheel rolling forward
+		marble_mesh.rotate_x(delta * 50.0)  # Fast forward spin (vertical rotation)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)

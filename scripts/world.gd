@@ -217,7 +217,7 @@ func _on_play_pressed() -> void:
 	_on_practice_button_pressed()
 
 func _on_practice_button_pressed() -> void:
-	"""Start practice mode with bots"""
+	"""Start practice mode with bots - ask for bot count first"""
 	print("======================================")
 	print("_on_practice_button_pressed() CALLED!")
 	print("Current player count: ", get_tree().get_nodes_in_group("players").size())
@@ -237,6 +237,60 @@ func _on_practice_button_pressed() -> void:
 		print("WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
 		print("======================================")
 		return
+
+	# Ask user how many bots they want
+	var bot_count_choice = await ask_bot_count()
+	if bot_count_choice < 0:
+		# User cancelled or error
+		print("Practice mode cancelled")
+		return
+
+	# Now start practice mode with the chosen bot count
+	start_practice_mode(bot_count_choice)
+
+func ask_bot_count() -> int:
+	"""Ask the user how many bots they want to play against"""
+	# Create a simple dialog with bot count options
+	var dialog = ConfirmationDialog.new()
+	dialog.title = "Select Bot Count"
+	dialog.dialog_text = "How many bots do you want to play against?"
+
+	# Create a VBoxContainer for the buttons
+	var vbox = VBoxContainer.new()
+	dialog.add_child(vbox)
+
+	# Bot count options
+	var bot_counts = [1, 3, 5, 7, 10, 15]
+	var selected_count = 3  # Default
+
+	# Create buttons for each option
+	for count in bot_counts:
+		var button = Button.new()
+		button.text = "%d Bots" % count
+		button.custom_minimum_size = Vector2(200, 40)
+		# Store the count in metadata
+		button.set_meta("bot_count", count)
+		button.pressed.connect(func():
+			selected_count = button.get_meta("bot_count")
+			dialog.hide()
+		)
+		vbox.add_child(button)
+
+	# Add dialog to scene
+	add_child(dialog)
+	dialog.popup_centered()
+
+	# Wait for dialog to close
+	await dialog.visibility_changed
+
+	# Clean up
+	dialog.queue_free()
+
+	return selected_count
+
+func start_practice_mode(bot_count: int) -> void:
+	"""Start practice mode with specified number of bots"""
+	print("Starting practice mode with %d bots" % bot_count)
 
 	if main_menu:
 		main_menu.hide()
@@ -263,9 +317,9 @@ func _on_practice_button_pressed() -> void:
 	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
-	# Spawn some bots for practice
-	print("Spawning 3 bots for practice mode...")
-	for i in range(3):
+	# Spawn requested number of bots for practice
+	print("Spawning %d bots for practice mode..." % bot_count)
+	for i in range(bot_count):
 		await get_tree().create_timer(0.5).timeout
 		spawn_bot()
 	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
