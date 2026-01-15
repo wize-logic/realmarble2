@@ -176,6 +176,27 @@ func _on_back_pressed() -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		options = false
 
+func _on_return_to_title_pressed() -> void:
+	"""Return to title screen from pause menu"""
+	print("Return to title screen pressed")
+
+	# Unpause the game
+	paused = false
+	if pause_menu:
+		pause_menu.hide()
+
+	# Stop gameplay music
+	if gameplay_music and gameplay_music.has_method("stop_playlist"):
+		gameplay_music.stop_playlist()
+
+	# Hide scoreboard if it's visible
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Call return_to_main_menu to clean up game state
+	return_to_main_menu()
+
 func _on_music_toggle_toggled(toggled_on: bool) -> void:
 	if menu_music:
 		if !toggled_on:
@@ -508,8 +529,17 @@ func return_to_main_menu() -> void:
 	player_scores.clear()
 	player_deaths.clear()
 
+	# Reset game state
+	game_active = false
+	countdown_active = false
+	game_time_remaining = 300.0
+
 	# Reset bot counter
 	bot_counter = 0
+
+	# Hide countdown label if visible
+	if countdown_label:
+		countdown_label.visible = false
 
 	# Show main menu
 	if main_menu:
