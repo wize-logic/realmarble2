@@ -1301,50 +1301,36 @@ func _create_friends_panel() -> void:
 	print("Friends panel created")
 
 func _create_marble_preview() -> void:
-	"""Create marble preview for main menu - matches player's actual marble"""
+	"""Create marble preview for main menu - actual player marble"""
 	# Create a container for the marble preview
 	var preview_container = Node3D.new()
 	preview_container.name = "MarblePreview"
 
-	# Create the marble mesh matching the player's marble
-	marble_preview = MeshInstance3D.new()
-	marble_preview.name = "Marble"
-	var sphere = SphereMesh.new()
-	sphere.radius = 0.5  # Same as player marble
-	sphere.height = 1.0  # Same as player marble
-	marble_preview.mesh = sphere
-	marble_preview.position = Vector3(0, 1.0, 0)  # Raised above ground for proper display
+	# Instantiate an actual player marble
+	var marble = Player.instantiate()
+	marble.name = "PreviewMarble"
+	marble.position = Vector3(0, 1.0, 0)  # Raised above ground for proper display
 
-	# Create material matching the player's marble (from player.gd line 426-442)
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint - same as player
-	mat.metallic = 0.3
-	mat.roughness = 0.4
-	mat.uv1_scale = Vector3(2.0, 2.0, 2.0)  # Tile the texture
+	# Disable physics and input for preview (it's just for display)
+	if marble is RigidBody3D:
+		marble.freeze = true  # Freeze physics
+		marble.set_process(false)  # Disable processing
+		marble.set_physics_process(false)  # Disable physics processing
+		marble.set_process_input(false)  # Disable input
+		marble.set_process_unhandled_input(false)  # Disable unhandled input
 
-	# Add procedural noise texture pattern (same as player)
-	var noise = FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 0.5
-	var noise_tex = NoiseTexture2D.new()
-	noise_tex.noise = noise
-	noise_tex.width = 512
-	noise_tex.height = 512
-	mat.albedo_texture = noise_tex
+	# Disable camera and UI elements from the marble
+	var marble_camera = marble.get_node_or_null("CameraArm/Camera3D")
+	if marble_camera:
+		marble_camera.queue_free()  # Remove the marble's camera
+	var crosshair = marble.get_node_or_null("TextureRect")
+	if crosshair:
+		crosshair.queue_free()  # Remove crosshair UI
 
-	marble_preview.material_override = mat
-
-	preview_container.add_child(marble_preview)
-
-	# Add aura light effect (same as player marble - from player.gd line 445-456)
-	var aura_light = OmniLight3D.new()
-	aura_light.name = "AuraLight"
-	aura_light.light_color = Color(0.6, 0.8, 1.0)  # Soft cyan-white
-	aura_light.light_energy = 1.5  # Moderate brightness
-	aura_light.omni_range = 3.5  # Illumination radius around marble
-	aura_light.omni_attenuation = 2.0  # Smooth falloff
-	aura_light.shadow_enabled = false  # Disable for performance
-	marble_preview.add_child(aura_light)
+	preview_container.add_child(marble)
+	marble_preview = marble.get_node_or_null("MeshInstance3D")
+	if not marble_preview:
+		marble_preview = marble.get_node_or_null("MarbleMesh")
 
 	# Create preview camera positioned like Rocket League showcase
 	preview_camera = Camera3D.new()
