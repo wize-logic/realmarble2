@@ -476,7 +476,59 @@ func end_deathmatch() -> void:
 	else:
 		print("No winner - no kills recorded!")
 
-	# TODO: Display winner screen UI
+	# Show scoreboard for 10 seconds
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("show_match_end_scoreboard"):
+		scoreboard.show_match_end_scoreboard()
+
+	# Release mouse so scoreboard is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	# Wait 10 seconds
+	await get_tree().create_timer(10.0).timeout
+
+	# Return to main menu
+	return_to_main_menu()
+
+func return_to_main_menu() -> void:
+	"""Return to main menu after match ends"""
+	print("Returning to main menu...")
+
+	# Hide scoreboard
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Remove all players
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	for player in players:
+		player.queue_free()
+
+	# Clear scores and deaths
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Reset bot counter
+	bot_counter = 0
+
+	# Show main menu
+	if main_menu:
+		main_menu.show()
+
+	# Show blur and dolly camera
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+	if has_node("Menu/DollyCamera"):
+		$Menu/DollyCamera.show()
+
+	# Start menu music
+	if menu_music:
+		menu_music.play()
+
+	# Make sure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	print("Returned to main menu")
 
 func add_score(player_id: int, points: int = 1) -> void:
 	"""Add points to a player's score"""

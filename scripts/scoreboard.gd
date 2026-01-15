@@ -6,12 +6,18 @@ extends Control
 @onready var player_list: VBoxContainer = $Panel/VBoxContainer/ScrollContainer/PlayerList
 
 var is_showing: bool = false
+var permanent_mode: bool = false  # When true, scoreboard stays visible (for match end)
 
 func _ready() -> void:
 	visible = false
 	is_showing = false
+	permanent_mode = false
 
 func _input(event: InputEvent) -> void:
+	# Only respond to Tab key if not in permanent mode
+	if permanent_mode:
+		return
+
 	# Show scoreboard while Tab is held down
 	if event is InputEventKey and event.keycode == KEY_TAB:
 		if event.pressed and not event.echo:
@@ -32,6 +38,23 @@ func show_scoreboard() -> void:
 
 func hide_scoreboard() -> void:
 	"""Hide the scoreboard"""
+	# Don't hide if in permanent mode
+	if permanent_mode:
+		return
+
+	is_showing = false
+	visible = false
+
+func show_match_end_scoreboard() -> void:
+	"""Show the scoreboard permanently for match end"""
+	permanent_mode = true
+	is_showing = true
+	visible = true
+	update_scoreboard()
+
+func hide_match_end_scoreboard() -> void:
+	"""Hide the scoreboard and exit permanent mode"""
+	permanent_mode = false
 	is_showing = false
 	visible = false
 
