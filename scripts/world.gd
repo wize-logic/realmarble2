@@ -470,9 +470,6 @@ func _on_profile_pressed() -> void:
 	"""Show profile panel"""
 	if profile_panel:
 		profile_panel.show_panel()
-	# Show blur (same pattern as options menu)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
 	if main_menu:
 		main_menu.hide()
 
@@ -480,9 +477,6 @@ func _on_friends_pressed() -> void:
 	"""Show friends panel"""
 	if friends_panel:
 		friends_panel.show_panel()
-	# Show blur (same pattern as options menu)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
 	if main_menu:
 		main_menu.hide()
 
@@ -1319,7 +1313,7 @@ func _create_marble_preview() -> void:
 	sphere.radius = 0.5  # Same as player marble
 	sphere.height = 1.0  # Same as player marble
 	marble_preview.mesh = sphere
-	marble_preview.position = Vector3(0, 0, 0)
+	marble_preview.position = Vector3(0, 1.0, 0)  # Raised above ground for proper display
 
 	# Create material matching the player's marble (from player.gd line 426-442)
 	var mat = StandardMaterial3D.new()
@@ -1357,8 +1351,8 @@ func _create_marble_preview() -> void:
 	preview_camera.name = "PreviewCamera"
 	# Position camera to showcase the marble (slightly above and in front)
 	preview_camera.position = Vector3(-2, 1.5, 3)
-	# Look at the marble
-	preview_camera.look_at(Vector3(0, 0, 0), Vector3.UP)
+	# Look at the marble (at its raised position)
+	preview_camera.look_at(Vector3(0, 1.0, 0), Vector3.UP)
 	preview_container.add_child(preview_camera)
 	# Make this the current camera
 	preview_camera.make_current()
@@ -1387,9 +1381,6 @@ func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
 	if profile_panel:
 		profile_panel.hide()
-	# Hide blur (same pattern as options menu)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -1397,9 +1388,6 @@ func _on_friends_panel_close_pressed() -> void:
 	"""Handle friends panel close button pressed"""
 	if friends_panel:
 		friends_panel.hide()
-	# Hide blur (same pattern as options menu)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
