@@ -35,6 +35,7 @@ var controller: bool = false
 var game_time_remaining: float = 300.0  # 5 minutes in seconds
 var game_active: bool = false
 var player_scores: Dictionary = {}  # player_id: score
+var player_deaths: Dictionary = {}  # player_id: death_count
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
@@ -44,6 +45,9 @@ const BotAI = preload("res://scripts/bot_ai.gd")
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
+
+# Scoreboard
+const Scoreboard = preload("res://scoreboard.tscn")
 
 # Procedural level generation
 const LevelGenerator = preload("res://scripts/level_generator.gd")
@@ -58,6 +62,10 @@ func _ready() -> void:
 	# Initialize debug menu
 	var debug_menu_instance: Control = DebugMenu.instantiate()
 	add_child(debug_menu_instance)
+
+	# Initialize scoreboard
+	var scoreboard_instance: Control = Scoreboard.instantiate()
+	add_child(scoreboard_instance)
 
 	# Initialize lobby UI
 	lobby_ui = LobbyUI.instantiate()
@@ -168,6 +176,27 @@ func _on_back_pressed() -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		options = false
 
+func _on_return_to_title_pressed() -> void:
+	"""Return to title screen from pause menu"""
+	print("Return to title screen pressed")
+
+	# Unpause the game
+	paused = false
+	if pause_menu:
+		pause_menu.hide()
+
+	# Stop gameplay music
+	if gameplay_music and gameplay_music.has_method("stop_playlist"):
+		gameplay_music.stop_playlist()
+
+	# Hide scoreboard if it's visible
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Call return_to_main_menu to clean up game state
+	return_to_main_menu()
+
 func _on_music_toggle_toggled(toggled_on: bool) -> void:
 	if menu_music:
 		if !toggled_on:
@@ -188,7 +217,7 @@ func _on_play_pressed() -> void:
 	_on_practice_button_pressed()
 
 func _on_practice_button_pressed() -> void:
-	"""Start practice mode with bots"""
+	"""Start practice mode with bots - ask for bot count first"""
 	print("======================================")
 	print("_on_practice_button_pressed() CALLED!")
 	print("Current player count: ", get_tree().get_nodes_in_group("players").size())
@@ -208,6 +237,150 @@ func _on_practice_button_pressed() -> void:
 		print("WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
 		print("======================================")
 		return
+
+	# Ask user how many bots they want
+	var bot_count_choice = await ask_bot_count()
+	if bot_count_choice < 0:
+		# User cancelled or error
+		print("Practice mode cancelled")
+		return
+
+	# Now start practice mode with the chosen bot count
+	start_practice_mode(bot_count_choice)
+
+func ask_bot_count() -> int:
+	"""Ask the user how many bots they want to play against"""
+	# Create a beautiful dialog matching main menu theme
+	var dialog = AcceptDialog.new()
+	dialog.title = "Practice Mode"
+	dialog.dialog_hide_on_ok = false
+	dialog.exclusive = true
+	dialog.unresizable = false
+	dialog.size = Vector2(600, 450)  # Slightly larger for better spacing
+
+	# Create custom panel style matching main menu
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)  # Dark semi-transparent
+	panel_style.set_corner_radius_all(12)  # Rounded corners
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)  # Blue border
+
+	# Create main panel
+	var panel = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", panel_style)
+	dialog.add_child(panel)
+
+	# Create main container with generous margins
+	var margin_container = MarginContainer.new()
+	margin_container.add_theme_constant_override("margin_left", 50)
+	margin_container.add_theme_constant_override("margin_right", 50)
+	margin_container.add_theme_constant_override("margin_top", 40)
+	margin_container.add_theme_constant_override("margin_bottom", 40)
+	panel.add_child(margin_container)
+
+	# Create VBoxContainer for organized layout
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 25)
+	margin_container.add_child(vbox)
+
+	# Add title label with larger font
+	var title_label = Label.new()
+	title_label.text = "SELECT NUMBER OF BOTS"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 28)
+	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))  # Blue color
+	vbox.add_child(title_label)
+
+	# Add descriptive label
+	var desc_label = Label.new()
+	desc_label.text = "How many bots do you want to practice against?"
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(desc_label)
+
+	# Add separator for visual separation
+	var separator = HSeparator.new()
+	separator.add_theme_constant_override("separation", 2)
+	vbox.add_child(separator)
+
+	# Bot count options
+	var bot_counts = [1, 3, 5, 7, 10, 15]
+	var selected_count = 3  # Default
+
+	# Create centered grid container for buttons (3 columns for better layout)
+	var grid_container = CenterContainer.new()
+	vbox.add_child(grid_container)
+
+	var grid = GridContainer.new()
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 20)
+	grid.add_theme_constant_override("v_separation", 20)
+	grid_container.add_child(grid)
+
+	# Create button style matching main menu
+	var button_style = StyleBoxFlat.new()
+	button_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	button_style.set_corner_radius_all(8)
+	button_style.border_width_left = 2
+	button_style.border_width_top = 2
+	button_style.border_width_right = 2
+	button_style.border_width_bottom = 2
+	button_style.border_color = Color(0.3, 0.7, 1, 0.4)
+
+	var button_hover_style = StyleBoxFlat.new()
+	button_hover_style.bg_color = Color(0.3, 0.7, 1, 0.3)
+	button_hover_style.set_corner_radius_all(8)
+	button_hover_style.border_width_left = 2
+	button_hover_style.border_width_top = 2
+	button_hover_style.border_width_right = 2
+	button_hover_style.border_width_bottom = 2
+	button_hover_style.border_color = Color(0.3, 0.7, 1, 0.8)
+
+	# Create buttons for each option with better styling
+	for count in bot_counts:
+		var button = Button.new()
+		button.text = "%d Bot%s" % [count, "s" if count > 1 else ""]
+		button.custom_minimum_size = Vector2(140, 60)
+		button.add_theme_font_size_override("font_size", 20)
+		button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+		button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
+		button.add_theme_stylebox_override("normal", button_style)
+		button.add_theme_stylebox_override("hover", button_hover_style)
+		button.add_theme_stylebox_override("pressed", button_hover_style)
+
+		# FIX: Capture the value properly to avoid closure issue
+		var count_value = count  # Capture the current count value
+		button.pressed.connect(func():
+			selected_count = count_value  # Use captured value
+			dialog.hide()
+		)
+		grid.add_child(button)
+
+	# Add bottom spacing
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 15)
+	vbox.add_child(spacer)
+
+	# Add dialog to scene
+	add_child(dialog)
+	dialog.popup_centered()
+
+	# Wait for dialog to close
+	await dialog.visibility_changed
+
+	# Clean up
+	dialog.queue_free()
+
+	return selected_count
+
+func start_practice_mode(bot_count: int) -> void:
+	"""Start practice mode with specified number of bots"""
+	print("Starting practice mode with %d bots" % bot_count)
 
 	if main_menu:
 		main_menu.hide()
@@ -231,11 +404,12 @@ func _on_practice_button_pressed() -> void:
 	add_child(local_player)
 	local_player.add_to_group("players")
 	player_scores[1] = 0
+	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
-	# Spawn some bots for practice
-	print("Spawning 3 bots for practice mode...")
-	for i in range(3):
+	# Spawn requested number of bots for practice
+	print("Spawning %d bots for practice mode..." % bot_count)
+	for i in range(bot_count):
 		await get_tree().create_timer(0.5).timeout
 		spawn_bot()
 	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
@@ -334,8 +508,9 @@ func add_player(peer_id: int) -> void:
 	# Add to players group for AI targeting
 	player.add_to_group("players")
 
-	# Initialize player score
+	# Initialize player score and deaths
 	player_scores[peer_id] = 0
+	player_deaths[peer_id] = 0
 
 func remove_player(peer_id: int) -> void:
 	var player: Node = get_node_or_null(str(peer_id))
@@ -422,6 +597,7 @@ func start_deathmatch() -> void:
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
 	player_scores.clear()
+	player_deaths.clear()
 
 	# Start countdown
 	countdown_active = true
@@ -465,7 +641,68 @@ func end_deathmatch() -> void:
 	else:
 		print("No winner - no kills recorded!")
 
-	# TODO: Display winner screen UI
+	# Show scoreboard for 10 seconds
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("show_match_end_scoreboard"):
+		scoreboard.show_match_end_scoreboard()
+
+	# Release mouse so scoreboard is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	# Wait 10 seconds
+	await get_tree().create_timer(10.0).timeout
+
+	# Return to main menu
+	return_to_main_menu()
+
+func return_to_main_menu() -> void:
+	"""Return to main menu after match ends"""
+	print("Returning to main menu...")
+
+	# Hide scoreboard
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Remove all players
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	for player in players:
+		player.queue_free()
+
+	# Clear scores and deaths
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Reset game state
+	game_active = false
+	countdown_active = false
+	game_time_remaining = 300.0
+
+	# Reset bot counter
+	bot_counter = 0
+
+	# Hide countdown label if visible
+	if countdown_label:
+		countdown_label.visible = false
+
+	# Show main menu
+	if main_menu:
+		main_menu.show()
+
+	# Show blur and dolly camera
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+	if has_node("Menu/DollyCamera"):
+		$Menu/DollyCamera.show()
+
+	# Start menu music
+	if menu_music:
+		menu_music.play()
+
+	# Make sure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	print("Returned to main menu")
 
 func add_score(player_id: int, points: int = 1) -> void:
 	"""Add points to a player's score"""
@@ -474,9 +711,28 @@ func add_score(player_id: int, points: int = 1) -> void:
 	player_scores[player_id] += points
 	print("Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
 
+func add_death(player_id: int) -> void:
+	"""Add a death to a player's death count"""
+	if not player_deaths.has(player_id):
+		player_deaths[player_id] = 0
+	player_deaths[player_id] += 1
+	print("Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
 	return player_scores.get(player_id, 0)
+
+func get_deaths(player_id: int) -> int:
+	"""Get a player's death count"""
+	return player_deaths.get(player_id, 0)
+
+func get_kd_ratio(player_id: int) -> float:
+	"""Get a player's K/D ratio"""
+	var kills: int = get_score(player_id)
+	var deaths: int = get_deaths(player_id)
+	if deaths == 0:
+		return float(kills)  # If no deaths, return kills as ratio
+	return float(kills) / float(deaths)
 
 func get_time_remaining_formatted() -> String:
 	"""Get formatted time string (MM:SS)"""
@@ -659,8 +915,9 @@ func spawn_bot() -> void:
 	# Add bot to players group
 	bot.add_to_group("players")
 
-	# Initialize bot score
+	# Initialize bot score and deaths
 	player_scores[bot_id] = 0
+	player_deaths[bot_id] = 0
 
 	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
 	print("--- spawn_bot() complete ---")

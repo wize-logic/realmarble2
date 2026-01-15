@@ -76,6 +76,11 @@ func _physics_process(delta: float) -> void:
 		print("ERROR: BotAI bot parent is not valid!")
 		return
 
+	# Only run AI when the game is active
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world or not world.game_active:
+		return
+
 	# Update timers
 	wander_timer -= delta
 	action_timer -= delta

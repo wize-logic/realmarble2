@@ -78,10 +78,13 @@ func activate() -> void:
 		if projectile is RigidBody3D:
 			projectile.linear_velocity = projectile_velocity
 
-		# Set charged damage and owner via metadata
+		# Set charged damage, owner, charge multiplier, and player level via metadata
 		var owner_id: int = player.name.to_int() if player else -1
+		var player_level: int = player.level if player and "level" in player else 0
 		projectile.set_meta("damage", charged_damage)
 		projectile.set_meta("owner_id", owner_id)
+		projectile.set_meta("charge_multiplier", charge_multiplier)
+		projectile.set_meta("player_level", player_level)
 
 		# Auto-destroy after lifetime
 		get_tree().create_timer(projectile_lifetime).timeout.connect(projectile.queue_free)
@@ -116,6 +119,21 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
 			print('Projectile hit player (RPC): ', body.name, ' | Damage: ', damage)
+
+		# Apply knockback from projectile impact
+		# Get charge multiplier and player level multiplier from projectile metadata
+		var charge_mult: float = projectile.get_meta("charge_multiplier", 1.0)
+		var player_level: int = projectile.get_meta("player_level", 0)
+		var level_mult: float = 1.0 + (player_level * 0.2)
+
+		# Calculate knockback (base 20.0, scaled by charge and level)
+		var base_knockback: float = 20.0
+		var total_knockback: float = base_knockback * charge_mult * level_mult
+
+		# Apply knockback in projectile direction with slight upward component
+		var knockback_dir: Vector3 = projectile.linear_velocity.normalized()
+		knockback_dir.y = 0.15  # Slight upward knockback
+		body.apply_central_impulse(knockback_dir * total_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()

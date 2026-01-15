@@ -271,8 +271,10 @@ func damage_nearby_players() -> void:
 				body.receive_damage_from.rpc_id(target_id, scaled_damage, attacker_id)
 				print("Explosion hit player (RPC): ", body.name, " | Damage: ", scaled_damage, " (charge x%.1f)" % charge_mult)
 
-			# Apply knockback scaled by charge
-			var scaled_knockback: float = knockback_force * charge_mult
+			# Apply knockback scaled by charge and player level
+			var player_level: int = player.level if player and "level" in player else 0
+			var level_mult: float = 1.0 + (player_level * 0.2)
+			var scaled_knockback: float = knockback_force * charge_mult * level_mult
 			body.apply_central_impulse(knockback_dir * scaled_knockback)
 
 			# Play attack hit sound (satisfying feedback for landing a hit)

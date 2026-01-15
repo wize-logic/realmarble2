@@ -196,10 +196,12 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 
 	# Check if it's another player
 	if body is RigidBody3D and body.has_method("receive_damage_from"):
-		# Get charge multiplier for damage/knockback scaling
+		# Get charge multiplier and player level multiplier for damage/knockback scaling
 		var charge_multiplier: float = get_charge_multiplier()
+		var player_level: int = player.level if player and "level" in player else 0
+		var level_mult: float = 1.0 + (player_level * 0.2)
 		var charged_damage: int = int(damage * charge_multiplier)
-		var charged_knockback: float = 40.0 * charge_multiplier
+		var charged_knockback: float = 40.0 * charge_multiplier * level_mult
 
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1

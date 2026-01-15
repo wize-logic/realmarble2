@@ -70,8 +70,8 @@ var current_roll_force: float = 300.0
 var current_jump_impulse: float = 70.0
 var max_speed: float = 12.0  # Slightly higher max speed
 var air_control: float = 0.4  # Better air control for shooter feel
-var base_spin_dash_force: float = 150.0
-var current_spin_dash_force: float = 150.0
+var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
+var current_spin_dash_force: float = 250.0
 
 # Jump system
 var jump_count: int = 0
@@ -103,7 +103,7 @@ var level: int = 0
 const MAX_LEVEL: int = 3
 const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
-const SPIN_BOOST_PER_LEVEL: float = 30.0   # Spin dash boost per level
+const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
 # Ground detection
@@ -570,9 +570,19 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID SPINNING during spindash - spin on all axes
-		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin
-		marble_mesh.rotate_y(delta * 25.0)  # Add some tumble
+		# RAPID SPINNING during spindash - use same rolling logic as normal movement but much faster
+		# This ensures the spin matches the forward rolling motion
+		var spin_speed: float = 100.0  # Very fast rolling speed for visual effect
+
+		# Get the dash direction (assuming forward if not stored)
+		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		if horizontal_vel.length() > 0.1:
+			var move_dir: Vector3 = horizontal_vel.normalized()
+			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # Perpendicular to movement
+			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
+		else:
+			# Fallback: spin around X axis (forward rolling)
+			marble_mesh.rotate_x(spin_speed * delta)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
@@ -978,6 +988,12 @@ func receive_damage(damage: int = 1) -> void:
 		return  # Immune to damage
 	health -= damage
 	if health <= 0:
+		# Track death
+		var world: Node = get_parent()
+		if world and world.has_method("add_death"):
+			var player_id: int = name.to_int()
+			world.add_death(player_id)
+
 		# Drop orbs and ability before respawning
 		spawn_death_orb()
 		drop_ability()
@@ -1001,10 +1017,14 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		spawn_death_orb()
 		drop_ability()
 
-		# Notify world of kill
+		# Notify world of kill and death
 		var world: Node = get_parent()
-		if world and world.has_method("add_score"):
-			world.add_score(attacker_id, 1)
+		if world:
+			if world.has_method("add_score"):
+				world.add_score(attacker_id, 1)
+			if world.has_method("add_death"):
+				var player_id: int = name.to_int()
+				world.add_death(player_id)
 
 		# Play death effects before respawning
 		spawn_death_particles()
@@ -1062,6 +1082,11 @@ func fall_death() -> void:
 		return
 
 	print("  Starting fall death sequence")
+
+	# Track death
+	var world: Node = get_parent()
+	if world and world.has_method("add_death"):
+		world.add_death(player_id)
 
 	# Drop orbs and ability before falling to death
 	spawn_death_orb()
