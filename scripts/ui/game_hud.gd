@@ -23,7 +23,14 @@ func find_local_player() -> void:
 	if not world:
 		return
 
-	var peer_id: int = multiplayer.get_unique_id()
+	# In practice mode (no multiplayer), the player is always named "1"
+	# In multiplayer mode, use the peer ID
+	var peer_id: int = 1  # Default to player 1 for practice mode
+
+	# Check if we're in multiplayer mode
+	if multiplayer.has_multiplayer_peer():
+		peer_id = multiplayer.get_unique_id()
+
 	player = world.get_node_or_null(str(peer_id))
 
 	if not player:
@@ -47,7 +54,10 @@ func update_hud() -> void:
 
 	# Update score
 	if world and world.has_method("get_score"):
-		var peer_id: int = multiplayer.get_unique_id()
+		# Use player 1 for practice mode, or multiplayer peer ID for multiplayer
+		var peer_id: int = 1
+		if multiplayer.has_multiplayer_peer():
+			peer_id = multiplayer.get_unique_id()
 		var score: int = world.get_score(peer_id)
 		score_label.text = "Kills: %d" % score
 	else:
