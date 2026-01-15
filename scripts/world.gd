@@ -250,42 +250,62 @@ func _on_practice_button_pressed() -> void:
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
-	# Create a beautiful, centered dialog
+	# Create a beautiful dialog matching main menu theme
 	var dialog = AcceptDialog.new()
 	dialog.title = "Practice Mode"
 	dialog.dialog_hide_on_ok = false
 	dialog.exclusive = true
 	dialog.unresizable = false
-	dialog.size = Vector2(500, 400)  # Fixed size for consistency
+	dialog.size = Vector2(600, 450)  # Slightly larger for better spacing
+
+	# Create custom panel style matching main menu
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)  # Dark semi-transparent
+	panel_style.set_corner_radius_all(12)  # Rounded corners
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)  # Blue border
+
+	# Create main panel
+	var panel = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", panel_style)
+	dialog.add_child(panel)
 
 	# Create main container with generous margins
 	var margin_container = MarginContainer.new()
-	margin_container.add_theme_constant_override("margin_left", 40)
-	margin_container.add_theme_constant_override("margin_right", 40)
-	margin_container.add_theme_constant_override("margin_top", 30)
-	margin_container.add_theme_constant_override("margin_bottom", 30)
+	margin_container.add_theme_constant_override("margin_left", 50)
+	margin_container.add_theme_constant_override("margin_right", 50)
+	margin_container.add_theme_constant_override("margin_top", 40)
+	margin_container.add_theme_constant_override("margin_bottom", 40)
+	panel.add_child(margin_container)
 
 	# Create VBoxContainer for organized layout
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 20)
+	vbox.add_theme_constant_override("separation", 25)
 	margin_container.add_child(vbox)
 
 	# Add title label with larger font
 	var title_label = Label.new()
-	title_label.text = "Select Number of Bots"
+	title_label.text = "SELECT NUMBER OF BOTS"
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_font_size_override("font_size", 28)
+	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))  # Blue color
 	vbox.add_child(title_label)
 
 	# Add descriptive label
 	var desc_label = Label.new()
 	desc_label.text = "How many bots do you want to practice against?"
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
 	# Add separator for visual separation
 	var separator = HSeparator.new()
+	separator.add_theme_constant_override("separation", 2)
 	vbox.add_child(separator)
 
 	# Bot count options
@@ -298,31 +318,53 @@ func ask_bot_count() -> int:
 
 	var grid = GridContainer.new()
 	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 15)
-	grid.add_theme_constant_override("v_separation", 15)
+	grid.add_theme_constant_override("h_separation", 20)
+	grid.add_theme_constant_override("v_separation", 20)
 	grid_container.add_child(grid)
+
+	# Create button style matching main menu
+	var button_style = StyleBoxFlat.new()
+	button_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	button_style.set_corner_radius_all(8)
+	button_style.border_width_left = 2
+	button_style.border_width_top = 2
+	button_style.border_width_right = 2
+	button_style.border_width_bottom = 2
+	button_style.border_color = Color(0.3, 0.7, 1, 0.4)
+
+	var button_hover_style = StyleBoxFlat.new()
+	button_hover_style.bg_color = Color(0.3, 0.7, 1, 0.3)
+	button_hover_style.set_corner_radius_all(8)
+	button_hover_style.border_width_left = 2
+	button_hover_style.border_width_top = 2
+	button_hover_style.border_width_right = 2
+	button_hover_style.border_width_bottom = 2
+	button_hover_style.border_color = Color(0.3, 0.7, 1, 0.8)
 
 	# Create buttons for each option with better styling
 	for count in bot_counts:
 		var button = Button.new()
 		button.text = "%d Bot%s" % [count, "s" if count > 1 else ""]
-		button.custom_minimum_size = Vector2(130, 50)
-		button.add_theme_font_size_override("font_size", 18)
-		# Store the count in metadata
-		button.set_meta("bot_count", count)
+		button.custom_minimum_size = Vector2(140, 60)
+		button.add_theme_font_size_override("font_size", 20)
+		button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+		button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
+		button.add_theme_stylebox_override("normal", button_style)
+		button.add_theme_stylebox_override("hover", button_hover_style)
+		button.add_theme_stylebox_override("pressed", button_hover_style)
+
+		# FIX: Capture the value properly to avoid closure issue
+		var count_value = count  # Capture the current count value
 		button.pressed.connect(func():
-			selected_count = button.get_meta("bot_count")
+			selected_count = count_value  # Use captured value
 			dialog.hide()
 		)
 		grid.add_child(button)
 
 	# Add bottom spacing
 	var spacer = Control.new()
-	spacer.custom_minimum_size = Vector2(0, 10)
+	spacer.custom_minimum_size = Vector2(0, 15)
 	vbox.add_child(spacer)
-
-	# Override the dialog's content with our custom layout
-	dialog.add_child(margin_container)
 
 	# Add dialog to scene
 	add_child(dialog)
