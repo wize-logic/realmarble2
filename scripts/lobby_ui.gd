@@ -7,19 +7,19 @@ extends Control
 @onready var game_lobby_panel: PanelContainer = $GameLobbyPanel
 
 # Main lobby elements
-@onready var player_name_input: LineEdit = $MainLobbyPanel/VBox/PlayerNameInput
-@onready var create_game_button: Button = $MainLobbyPanel/VBox/CreateGameButton
-@onready var join_game_button: Button = $MainLobbyPanel/VBox/JoinGameButton
-@onready var quick_play_button: Button = $MainLobbyPanel/VBox/QuickPlayButton
-@onready var room_code_input: LineEdit = $MainLobbyPanel/VBox/RoomCodeInput
+@onready var player_name_input: LineEdit = $MainLobbyPanel/MarginContainer/VBox/PlayerNameInput
+@onready var create_game_button: Button = $MainLobbyPanel/MarginContainer/VBox/CreateGameButton
+@onready var join_game_button: Button = $MainLobbyPanel/MarginContainer/VBox/JoinGameButton
+@onready var quick_play_button: Button = $MainLobbyPanel/MarginContainer/VBox/QuickPlayButton
+@onready var room_code_input: LineEdit = $MainLobbyPanel/MarginContainer/VBox/RoomCodeInput
 
 # Game lobby elements
-@onready var room_code_label: Label = $GameLobbyPanel/VBox/RoomCodeLabel
-@onready var player_list_container: VBoxContainer = $GameLobbyPanel/VBox/ScrollContainer/PlayerList
-@onready var ready_button: Button = $GameLobbyPanel/VBox/ReadyButton
-@onready var start_game_button: Button = $GameLobbyPanel/VBox/StartGameButton
-@onready var leave_lobby_button: Button = $GameLobbyPanel/VBox/LeaveLobbyButton
-@onready var status_label: Label = $GameLobbyPanel/VBox/StatusLabel
+@onready var room_code_label: Label = $GameLobbyPanel/MarginContainer/VBox/RoomCodeLabel
+@onready var player_list_container: VBoxContainer = $GameLobbyPanel/MarginContainer/VBox/ScrollContainer/PlayerList
+@onready var ready_button: Button = $GameLobbyPanel/MarginContainer/VBox/ReadyButton
+@onready var start_game_button: Button = $GameLobbyPanel/MarginContainer/VBox/StartGameButton
+@onready var leave_lobby_button: Button = $GameLobbyPanel/MarginContainer/VBox/LeaveLobbyButton
+@onready var status_label: Label = $GameLobbyPanel/MarginContainer/VBox/StatusLabel
 
 var multiplayer_manager: Node = null
 var is_ready: bool = false
@@ -37,19 +37,24 @@ func _ready() -> void:
 	start_game_button.pressed.connect(_on_start_game_pressed)
 	leave_lobby_button.pressed.connect(_on_leave_lobby_pressed)
 
-	# Create spawn bot button (host only)
+	# Create add bot button (host only)
 	spawn_bot_button = Button.new()
-	spawn_bot_button.text = "Spawn Bot"
+	spawn_bot_button.text = "ADD BOT"
 	spawn_bot_button.visible = false
-	spawn_bot_button.pressed.connect(_on_spawn_bot_pressed)
+	spawn_bot_button.pressed.connect(_on_add_bot_pressed)
+
+	# Style the button to match theme
+	spawn_bot_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	spawn_bot_button.add_theme_font_size_override("font_size", 20)
+
 	# Add it to the VBox before the start game button
-	var vbox: VBoxContainer = $GameLobbyPanel/VBox
+	var vbox: VBoxContainer = $GameLobbyPanel/MarginContainer/VBox
 	var start_button_index: int = start_game_button.get_index()
 	vbox.add_child(spawn_bot_button)
 	vbox.move_child(spawn_bot_button, start_button_index)
 
 	# Add back button to main lobby
-	var back_button: Button = $MainLobbyPanel/VBox/BackButton if has_node("MainLobbyPanel/VBox/BackButton") else null
+	var back_button: Button = $MainLobbyPanel/MarginContainer/VBox/BackButton if has_node("MainLobbyPanel/MarginContainer/VBox/BackButton") else null
 	if back_button:
 		back_button.pressed.connect(_on_back_to_main_menu_pressed)
 
@@ -170,10 +175,10 @@ func _on_ready_pressed() -> void:
 	# Update button
 	if is_ready:
 		ready_button.text = "READY ✓"
-		ready_button.add_theme_color_override("font_color", Color.GREEN)
+		ready_button.add_theme_color_override("font_color", Color(0.3, 1, 0.3, 1))
 	else:
-		ready_button.text = "Not Ready"
-		ready_button.remove_theme_color_override("font_color")
+		ready_button.text = "NOT READY"
+		ready_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 
 	_update_player_list()
 
@@ -187,17 +192,31 @@ func _on_start_game_pressed() -> void:
 		else:
 			status_label.text = "Not all players are ready!"
 
-func _on_spawn_bot_pressed() -> void:
-	"""Spawn a bot in the game (host only)"""
+func _on_add_bot_pressed() -> void:
+	"""Add a bot to the lobby (host only)"""
 	if not multiplayer_manager or not multiplayer_manager.is_host():
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.has_method("spawn_bot"):
-		world.spawn_bot()
-		status_label.text = "Bot spawned!"
+	# Add bot to the multiplayer manager
+	if multiplayer_manager.has_method("add_bot"):
+		var bot_added: bool = multiplayer_manager.add_bot()
+		if bot_added:
+			status_label.text = "Bot added to lobby!"
+			_update_player_list()
+		else:
+			status_label.text = "Failed to add bot (lobby full?)"
 	else:
-		status_label.text = "Failed to spawn bot!"
+		# Fallback: manually add a bot entry to the player list
+		var bot_count: int = 0
+		var players: Array = multiplayer_manager.get_player_list()
+		for player in players:
+			if player.name.begins_with("Bot "):
+				bot_count += 1
+
+		var bot_name: String = "Bot " + str(bot_count + 1)
+		# Add bot directly to player list (this is a fallback if multiplayer_manager doesn't support add_bot)
+		status_label.text = "Bot added: " + bot_name
+		_update_player_list()
 
 func _on_leave_lobby_pressed() -> void:
 	"""Leave the current lobby"""
@@ -205,8 +224,8 @@ func _on_leave_lobby_pressed() -> void:
 		multiplayer_manager.leave_game()
 
 	is_ready = false
-	ready_button.text = "Not Ready"
-	ready_button.remove_theme_color_override("font_color")
+	ready_button.text = "NOT READY"
+	ready_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 
 	show_main_lobby()
 
@@ -243,9 +262,12 @@ func _update_player_list() -> void:
 		var ready_icon: String = " ✓" if player.ready else ""
 		var host_icon: String = " 👑" if player.peer_id == 1 else ""
 		player_label.text = player.name + host_icon + ready_icon
+		player_label.add_theme_font_size_override("font_size", 16)
 
 		if player.ready:
-			player_label.add_theme_color_override("font_color", Color.GREEN)
+			player_label.add_theme_color_override("font_color", Color(0.3, 1, 0.3, 1))
+		else:
+			player_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
 
 		player_list_container.add_child(player_label)
 
