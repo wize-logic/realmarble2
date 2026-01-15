@@ -571,7 +571,7 @@ func _physics_process_marble_roll(delta: float) -> void:
 
 	if is_spin_dashing:
 		# RAPID VERTICAL SPINNING during spindash - spin like a wheel rolling forward
-		marble_mesh.rotate_x(delta * 50.0)  # Fast forward spin (vertical rotation)
+		marble_mesh.rotate_z(delta * 50.0)  # Fast vertical spin (up/down rotation)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)

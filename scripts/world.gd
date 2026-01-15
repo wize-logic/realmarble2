@@ -250,31 +250,59 @@ func _on_practice_button_pressed() -> void:
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
-	# Create a simple dialog with bot count options
-	var dialog = ConfirmationDialog.new()
-	dialog.title = "Select Bot Count"
-	dialog.dialog_text = "How many bots do you want to play against?"
+	# Create a clean dialog with proper layout
+	var dialog = AcceptDialog.new()
+	dialog.title = "Select Number of Bots"
+	dialog.dialog_hide_on_ok = false
 
-	# Create a VBoxContainer for the buttons
+	# Create main container with proper margins
+	var margin_container = MarginContainer.new()
+	margin_container.add_theme_constant_override("margin_left", 20)
+	margin_container.add_theme_constant_override("margin_right", 20)
+	margin_container.add_theme_constant_override("margin_top", 20)
+	margin_container.add_theme_constant_override("margin_bottom", 20)
+
+	# Create VBoxContainer for organized layout
 	var vbox = VBoxContainer.new()
-	dialog.add_child(vbox)
+	vbox.add_theme_constant_override("separation", 10)
+	margin_container.add_child(vbox)
+
+	# Add descriptive label
+	var desc_label = Label.new()
+	desc_label.text = "Choose how many bots to practice against:"
+	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(desc_label)
+
+	# Add separator
+	var separator = HSeparator.new()
+	vbox.add_child(separator)
 
 	# Bot count options
 	var bot_counts = [1, 3, 5, 7, 10, 15]
 	var selected_count = 3  # Default
 
+	# Create grid container for buttons (2 columns)
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	vbox.add_child(grid)
+
 	# Create buttons for each option
 	for count in bot_counts:
 		var button = Button.new()
-		button.text = "%d Bots" % count
-		button.custom_minimum_size = Vector2(200, 40)
+		button.text = "%d Bot%s" % [count, "s" if count > 1 else ""]
+		button.custom_minimum_size = Vector2(120, 45)
 		# Store the count in metadata
 		button.set_meta("bot_count", count)
 		button.pressed.connect(func():
 			selected_count = button.get_meta("bot_count")
 			dialog.hide()
 		)
-		vbox.add_child(button)
+		grid.add_child(button)
+
+	# Override the dialog's content with our custom layout
+	dialog.add_child(margin_container)
 
 	# Add dialog to scene
 	add_child(dialog)
