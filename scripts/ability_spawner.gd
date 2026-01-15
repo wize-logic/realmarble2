@@ -13,11 +13,11 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
 
-# Number of each ability type to spawn
-@export var num_dash_attacks: int = 2
-@export var num_explosions: int = 2
-@export var num_guns: int = 3
-@export var num_swords: int = 2
+# Number of each ability type to spawn (increased for fuller map)
+@export var num_dash_attacks: int = 5
+@export var num_explosions: int = 4
+@export var num_guns: int = 7
+@export var num_swords: int = 4
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Check respawn every 10 seconds

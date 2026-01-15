@@ -7,7 +7,7 @@ const OrbScene = preload("res://collectible_orb.tscn")
 # Map volume bounds for random spawning
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
-@export var num_orbs: int = 9  # Number of orbs to spawn
+@export var num_orbs: int = 25  # Number of orbs to spawn (increased for fuller map)
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Respawn every 10 seconds

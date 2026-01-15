@@ -94,14 +94,9 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 
 	# Check if body is a player (RigidBody3D with player script)
+	# Allow collection regardless of level - even max level players can collect orbs
 	if body is RigidBody3D and body.has_method("collect_orb"):
-		# Check if player can still level up
-		if "level" in body and "MAX_LEVEL" in body:
-			if body.level < body.MAX_LEVEL:
-				collect(body)
-		else:
-			# Fallback - just collect it
-			collect(body)
+		collect(body)
 
 func collect(player: Node) -> void:
 	"""Handle orb collection"""
