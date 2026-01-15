@@ -77,8 +77,10 @@ func focus_exited() -> void:
 	is_focused = false
 
 func _activate() -> void:
+	print("Button activated: ", name)
 	if select_sound:
 		select_sound.play()
+	print("Emitting button_pressed signal")
 	button_pressed.emit()
 
 func set_sounds(hover: AudioStreamPlayer, select: AudioStreamPlayer) -> void:

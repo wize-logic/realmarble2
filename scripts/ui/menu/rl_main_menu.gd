@@ -77,16 +77,24 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func collect_buttons() -> void:
 	menu_buttons.clear()
+	print("Collecting main menu buttons...")
 	for child in main_buttons_container.get_children():
+		print("  Found child: ", child.name, " (type: ", child.get_class(), ")")
 		if child is RLMenuButton:
 			menu_buttons.append(child)
 			child.button_pressed.connect(_on_main_button_pressed.bind(child))
+			print("  Added button: ", child.name)
+	print("Total main menu buttons: ", menu_buttons.size())
 
 	submenu_buttons.clear()
+	print("Collecting submenu buttons...")
 	for child in submenu_buttons_container.get_children():
+		print("  Found submenu child: ", child.name, " (type: ", child.get_class(), ")")
 		if child is RLMenuButton:
 			submenu_buttons.append(child)
 			child.button_pressed.connect(_on_submenu_button_pressed.bind(child))
+			print("  Added submenu button: ", child.name)
+	print("Total submenu buttons: ", submenu_buttons.size())
 
 func navigate_down() -> void:
 	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
