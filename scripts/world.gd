@@ -256,7 +256,7 @@ func _on_multiplayer_button_pressed() -> void:
 
 func _on_play_pressed() -> void:
 	"""Start practice mode with bots (renamed from practice button)"""
-	_on_practice_button_pressed()
+	await _on_practice_button_pressed()
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots - ask for bot count first"""
@@ -281,13 +281,16 @@ func _on_practice_button_pressed() -> void:
 		return
 
 	# Ask user how many bots they want
+	print("Calling ask_bot_count()...")
 	var bot_count_choice = await ask_bot_count()
+	print("ask_bot_count() returned: ", bot_count_choice)
 	if bot_count_choice < 0:
 		# User cancelled or error
 		print("Practice mode cancelled")
 		return
 
 	# Now start practice mode with the chosen bot count
+	print("Starting practice mode with %d bots..." % bot_count_choice)
 	start_practice_mode(bot_count_choice)
 
 func ask_bot_count() -> int:
@@ -399,10 +402,15 @@ func ask_bot_count() -> int:
 		# FIX: Capture the value properly to avoid closure issue
 		var count_value = count  # Capture the current count value
 		button.pressed.connect(func():
+			print("=== BUTTON PRESSED CALLBACK START ===")
+			print("Button clicked for count: %d" % count_value)
 			selected_count = count_value  # Use captured value
-			print("User selected %d bots" % count_value)
+			print("selected_count set to: %d" % selected_count)
 			dialog_closed = true
+			print("dialog_closed set to: true")
 			dialog.hide()
+			print("dialog.hide() called")
+			print("=== BUTTON PRESSED CALLBACK END ===")
 		)
 		grid.add_child(button)
 
@@ -414,11 +422,13 @@ func ask_bot_count() -> int:
 	# Add dialog to scene
 	add_child(dialog)
 	dialog.popup_centered()
+	print("Dialog shown, waiting for user selection...")
 
 	# Wait for user to select an option (flag-based waiting)
 	while not dialog_closed:
 		await get_tree().process_frame
 
+	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
 
