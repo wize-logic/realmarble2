@@ -8,7 +8,6 @@ class_name Rail
 var rail_mesh: MeshInstance3D
 var rail_material: StandardMaterial3D
 var detection_area: Area3D
-var grinding_players: Array = []
 
 func _ready():
 	add_to_group("rails")
@@ -92,16 +91,15 @@ func create_detection_area():
 		area.body_exited.connect(_on_body_exited)
 
 func _on_body_entered(body):
-	if body.has_method("start_grinding"):
-		if not body in grinding_players:
-			grinding_players.append(body)
-			body.start_grinding(self)
+	if body.has_method("set_nearby_rail"):
+		body.set_nearby_rail(self)
 
 func _on_body_exited(body):
-	if body in grinding_players:
-		grinding_players.erase(body)
-		if body.has_method("stop_grinding"):
-			body.stop_grinding()
+	if body.has_method("clear_nearby_rail"):
+		body.clear_nearby_rail(self)
+	# Also stop grinding if they're grinding on this rail
+	if body.has_method("stop_grinding") and body.is_grinding and body.current_rail == self:
+		body.stop_grinding()
 
 func get_nearest_point_on_rail(global_pos: Vector3) -> Dictionary:
 	# Find the nearest point on the rail curve
@@ -124,5 +122,5 @@ func apply_grinding_effect(player_pos: Vector3):
 
 func _process(delta):
 	# Fade rail glow back to normal
-	if rail_material and grinding_players.is_empty():
-		rail_material.emission_energy_multiplier = lerp(rail_material.emission_energy_multiplier, 0.5, 0.05)
+	if rail_material:
+		rail_material.emission_energy_multiplier = lerp(rail_material.emission_energy_multiplier, 1.5, 0.05)
