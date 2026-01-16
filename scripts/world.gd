@@ -1307,7 +1307,7 @@ func _create_marble_preview() -> void:
 	preview_container.name = "MarblePreview"
 
 	# Use raycast to find ground position
-	var space_state = get_world_3d().direct_space_state
+	var space_state = get_viewport().get_world_3d().direct_space_state
 	var query = PhysicsRayQueryParameters3D.create(Vector3(0, 100, 0), Vector3(0, -100, 0))
 	var result = space_state.intersect_ray(query)
 
