@@ -105,6 +105,19 @@ func _on_body_entered(body: Node3D):
 	if distance > detection_radius:
 		return
 
+	# ONLY attach if player is ABOVE the rail (not from sides or below)
+	var to_player = player_pos - world_closest
+	var vertical_offset = to_player.y
+
+	# Must be above the rail (positive Y) and close to directly above
+	if vertical_offset < 0.2:  # Must be at least 0.2 units above
+		return
+
+	# Check horizontal distance - shouldn't be too far to the side
+	var horizontal_offset = Vector2(to_player.x, to_player.z).length()
+	if horizontal_offset > 1.5:  # Max 1.5 units horizontal offset
+		return
+
 	# Start grinding
 	_attach_grinder(body, closest_offset, velocity)
 

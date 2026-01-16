@@ -279,7 +279,7 @@ func generate_vertical_rails() -> void:
 	print("Generated ", vertical_rail_count, " vertical rails")
 
 func create_rail_visual(rail: Path3D) -> void:
-	"""Create visual representation of a rail using a CSG cylinder"""
+	"""Create visual representation of a rail using a 3D cylindrical tube"""
 	if not rail.curve or rail.curve.get_baked_length() == 0:
 		return
 
@@ -300,27 +300,56 @@ func create_rail_visual(rail: Path3D) -> void:
 	material.emission = Color(0.3, 0.5, 1.0)  # Slight blue glow
 	material.emission_energy_multiplier = 0.3
 
-	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, material)
+	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
 
-	# Draw rail as a tube
+	# Draw rail as a proper 3D cylindrical tube
 	var rail_radius: float = 0.15
-	var segments: int = int(rail.curve.get_baked_length() * 2)
-	segments = max(segments, 10)
+	var radial_segments: int = 8  # Number of sides around the cylinder
+	var length_segments: int = int(rail.curve.get_baked_length() * 2)
+	length_segments = max(length_segments, 10)
 
-	for i in range(segments + 1):
-		var offset: float = (float(i) / segments) * rail.curve.get_baked_length()
+	# Generate vertices around the rail path
+	for i in range(length_segments):
+		var offset: float = (float(i) / length_segments) * rail.curve.get_baked_length()
+		var next_offset: float = (float(i + 1) / length_segments) * rail.curve.get_baked_length()
+
 		var pos: Vector3 = rail.curve.sample_baked(offset)
-		var next_offset: float = min(offset + 0.1, rail.curve.get_baked_length())
 		var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
 
+		# Calculate forward direction
 		var forward: Vector3 = (next_pos - pos).normalized()
+		if forward.length() < 0.1:
+			forward = Vector3.FORWARD
+
+		# Calculate right and up vectors
 		var right: Vector3 = forward.cross(Vector3.UP).normalized()
 		if right.length() < 0.1:
 			right = forward.cross(Vector3.RIGHT).normalized()
+		var up: Vector3 = right.cross(forward).normalized()
 
-		# Top and bottom points of the rail cylinder
-		immediate_mesh.surface_add_vertex(pos + right * rail_radius)
-		immediate_mesh.surface_add_vertex(pos - right * rail_radius)
+		# Create ring of vertices at this position
+		for j in range(radial_segments):
+			var angle_curr: float = (float(j) / radial_segments) * TAU
+			var angle_next: float = (float(j + 1) / radial_segments) * TAU
+
+			# Current ring vertices
+			var offset_curr: Vector3 = (right * cos(angle_curr) + up * sin(angle_curr)) * rail_radius
+			var offset_next: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * rail_radius
+
+			var v1: Vector3 = pos + offset_curr
+			var v2: Vector3 = pos + offset_next
+			var v3: Vector3 = next_pos + offset_curr
+			var v4: Vector3 = next_pos + offset_next
+
+			# First triangle
+			immediate_mesh.surface_add_vertex(v1)
+			immediate_mesh.surface_add_vertex(v2)
+			immediate_mesh.surface_add_vertex(v3)
+
+			# Second triangle
+			immediate_mesh.surface_add_vertex(v2)
+			immediate_mesh.surface_add_vertex(v4)
+			immediate_mesh.surface_add_vertex(v3)
 
 	immediate_mesh.surface_end()
 
