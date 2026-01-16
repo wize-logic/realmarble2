@@ -20,15 +20,22 @@ func initialize():
 		create_detection_area()
 
 func create_rail_visual():
-	# Create the visual rail mesh using CSGCylinder3D for the tube
+	# Create the visual rail mesh using CSGPolygon3D for the tube
 	if not curve:
 		return
 
 	var csg_path = CSGPolygon3D.new()
-	csg_path.polygon = PackedVector2Array([
-		Vector2(-rail_width/2, 0),
-		Vector2(rail_width/2, 0)
-	])
+
+	# Create a circular polygon to extrude along the path (creates a tube)
+	var circle_points: PackedVector2Array = PackedVector2Array()
+	var num_points: int = 8  # 8 points for a smooth circle
+	for i in range(num_points):
+		var angle: float = (float(i) / num_points) * TAU
+		var x: float = cos(angle) * rail_width
+		var y: float = sin(angle) * rail_width
+		circle_points.append(Vector2(x, y))
+
+	csg_path.polygon = circle_points
 	csg_path.mode = CSGPolygon3D.MODE_PATH
 	csg_path.path_node = get_path()
 	csg_path.path_interval_type = CSGPolygon3D.PATH_INTERVAL_DISTANCE
@@ -42,7 +49,7 @@ func create_rail_visual():
 	rail_material.roughness = 0.3
 	rail_material.emission_enabled = true
 	rail_material.emission = Color(0.3, 0.5, 1.0)  # Blue glow
-	rail_material.emission_energy_multiplier = 0.5
+	rail_material.emission_energy_multiplier = 1.5  # Brighter so easier to see
 
 	csg_path.material = rail_material
 	add_child(csg_path)

@@ -287,7 +287,7 @@ func generate_rails() -> void:
 
 	for i in range(rail_count):
 		var angle: float = (float(i) / rail_count) * TAU
-		var rail_distance: float = arena_size * 0.65  # Outside the walls
+		var rail_distance: float = arena_size * 0.57  # Just outside the walls (walls are at 0.55)
 
 		# Create rail path
 		var rail: Path3D = RailScene.instantiate()
@@ -304,8 +304,8 @@ func generate_rails() -> void:
 			0:  # Curved arc rail
 				var arc_length: int = 8
 				var arc_angle: float = TAU / 3.0  # 120 degrees
-				var start_height: float = 5.0 + randf() * 10.0
-				var end_height: float = start_height + randf_range(-5.0, 5.0)
+				var start_height: float = 3.0 + randf() * 5.0  # Lower starting height (3-8)
+				var end_height: float = start_height + randf_range(-2.0, 8.0)  # Can go higher
 
 				for j in range(arc_length + 1):
 					var t: float = float(j) / arc_length
@@ -318,9 +318,9 @@ func generate_rails() -> void:
 			1:  # Spiral rail
 				var spiral_length: int = 12
 				var spiral_radius_start: float = rail_distance
-				var spiral_radius_end: float = rail_distance * 0.8
-				var height_start: float = 2.0
-				var height_end: float = 15.0
+				var spiral_radius_end: float = rail_distance * 0.85
+				var height_start: float = 3.0  # Start at reachable height
+				var height_end: float = 12.0  # Don't go too high
 
 				for j in range(spiral_length + 1):
 					var t: float = float(j) / spiral_length
@@ -333,14 +333,15 @@ func generate_rails() -> void:
 
 			2:  # Wave rail (up and down)
 				var wave_length: int = 10
-				var wave_height: float = 8.0
+				var wave_height: float = 4.0  # Smaller waves
+				var base_height: float = 5.0  # Lower base height
 
 				for j in range(wave_length + 1):
 					var t: float = float(j) / wave_length
 					var current_angle: float = angle + (t - 0.5) * (TAU / 4.0)
 					var x: float = cos(current_angle) * rail_distance
 					var z: float = sin(current_angle) * rail_distance
-					var y: float = 8.0 + sin(t * TAU * 2.0) * wave_height
+					var y: float = base_height + sin(t * TAU * 2.0) * wave_height
 					curve.add_point(Vector3(x, y, z))
 
 		# Apply curve to rail
