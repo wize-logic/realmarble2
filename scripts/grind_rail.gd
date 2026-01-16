@@ -166,21 +166,26 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var world_rail_tangent = global_transform.basis * rail_tangent
 	var world_rail_up = global_transform.basis * rail_up
 
-	# Get rail position in world space
-	var world_rail_pos = to_global(closest_point)
-
-	# POSITION: Place player directly on top of the rail (0.6 units above)
+	# Get rail position in world space (slightly above for player to sit on top)
 	var rail_height_offset = 0.6
-	var target_position = world_rail_pos + world_rail_up * rail_height_offset
-	grinder.global_position = target_position
+	var world_rail_pos = to_global(closest_point) + world_rail_up * rail_height_offset
+
+	# CONSTRAINT: Strong force to keep player on top of rail
+	var to_rail = world_rail_pos - grinder.global_position
+	var constraint_force = to_rail * rail_constraint_strength * 2.0  # Extra strong to stay on top
+	grinder.apply_central_force(constraint_force)
 
 	# PROJECT velocity along rail tangent (maintain momentum direction)
 	var current_velocity = grinder.linear_velocity
 	var velocity_along_rail = current_velocity.dot(world_rail_tangent)
 	var projected_velocity = world_rail_tangent * velocity_along_rail
 
-	# Apply friction
+	# Apply friction to align velocity with rail
 	grinder.linear_velocity = grinder.linear_velocity.lerp(projected_velocity, 0.8)
+
+	# FORWARD PUSH: Give player a small push to prevent getting stuck
+	var push_force = world_rail_tangent * 5.0  # Small constant push forward
+	grinder.apply_central_force(push_force)
 
 	# GRAVITY EFFECT on slopes
 	# Calculate slope direction (is rail going up or down?)
