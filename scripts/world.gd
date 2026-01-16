@@ -353,6 +353,7 @@ func ask_bot_count() -> int:
 	# Bot count options
 	var bot_counts = [1, 3, 5, 7, 10, 15]
 	var selected_count = 3  # Default
+	var dialog_closed = false  # Flag to track when dialog is dismissed
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -400,6 +401,7 @@ func ask_bot_count() -> int:
 		button.pressed.connect(func():
 			selected_count = count_value  # Use captured value
 			print("User selected %d bots" % count_value)
+			dialog_closed = true
 			dialog.hide()
 		)
 		grid.add_child(button)
@@ -413,8 +415,9 @@ func ask_bot_count() -> int:
 	add_child(dialog)
 	dialog.popup_centered()
 
-	# Wait for dialog to close (hidden signal fires when dialog is dismissed)
-	await dialog.hidden
+	# Wait for user to select an option (flag-based waiting)
+	while not dialog_closed:
+		await get_tree().process_frame
 
 	# Clean up
 	dialog.queue_free()
@@ -1385,9 +1388,10 @@ func _create_marble_preview() -> void:
 	# Position camera to showcase the marble (slightly above and in front)
 	var marble_y = ground_position.y + 0.5
 	preview_camera.position = Vector3(-2, marble_y + 0.5, 3)
-	# Look at the marble at its actual position
-	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
+	# Add to tree first before calling look_at
 	preview_container.add_child(preview_camera)
+	# Look at the marble at its actual position (after adding to tree)
+	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
 	# Make this the current camera
 	preview_camera.make_current()
 
