@@ -7,7 +7,7 @@ const OrbScene = preload("res://collectible_orb.tscn")
 # Map volume bounds for random spawning
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
-@export var num_orbs: int = 25  # Number of orbs to spawn (increased for fuller map)
+@export var num_orbs: int = 12  # Number of orbs to spawn (reduced by half)
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Respawn every 10 seconds
@@ -23,8 +23,13 @@ func _ready() -> void:
 	# Don't spawn automatically - wait for world to call spawn_orbs() when match starts
 
 func _process(delta: float) -> void:
-	# Server-side respawn timer
+	# Server-side respawn timer - only when game is active
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
+		return
+
+	# Check if game is active
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
 		return
 
 	respawn_timer += delta
@@ -38,10 +43,21 @@ func spawn_orbs() -> void:
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
+	# Check if game is active before spawning
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+		print("ORB SPAWNER: Game is not active, skipping spawn")
+		return
+
+	# Scale orb count based on number of players (3 orbs per player)
+	var player_count: int = get_tree().get_nodes_in_group("players").size()
+	var scaled_orbs: int = clamp(int(player_count * 3.0), 9, 36)  # Min 9, Max 36 orbs
+
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
+	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
-	for i in range(num_orbs):
+	for i in range(scaled_orbs):
 		var random_pos: Vector3 = get_random_spawn_position()
 		print("Orb %d spawning at position: %s" % [i+1, random_pos])
 		spawn_orb_at_position(random_pos)
@@ -50,6 +66,9 @@ func spawn_orbs() -> void:
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground"""
+	const DEATH_ZONE_Y: float = -50.0  # Death zone position
+	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
+
 	# Generate random X and Z within bounds
 	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
 	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
@@ -67,7 +86,11 @@ func get_random_spawn_position() -> Vector3:
 	var result: Dictionary = space_state.intersect_ray(query)
 
 	if result:
-		# Found ground - spawn 1 unit above it
+		# Found ground - check if it's in death zone
+		var spawn_y: float = result.position.y + 1.0
+		if spawn_y < MIN_SAFE_Y:
+			# Too close to death zone - use safe fallback position
+			return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
 		return result.position + Vector3.UP * 1.0
 	else:
 		# No ground found - use middle Y as fallback
@@ -99,6 +122,14 @@ func check_and_respawn_orbs() -> void:
 			if orb.has_method("respawn_orb"):
 				orb.respawn_orb()
 			print("Respawned orb at new random location: ", orb.global_position)
+
+func clear_all() -> void:
+	"""Clear all orbs without respawning (called when match ends)"""
+	for orb in spawned_orbs:
+		if orb:
+			orb.queue_free()
+	spawned_orbs.clear()
+	print("Cleared all orbs")
 
 func respawn_all() -> void:
 	"""Clear and respawn all orbs (called when level is regenerated)"""

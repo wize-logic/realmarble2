@@ -65,10 +65,13 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if is_collected:
-		# Handle respawn timer
-		respawn_timer -= delta
-		if respawn_timer <= 0.0:
-			respawn_orb()
+		# Check if game is active before respawning
+		var world: Node = get_parent()
+		if world and world.has_method("is_game_active") and world.is_game_active():
+			# Handle respawn timer only during active gameplay
+			respawn_timer -= delta
+			if respawn_timer <= 0.0:
+				respawn_orb()
 		return
 
 	# Update animation time

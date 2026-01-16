@@ -13,11 +13,11 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
 
-# Number of each ability type to spawn (increased for fuller map)
-@export var num_dash_attacks: int = 5
-@export var num_explosions: int = 4
-@export var num_guns: int = 7
-@export var num_swords: int = 4
+# Number of each ability type to spawn (reduced by half)
+@export var num_dash_attacks: int = 2
+@export var num_explosions: int = 2
+@export var num_guns: int = 4
+@export var num_swords: int = 2
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Check respawn every 10 seconds
@@ -33,8 +33,13 @@ func _ready() -> void:
 	# Don't spawn automatically - wait for world to call spawn_abilities() when match starts
 
 func _process(delta: float) -> void:
-	# Server-side respawn timer
+	# Server-side respawn timer - only when game is active
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
+		return
+
+	# Check if game is active
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
 		return
 
 	respawn_timer += delta
@@ -48,29 +53,47 @@ func spawn_abilities() -> void:
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
+	# Check if game is active before spawning
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+		print("ABILITY SPAWNER: Game is not active, skipping spawn")
+		return
+
+	# Scale ability count based on number of players (2.5 abilities per player)
+	var player_count: int = get_tree().get_nodes_in_group("players").size()
+	var total_abilities: int = clamp(int(player_count * 2.5), 8, 25)  # Min 8, Max 25 abilities
+
+	# Distribute abilities across types (proportional to original ratios)
+	# Original ratio: Dash=2, Explosion=2, Gun=4, Sword=2 (total=10)
+	var scaled_dash: int = max(1, int(total_abilities * 0.2))      # 20%
+	var scaled_explosion: int = max(1, int(total_abilities * 0.2))  # 20%
+	var scaled_gun: int = max(2, int(total_abilities * 0.4))        # 40%
+	var scaled_sword: int = max(1, int(total_abilities * 0.2))      # 20%
+
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
+	print("Players: %d | Total abilities: %d" % [player_count, total_abilities])
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
 	# Spawn dash attacks
-	for i in range(num_dash_attacks):
+	for i in range(scaled_dash):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Dash Attack %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.ORANGE_RED)
 
 	# Spawn explosions
-	for i in range(num_explosions):
+	for i in range(scaled_explosion):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Explosion %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
 
 	# Spawn guns
-	for i in range(num_guns):
+	for i in range(scaled_gun):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Gun %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, GunScene, "Gun", Color.CYAN)
 
 	# Spawn swords
-	for i in range(num_swords):
+	for i in range(scaled_sword):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Sword %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, SwordScene, "Sword", Color.STEEL_BLUE)
@@ -79,6 +102,9 @@ func spawn_abilities() -> void:
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground"""
+	const DEATH_ZONE_Y: float = -50.0  # Death zone position
+	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
+
 	# Generate random X and Z within bounds
 	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
 	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
@@ -96,7 +122,11 @@ func get_random_spawn_position() -> Vector3:
 	var result: Dictionary = space_state.intersect_ray(query)
 
 	if result:
-		# Found ground - spawn 1 unit above it
+		# Found ground - check if it's in death zone
+		var spawn_y: float = result.position.y + 1.0
+		if spawn_y < MIN_SAFE_Y:
+			# Too close to death zone - use safe fallback position
+			return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
 		return result.position + Vector3.UP * 1.0
 	else:
 		# No ground found - use middle Y as fallback
@@ -142,6 +172,14 @@ func spawn_random_ability(pos: Vector3) -> void:
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]
 	spawn_ability_at(pos, random_ability[0], random_ability[1], random_ability[2])
+
+func clear_all() -> void:
+	"""Clear all abilities without respawning (called when match ends)"""
+	for pickup in spawned_pickups:
+		if pickup:
+			pickup.queue_free()
+	spawned_pickups.clear()
+	print("Cleared all ability pickups")
 
 func respawn_all() -> void:
 	"""Clear and respawn all abilities (called when level is regenerated)"""

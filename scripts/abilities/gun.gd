@@ -136,18 +136,20 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		body.apply_central_impulse(knockback_dir * total_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
-		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-		hit_sound.max_distance = 20.0
-		hit_sound.volume_db = 3.0
-		hit_sound.pitch_scale = randf_range(1.2, 1.4)
-		hit_sound.global_position = projectile.global_position
-		if player and player.get_parent():
-			player.get_parent().add_child(hit_sound)
-			hit_sound.play()
-			# Sound will auto-cleanup when it finishes
+		if projectile and projectile.is_inside_tree():
+			var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+			hit_sound.max_distance = 20.0
+			hit_sound.volume_db = 3.0
+			hit_sound.pitch_scale = randf_range(1.2, 1.4)
+			hit_sound.global_position = projectile.global_position
+			if player and player.get_parent():
+				player.get_parent().add_child(hit_sound)
+				hit_sound.play()
+				# Sound will auto-cleanup when it finishes
 
 	# Destroy projectile on hit
-	projectile.queue_free()
+	if projectile and is_instance_valid(projectile):
+		projectile.queue_free()
 
 func create_projectile() -> Node3D:
 	"""Create a projectile node"""
