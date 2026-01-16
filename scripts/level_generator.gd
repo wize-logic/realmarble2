@@ -31,6 +31,7 @@ func generate_level() -> void:
 	generate_platforms()
 	generate_ramps()
 	generate_walls()
+	generate_grind_rails()
 	generate_death_zone()
 
 	print("Level generation complete!")
@@ -182,6 +183,147 @@ func generate_walls() -> void:
 		platforms.append(wall_instance)
 
 	print("Generated perimeter walls")
+
+func generate_grind_rails() -> void:
+	"""Generate grinding rails around the arena perimeter (Sonic style)"""
+	var rail_count: int = 8  # Number of rails around the arena
+	var rail_distance: float = arena_size * 0.48  # Outside main floor, inside walls
+
+	for i in range(rail_count):
+		var angle_start: float = (float(i) / rail_count) * TAU
+		var angle_end: float = angle_start + (TAU / rail_count) * 0.7  # Rails cover 70% of arc segment
+
+		# Create a curved rail using Path3D and Curve3D
+		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
+		rail.name = "GrindRail" + str(i)
+		rail.curve = Curve3D.new()
+
+		# Determine rail height (varied for interest)
+		var base_height: float = 2.0 + (i % 3) * 3.0  # Heights: 2, 5, 8, repeating
+
+		# Create curve points along the arc
+		var num_points: int = 12  # Number of control points
+		for j in range(num_points):
+			var t: float = float(j) / (num_points - 1)
+			var angle: float = lerp(angle_start, angle_end, t)
+
+			# Position along arc
+			var x: float = cos(angle) * rail_distance
+			var z: float = sin(angle) * rail_distance
+
+			# Height variation (slight wave for interest)
+			var height_offset: float = sin(t * PI) * 2.0  # Slight arc up and down
+			var y: float = base_height + height_offset
+
+			# Add point to curve
+			rail.curve.add_point(Vector3(x, y, z))
+
+		# Smooth the curve for nice grinding
+		for j in range(rail.curve.point_count):
+			rail.curve.set_point_in(j, Vector3(-1, 0, 0))
+			rail.curve.set_point_out(j, Vector3(1, 0, 0))
+
+		add_child(rail)
+
+		# Create visual rail mesh (cylinder along the path)
+		create_rail_visual(rail)
+
+	# Add some vertical connecting rails (like loops)
+	generate_vertical_rails()
+
+	print("Generated ", rail_count, " grind rails around perimeter")
+
+func generate_vertical_rails() -> void:
+	"""Generate vertical/diagonal rails connecting different heights"""
+	var vertical_rail_count: int = 4
+
+	for i in range(vertical_rail_count):
+		var angle: float = (float(i) / vertical_rail_count) * TAU + (TAU / vertical_rail_count * 0.5)
+		var distance: float = arena_size * 0.35
+
+		# Create vertical rail
+		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
+		rail.name = "VerticalRail" + str(i)
+		rail.curve = Curve3D.new()
+
+		# Start position
+		var start_x: float = cos(angle) * distance
+		var start_z: float = sin(angle) * distance
+		var start_y: float = 1.0
+
+		# End position (higher up)
+		var end_y: float = 10.0
+
+		# Create upward spiral
+		var num_points: int = 8
+		for j in range(num_points):
+			var t: float = float(j) / (num_points - 1)
+			var current_angle: float = angle + t * PI * 0.5  # Quarter turn
+			var current_distance: float = lerp(distance, distance * 0.8, t)
+
+			var x: float = cos(current_angle) * current_distance
+			var z: float = sin(current_angle) * current_distance
+			var y: float = lerp(start_y, end_y, t)
+
+			rail.curve.add_point(Vector3(x, y, z))
+
+		# Smooth the curve
+		for j in range(rail.curve.point_count):
+			rail.curve.set_point_in(j, Vector3(-0.5, 0, 0))
+			rail.curve.set_point_out(j, Vector3(0.5, 0, 0))
+
+		add_child(rail)
+		create_rail_visual(rail)
+
+	print("Generated ", vertical_rail_count, " vertical rails")
+
+func create_rail_visual(rail: Path3D) -> void:
+	"""Create visual representation of a rail using a CSG cylinder"""
+	if not rail.curve or rail.curve.get_baked_length() == 0:
+		return
+
+	# Create mesh for the rail
+	var rail_visual: MeshInstance3D = MeshInstance3D.new()
+	rail_visual.name = "RailVisual"
+
+	# Use ImmediateMesh to draw the rail
+	var immediate_mesh: ImmediateMesh = ImmediateMesh.new()
+	rail_visual.mesh = immediate_mesh
+
+	# Material for the rail
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.8, 0.9)  # Metallic silver
+	material.metallic = 0.9
+	material.roughness = 0.2
+	material.emission_enabled = true
+	material.emission = Color(0.3, 0.5, 1.0)  # Slight blue glow
+	material.emission_energy_multiplier = 0.3
+
+	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP, material)
+
+	# Draw rail as a tube
+	var rail_radius: float = 0.15
+	var segments: int = int(rail.curve.get_baked_length() * 2)
+	segments = max(segments, 10)
+
+	for i in range(segments + 1):
+		var offset: float = (float(i) / segments) * rail.curve.get_baked_length()
+		var pos: Vector3 = rail.curve.sample_baked(offset)
+		var next_offset: float = min(offset + 0.1, rail.curve.get_baked_length())
+		var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
+
+		var forward: Vector3 = (next_pos - pos).normalized()
+		var right: Vector3 = forward.cross(Vector3.UP).normalized()
+		if right.length() < 0.1:
+			right = forward.cross(Vector3.RIGHT).normalized()
+
+		# Top and bottom points of the rail cylinder
+		immediate_mesh.surface_add_vertex(pos + right * rail_radius)
+		immediate_mesh.surface_add_vertex(pos - right * rail_radius)
+
+	immediate_mesh.surface_end()
+
+	rail.add_child(rail_visual)
 
 func generate_death_zone() -> void:
 	"""Generate death zone below the arena"""

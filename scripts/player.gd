@@ -88,6 +88,11 @@ var bounce_count: int = 0  # Consecutive bounce counter
 var max_bounce_count: int = 3  # Maximum consecutive bounces for scaling
 var bounce_scale_per_count: float = 1.3  # Multiplier per consecutive bounce (30% increase)
 
+# Rail grinding (Sonic series style)
+var is_grinding: bool = false  # Currently grinding on a rail
+var current_rail: GrindRail = null  # The rail we're currently grinding on
+var grind_particles: CPUParticles3D = null  # Spark particles while grinding
+
 # Spin dash properties
 var is_charging_spin: bool = false
 var is_spin_dashing: bool = false  # Actively spinning from spindash
@@ -457,6 +462,63 @@ func _ready() -> void:
 		# Shadow settings - disable for performance
 		aura_light.shadow_enabled = false
 
+	# Create grind spark particles (Sonic series style)
+	if not grind_particles:
+		grind_particles = CPUParticles3D.new()
+		grind_particles.name = "GrindParticles"
+		add_child(grind_particles)
+
+		# Configure grind particles - sparks flying backward
+		grind_particles.emitting = false
+		grind_particles.amount = 30
+		grind_particles.lifetime = 0.6
+		grind_particles.one_shot = false  # Continuous emission while grinding
+		grind_particles.explosiveness = 0.1
+		grind_particles.randomness = 0.4
+		grind_particles.local_coords = false
+
+		# Set up particle mesh
+		var grind_particle_mesh: QuadMesh = QuadMesh.new()
+		grind_particle_mesh.size = Vector2(0.15, 0.15)
+		grind_particles.mesh = grind_particle_mesh
+
+		# Create material for bright spark particles
+		var grind_particle_material: StandardMaterial3D = StandardMaterial3D.new()
+		grind_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		grind_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for bright sparks
+		grind_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		grind_particle_material.vertex_color_use_as_albedo = true
+		grind_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		grind_particle_material.disable_receive_shadows = true
+		grind_particles.mesh.material = grind_particle_material
+
+		# Emission shape - point below player
+		grind_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
+
+		# Movement - sparks fly backward and down
+		grind_particles.direction = Vector3(0, -1, -1)  # Down and back
+		grind_particles.spread = 25.0
+		grind_particles.gravity = Vector3(0, -20.0, 0)
+		grind_particles.initial_velocity_min = 3.0
+		grind_particles.initial_velocity_max = 6.0
+
+		# Size over lifetime
+		grind_particles.scale_amount_min = 1.0
+		grind_particles.scale_amount_max = 1.5
+		var grind_scale_curve: Curve = Curve.new()
+		grind_scale_curve.add_point(Vector2(0, 1.2))
+		grind_scale_curve.add_point(Vector2(0.3, 1.0))
+		grind_scale_curve.add_point(Vector2(1, 0.0))
+		grind_particles.scale_amount_curve = grind_scale_curve
+
+		# Color gradient - bright yellow/orange sparks
+		var grind_gradient: Gradient = Gradient.new()
+		grind_gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright yellow-white
+		grind_gradient.add_point(0.2, Color(1.0, 0.8, 0.2, 1.0))  # Yellow
+		grind_gradient.add_point(0.5, Color(1.0, 0.4, 0.1, 0.8))  # Orange
+		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
+		grind_particles.color_ramp = grind_gradient
+
 	if not is_multiplayer_authority():
 		return
 
@@ -622,10 +684,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			mouse_captured = true
 
-	# Jump - Space key (with double jump)
+	# Jump - Space key (with double jump, and jumping off rails)
 	if event is InputEventKey and event.keycode == KEY_SPACE:
-		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps)
+		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps, " | Grinding: ", is_grinding)
 		if event.pressed and not event.echo:
+			# Jump off rail if grinding
+			if is_grinding:
+				print("JUMPING OFF RAIL!")
+				jump_off_rail()
+				return
+
 			if jump_count < max_jumps:
 				var jump_strength: float = current_jump_impulse
 				# Second jump is slightly weaker
@@ -1537,3 +1605,86 @@ func update_charge_meter_ui() -> void:
 	else:
 		# Hide meter when not charging anything
 		charge_meter_ui.visible = false
+
+# ============================================================================
+# RAIL GRINDING SYSTEM
+# ============================================================================
+
+func start_grinding(rail: GrindRail) -> void:
+	"""Called by rail when player enters grinding state"""
+	if is_grinding:
+		return
+
+	print("Started grinding on rail!")
+	is_grinding = true
+	current_rail = rail
+	jump_count = 0  # Reset jumps when starting grind
+
+	# Disable normal physics interactions while grinding
+	gravity_scale = 0.0
+	linear_damp = 0.0
+
+	# Start spark particles
+	if grind_particles:
+		grind_particles.emitting = true
+
+	# Play a grind sound (reuse spin sound for now)
+	if spin_sound and spin_sound.stream:
+		spin_sound.pitch_scale = 0.8
+		spin_sound.play()
+
+func stop_grinding() -> void:
+	"""Called by rail when player exits grinding state"""
+	if not is_grinding:
+		return
+
+	print("Stopped grinding!")
+	is_grinding = false
+	current_rail = null
+
+	# Re-enable normal physics
+	gravity_scale = 2.5
+	linear_damp = 0.5
+
+	# Stop spark particles
+	if grind_particles:
+		grind_particles.emitting = false
+
+func launch_from_rail(velocity: Vector3) -> void:
+	"""Called by rail when player reaches the end of the rail"""
+	if not is_grinding:
+		return
+
+	print("Launched from rail end with velocity: ", velocity)
+	stop_grinding()
+
+	# Apply the launch velocity
+	linear_velocity = velocity
+	# Add upward boost
+	apply_central_impulse(Vector3.UP * 20.0)
+
+func jump_off_rail() -> void:
+	"""Player manually jumps off the rail"""
+	if not is_grinding or not current_rail:
+		return
+
+	# Get current grinding velocity from rail
+	var grind_velocity: Vector3 = current_rail.detach_grinder(self)
+	if not grind_velocity:
+		grind_velocity = linear_velocity
+
+	stop_grinding()
+
+	# Apply jump impulse upward
+	var jump_strength: float = current_jump_impulse * 1.2  # Bonus for rail jump
+	linear_velocity = grind_velocity
+	apply_central_impulse(Vector3.UP * jump_strength)
+
+	# Play jump sound
+	if jump_sound and jump_sound.stream:
+		play_jump_sound.rpc()
+
+	# Spawn jump particle effect
+	spawn_jump_bounce_effect(1.2)
+
+	print("Jumped off rail! Velocity: ", linear_velocity)
