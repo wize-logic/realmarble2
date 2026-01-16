@@ -69,10 +69,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if is_collected:
-		# Handle respawn timer
-		respawn_timer -= delta
-		if respawn_timer <= 0.0:
-			respawn_pickup()
+		# Don't auto-respawn during gameplay - pickups stay collected
 		return
 
 	# Update animation time

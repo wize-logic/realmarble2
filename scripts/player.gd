@@ -1088,9 +1088,8 @@ func fall_death() -> void:
 	if world and world.has_method("add_death"):
 		world.add_death(player_id)
 
-	# Drop orbs and ability before falling to death
-	spawn_death_orb()
-	drop_ability()
+	# Don't drop orbs or abilities when falling to death
+	# (Players lose their items in the void)
 
 	is_falling_to_death = true
 	fall_death_timer = 0.0
@@ -1215,6 +1214,12 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	else:
 		# No ground found - use current height as fallback
 		spawn_pos = global_position + placement_offset
+
+	# Don't spawn abilities in or near the death zone
+	const MIN_SAFE_Y: float = -40.0
+	if spawn_pos.y < MIN_SAFE_Y:
+		print("Cannot spawn ability pickup - too close to death zone (Y: %.1f)" % spawn_pos.y)
+		return
 
 	# Instantiate the ability pickup
 	var pickup: Area3D = AbilityPickupScene.instantiate()
@@ -1405,6 +1410,12 @@ func spawn_death_orb() -> void:
 		else:
 			# No ground found - use current height as fallback
 			spawn_pos = global_position + horizontal_offset
+
+		# Don't spawn orbs in or near the death zone
+		const MIN_SAFE_Y: float = -40.0
+		if spawn_pos.y < MIN_SAFE_Y:
+			print("Skipping orb spawn - too close to death zone (Y: %.1f)" % spawn_pos.y)
+			continue
 
 		# Instantiate the orb
 		var orb: Area3D = OrbScene.instantiate()

@@ -701,6 +701,16 @@ func end_deathmatch() -> void:
 	# Hide HUD when game ends
 	if game_hud:
 		game_hud.visible = false
+
+	# Clear all abilities and orbs when match ends
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("clear_all"):
+		ability_spawner.clear_all()
+
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("clear_all"):
+		orb_spawner.clear_all()
+
 	print("Deathmatch ended!")
 
 	# Notify CrazyGames SDK that gameplay has stopped

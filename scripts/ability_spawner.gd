@@ -13,11 +13,11 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
 
-# Number of each ability type to spawn (increased for fuller map)
-@export var num_dash_attacks: int = 5
-@export var num_explosions: int = 4
-@export var num_guns: int = 7
-@export var num_swords: int = 4
+# Number of each ability type to spawn (reduced by half)
+@export var num_dash_attacks: int = 2
+@export var num_explosions: int = 2
+@export var num_guns: int = 4
+@export var num_swords: int = 2
 
 # Respawn settings
 @export var respawn_interval: float = 10.0  # Check respawn every 10 seconds
@@ -33,14 +33,8 @@ func _ready() -> void:
 	# Don't spawn automatically - wait for world to call spawn_abilities() when match starts
 
 func _process(delta: float) -> void:
-	# Server-side respawn timer
-	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
-		return
-
-	respawn_timer += delta
-	if respawn_timer >= respawn_interval:
-		respawn_timer = 0.0
-		check_and_respawn_pickups()
+	# Disabled: Don't auto-respawn abilities during gameplay
+	pass
 
 func spawn_abilities() -> void:
 	"""Spawn ability pickups at random 3D positions in the map volume"""
@@ -79,6 +73,9 @@ func spawn_abilities() -> void:
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground"""
+	const DEATH_ZONE_Y: float = -50.0  # Death zone position
+	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
+
 	# Generate random X and Z within bounds
 	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
 	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
@@ -96,7 +93,11 @@ func get_random_spawn_position() -> Vector3:
 	var result: Dictionary = space_state.intersect_ray(query)
 
 	if result:
-		# Found ground - spawn 1 unit above it
+		# Found ground - check if it's in death zone
+		var spawn_y: float = result.position.y + 1.0
+		if spawn_y < MIN_SAFE_Y:
+			# Too close to death zone - use safe fallback position
+			return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
 		return result.position + Vector3.UP * 1.0
 	else:
 		# No ground found - use middle Y as fallback
@@ -142,6 +143,14 @@ func spawn_random_ability(pos: Vector3) -> void:
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]
 	spawn_ability_at(pos, random_ability[0], random_ability[1], random_ability[2])
+
+func clear_all() -> void:
+	"""Clear all abilities without respawning (called when match ends)"""
+	for pickup in spawned_pickups:
+		if pickup:
+			pickup.queue_free()
+	spawned_pickups.clear()
+	print("Cleared all ability pickups")
 
 func respawn_all() -> void:
 	"""Clear and respawn all abilities (called when level is regenerated)"""
