@@ -20,9 +20,7 @@ var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 func _ready() -> void:
 	# Initialize RNG with unique seed
 	rng.randomize()
-	# Only spawn on server (authoritative)
-	if multiplayer.is_server() or multiplayer.multiplayer_peer == null:
-		call_deferred("spawn_orbs")
+	# Don't spawn automatically - wait for world to call spawn_orbs() when match starts
 
 func _process(delta: float) -> void:
 	# Server-side respawn timer
@@ -36,6 +34,10 @@ func _process(delta: float) -> void:
 
 func spawn_orbs() -> void:
 	"""Spawn orbs at random 3D positions in the map volume"""
+	# Only spawn on server (authoritative)
+	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
+		return
+
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 

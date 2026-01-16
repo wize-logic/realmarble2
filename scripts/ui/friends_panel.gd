@@ -3,16 +3,25 @@ extends PanelContainer
 ## Friends Panel UI
 ## Displays friends list and allows inviting friends to game
 
-@onready var friends_list_container: VBoxContainer = $MarginContainer/VBox/ScrollContainer/FriendsList
-@onready var online_count_label: Label = $MarginContainer/VBox/Header/OnlineCount
-@onready var total_count_label: Label = $MarginContainer/VBox/Header/TotalCount
-@onready var refresh_button: Button = $MarginContainer/VBox/Header/RefreshButton
-@onready var close_button: Button = $MarginContainer/VBox/Header/CloseButton
-@onready var no_friends_label: Label = $MarginContainer/VBox/NoFriends
+# Use get_node_or_null to avoid errors if nodes don't exist
+var friends_list_container: VBoxContainer = null
+var online_count_label: Label = null
+var total_count_label: Label = null
+var refresh_button: Button = null
+var close_button: Button = null
+var no_friends_label: Label = null
 
 signal closed
 
 func _ready() -> void:
+	# Initialize node references (safely)
+	friends_list_container = get_node_or_null("MarginContainer/VBox/ScrollContainer/FriendsList")
+	online_count_label = get_node_or_null("MarginContainer/VBox/Header/OnlineCount")
+	total_count_label = get_node_or_null("MarginContainer/VBox/Header/TotalCount")
+	refresh_button = get_node_or_null("MarginContainer/VBox/Header/RefreshButton")
+	close_button = get_node_or_null("MarginContainer/VBox/Header/CloseButton")
+	no_friends_label = get_node_or_null("MarginContainer/VBox/NoFriends")
+
 	# Connect signals
 	if FriendsManager:
 		FriendsManager.friends_list_updated.connect(_on_friends_list_updated)

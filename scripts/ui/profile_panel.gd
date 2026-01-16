@@ -3,25 +3,40 @@ extends PanelContainer
 ## Profile Panel UI
 ## Displays user profile information and stats
 
-@onready var username_label: Label = $MarginContainer/VBox/Header/Username
-@onready var profile_picture: TextureRect = $MarginContainer/VBox/Header/ProfilePicture
-@onready var auth_status_label: Label = $MarginContainer/VBox/Header/AuthStatus
-@onready var login_button: Button = $MarginContainer/VBox/Header/LoginButton
-@onready var link_account_button: Button = $MarginContainer/VBox/Header/LinkAccountButton
+# Use get_node_or_null to avoid errors if nodes don't exist
+var username_label: Label = null
+var profile_picture: TextureRect = null
+var auth_status_label: Label = null
+var login_button: Button = null
+var link_account_button: Button = null
 
 # Stats labels
-@onready var total_kills_label: Label = $MarginContainer/VBox/Stats/KillsValue
-@onready var total_deaths_label: Label = $MarginContainer/VBox/Stats/DeathsValue
-@onready var kd_ratio_label: Label = $MarginContainer/VBox/Stats/KDValue
-@onready var total_matches_label: Label = $MarginContainer/VBox/Stats/MatchesValue
-@onready var total_wins_label: Label = $MarginContainer/VBox/Stats/WinsValue
-@onready var win_rate_label: Label = $MarginContainer/VBox/Stats/WinRateValue
+var total_kills_label: Label = null
+var total_deaths_label: Label = null
+var kd_ratio_label: Label = null
+var total_matches_label: Label = null
+var total_wins_label: Label = null
+var win_rate_label: Label = null
 
-@onready var close_button: Button = $MarginContainer/VBox/Header/CloseButton
+var close_button: Button = null
 
 signal closed
 
 func _ready() -> void:
+	# Initialize node references (safely)
+	username_label = get_node_or_null("MarginContainer/VBox/Header/Username")
+	profile_picture = get_node_or_null("MarginContainer/VBox/Header/ProfilePicture")
+	auth_status_label = get_node_or_null("MarginContainer/VBox/Header/AuthStatus")
+	login_button = get_node_or_null("MarginContainer/VBox/Header/LoginButton")
+	link_account_button = get_node_or_null("MarginContainer/VBox/Header/LinkAccountButton")
+	total_kills_label = get_node_or_null("MarginContainer/VBox/Stats/KillsValue")
+	total_deaths_label = get_node_or_null("MarginContainer/VBox/Stats/DeathsValue")
+	kd_ratio_label = get_node_or_null("MarginContainer/VBox/Stats/KDValue")
+	total_matches_label = get_node_or_null("MarginContainer/VBox/Stats/MatchesValue")
+	total_wins_label = get_node_or_null("MarginContainer/VBox/Stats/WinsValue")
+	win_rate_label = get_node_or_null("MarginContainer/VBox/Stats/WinRateValue")
+	close_button = get_node_or_null("MarginContainer/VBox/Header/CloseButton")
+
 	# Connect signals
 	if ProfileManager:
 		ProfileManager.profile_loaded.connect(_on_profile_loaded)

@@ -53,7 +53,12 @@ var countdown_time: float = 0.0
 
 # Bot system
 var bot_counter: int = 0
+var pending_bot_count: int = 0  # Bots to spawn when game becomes active
 const BotAI = preload("res://scripts/bot_ai.gd")
+
+# Bot count selection dialog state (instance variables for proper closure sharing)
+var bot_count_dialog_closed: bool = false
+var bot_count_selected: int = 3
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
@@ -155,6 +160,15 @@ func _process(delta: float) -> void:
 				game_hud.visible = true
 			print("GO! Match started! game_active is now: ", game_active)
 
+			# Spawn pending bots now that match is active
+			if pending_bot_count > 0:
+				print("Spawning %d pending bots..." % pending_bot_count)
+				spawn_pending_bots()
+				pending_bot_count = 0
+
+			# Spawn abilities and orbs now that match is active
+			spawn_abilities_and_orbs()
+
 			# Notify CrazyGames SDK that gameplay has started
 			if CrazyGamesSDK:
 				CrazyGamesSDK.gameplay_start()
@@ -246,7 +260,7 @@ func _on_multiplayer_button_pressed() -> void:
 
 func _on_play_pressed() -> void:
 	"""Start practice mode with bots (renamed from practice button)"""
-	_on_practice_button_pressed()
+	await _on_practice_button_pressed()
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots - ask for bot count first"""
@@ -271,13 +285,16 @@ func _on_practice_button_pressed() -> void:
 		return
 
 	# Ask user how many bots they want
+	print("Calling ask_bot_count()...")
 	var bot_count_choice = await ask_bot_count()
+	print("ask_bot_count() returned: ", bot_count_choice)
 	if bot_count_choice < 0:
 		# User cancelled or error
 		print("Practice mode cancelled")
 		return
 
 	# Now start practice mode with the chosen bot count
+	print("Starting practice mode with %d bots..." % bot_count_choice)
 	start_practice_mode(bot_count_choice)
 
 func ask_bot_count() -> int:
@@ -340,9 +357,12 @@ func ask_bot_count() -> int:
 	separator.add_theme_constant_override("separation", 2)
 	vbox.add_child(separator)
 
+	# Reset instance variables for this dialog
+	bot_count_dialog_closed = false
+	bot_count_selected = 3  # Default
+
 	# Bot count options
 	var bot_counts = [1, 3, 5, 7, 10, 15]
-	var selected_count = 3  # Default
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -388,8 +408,15 @@ func ask_bot_count() -> int:
 		# FIX: Capture the value properly to avoid closure issue
 		var count_value = count  # Capture the current count value
 		button.pressed.connect(func():
-			selected_count = count_value  # Use captured value
+			print("=== BUTTON PRESSED CALLBACK START ===")
+			print("Button clicked for count: %d" % count_value)
+			bot_count_selected = count_value  # Use instance variable
+			print("bot_count_selected set to: %d" % bot_count_selected)
+			bot_count_dialog_closed = true  # Use instance variable
+			print("bot_count_dialog_closed set to: true")
 			dialog.hide()
+			print("dialog.hide() called")
+			print("=== BUTTON PRESSED CALLBACK END ===")
 		)
 		grid.add_child(button)
 
@@ -401,14 +428,19 @@ func ask_bot_count() -> int:
 	# Add dialog to scene
 	add_child(dialog)
 	dialog.popup_centered()
+	print("Dialog shown, waiting for user selection...")
 
-	# Wait for dialog to close
-	await dialog.visibility_changed
+	# Wait for user to select an option (flag-based waiting using instance variable)
+	while not bot_count_dialog_closed:
+		await get_tree().process_frame
+		print("Still waiting... bot_count_dialog_closed = ", bot_count_dialog_closed)
 
+	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
 
-	return selected_count
+	print("Bot count selected: %d" % bot_count_selected)
+	return bot_count_selected
 
 func start_practice_mode(bot_count: int) -> void:
 	"""Start practice mode with specified number of bots"""
@@ -440,12 +472,9 @@ func start_practice_mode(bot_count: int) -> void:
 	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
-	# Spawn requested number of bots for practice
-	print("Spawning %d bots for practice mode..." % bot_count)
-	for i in range(bot_count):
-		await get_tree().create_timer(0.5).timeout
-		spawn_bot()
-	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
+	# Store bot count to spawn after countdown
+	pending_bot_count = bot_count
+	print("Will spawn %d bots after countdown completes..." % bot_count)
 
 	# Start the deathmatch
 	start_deathmatch()
@@ -979,6 +1008,31 @@ func spawn_bot() -> void:
 	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
 	print("--- spawn_bot() complete ---")
 
+func spawn_pending_bots() -> void:
+	"""Spawn all pending bots (called when match becomes active)"""
+	print("spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
+	for i in range(pending_bot_count):
+		print("Spawning bot %d of %d" % [i + 1, pending_bot_count])
+		spawn_bot()
+		# Small delay between spawns for visual effect
+		if i < pending_bot_count - 1:  # Don't wait after last bot
+			await get_tree().create_timer(0.1).timeout
+	print("All pending bots spawned. Total players: ", get_tree().get_nodes_in_group("players").size())
+
+func spawn_abilities_and_orbs() -> void:
+	"""Trigger spawning of abilities and orbs when match becomes active"""
+	# Find and trigger ability spawner
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("spawn_abilities"):
+		ability_spawner.spawn_abilities()
+		print("Triggered ability spawning")
+
+	# Find and trigger orb spawner
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("spawn_orbs"):
+		orb_spawner.spawn_orbs()
+		print("Triggered orb spawning")
+
 # ============================================================================
 # COUNTDOWN SYSTEM
 # ============================================================================
@@ -1351,9 +1405,10 @@ func _create_marble_preview() -> void:
 	# Position camera to showcase the marble (slightly above and in front)
 	var marble_y = ground_position.y + 0.5
 	preview_camera.position = Vector3(-2, marble_y + 0.5, 3)
-	# Look at the marble at its actual position
-	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
+	# Add to tree first before calling look_at
 	preview_container.add_child(preview_camera)
+	# Look at the marble at its actual position (after adding to tree)
+	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
 	# Make this the current camera
 	preview_camera.make_current()
 
