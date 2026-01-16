@@ -97,6 +97,7 @@ var max_spin_charge: float = 1.5  # Max charge time in seconds
 var spin_cooldown: float = 0.0
 var spin_cooldown_time: float = 0.8  # Cooldown in seconds (reduced from 1.0)
 var charge_spin_rotation: float = 0.0  # For spin animation during charge
+var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash (faces reticle)
 
 # Level up system (3 levels max)
 var level: int = 0
@@ -569,21 +570,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 	if not marble_mesh:
 		return
 
-	if is_spin_dashing:
-		# RAPID SPINNING during spindash - use same rolling logic as normal movement but much faster
-		# This ensures the spin matches the forward rolling motion
-		var spin_speed: float = 100.0  # Very fast rolling speed for visual effect
-
-		# Get the dash direction (assuming forward if not stored)
-		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		if horizontal_vel.length() > 0.1:
-			var move_dir: Vector3 = horizontal_vel.normalized()
-			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # Perpendicular to movement
-			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
-		else:
-			# Fallback: spin around X axis (forward rolling)
-			marble_mesh.rotate_x(spin_speed * delta)
-	elif not is_charging_spin:
+	# Use normal rolling for both regular movement AND spin dash
+	if not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
 		var speed: float = horizontal_vel.length()
@@ -594,7 +582,10 @@ func _physics_process_marble_roll(delta: float) -> void:
 			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # 90 degree rotation (inverted for correct direction)
 
 			# Roll speed based on velocity (marble radius is 0.5)
+			# During spin dash, multiply by 3 for faster visual effect
 			var roll_speed: float = speed / 0.5  # Angular velocity = linear velocity / radius
+			if is_spin_dashing:
+				roll_speed *= 3.0
 
 			# Apply rotation
 			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
@@ -755,6 +746,21 @@ func _physics_process(delta: float) -> void:
 		if spin_dash_timer <= 0.0:
 			is_spin_dashing = false
 
+		# Apply small continuous force towards reticle during spin dash to maintain rolling direction
+		if is_spin_dashing:
+			var reticle_direction: Vector3 = Vector3.FORWARD
+			if camera:
+				reticle_direction = -camera.global_transform.basis.z
+				reticle_direction.y = 0
+				reticle_direction = reticle_direction.normalized()
+			elif camera_arm:
+				reticle_direction = -camera_arm.global_transform.basis.z
+				reticle_direction.y = 0
+				reticle_direction = reticle_direction.normalized()
+
+			# Apply gentle force to maintain direction (10% of normal roll force)
+			apply_central_force(reticle_direction * current_roll_force * 0.1)
+
 	# Charge spin dash if holding button
 	if is_charging_spin:
 		spin_charge += delta
@@ -902,44 +908,38 @@ func check_ground() -> void:
 		print("Ground state changed: ", is_grounded, " | Position: ", global_position)
 
 func execute_spin_dash() -> void:
-	"""Execute a Sonic-style spin dash"""
-	# Calculate dash direction based on camera or input
-	var dash_direction: Vector3 = Vector3.ZERO
+	"""Execute a Sonic-style spin dash - Always dash towards reticle position"""
+	var dash_direction: Vector3 = Vector3.FORWARD
 
-	# Try to use current input direction
-	var input_dir := Input.get_vector("left", "right", "up", "down")
+	# ALWAYS use camera/reticle direction for the dash
+	if camera:
+		# Use camera forward direction (reticle position) including pitch
+		dash_direction = -camera.global_transform.basis.z
+		# Keep horizontal component only for dash direction
+		dash_direction.y = 0
+		dash_direction = dash_direction.normalized()
+	elif camera_arm:
+		# Fallback to camera_arm if camera not found
+		dash_direction = -camera_arm.global_transform.basis.z
+		dash_direction.y = 0
+		dash_direction = dash_direction.normalized()
 
-	if input_dir != Vector2.ZERO and camera_arm:
-		# Dash in input direction
-		var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
-		cam_forward.y = 0
-		cam_forward = cam_forward.normalized()
+	# Calculate target rotation to face the dash direction (for fallback rolling only)
+	# Use atan2 to get the angle on the Y axis (horizontal rotation)
+	var target_rotation_y: float = atan2(dash_direction.x, dash_direction.z)
 
-		var cam_right: Vector3 = camera_arm.global_transform.basis.x
-		cam_right.y = 0
-		cam_right = cam_right.normalized()
+	# Store the target rotation for maintaining orientation during spin dash
+	spin_dash_target_rotation = target_rotation_y
 
-		dash_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
-	else:
-		# No input - prioritize velocity direction (where player is moving/facing)
-		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		if horizontal_velocity.length() > 0.1:
-			# Use current movement direction
-			dash_direction = horizontal_velocity.normalized()
-		elif camera_arm:
-			# Not moving - use camera forward direction
-			dash_direction = -camera_arm.global_transform.basis.z
-			dash_direction.y = 0
-			dash_direction = dash_direction.normalized()
-		else:
-			# Fallback - dash forward
-			dash_direction = Vector3.FORWARD
+	# RESET marble mesh rotation completely to prevent any accumulated rotation from charging
+	if marble_mesh:
+		marble_mesh.rotation = Vector3.ZERO
 
 	# Calculate dash force based on charge (50% to 100% of max force)
 	var charge_multiplier: float = 0.5 + (spin_charge / max_spin_charge) * 0.5
 	var dash_impulse: float = current_spin_dash_force * charge_multiplier
 
-	# Apply the dash impulse
+	# Apply the dash impulse in the camera/reticle direction
 	apply_central_impulse(dash_direction * dash_impulse)
 
 	# Add small upward impulse for extra flair
@@ -956,7 +956,7 @@ func execute_spin_dash() -> void:
 	if spin_sound and spin_sound.stream:
 		play_spin_sound.rpc()
 
-	print("Spin dash! Charge: %.1f%% | Force: %.1f" % [charge_multiplier * 100, dash_impulse])
+	print("Spin dash towards reticle! Direction: %s | Rotation: %.1f° | Charge: %.1f%% | Force: %.1f" % [dash_direction, rad_to_deg(target_rotation_y), charge_multiplier * 100, dash_impulse])
 
 func start_bounce() -> void:
 	"""Start the bounce attack - Sonic Adventure 2 style"""
