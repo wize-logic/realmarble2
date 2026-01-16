@@ -12,11 +12,18 @@ var grinding_players: Array = []
 
 func _ready():
 	add_to_group("rails")
-	create_rail_visual()
-	create_detection_area()
+
+func initialize():
+	"""Call this after setting the curve to create visuals and collision"""
+	if curve:
+		create_rail_visual()
+		create_detection_area()
 
 func create_rail_visual():
 	# Create the visual rail mesh using CSGCylinder3D for the tube
+	if not curve:
+		return
+
 	var csg_path = CSGPolygon3D.new()
 	csg_path.polygon = PackedVector2Array([
 		Vector2(-rail_width/2, 0),
@@ -42,6 +49,9 @@ func create_rail_visual():
 
 func create_detection_area():
 	# Create an Area3D that follows the path for player detection
+	if not curve:
+		return
+
 	var path_follow = PathFollow3D.new()
 	path_follow.loop = false
 	add_child(path_follow)

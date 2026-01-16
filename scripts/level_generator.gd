@@ -346,6 +346,9 @@ func generate_rails() -> void:
 		# Apply curve to rail
 		rail.curve = curve
 
+		# Initialize rail visuals and collision after curve is set
+		rail.initialize()
+
 		# Store rail reference
 		rails.append(rail)
 
