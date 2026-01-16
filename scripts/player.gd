@@ -110,6 +110,14 @@ const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 # Ground detection
 var is_grounded: bool = false
 
+# Rail grinding system
+var is_grinding: bool = false
+var current_rail: Path3D = null
+var rail_progress: float = 0.0
+var rail_speed: float = 15.0
+var grinding_particles: CPUParticles3D = null
+var grinding_sound: AudioStreamPlayer3D = null
+
 # Ability system
 var current_ability: Node = null  # The currently equipped ability
 
@@ -468,6 +476,71 @@ func _ready() -> void:
 	# Create charge meter UI
 	create_charge_meter_ui()
 
+	# Set up grinding particle effect (sparks behind player)
+	if not grinding_particles:
+		grinding_particles = CPUParticles3D.new()
+		grinding_particles.name = "GrindingParticles"
+		add_child(grinding_particles)
+
+		# Configure grinding particles - sparks flying behind
+		grinding_particles.emitting = false
+		grinding_particles.amount = 50
+		grinding_particles.lifetime = 0.5
+		grinding_particles.lifetime_randomness = 0.3
+		grinding_particles.explosiveness = 0.0
+		grinding_particles.randomness = 0.2
+		grinding_particles.local_coords = false
+
+		# Set up particle mesh - small sparks
+		var spark_mesh: QuadMesh = QuadMesh.new()
+		spark_mesh.size = Vector2(0.1, 0.1)
+		grinding_particles.mesh = spark_mesh
+
+		# Create material for bright sparks
+		var spark_material: StandardMaterial3D = StandardMaterial3D.new()
+		spark_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		spark_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		spark_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		spark_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
+		spark_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		spark_material.disable_receive_shadows = true
+		grinding_particles.mesh.material = spark_material
+
+		# Emission shape - point behind player
+		grinding_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		grinding_particles.emission_sphere_radius = 0.3
+
+		# Movement - sparks fly backwards and down
+		grinding_particles.direction = Vector3(0, -1, 0)
+		grinding_particles.spread = 45.0
+		grinding_particles.gravity = Vector3(0, -20.0, 0)
+		grinding_particles.initial_velocity_min = 5.0
+		grinding_particles.initial_velocity_max = 10.0
+
+		# Size - start small, fade out
+		grinding_particles.scale_amount_min = 0.8
+		grinding_particles.scale_amount_max = 1.5
+		var grind_scale_curve: Curve = Curve.new()
+		grind_scale_curve.add_point(Vector2(0, 1.0))
+		grind_scale_curve.add_point(Vector2(0.5, 0.5))
+		grind_scale_curve.add_point(Vector2(1, 0.0))
+		grinding_particles.scale_amount_curve = grind_scale_curve
+
+		# Color gradient - bright yellow/orange fading to red
+		var grind_gradient: Gradient = Gradient.new()
+		grind_gradient.add_point(0.0, Color(1.0, 1.0, 0.6, 1.0))
+		grind_gradient.add_point(0.3, Color(1.0, 0.6, 0.2, 0.8))
+		grind_gradient.add_point(1.0, Color(1.0, 0.2, 0.0, 0.0))
+		grinding_particles.color_ramp = grind_gradient
+
+	# Set up grinding sound
+	if not grinding_sound:
+		grinding_sound = AudioStreamPlayer3D.new()
+		grinding_sound.name = "GrindingSound"
+		add_child(grinding_sound)
+		grinding_sound.max_distance = 30.0
+		grinding_sound.volume_db = -2.0
+
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
 	var spawn_index: int = player_id % spawns.size()
@@ -731,6 +804,11 @@ func _physics_process(delta: float) -> void:
 
 	# Check if marble is on ground using raycast
 	check_ground()
+
+	# Update rail grinding (takes priority over normal movement)
+	if is_grinding:
+		update_grinding(delta)
+		return  # Skip normal physics when grinding
 
 	# Update bounce cooldown
 	if bounce_cooldown > 0.0:
@@ -1427,6 +1505,119 @@ func spawn_death_orb() -> void:
 		print("Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
 
 	print("Total %d orbs dropped by player %s" % [num_orbs, name])
+
+# ============================================================================
+# RAIL GRINDING SYSTEM
+# ============================================================================
+
+func start_grinding(rail: Path3D) -> void:
+	"""Start grinding on a rail"""
+	if is_grinding:
+		return
+
+	is_grinding = true
+	current_rail = rail
+
+	# Find nearest point on rail
+	var rail_data = rail.get_nearest_point_on_rail(global_position)
+	rail_progress = rail_data["offset"]
+
+	# Start grinding particles
+	if grinding_particles:
+		grinding_particles.emitting = true
+
+	# Play grinding sound loop
+	if grinding_sound and not grinding_sound.playing:
+		grinding_sound.play()
+
+	print("Player %s started grinding on rail" % name)
+
+func stop_grinding() -> void:
+	"""Stop grinding and return to normal movement"""
+	if not is_grinding:
+		return
+
+	is_grinding = false
+	current_rail = null
+
+	# Stop grinding particles
+	if grinding_particles:
+		grinding_particles.emitting = false
+
+	# Stop grinding sound
+	if grinding_sound:
+		grinding_sound.stop()
+
+	print("Player %s stopped grinding" % name)
+
+func update_grinding(delta: float) -> void:
+	"""Update rail grinding physics"""
+	if not is_grinding or not current_rail:
+		return
+
+	# Get current input direction
+	var input_dir := Input.get_vector("left", "right", "up", "down")
+
+	# Allow jumping off the rail
+	if Input.is_action_just_pressed("jump"):
+		stop_grinding()
+		# Apply upward impulse
+		apply_central_impulse(Vector3.UP * current_jump_impulse * 1.2)
+		jump_count = 1  # Used one jump
+		play_jump_sound()
+		return
+
+	# Move along the rail
+	var rail_curve = current_rail.curve
+	if not rail_curve:
+		stop_grinding()
+		return
+
+	# Calculate movement speed along rail (affected by input)
+	var move_speed = rail_speed
+	if input_dir.y < 0:  # Forward input increases speed
+		move_speed *= 1.5
+	elif input_dir.y > 0:  # Backward input slows down
+		move_speed *= 0.5
+
+	# Update progress along rail
+	rail_progress += move_speed * delta
+
+	# Check if we've reached the end of the rail
+	var rail_length = rail_curve.get_baked_length()
+	if rail_progress >= rail_length or rail_progress < 0:
+		stop_grinding()
+		# Launch player forward
+		var forward_vel = linear_velocity.normalized() * rail_speed * 0.8
+		linear_velocity = forward_vel
+		return
+
+	# Get position and direction on rail
+	var rail_point = rail_curve.sample_baked(rail_progress)
+	var rail_forward = rail_curve.sample_baked(rail_progress + 0.5) - rail_point
+	rail_forward = rail_forward.normalized()
+
+	# Convert to global coordinates
+	var target_pos = current_rail.to_global(rail_point)
+	var global_forward = current_rail.global_transform.basis * rail_forward
+
+	# Smoothly move player to rail position
+	var direction_to_rail = (target_pos - global_position)
+	if direction_to_rail.length() > 0.5:
+		# Too far from rail, stop grinding
+		stop_grinding()
+		return
+
+	# Lock player to rail position
+	global_position = target_pos
+
+	# Set velocity along rail direction
+	linear_velocity = global_forward * move_speed
+
+	# Update particle position
+	if grinding_particles:
+		grinding_particles.global_position = global_position
+		grinding_particles.direction = -global_forward + Vector3(0, -1, 0)
 
 # ============================================================================
 # UI SYSTEM

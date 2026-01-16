@@ -3,13 +3,18 @@ extends Node3D
 ## Procedural Level Generator
 ## Creates Marble Blast Gold / Quake 3 style arenas
 
+# Preload rail scene
+const RailScene = preload("res://rail.tscn")
+
 @export var level_seed: int = 0
 @export var arena_size: float = 120.0
 @export var platform_count: int = 24
 @export var ramp_count: int = 12
+@export var rail_count: int = 8
 
 var noise: FastNoiseLite
 var platforms: Array = []
+var rails: Array = []
 
 func _ready() -> void:
 	generate_level()
@@ -32,6 +37,7 @@ func generate_level() -> void:
 	generate_ramps()
 	generate_walls()
 	generate_death_zone()
+	generate_rails()
 
 	print("Level generation complete!")
 
@@ -40,6 +46,7 @@ func clear_level() -> void:
 	for child in get_children():
 		child.queue_free()
 	platforms.clear()
+	rails.clear()
 
 func generate_main_floor() -> void:
 	"""Generate the main arena floor"""
@@ -273,3 +280,75 @@ func get_spawn_points() -> PackedVector3Array:
 			spawns.append(spawn_pos)
 
 	return spawns
+
+func generate_rails() -> void:
+	"""Generate curved rails outside the arena for grinding"""
+	print("Generating rails...")
+
+	for i in range(rail_count):
+		var angle: float = (float(i) / rail_count) * TAU
+		var rail_distance: float = arena_size * 0.65  # Outside the walls
+
+		# Create rail path
+		var rail: Path3D = RailScene.instantiate()
+		rail.name = "Rail" + str(i)
+		add_child(rail)
+
+		# Create curved path for the rail
+		var curve: Curve3D = Curve3D.new()
+
+		# Rail types - mix of straight, curved, and spiral rails
+		var rail_type: int = i % 3
+
+		match rail_type:
+			0:  # Curved arc rail
+				var arc_length: int = 8
+				var arc_angle: float = TAU / 3.0  # 120 degrees
+				var start_height: float = 5.0 + randf() * 10.0
+				var end_height: float = start_height + randf_range(-5.0, 5.0)
+
+				for j in range(arc_length + 1):
+					var t: float = float(j) / arc_length
+					var current_angle: float = angle + (t - 0.5) * arc_angle
+					var x: float = cos(current_angle) * rail_distance
+					var z: float = sin(current_angle) * rail_distance
+					var y: float = lerp(start_height, end_height, t)
+					curve.add_point(Vector3(x, y, z))
+
+			1:  # Spiral rail
+				var spiral_length: int = 12
+				var spiral_radius_start: float = rail_distance
+				var spiral_radius_end: float = rail_distance * 0.8
+				var height_start: float = 2.0
+				var height_end: float = 15.0
+
+				for j in range(spiral_length + 1):
+					var t: float = float(j) / spiral_length
+					var current_angle: float = angle + t * TAU * 0.75
+					var current_radius: float = lerp(spiral_radius_start, spiral_radius_end, t)
+					var x: float = cos(current_angle) * current_radius
+					var z: float = sin(current_angle) * current_radius
+					var y: float = lerp(height_start, height_end, t)
+					curve.add_point(Vector3(x, y, z))
+
+			2:  # Wave rail (up and down)
+				var wave_length: int = 10
+				var wave_height: float = 8.0
+
+				for j in range(wave_length + 1):
+					var t: float = float(j) / wave_length
+					var current_angle: float = angle + (t - 0.5) * (TAU / 4.0)
+					var x: float = cos(current_angle) * rail_distance
+					var z: float = sin(current_angle) * rail_distance
+					var y: float = 8.0 + sin(t * TAU * 2.0) * wave_height
+					curve.add_point(Vector3(x, y, z))
+
+		# Apply curve to rail
+		rail.curve = curve
+
+		# Store rail reference
+		rails.append(rail)
+
+		print("Generated rail %d (%s)" % [i, ["Arc", "Spiral", "Wave"][rail_type]])
+
+	print("Generated %d rails outside arena" % rail_count)
