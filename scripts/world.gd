@@ -8,14 +8,26 @@ extends Node
 @onready var menu_music: AudioStreamPlayer = get_node_or_null("%MenuMusic")
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
 @onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
+@onready var game_hud: Control = get_node_or_null("GameHUD/HUD")
 
 # Multiplayer UI
 var lobby_ui: Control = null
 const LobbyUI = preload("res://lobby_ui.tscn")
 
+# Profile and Friends UI
+var profile_panel: PanelContainer = null
+var friends_panel: PanelContainer = null
+const ProfilePanelScript = preload("res://scripts/ui/profile_panel.gd")
+const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
+
 # Countdown UI (created dynamically)
 var countdown_label: Label = null
 var countdown_sound: AudioStreamPlayer = null
+
+# Marble Preview (for main menu)
+var marble_preview: Node3D = null
+var preview_camera: Camera3D = null
+var preview_light: DirectionalLight3D = null
 
 # Game Settings
 var sensitivity: float = 0.005
@@ -72,6 +84,15 @@ func _ready() -> void:
 	add_child(lobby_ui)
 	lobby_ui.visible = false  # Hidden by default
 
+	# Initialize profile panel
+	_create_profile_panel()
+
+	# Initialize friends panel
+	_create_friends_panel()
+
+	# Initialize marble preview (replaces dolly camera)
+	_create_marble_preview()
+
 	# Connect multiplayer manager signals
 	if MultiplayerManager:
 		MultiplayerManager.player_connected.connect(_on_multiplayer_player_connected)
@@ -86,6 +107,10 @@ func _ready() -> void:
 
 	# Auto-load music from default directory with fallback
 	_auto_load_music()
+
+	# Hide HUD initially (only shown during active gameplay)
+	if game_hud:
+		game_hud.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
@@ -125,7 +150,14 @@ func _process(delta: float) -> void:
 			game_active = true
 			if countdown_label:
 				countdown_label.visible = false
+			# Show HUD when game starts
+			if game_hud:
+				game_hud.visible = true
 			print("GO! Match started! game_active is now: ", game_active)
+
+			# Notify CrazyGames SDK that gameplay has started
+			if CrazyGamesSDK:
+				CrazyGamesSDK.gameplay_start()
 
 	# Handle deathmatch timer
 	if game_active:
@@ -384,10 +416,11 @@ func start_practice_mode(bot_count: int) -> void:
 
 	if main_menu:
 		main_menu.hide()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+	# Hide marble preview when starting gameplay
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = false
 	if menu_music:
 		menu_music.stop()
 
@@ -434,20 +467,27 @@ func _on_garage_pressed() -> void:
 	print("Garage - Not implemented yet")
 
 func _on_profile_pressed() -> void:
-	"""Profile placeholder"""
-	print("Profile - Not implemented yet")
+	"""Show profile panel"""
+	if profile_panel:
+		profile_panel.show_panel()
+	if main_menu:
+		main_menu.hide()
 
 func _on_friends_pressed() -> void:
-	"""Friends placeholder"""
-	print("Friends - Not implemented yet")
+	"""Show friends panel"""
+	if friends_panel:
+		friends_panel.show_panel()
+	if main_menu:
+		main_menu.hide()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+	# Hide marble preview when starting gameplay
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = false
 	if menu_music:
 		menu_music.stop()
 
@@ -478,6 +518,9 @@ func _on_join_button_pressed() -> void:
 		main_menu.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+	# Hide marble preview when starting gameplay
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = false
 	if menu_music:
 		menu_music.stop()
 
@@ -539,11 +582,12 @@ func show_multiplayer_lobby() -> void:
 		# Hide main menu
 		if main_menu:
 			main_menu.visible = false
-		# Hide blur and camera
+		# Hide blur
 		if has_node("Menu/Blur"):
 			$Menu/Blur.hide()
-		if has_node("Menu/DollyCamera"):
-			$Menu/DollyCamera.hide()
+		# Hide marble preview when showing lobby
+		if has_node("MarblePreview"):
+			get_node("MarblePreview").visible = false
 		# Show mouse cursor
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -556,11 +600,11 @@ func show_main_menu() -> void:
 	"""Show the main menu"""
 	if main_menu:
 		main_menu.visible = true
-	# Show blur and camera
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.show()
+	# Show marble preview and make camera current
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = true
+	if preview_camera:
+		preview_camera.make_current()
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
@@ -599,6 +643,10 @@ func start_deathmatch() -> void:
 	player_scores.clear()
 	player_deaths.clear()
 
+	# Notify CrazyGames SDK that gameplay is about to start
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()  # Ensure clean state
+
 	# Start countdown
 	countdown_active = true
 	countdown_time = 3.0  # 3 seconds: "READY" (1s), "SET" (1s), "GO!" (1s)
@@ -621,7 +669,14 @@ func end_deathmatch() -> void:
 
 	game_active = false
 	countdown_active = false  # Make sure countdown is also stopped
+	# Hide HUD when game ends
+	if game_hud:
+		game_hud.visible = false
 	print("Deathmatch ended!")
+
+	# Notify CrazyGames SDK that gameplay has stopped
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()
 
 	# Stop gameplay music
 	if gameplay_music and gameplay_music.has_method("stop_playlist"):
@@ -681,19 +736,21 @@ func return_to_main_menu() -> void:
 	# Reset bot counter
 	bot_counter = 0
 
-	# Hide countdown label if visible
+	# Hide countdown label and HUD if visible
 	if countdown_label:
 		countdown_label.visible = false
+	if game_hud:
+		game_hud.visible = false
 
 	# Show main menu
 	if main_menu:
 		main_menu.show()
 
-	# Show blur and dolly camera
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
-	if has_node("Menu/DollyCamera"):
-		$Menu/DollyCamera.show()
+	# Show marble preview and make camera current
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = true
+	if preview_camera:
+		preview_camera.make_current()
 
 	# Start menu music
 	if menu_music:
@@ -925,6 +982,414 @@ func spawn_bot() -> void:
 # ============================================================================
 # COUNTDOWN SYSTEM
 # ============================================================================
+
+func _apply_button_style(button: Button, font_size: int = 20) -> void:
+	"""Apply style guide button styling to a button"""
+	# Normal state
+	var button_normal = StyleBoxFlat.new()
+	button_normal.bg_color = Color(0.15, 0.15, 0.2, 0.8)
+	button_normal.set_corner_radius_all(8)
+	button_normal.border_color = Color(0.3, 0.7, 1, 0.4)
+	button_normal.set_border_width_all(2)
+
+	# Hover state
+	var button_hover = StyleBoxFlat.new()
+	button_hover.bg_color = Color(0.2, 0.3, 0.4, 0.9)
+	button_hover.set_corner_radius_all(8)
+	button_hover.border_color = Color(0.3, 0.7, 1, 0.8)
+	button_hover.set_border_width_all(2)
+
+	# Pressed state
+	var button_pressed = StyleBoxFlat.new()
+	button_pressed.bg_color = Color(0.3, 0.5, 0.7, 1)
+	button_pressed.set_corner_radius_all(8)
+	button_pressed.border_color = Color(0.4, 0.8, 1, 1)
+	button_pressed.set_border_width_all(2)
+
+	# Apply styles
+	button.add_theme_stylebox_override("normal", button_normal)
+	button.add_theme_stylebox_override("hover", button_hover)
+	button.add_theme_stylebox_override("pressed", button_pressed)
+	button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	button.add_theme_font_size_override("font_size", font_size)
+
+func _create_profile_panel() -> void:
+	"""Create the profile panel UI following style guide"""
+	# Create the panel
+	profile_panel = PanelContainer.new()
+	profile_panel.name = "ProfilePanel"
+	profile_panel.set_script(ProfilePanelScript)
+
+	# Center the panel (600x700px as per style guide)
+	profile_panel.set_anchors_preset(Control.PRESET_CENTER)
+	profile_panel.anchor_left = 0.5
+	profile_panel.anchor_right = 0.5
+	profile_panel.anchor_top = 0.5
+	profile_panel.anchor_bottom = 0.5
+	profile_panel.offset_left = -300
+	profile_panel.offset_right = 300
+	profile_panel.offset_top = -350
+	profile_panel.offset_bottom = 350
+	profile_panel.custom_minimum_size = Vector2(600, 700)
+
+	# Apply panel style from style guide
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	panel_style.set_border_width_all(3)
+	profile_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 25px margins as per style guide
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 25)
+	margin.add_theme_constant_override("margin_right", 25)
+	margin.add_theme_constant_override("margin_top", 25)
+	margin.add_theme_constant_override("margin_bottom", 25)
+	profile_panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+
+	# Header with title
+	var header = HBoxContainer.new()
+	header.name = "Header"
+	vbox.add_child(header)
+
+	var username_label = Label.new()
+	username_label.name = "Username"
+	username_label.text = "PROFILE"
+	username_label.add_theme_font_size_override("font_size", 32)
+	username_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	username_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(username_label)
+
+	# Close button with style
+	var close_btn = Button.new()
+	close_btn.name = "CloseButton"
+	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(50, 50)
+	_apply_button_style(close_btn, 20)
+	close_btn.pressed.connect(_on_profile_panel_close_pressed)
+	header.add_child(close_btn)
+
+	# Separator
+	var sep1 = HSeparator.new()
+	vbox.add_child(sep1)
+
+	# Auth section
+	var auth_hbox = HBoxContainer.new()
+	auth_hbox.add_theme_constant_override("separation", 10)
+	vbox.add_child(auth_hbox)
+
+	var auth_status = Label.new()
+	auth_status.name = "AuthStatus"
+	auth_status.text = "GUEST"
+	auth_status.add_theme_font_size_override("font_size", 16)
+	auth_status.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	auth_hbox.add_child(auth_status)
+
+	var spacer1 = Control.new()
+	spacer1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	auth_hbox.add_child(spacer1)
+
+	var login_btn = Button.new()
+	login_btn.name = "LoginButton"
+	login_btn.text = "LOGIN"
+	login_btn.custom_minimum_size = Vector2(120, 40)
+	_apply_button_style(login_btn, 18)
+	auth_hbox.add_child(login_btn)
+
+	var link_btn = Button.new()
+	link_btn.name = "LinkAccountButton"
+	link_btn.text = "LINK ACCOUNT"
+	link_btn.custom_minimum_size = Vector2(150, 40)
+	link_btn.visible = false
+	_apply_button_style(link_btn, 18)
+	auth_hbox.add_child(link_btn)
+
+	# Placeholder for profile picture
+	var pic = TextureRect.new()
+	pic.name = "ProfilePicture"
+	pic.custom_minimum_size = Vector2(100, 100)
+	pic.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	vbox.add_child(pic)
+
+	# Stats section header
+	var stats_header = Label.new()
+	stats_header.text = "STATISTICS"
+	stats_header.add_theme_font_size_override("font_size", 24)
+	stats_header.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	stats_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(stats_header)
+
+	# Separator
+	var sep2 = HSeparator.new()
+	vbox.add_child(sep2)
+
+	# Stats grid
+	var stats_grid = GridContainer.new()
+	stats_grid.name = "Stats"
+	stats_grid.columns = 2
+	stats_grid.add_theme_constant_override("h_separation", 20)
+	stats_grid.add_theme_constant_override("v_separation", 10)
+	vbox.add_child(stats_grid)
+
+	# Add stat labels with proper styling
+	var stat_names = ["KILLS", "DEATHS", "K/D RATIO", "MATCHES", "WINS", "WIN RATE"]
+	var stat_keys = ["Kills", "Deaths", "KD", "Matches", "Wins", "WinRate"]
+
+	for i in stat_names.size():
+		var label = Label.new()
+		label.text = stat_names[i] + ":"
+		label.add_theme_font_size_override("font_size", 18)
+		label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+		stats_grid.add_child(label)
+
+		var value = Label.new()
+		value.name = stat_keys[i] + "Value"
+		value.text = "0"
+		value.add_theme_font_size_override("font_size", 18)
+		value.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		stats_grid.add_child(value)
+
+	# Set mouse filter to stop clicks from going through
+	profile_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Add panel to Menu CanvasLayer (same as options_menu and pause_menu)
+	if has_node("Menu"):
+		get_node("Menu").add_child(profile_panel)
+	else:
+		add_child(profile_panel)
+
+	# Start hidden
+	profile_panel.visible = false
+
+	print("Profile panel created")
+
+func _create_friends_panel() -> void:
+	"""Create the friends panel UI following style guide"""
+	# Create the panel
+	friends_panel = PanelContainer.new()
+	friends_panel.name = "FriendsPanel"
+	friends_panel.set_script(FriendsPanelScript)
+
+	# Center the panel (600x700px as per style guide)
+	friends_panel.set_anchors_preset(Control.PRESET_CENTER)
+	friends_panel.anchor_left = 0.5
+	friends_panel.anchor_right = 0.5
+	friends_panel.anchor_top = 0.5
+	friends_panel.anchor_bottom = 0.5
+	friends_panel.offset_left = -300
+	friends_panel.offset_right = 300
+	friends_panel.offset_top = -350
+	friends_panel.offset_bottom = 350
+	friends_panel.custom_minimum_size = Vector2(600, 700)
+
+	# Apply panel style from style guide
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	panel_style.set_border_width_all(3)
+	friends_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 25px margins as per style guide
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 25)
+	margin.add_theme_constant_override("margin_right", 25)
+	margin.add_theme_constant_override("margin_top", 25)
+	margin.add_theme_constant_override("margin_bottom", 25)
+	friends_panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+
+	# Header
+	var header = HBoxContainer.new()
+	header.name = "Header"
+	header.add_theme_constant_override("separation", 10)
+	vbox.add_child(header)
+
+	var title = Label.new()
+	title.text = "FRIENDS"
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+
+	var refresh_btn = Button.new()
+	refresh_btn.name = "RefreshButton"
+	refresh_btn.text = "REFRESH"
+	refresh_btn.custom_minimum_size = Vector2(100, 40)
+	_apply_button_style(refresh_btn, 16)
+	header.add_child(refresh_btn)
+
+	var close_btn = Button.new()
+	close_btn.name = "CloseButton"
+	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(50, 50)
+	_apply_button_style(close_btn, 20)
+	close_btn.pressed.connect(_on_friends_panel_close_pressed)
+	header.add_child(close_btn)
+
+	# Separator
+	var sep1 = HSeparator.new()
+	vbox.add_child(sep1)
+
+	# Friend count section
+	var count_hbox = HBoxContainer.new()
+	count_hbox.add_theme_constant_override("separation", 20)
+	vbox.add_child(count_hbox)
+
+	var online_count = Label.new()
+	online_count.name = "OnlineCount"
+	online_count.text = "ONLINE: 0"
+	online_count.add_theme_font_size_override("font_size", 16)
+	online_count.add_theme_color_override("font_color", Color(0.3, 1, 0.3, 1))
+	count_hbox.add_child(online_count)
+
+	var total_count = Label.new()
+	total_count.name = "TotalCount"
+	total_count.text = "TOTAL: 0"
+	total_count.add_theme_font_size_override("font_size", 16)
+	total_count.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	count_hbox.add_child(total_count)
+
+	# Separator
+	var sep2 = HSeparator.new()
+	vbox.add_child(sep2)
+
+	# No friends message
+	var no_friends = Label.new()
+	no_friends.name = "NoFriends"
+	no_friends.text = "NO FRIENDS YET\nAdd friends on CrazyGames!"
+	no_friends.add_theme_font_size_override("font_size", 18)
+	no_friends.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	no_friends.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	no_friends.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	no_friends.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(no_friends)
+
+	# Scroll container for friends list
+	var scroll = ScrollContainer.new()
+	scroll.name = "ScrollContainer"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(scroll)
+
+	var friends_list = VBoxContainer.new()
+	friends_list.name = "FriendsList"
+	friends_list.add_theme_constant_override("separation", 8)
+	scroll.add_child(friends_list)
+
+	# Set mouse filter to stop clicks from going through
+	friends_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Add panel to Menu CanvasLayer (same as options_menu and pause_menu)
+	if has_node("Menu"):
+		get_node("Menu").add_child(friends_panel)
+	else:
+		add_child(friends_panel)
+
+	# Start hidden
+	friends_panel.visible = false
+
+	print("Friends panel created")
+
+func _create_marble_preview() -> void:
+	"""Create marble preview for main menu - actual player marble"""
+	# Create a container for the marble preview
+	var preview_container = Node3D.new()
+	preview_container.name = "MarblePreview"
+
+	# Use raycast to find ground position
+	var space_state = get_viewport().get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(Vector3(0, 100, 0), Vector3(0, -100, 0))
+	var result = space_state.intersect_ray(query)
+
+	var ground_position = Vector3(0, 0, 0)
+	if result:
+		ground_position = result.position
+		print("Ground found at: ", ground_position)
+	else:
+		print("No ground found, using default position")
+
+	# Instantiate an actual player marble
+	var marble = Player.instantiate()
+	marble.name = "PreviewMarble"
+	# Position marble on ground (add 0.5 for marble radius so it sits on top)
+	marble.position = ground_position + Vector3(0, 0.5, 0)
+
+	# Disable physics and input for preview (it's just for display)
+	if marble is RigidBody3D:
+		marble.freeze = true  # Freeze physics
+		marble.set_process(false)  # Disable processing
+		marble.set_physics_process(false)  # Disable physics processing
+		marble.set_process_input(false)  # Disable input
+		marble.set_process_unhandled_input(false)  # Disable unhandled input
+
+	# Disable camera and UI elements from the marble
+	var marble_camera = marble.get_node_or_null("CameraArm/Camera3D")
+	if marble_camera:
+		marble_camera.queue_free()  # Remove the marble's camera
+	var crosshair = marble.get_node_or_null("TextureRect")
+	if crosshair:
+		crosshair.queue_free()  # Remove crosshair UI
+
+	preview_container.add_child(marble)
+	marble_preview = marble.get_node_or_null("MeshInstance3D")
+	if not marble_preview:
+		marble_preview = marble.get_node_or_null("MarbleMesh")
+
+	# Create preview camera positioned like Rocket League showcase
+	preview_camera = Camera3D.new()
+	preview_camera.name = "PreviewCamera"
+	# Position camera to showcase the marble (slightly above and in front)
+	var marble_y = ground_position.y + 0.5
+	preview_camera.position = Vector3(-2, marble_y + 0.5, 3)
+	# Look at the marble at its actual position
+	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
+	preview_container.add_child(preview_camera)
+	# Make this the current camera
+	preview_camera.make_current()
+
+	# Create directional light for good lighting
+	preview_light = DirectionalLight3D.new()
+	preview_light.name = "PreviewLight"
+	preview_light.light_energy = 1.2
+	preview_light.rotation_degrees = Vector3(-45, 45, 0)
+	preview_light.shadow_enabled = true
+	preview_container.add_child(preview_light)
+
+	# Add an additional fill light for better showcase
+	var fill_light = OmniLight3D.new()
+	fill_light.name = "FillLight"
+	fill_light.light_energy = 0.5
+	fill_light.position = Vector3(2, 1, 2)
+	preview_container.add_child(fill_light)
+
+	# Add to World root (Menu is a CanvasLayer for UI, can't hold 3D nodes)
+	add_child(preview_container)
+
+	print("Marble preview created")
+
+func _on_profile_panel_close_pressed() -> void:
+	"""Handle profile panel close button pressed"""
+	if profile_panel:
+		profile_panel.hide()
+	if main_menu:
+		main_menu.show()
+
+func _on_friends_panel_close_pressed() -> void:
+	"""Handle friends panel close button pressed"""
+	if friends_panel:
+		friends_panel.hide()
+	if main_menu:
+		main_menu.show()
 
 func create_countdown_ui() -> void:
 	"""Create the countdown UI elements"""

@@ -20,6 +20,9 @@ config/icon="res://icon.svg"
 
 Global="*res://scripts/Global.gd"
 MultiplayerManager="*res://scripts/multiplayer_manager.gd"
+CrazyGamesSDK="*res://scripts/crazygames_sdk.gd"
+ProfileManager="*res://scripts/profile_manager.gd"
+FriendsManager="*res://scripts/friends_manager.gd"
 
 [debug]
 

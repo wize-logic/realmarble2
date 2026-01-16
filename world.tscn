@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3 uid="uid://b57uspbprxc8"]
+[gd_scene load_steps=21 format=3 uid="uid://b57uspbprxc8"]
 
 [ext_resource type="Script" uid="uid://bd81ysdlqd6oy" path="res://scripts/world.gd" id="1_ho7yh"]
 [ext_resource type="Script" uid="uid://chl816vkrpda8" path="res://scripts/ui/fps_counter.gd" id="4_2328u"]
@@ -17,7 +17,6 @@
 [ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
 [ext_resource type="Script" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
 [ext_resource type="Script" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
-[ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="18_orbitcam"]
 [ext_resource type="PackedScene" uid="uid://rl_main_menu" path="res://rl_main_menu.tscn" id="19_rlmenu"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
@@ -39,42 +38,6 @@ fog_density = 0.0099
 fog_aerial_perspective = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
-
-[sub_resource type="Animation" id="Animation_ug7wi"]
-resource_name = "Dolly"
-length = 120.0
-loop_mode = 1
-tracks/0/type = "bezier"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("../DollyCamera:position:z")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"handle_modes": PackedInt32Array(0, 0, 0, 0),
-"points": PackedFloat32Array(0.659, -0.25, 0, 0.25, 0, -14.157, -0.25, 0, 0.25, 0, 13.2434, -0.25, 0, 0.25, 0, 0.659, -0.25, 0, 0.25, 0),
-"times": PackedFloat32Array(0, 30.0667, 89.9333, 120)
-}
-
-[sub_resource type="Animation" id="Animation_ei2s0"]
-length = 0.001
-tracks/0/type = "bezier"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("../DollyCamera:position:z")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"handle_modes": PackedInt32Array(0),
-"points": PackedFloat32Array(13.2434, -0.25, 0, 0.25, 0),
-"times": PackedFloat32Array(0)
-}
-
-[sub_resource type="AnimationLibrary" id="AnimationLibrary_lekn2"]
-_data = {
-&"Dolly": SubResource("Animation_ug7wi"),
-&"RESET": SubResource("Animation_ei2s0")
-}
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_nou27"]
 shader = ExtResource("4_p7mxg")
@@ -316,14 +279,8 @@ volume_db = -20.0
 autoplay = true
 bus = &"Music"
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="Menu"]
-root_node = NodePath("../Blur")
-libraries = {
-&"": SubResource("AnimationLibrary_lekn2")
-}
-autoplay = "Dolly"
-
 [node name="Blur" type="ColorRect" parent="Menu"]
+visible = false
 material = SubResource("ShaderMaterial_nou27")
 anchors_preset = 15
 anchor_right = 1.0
@@ -331,10 +288,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-
-[node name="DollyCamera" type="Camera3D" parent="Menu"]
-transform = Transform3D(-1, 0, 8.74228e-08, 0, 1, 0, -8.74228e-08, 0, -1, 0, 5.0, 15.0)
-script = ExtResource("18_orbitcam")
 
 [node name="Options" type="PanelContainer" parent="Menu"]
 unique_name_in_owner = true
