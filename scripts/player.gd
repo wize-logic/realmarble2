@@ -940,16 +940,14 @@ func execute_spin_dash() -> void:
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
 
-	# Calculate target rotation to face the dash direction
+	# Calculate target rotation to face the dash direction (for fallback rolling only)
 	# Use atan2 to get the angle on the Y axis (horizontal rotation)
 	var target_rotation_y: float = atan2(dash_direction.x, dash_direction.z)
 
 	# Store the target rotation for maintaining orientation during spin dash
 	spin_dash_target_rotation = target_rotation_y
 
-	# Rotate marble mesh to face the dash direction (no side-to-side flipping)
-	if marble_mesh:
-		marble_mesh.rotation.y = target_rotation_y
+	# DON'T set marble mesh Y rotation - let it roll naturally based on velocity
 
 	# Calculate dash force based on charge (50% to 100% of max force)
 	var charge_multiplier: float = 0.5 + (spin_charge / max_spin_charge) * 0.5
