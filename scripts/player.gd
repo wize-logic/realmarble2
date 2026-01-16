@@ -571,18 +571,25 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID FORWARD ROLLING during spindash - just like normal movement but faster
-		# This ensures the marble looks like it's rolling forward towards the reticle
-		var spin_speed: float = 100.0  # Very fast rolling speed for visual effect
+		# RAPID FORWARD ROLLING during spindash - based on ACTUAL velocity direction
+		# This ensures the rolling matches the actual movement, just like normal gameplay
+		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+		var speed: float = horizontal_vel.length()
 
-		# Calculate the direction we're facing (from stored target rotation)
-		var face_dir: Vector3 = Vector3(sin(spin_dash_target_rotation), 0, cos(spin_dash_target_rotation))
+		if speed > 0.1:
+			# Use actual movement direction for rolling (same as normal movement)
+			var move_dir: Vector3 = horizontal_vel.normalized()
+			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # Perpendicular to movement
 
-		# Calculate roll axis perpendicular to facing direction (same as normal movement)
-		var roll_axis: Vector3 = Vector3(face_dir.z, 0, -face_dir.x)
-
-		# Apply forward rolling rotation
-		marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
+			# Very fast rolling for visual effect
+			var spin_speed: float = 100.0
+			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
+		else:
+			# Fallback: use target rotation if not moving yet
+			var face_dir: Vector3 = Vector3(sin(spin_dash_target_rotation), 0, cos(spin_dash_target_rotation))
+			var roll_axis: Vector3 = Vector3(face_dir.z, 0, -face_dir.x)
+			var spin_speed: float = 100.0
+			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
@@ -754,6 +761,21 @@ func _physics_process(delta: float) -> void:
 		spin_dash_timer -= delta
 		if spin_dash_timer <= 0.0:
 			is_spin_dashing = false
+
+		# Apply small continuous force towards reticle during spin dash to maintain rolling direction
+		if is_spin_dashing:
+			var reticle_direction: Vector3 = Vector3.FORWARD
+			if camera:
+				reticle_direction = -camera.global_transform.basis.z
+				reticle_direction.y = 0
+				reticle_direction = reticle_direction.normalized()
+			elif camera_arm:
+				reticle_direction = -camera_arm.global_transform.basis.z
+				reticle_direction.y = 0
+				reticle_direction = reticle_direction.normalized()
+
+			# Apply gentle force to maintain direction (10% of normal roll force)
+			apply_central_force(reticle_direction * current_roll_force * 0.1)
 
 	# Charge spin dash if holding button
 	if is_charging_spin:
