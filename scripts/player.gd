@@ -75,6 +75,7 @@ var max_spin_charge: float = 1.5  # Max charge time in seconds
 var spin_cooldown: float = 0.0
 var spin_cooldown_time: float = 0.8  # Cooldown in seconds (reduced from 1.0)
 var charge_spin_rotation: float = 0.0  # For spin animation during charge
+var spin_dash_direction: Vector3 = Vector3.FORWARD  # Direction of the spin dash
 
 # Level up system (3 levels max)
 var level: int = 0
@@ -413,9 +414,17 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID SPINNING during spindash - spin on all axes
-		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin
-		marble_mesh.rotate_y(delta * 25.0)  # Add some tumble
+		# RAPID SPINNING during spindash - spin towards the reticle direction (no side-to-side)
+		# Calculate roll axis perpendicular to the dash direction (same as normal rolling)
+		var dash_dir_normalized: Vector3 = spin_dash_direction.normalized()
+		var roll_axis: Vector3 = Vector3(dash_dir_normalized.z, 0, -dash_dir_normalized.x)
+
+		# Spin much faster than normal rolling (spin speed of 50 rad/s for dramatic effect)
+		var spin_speed: float = 50.0
+
+		# Apply rotation around the perpendicular axis (rolls forward in dash direction)
+		if roll_axis.length() > 0.01:  # Avoid division by zero
+			marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
@@ -697,6 +706,9 @@ func execute_spin_dash() -> void:
 	# Calculate dash force based on charge (50% to 100% of max force)
 	var charge_multiplier: float = 0.5 + (spin_charge / max_spin_charge) * 0.5
 	var dash_impulse: float = current_spin_dash_force * charge_multiplier
+
+	# Store the dash direction for spinning animation
+	spin_dash_direction = dash_direction
 
 	# Apply the dash impulse
 	apply_central_impulse(dash_direction * dash_impulse)
