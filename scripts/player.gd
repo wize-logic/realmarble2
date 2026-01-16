@@ -722,13 +722,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	# Bounce attack - Right mouse button (Sonic Adventure 2 style)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
-			# Can only bounce in the air and if not on cooldown
-			if not is_grounded and bounce_cooldown <= 0.0 and not is_bouncing:
+			# Can only bounce in the air and if not on cooldown (not while grinding)
+			if not is_grounded and not is_grinding and bounce_cooldown <= 0.0 and not is_bouncing:
 				print("BOUNCE ATTACK!")
 				start_bounce()
 			else:
 				if is_grounded:
 					print("Can't bounce - on ground")
+				elif is_grinding:
+					print("Can't bounce - grinding on rail")
 				elif bounce_cooldown > 0.0:
 					print("Can't bounce - on cooldown (%.2f)" % bounce_cooldown)
 				elif is_bouncing:
@@ -856,6 +858,10 @@ func _physics_process(delta: float) -> void:
 	if world and not world.get("game_active"):
 		return  # Don't process movement until game is active
 
+	# Don't allow player input while grinding - rail physics handles everything
+	if is_grinding:
+		return
+
 	# Get input direction relative to camera
 	var input_dir := Input.get_vector("left", "right", "up", "down")
 
@@ -895,6 +901,11 @@ func _physics_process(delta: float) -> void:
 func check_ground() -> void:
 	# Use RayCast3D node for ground detection
 	if not ground_ray:
+		is_grounded = false
+		return
+
+	# Grinding is a distinct state - not grounded, not airborne
+	if is_grinding:
 		is_grounded = false
 		return
 

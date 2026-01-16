@@ -160,17 +160,19 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var closest_point = curve.sample_baked(closest_offset)
 	var rail_pos_with_rotation = curve.sample_baked_with_rotation(closest_offset)
 
-	# Get rail tangent (direction along rail)
+	# Get rail tangent (direction along rail) and up vector
 	var rail_tangent = rail_pos_with_rotation.basis.z
+	var rail_up = rail_pos_with_rotation.basis.y
 	var world_rail_tangent = global_transform.basis * rail_tangent
+	var world_rail_up = global_transform.basis * rail_up
 
 	# Get rail position in world space
 	var world_rail_pos = to_global(closest_point)
 
-	# CONSTRAINT: Pull player onto the rail
-	var to_rail = world_rail_pos - grinder.global_position
-	var constraint_force = to_rail * rail_constraint_strength
-	grinder.apply_central_force(constraint_force)
+	# POSITION: Place player directly on top of the rail (0.6 units above)
+	var rail_height_offset = 0.6
+	var target_position = world_rail_pos + world_rail_up * rail_height_offset
+	grinder.global_position = target_position
 
 	# PROJECT velocity along rail tangent (maintain momentum direction)
 	var current_velocity = grinder.linear_velocity
