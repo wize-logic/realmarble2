@@ -51,7 +51,7 @@ func spawn_orbs() -> void:
 
 	# Scale orb count based on number of players (3 orbs per player)
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var scaled_orbs: int = max(9, int(player_count * 3.0))  # Minimum 9 orbs
+	var scaled_orbs: int = clamp(int(player_count * 3.0), 9, 36)  # Min 9, Max 36 orbs
 
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
 	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])

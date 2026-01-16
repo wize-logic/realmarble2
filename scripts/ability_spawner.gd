@@ -61,7 +61,7 @@ func spawn_abilities() -> void:
 
 	# Scale ability count based on number of players (2.5 abilities per player)
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var total_abilities: int = max(8, int(player_count * 2.5))  # Minimum 8 abilities
+	var total_abilities: int = clamp(int(player_count * 2.5), 8, 25)  # Min 8, Max 25 abilities
 
 	# Distribute abilities across types (proportional to original ratios)
 	# Original ratio: Dash=2, Explosion=2, Gun=4, Sword=2 (total=10)
