@@ -53,6 +53,7 @@ var countdown_time: float = 0.0
 
 # Bot system
 var bot_counter: int = 0
+var pending_bot_count: int = 0  # Bots to spawn when game becomes active
 const BotAI = preload("res://scripts/bot_ai.gd")
 
 # Debug menu
@@ -154,6 +155,15 @@ func _process(delta: float) -> void:
 			if game_hud:
 				game_hud.visible = true
 			print("GO! Match started! game_active is now: ", game_active)
+
+			# Spawn pending bots now that match is active
+			if pending_bot_count > 0:
+				print("Spawning %d pending bots..." % pending_bot_count)
+				spawn_pending_bots()
+				pending_bot_count = 0
+
+			# Spawn abilities and orbs now that match is active
+			spawn_abilities_and_orbs()
 
 			# Notify CrazyGames SDK that gameplay has started
 			if CrazyGamesSDK:
@@ -440,12 +450,9 @@ func start_practice_mode(bot_count: int) -> void:
 	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
 
-	# Spawn requested number of bots for practice
-	print("Spawning %d bots for practice mode..." % bot_count)
-	for i in range(bot_count):
-		await get_tree().create_timer(0.5).timeout
-		spawn_bot()
-	print("Bot spawning complete. Total players now: ", get_tree().get_nodes_in_group("players").size())
+	# Store bot count to spawn after countdown
+	pending_bot_count = bot_count
+	print("Will spawn %d bots after countdown completes..." % bot_count)
 
 	# Start the deathmatch
 	start_deathmatch()
@@ -978,6 +985,29 @@ func spawn_bot() -> void:
 
 	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
 	print("--- spawn_bot() complete ---")
+
+func spawn_pending_bots() -> void:
+	"""Spawn all pending bots (called when match becomes active)"""
+	for i in range(pending_bot_count):
+		spawn_bot()
+		# Small delay between spawns for visual effect
+		if i < pending_bot_count - 1:  # Don't wait after last bot
+			await get_tree().create_timer(0.1).timeout
+	print("All pending bots spawned. Total players: ", get_tree().get_nodes_in_group("players").size())
+
+func spawn_abilities_and_orbs() -> void:
+	"""Trigger spawning of abilities and orbs when match becomes active"""
+	# Find and trigger ability spawner
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("spawn_abilities"):
+		ability_spawner.spawn_abilities()
+		print("Triggered ability spawning")
+
+	# Find and trigger orb spawner
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("spawn_orbs"):
+		orb_spawner.spawn_orbs()
+		print("Triggered orb spawning")
 
 # ============================================================================
 # COUNTDOWN SYSTEM
