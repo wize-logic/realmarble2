@@ -53,6 +53,12 @@ func spawn_abilities() -> void:
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
+	# Check if game is active before spawning
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+		print("ABILITY SPAWNER: Game is not active, skipping spawn")
+		return
+
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 

@@ -1445,7 +1445,8 @@ func _create_marble_preview() -> void:
 	# Add to tree first before calling look_at
 	preview_container.add_child(preview_camera)
 	# Look at the marble at its actual position (after adding to tree)
-	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
+	if preview_camera.is_inside_tree():
+		preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
 	# Make this the current camera
 	preview_camera.make_current()
 
