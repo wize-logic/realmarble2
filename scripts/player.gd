@@ -1608,14 +1608,13 @@ func update_grinding(delta: float) -> void:
 		stop_grinding()
 		return
 
-	# Apply forces to keep player on rail (instead of direct position setting)
-	# This is much smoother and won't cause teleportation issues
-	var pull_to_rail_force = direction_to_rail * 200.0  # Gentler force to keep on rail
+	# Apply forces to keep player on rail (strong enough to override gravity and maintain position)
+	var pull_to_rail_force = direction_to_rail * 800.0  # Strong magnetic pull to rail
 	apply_central_force(pull_to_rail_force)
 
-	# Apply forward force along rail
+	# Apply forward force along rail (strong acceleration to match rail speed)
 	var desired_velocity = global_forward * move_speed
-	var velocity_correction = (desired_velocity - linear_velocity) * 5.0  # Gentler correction
+	var velocity_correction = (desired_velocity - linear_velocity) * 20.0  # Quick velocity matching
 	apply_central_force(velocity_correction)
 
 	# Update particle position

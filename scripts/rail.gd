@@ -7,7 +7,6 @@ class_name Rail
 
 var rail_mesh: MeshInstance3D
 var rail_material: StandardMaterial3D
-var detection_area: Area3D
 
 func _ready():
 	add_to_group("rails")
@@ -54,18 +53,9 @@ func create_rail_visual():
 	add_child(csg_path)
 
 func create_detection_area():
-	# Create an Area3D that follows the path for player detection
+	# Create multiple Area3D nodes along the path for player detection
 	if not curve:
 		return
-
-	var path_follow = PathFollow3D.new()
-	path_follow.loop = false
-	add_child(path_follow)
-
-	detection_area = Area3D.new()
-	detection_area.collision_layer = 0
-	detection_area.collision_mask = 2  # Detect players on layer 2
-	path_follow.add_child(detection_area)
 
 	# Create multiple collision shapes along the path
 	var num_segments = max(10, int(curve.get_baked_length() / 2.0))
