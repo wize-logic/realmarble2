@@ -941,7 +941,9 @@ func execute_spin_dash() -> void:
 	# Store the target rotation for maintaining orientation during spin dash
 	spin_dash_target_rotation = target_rotation_y
 
-	# DON'T set marble mesh Y rotation - let it roll naturally based on velocity
+	# RESET marble mesh rotation completely to prevent any accumulated rotation from charging
+	if marble_mesh:
+		marble_mesh.rotation = Vector3.ZERO
 
 	# Calculate dash force based on charge (50% to 100% of max force)
 	var charge_multiplier: float = 0.5 + (spin_charge / max_spin_charge) * 0.5
