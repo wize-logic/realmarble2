@@ -1306,10 +1306,23 @@ func _create_marble_preview() -> void:
 	var preview_container = Node3D.new()
 	preview_container.name = "MarblePreview"
 
+	# Use raycast to find ground position
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(Vector3(0, 100, 0), Vector3(0, -100, 0))
+	var result = space_state.intersect_ray(query)
+
+	var ground_position = Vector3(0, 0, 0)
+	if result:
+		ground_position = result.position
+		print("Ground found at: ", ground_position)
+	else:
+		print("No ground found, using default position")
+
 	# Instantiate an actual player marble
 	var marble = Player.instantiate()
 	marble.name = "PreviewMarble"
-	marble.position = Vector3(0, 1.0, 0)  # Raised above ground for proper display
+	# Position marble on ground (add 0.5 for marble radius so it sits on top)
+	marble.position = ground_position + Vector3(0, 0.5, 0)
 
 	# Disable physics and input for preview (it's just for display)
 	if marble is RigidBody3D:
@@ -1336,9 +1349,10 @@ func _create_marble_preview() -> void:
 	preview_camera = Camera3D.new()
 	preview_camera.name = "PreviewCamera"
 	# Position camera to showcase the marble (slightly above and in front)
-	preview_camera.position = Vector3(-2, 1.5, 3)
-	# Look at the marble (at its raised position)
-	preview_camera.look_at(Vector3(0, 1.0, 0), Vector3.UP)
+	var marble_y = ground_position.y + 0.5
+	preview_camera.position = Vector3(-2, marble_y + 0.5, 3)
+	# Look at the marble at its actual position
+	preview_camera.look_at(ground_position + Vector3(0, 0.5, 0), Vector3.UP)
 	preview_container.add_child(preview_camera)
 	# Make this the current camera
 	preview_camera.make_current()
