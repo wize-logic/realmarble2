@@ -4,7 +4,7 @@ class_name GrindRail
 ## Rail grinding system similar to Sonic Adventure 2
 ## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
-@export var detection_radius: float = 3.0  ## How close player needs to be to snap to rail
+@export var detection_radius: float = 5.0  ## How close player needs to be to snap to rail
 @export var rail_constraint_strength: float = 50.0  ## How strongly rail pulls player onto it
 @export var min_grind_speed: float = 2.0  ## Minimum speed to stay on rail (very low)
 @export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
@@ -115,7 +115,7 @@ func _on_body_entered(body: Node3D):
 
 	# Check horizontal distance - shouldn't be too far to the side
 	var horizontal_offset = Vector2(to_player.x, to_player.z).length()
-	if horizontal_offset > 1.5:  # Max 1.5 units horizontal offset
+	if horizontal_offset > 2.5:  # Max 2.5 units horizontal offset (increased for easier grinding)
 		return
 
 	# Start grinding
@@ -183,39 +183,41 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var rail_height_offset = 0.6
 	var world_rail_pos = to_global(closest_point) + world_rail_up * rail_height_offset
 
-	# CONSTRAINT: Strong force to keep player on top of rail
-	var to_rail = world_rail_pos - grinder.global_position
-	var constraint_force = to_rail * rail_constraint_strength * 2.0  # Extra strong to stay on top
-	grinder.apply_central_force(constraint_force)
+	# AGGRESSIVE SNAP: Force player position to be exactly on top of rail
+	grinder.global_position = world_rail_pos
 
 	# PROJECT velocity along rail tangent (maintain momentum direction)
 	var current_velocity = grinder.linear_velocity
 	var velocity_along_rail = current_velocity.dot(world_rail_tangent)
-	var projected_velocity = world_rail_tangent * velocity_along_rail
 
-	# Apply friction to align velocity with rail
-	grinder.linear_velocity = grinder.linear_velocity.lerp(projected_velocity, 0.8)
+	# Keep only the velocity component along the rail
+	var speed_magnitude = abs(velocity_along_rail)
+	var velocity_direction = sign(velocity_along_rail)
 
-	# FORWARD PUSH: Give player a small push to prevent getting stuck
-	var push_force = world_rail_tangent * 5.0  # Small constant push forward
-	grinder.apply_central_force(push_force)
+	# FORWARD PUSH: Give player a constant push to prevent getting stuck
+	speed_magnitude += 5.0 * delta  # Add constant forward momentum
 
-	# GRAVITY EFFECT on slopes
+	# Set velocity to be along rail tangent only
+	grinder.linear_velocity = world_rail_tangent * velocity_direction * speed_magnitude
+
+	# GRAVITY EFFECT on slopes (adjust speed based on slope)
 	# Calculate slope direction (is rail going up or down?)
-	var lookahead_offset = closest_offset + world_rail_tangent.dot(Vector3.FORWARD) * 2.0
+	var lookahead_offset = closest_offset + velocity_direction * 2.0
 	lookahead_offset = clamp(lookahead_offset, 0, curve_length)
 	var lookahead_point = curve.sample_baked(lookahead_offset)
 	var world_lookahead = to_global(lookahead_point)
-	var slope_delta_y = world_lookahead.y - world_rail_pos.y
+	var slope_delta_y = world_lookahead.y - to_global(closest_point).y
 
-	# Apply gravity force along the rail (downhill = accelerate, uphill = decelerate)
-	var gravity_force = world_rail_tangent * slope_delta_y * gravity_multiplier * 10.0
-	grinder.apply_central_force(gravity_force)
+	# Adjust speed based on slope (downhill = faster, uphill = slower)
+	var gravity_acceleration = slope_delta_y * -gravity_multiplier * 10.0 * delta
+	speed_magnitude += gravity_acceleration
+
+	# Update velocity with gravity effect
+	grinder.linear_velocity = world_rail_tangent * velocity_direction * speed_magnitude
 
 	# Check if moving too slow - fall off rail
-	var speed_along_rail = abs(velocity_along_rail)
-	if speed_along_rail < min_grind_speed:
-		print("Speed too low (", speed_along_rail, "), falling off rail")
+	if speed_magnitude < min_grind_speed:
+		print("Speed too low (", speed_magnitude, "), falling off rail")
 		_remove_grinder(grinder)
 		return
 
