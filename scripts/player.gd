@@ -570,21 +570,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 	if not marble_mesh:
 		return
 
-	if is_spin_dashing:
-		# RAPID FORWARD ROLLING during spindash - based on ACTUAL velocity direction
-		# Use the SAME rolling logic as normal movement, just with faster speed multiplier
-		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		var speed: float = horizontal_vel.length()
-
-		if speed > 0.1:
-			# Use actual movement direction for rolling (EXACT same as normal movement)
-			var move_dir: Vector3 = horizontal_vel.normalized()
-			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # Perpendicular to movement
-
-			# Roll speed based on velocity (marble radius is 0.5), just 3x faster for spin effect
-			var roll_speed: float = (speed / 0.5) * 3.0
-			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
-	elif not is_charging_spin:
+	# Use normal rolling for both regular movement AND spin dash
+	if not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
 		var speed: float = horizontal_vel.length()
@@ -595,7 +582,10 @@ func _physics_process_marble_roll(delta: float) -> void:
 			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # 90 degree rotation (inverted for correct direction)
 
 			# Roll speed based on velocity (marble radius is 0.5)
+			# During spin dash, multiply by 3 for faster visual effect
 			var roll_speed: float = speed / 0.5  # Angular velocity = linear velocity / radius
+			if is_spin_dashing:
+				roll_speed *= 3.0
 
 			# Apply rotation
 			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
