@@ -72,12 +72,8 @@ func _on_body_entered(body: Node3D):
 	if not body.has_method("start_grinding"):
 		return
 
-	# Check if player is moving fast enough and close enough
+	# Get player velocity (attach at any speed, even 0)
 	var velocity = body.linear_velocity
-	var speed = velocity.length()
-
-	if speed < min_speed * 0.5:  ## Need some speed to attach
-		return
 
 	# Find closest point on rail
 	var player_pos = body.global_position
@@ -113,11 +109,19 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 	# Calculate direction based on velocity
 	var tangent = curve.sample_baked_with_rotation(offset).basis.z
 	var world_tangent = global_transform.basis * tangent
-	var dot = velocity.normalized().dot(world_tangent.normalized())
 
-	# Determine initial speed and direction
-	var initial_speed = velocity.length() * speed_boost
-	var direction = 1 if dot > 0 else -1
+	var speed = velocity.length()
+	var direction = 1  # Default to forward
+	var initial_speed = grind_speed  # Default to base grind speed
+
+	# If player has velocity, use it to determine direction and boost speed
+	if speed > 0.1:
+		var dot = velocity.normalized().dot(world_tangent.normalized())
+		direction = 1 if dot >= 0 else -1
+		initial_speed = speed * speed_boost
+	else:
+		# Player attached at rest, start grinding at base speed forward
+		initial_speed = grind_speed
 
 	# Create grinder data
 	var data = GrinderData.new(progress, initial_speed * direction, velocity)

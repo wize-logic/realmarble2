@@ -187,7 +187,7 @@ func generate_walls() -> void:
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
 	var rail_count: int = 8  # Number of rails around the arena
-	var rail_distance: float = arena_size * 0.48  # Outside main floor, inside walls
+	var rail_distance: float = arena_size * 0.50  # Outside arena (0.35 floor edge), inside walls (0.55)
 
 	for i in range(rail_count):
 		var angle_start: float = (float(i) / rail_count) * TAU
@@ -239,7 +239,7 @@ func generate_vertical_rails() -> void:
 
 	for i in range(vertical_rail_count):
 		var angle: float = (float(i) / vertical_rail_count) * TAU + (TAU / vertical_rail_count * 0.5)
-		var distance: float = arena_size * 0.35
+		var distance: float = arena_size * 0.48  # Outside arena, inside walls
 
 		# Create vertical rail
 		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
