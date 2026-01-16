@@ -187,7 +187,8 @@ func generate_walls() -> void:
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
 	var rail_count: int = 8  # Number of rails around the arena
-	var rail_distance: float = arena_size * 0.52  # Outside platforms (max 0.45), inside walls (0.55)
+	# Position between platforms (max 0.4) and walls (0.55)
+	var rail_distance: float = arena_size * 0.47  # ~56 units at default size
 
 	for i in range(rail_count):
 		var angle_start: float = (float(i) / rail_count) * TAU
@@ -198,8 +199,8 @@ func generate_grind_rails() -> void:
 		rail.name = "GrindRail" + str(i)
 		rail.curve = Curve3D.new()
 
-		# Determine rail height (varied for interest, above platforms)
-		var base_height: float = 13.0 + (i % 3) * 4.0  # Heights: 13, 17, 21, repeating (above max platform at 11)
+		# Determine rail height (varied for interest, accessible heights)
+		var base_height: float = 3.0 + (i % 3) * 2.5  # Heights: 3, 5.5, 8, repeating
 
 		# Create curve points along the arc
 		var num_points: int = 12  # Number of control points
@@ -212,7 +213,7 @@ func generate_grind_rails() -> void:
 			var z: float = sin(angle) * rail_distance
 
 			# Height variation (slight wave for interest)
-			var height_offset: float = sin(t * PI) * 1.5  # Slight arc up and down
+			var height_offset: float = sin(t * PI) * 1.0  # Slight arc up and down
 			var y: float = base_height + height_offset
 
 			# Add point to curve
@@ -239,27 +240,27 @@ func generate_vertical_rails() -> void:
 
 	for i in range(vertical_rail_count):
 		var angle: float = (float(i) / vertical_rail_count) * TAU + (TAU / vertical_rail_count * 0.5)
-		var distance: float = arena_size * 0.52  # Outside platforms, inside walls
+		var distance: float = arena_size * 0.47  # Same as horizontal rails
 
 		# Create vertical rail
 		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
 		rail.name = "VerticalRail" + str(i)
 		rail.curve = Curve3D.new()
 
-		# Start position (higher to avoid platforms)
+		# Start position (low and accessible)
 		var start_x: float = cos(angle) * distance
 		var start_z: float = sin(angle) * distance
-		var start_y: float = 12.0  # Start above platforms (which max at 11)
+		var start_y: float = 2.0  # Low starting height
 
-		# End position (much higher up)
-		var end_y: float = 20.0
+		# End position (moderate height)
+		var end_y: float = 10.0
 
 		# Create upward spiral
 		var num_points: int = 8
 		for j in range(num_points):
 			var t: float = float(j) / (num_points - 1)
 			var current_angle: float = angle + t * PI * 0.5  # Quarter turn
-			var current_distance: float = lerp(distance, distance * 0.9, t)  # Don't curve in as much
+			var current_distance: float = lerp(distance, distance * 0.85, t)  # Curve inward slightly
 
 			var x: float = cos(current_angle) * current_distance
 			var z: float = sin(current_angle) * current_distance
