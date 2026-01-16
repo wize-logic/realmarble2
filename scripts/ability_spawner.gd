@@ -59,29 +59,41 @@ func spawn_abilities() -> void:
 		print("ABILITY SPAWNER: Game is not active, skipping spawn")
 		return
 
+	# Scale ability count based on number of players (2.5 abilities per player)
+	var player_count: int = get_tree().get_nodes_in_group("players").size()
+	var total_abilities: int = max(8, int(player_count * 2.5))  # Minimum 8 abilities
+
+	# Distribute abilities across types (proportional to original ratios)
+	# Original ratio: Dash=2, Explosion=2, Gun=4, Sword=2 (total=10)
+	var scaled_dash: int = max(1, int(total_abilities * 0.2))      # 20%
+	var scaled_explosion: int = max(1, int(total_abilities * 0.2))  # 20%
+	var scaled_gun: int = max(2, int(total_abilities * 0.4))        # 40%
+	var scaled_sword: int = max(1, int(total_abilities * 0.2))      # 20%
+
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
+	print("Players: %d | Total abilities: %d" % [player_count, total_abilities])
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
 	# Spawn dash attacks
-	for i in range(num_dash_attacks):
+	for i in range(scaled_dash):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Dash Attack %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.ORANGE_RED)
 
 	# Spawn explosions
-	for i in range(num_explosions):
+	for i in range(scaled_explosion):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Explosion %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
 
 	# Spawn guns
-	for i in range(num_guns):
+	for i in range(scaled_gun):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Gun %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, GunScene, "Gun", Color.CYAN)
 
 	# Spawn swords
-	for i in range(num_swords):
+	for i in range(scaled_sword):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Sword %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, SwordScene, "Sword", Color.STEEL_BLUE)

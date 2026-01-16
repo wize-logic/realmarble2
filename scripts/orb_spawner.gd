@@ -49,10 +49,15 @@ func spawn_orbs() -> void:
 		print("ORB SPAWNER: Game is not active, skipping spawn")
 		return
 
+	# Scale orb count based on number of players (3 orbs per player)
+	var player_count: int = get_tree().get_nodes_in_group("players").size()
+	var scaled_orbs: int = max(9, int(player_count * 3.0))  # Minimum 9 orbs
+
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
+	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
 	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
-	for i in range(num_orbs):
+	for i in range(scaled_orbs):
 		var random_pos: Vector3 = get_random_spawn_position()
 		print("Orb %d spawning at position: %s" % [i+1, random_pos])
 		spawn_orb_at_position(random_pos)
