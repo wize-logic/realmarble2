@@ -1620,9 +1620,9 @@ func start_grinding(rail: GrindRail) -> void:
 	current_rail = rail
 	jump_count = 0  # Reset jumps when starting grind
 
-	# Disable normal physics interactions while grinding
-	gravity_scale = 0.0
-	linear_damp = 0.0
+	# Keep physics active (SA2 style - gravity affects grinding!)
+	# Only reduce damping slightly for smoother grinding
+	linear_damp = 0.2
 
 	# Start spark particles
 	if grind_particles:
@@ -1642,8 +1642,7 @@ func stop_grinding() -> void:
 	is_grinding = false
 	current_rail = null
 
-	# Re-enable normal physics
-	gravity_scale = 2.5
+	# Restore normal physics
 	linear_damp = 0.5
 
 	# Stop spark particles
@@ -1658,26 +1657,20 @@ func launch_from_rail(velocity: Vector3) -> void:
 	print("Launched from rail end with velocity: ", velocity)
 	stop_grinding()
 
-	# Apply the launch velocity
-	linear_velocity = velocity
-	# Add upward boost
-	apply_central_impulse(Vector3.UP * 20.0)
+	# Player already has velocity from physics, just add upward boost
+	apply_central_impulse(Vector3.UP * 15.0)
 
 func jump_off_rail() -> void:
 	"""Player manually jumps off the rail"""
 	if not is_grinding or not current_rail:
 		return
 
-	# Get current grinding velocity from rail
-	var grind_velocity: Vector3 = current_rail.detach_grinder(self)
-	if not grind_velocity:
-		grind_velocity = linear_velocity
-
+	# Detach from rail (maintains current velocity)
+	current_rail.detach_grinder(self)
 	stop_grinding()
 
-	# Apply jump impulse upward
+	# Apply jump impulse upward (player keeps their grinding momentum)
 	var jump_strength: float = current_jump_impulse * 1.2  # Bonus for rail jump
-	linear_velocity = grind_velocity
 	apply_central_impulse(Vector3.UP * jump_strength)
 
 	# Play jump sound

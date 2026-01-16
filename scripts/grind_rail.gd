@@ -1,32 +1,26 @@
 extends Path3D
 class_name GrindRail
 
-## Rail grinding system similar to Sonic series
-## Allows players to grind along rails with speed boosts and momentum
+## Rail grinding system similar to Sonic Adventure 2
+## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
-@export var grind_speed: float = 20.0  ## Base speed while grinding
-@export var speed_boost: float = 1.5  ## Speed multiplier when entering grind
-@export var min_speed: float = 10.0  ## Minimum speed to maintain grind
-@export var gravity_assist: float = 0.3  ## How much downward slope increases speed
-@export var uphill_resistance: float = 0.15  ## How much upward slope decreases speed
 @export var detection_radius: float = 3.0  ## How close player needs to be to snap to rail
-@export var rail_height_offset: float = 0.6  ## Height above rail path for player
+@export var rail_constraint_strength: float = 50.0  ## How strongly rail pulls player onto it
+@export var min_grind_speed: float = 2.0  ## Minimum speed to stay on rail (very low)
+@export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
+@export var rail_friction: float = 0.98  ## Speed retention per second (0.98 = loses 2% per second)
 
 var active_grinders: Array[RigidBody3D] = []  ## Players currently grinding this rail
 var grinder_data: Dictionary = {}  ## Stores grinding data per player
 
 ## Data structure for each grinder
 class GrinderData:
-	var progress: float = 0.0  ## Position along curve (0.0 to 1.0)
-	var speed: float = 0.0  ## Current grinding speed
-	var direction: int = 1  ## 1 for forward, -1 for backward
-	var entry_velocity: Vector3 = Vector3.ZERO
+	var closest_offset: float = 0.0  ## Current position along curve
+	var last_offset: float = 0.0  ## Previous position (for direction detection)
 
-	func _init(start_progress: float, initial_speed: float, vel: Vector3):
-		progress = start_progress
-		speed = initial_speed
-		direction = 1 if initial_speed >= 0 else -1
-		entry_velocity = vel
+	func _init(start_offset: float):
+		closest_offset = start_offset
+		last_offset = start_offset
 
 
 func _ready():
@@ -124,32 +118,12 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 	if active_grinders.has(grinder):
 		return  ## Already grinding
 
-	# Calculate progress (0.0 to 1.0)
 	var curve_length = curve.get_baked_length()
 	if curve_length == 0:
 		return
 
-	var progress = offset / curve_length
-
-	# Calculate direction based on velocity
-	var tangent = curve.sample_baked_with_rotation(offset).basis.z
-	var world_tangent = global_transform.basis * tangent
-
-	var speed = velocity.length()
-	var direction = 1  # Default to forward
-	var initial_speed = grind_speed  # Default to base grind speed
-
-	# If player has velocity, use it to determine direction and boost speed
-	if speed > 0.1:
-		var dot = velocity.normalized().dot(world_tangent.normalized())
-		direction = 1 if dot >= 0 else -1
-		initial_speed = speed * speed_boost
-	else:
-		# Player attached at rest, start grinding at base speed forward
-		initial_speed = grind_speed
-
-	# Create grinder data
-	var data = GrinderData.new(progress, initial_speed * direction, velocity)
+	# Create grinder data with starting offset
+	var data = GrinderData.new(offset)
 	grinder_data[grinder] = data
 	active_grinders.append(grinder)
 
@@ -157,7 +131,7 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
 
-	print("Rail: Player attached at progress ", progress, " with speed ", initial_speed)
+	print("Rail: Player attached at offset ", offset, " with velocity ", velocity.length())
 
 
 func _remove_grinder(grinder: RigidBody3D):
@@ -180,79 +154,79 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 		_remove_grinder(grinder)
 		return
 
-	# Calculate current offset
-	var current_offset = data.progress * curve_length
+	# Find closest point on rail to player's current position
+	var player_local_pos = to_local(grinder.global_position)
+	var closest_offset = curve.get_closest_offset(player_local_pos)
+	var closest_point = curve.sample_baked(closest_offset)
+	var rail_pos_with_rotation = curve.sample_baked_with_rotation(closest_offset)
 
-	# Get current and next position to determine slope
-	var current_pos = curve.sample_baked(current_offset)
-	var next_offset = current_offset + (data.speed * delta * 0.01)  ## Small lookahead
-	next_offset = clamp(next_offset, 0, curve_length)
-	var next_pos = curve.sample_baked(next_offset)
+	# Get rail tangent (direction along rail)
+	var rail_tangent = rail_pos_with_rotation.basis.z
+	var world_rail_tangent = global_transform.basis * rail_tangent
 
-	# Calculate slope effect
-	var height_diff = (to_global(next_pos).y - to_global(current_pos).y)
-	var slope_effect = 0.0
-	if data.speed > 0:
-		if height_diff < 0:  ## Going downhill
-			slope_effect = -height_diff * gravity_assist
-		else:  ## Going uphill
-			slope_effect = -height_diff * uphill_resistance
+	# Get rail position in world space
+	var world_rail_pos = to_global(closest_point)
 
-	# Update speed
-	data.speed += slope_effect * delta * 10.0
-	data.speed = max(data.speed, min_speed)  ## Don't go too slow
+	# CONSTRAINT: Pull player onto the rail
+	var to_rail = world_rail_pos - grinder.global_position
+	var constraint_force = to_rail * rail_constraint_strength
+	grinder.apply_central_force(constraint_force)
 
-	# Update progress
-	var speed_delta = (data.speed * delta) / curve_length
-	data.progress += speed_delta
+	# PROJECT velocity along rail tangent (maintain momentum direction)
+	var current_velocity = grinder.linear_velocity
+	var velocity_along_rail = current_velocity.dot(world_rail_tangent)
+	var projected_velocity = world_rail_tangent * velocity_along_rail
 
-	# Check if reached end
-	if data.progress >= 1.0 or data.progress <= 0.0:
-		# Launch player off the end
-		var launch_dir = curve.sample_baked_with_rotation(current_offset).basis.z
-		var world_launch = global_transform.basis * launch_dir
-		if grinder.has_method("launch_from_rail"):
-			grinder.launch_from_rail(world_launch * data.speed)
+	# Apply friction
+	grinder.linear_velocity = grinder.linear_velocity.lerp(projected_velocity, 0.8)
+
+	# GRAVITY EFFECT on slopes
+	# Calculate slope direction (is rail going up or down?)
+	var lookahead_offset = closest_offset + world_rail_tangent.dot(Vector3.FORWARD) * 2.0
+	lookahead_offset = clamp(lookahead_offset, 0, curve_length)
+	var lookahead_point = curve.sample_baked(lookahead_offset)
+	var world_lookahead = to_global(lookahead_point)
+	var slope_delta_y = world_lookahead.y - world_rail_pos.y
+
+	# Apply gravity force along the rail (downhill = accelerate, uphill = decelerate)
+	var gravity_force = world_rail_tangent * slope_delta_y * gravity_multiplier * 10.0
+	grinder.apply_central_force(gravity_force)
+
+	# Check if moving too slow - fall off rail
+	var speed_along_rail = abs(velocity_along_rail)
+	if speed_along_rail < min_grind_speed:
+		print("Speed too low (", speed_along_rail, "), falling off rail")
 		_remove_grinder(grinder)
 		return
 
-	# Update player position
-	current_offset = data.progress * curve_length
-	var rail_pos = curve.sample_baked_with_rotation(current_offset)
-	var rail_tangent = rail_pos.basis.z
-	var rail_up = rail_pos.basis.y
+	# Check if reached end of rail
+	if closest_offset <= 0.5 or closest_offset >= curve_length - 0.5:
+		# Launch player off the end
+		var launch_velocity = grinder.linear_velocity
+		if grinder.has_method("launch_from_rail"):
+			grinder.launch_from_rail(launch_velocity)
+		_remove_grinder(grinder)
+		return
 
-	# Calculate world position (slightly above rail)
-	var world_pos = to_global(rail_pos.origin) + global_transform.basis * rail_up * rail_height_offset
-	var world_tangent = global_transform.basis * rail_tangent
+	# Update tracking data
+	data.last_offset = data.closest_offset
+	data.closest_offset = closest_offset
 
-	# Update grinder transform
-	grinder.global_position = world_pos
-
-	# Maintain velocity along rail
-	var velocity_magnitude = data.speed
-	grinder.linear_velocity = world_tangent.normalized() * velocity_magnitude
-
-	# Reduce angular velocity while grinding
-	grinder.angular_velocity *= 0.5
+	# Reduce angular velocity (prevent spinning)
+	grinder.angular_velocity *= 0.3
 
 
 ## Called by player to detach from rail (jumping off)
 func detach_grinder(grinder: RigidBody3D):
 	if not active_grinders.has(grinder):
-		return
+		return grinder.linear_velocity
 
-	var data: GrinderData = grinder_data[grinder]
-
-	# Give player a boost in current direction
-	var current_offset = data.progress * curve.get_baked_length()
-	var rail_dir = curve.sample_baked_with_rotation(current_offset).basis.z
-	var world_dir = global_transform.basis * rail_dir
-
+	# Player maintains their current velocity
+	var current_velocity = grinder.linear_velocity
 	_remove_grinder(grinder)
 
 	# Return velocity for player to use
-	return world_dir * data.speed
+	return current_velocity
 
 
 ## Check if a specific grinder is on this rail
@@ -264,5 +238,5 @@ func is_grinding(grinder: RigidBody3D) -> bool:
 func get_grind_speed(grinder: RigidBody3D) -> float:
 	if not grinder_data.has(grinder):
 		return 0.0
-	var data: GrinderData = grinder_data[grinder]
-	return data.speed
+	# Speed is the player's actual velocity magnitude
+	return grinder.linear_velocity.length()
