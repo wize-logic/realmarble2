@@ -571,20 +571,18 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID SPINNING during spindash - spin around the forward axis (like a drill)
-		# Maintain Y rotation to face the reticle direction (NO SIDE-TO-SIDE SPINNING)
+		# RAPID FORWARD ROLLING during spindash - just like normal movement but faster
+		# This ensures the marble looks like it's rolling forward towards the reticle
 		var spin_speed: float = 100.0  # Very fast rolling speed for visual effect
 
-		# Maintain the Y rotation (facing reticle) and only spin around the local Z axis (forward)
-		if marble_mesh:
-			# Save current Y rotation
-			var current_y_rotation: float = marble_mesh.rotation.y
+		# Calculate the direction we're facing (from stored target rotation)
+		var face_dir: Vector3 = Vector3(sin(spin_dash_target_rotation), 0, cos(spin_dash_target_rotation))
 
-			# Rotate around local Z axis (forward axis) for spinning effect
-			marble_mesh.rotate_object_local(Vector3.FORWARD, spin_speed * delta)
+		# Calculate roll axis perpendicular to facing direction (same as normal movement)
+		var roll_axis: Vector3 = Vector3(face_dir.z, 0, -face_dir.x)
 
-			# Restore Y rotation to maintain facing direction (no side-to-side spinning)
-			marble_mesh.rotation.y = spin_dash_target_rotation
+		# Apply forward rolling rotation
+		marble_mesh.rotate(roll_axis.normalized(), spin_speed * delta)
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
