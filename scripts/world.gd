@@ -683,6 +683,10 @@ func start_deathmatch() -> void:
 		countdown_label.visible = true
 	print("Starting countdown...")
 
+func is_game_active() -> bool:
+	"""Check if the game is currently active"""
+	return game_active
+
 func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
 	print("======================================")
@@ -701,6 +705,9 @@ func end_deathmatch() -> void:
 	# Hide HUD when game ends
 	if game_hud:
 		game_hud.visible = false
+
+	# Despawn all bots
+	despawn_all_bots()
 
 	# Clear all abilities and orbs when match ends
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
@@ -1028,6 +1035,28 @@ func spawn_pending_bots() -> void:
 		if i < pending_bot_count - 1:  # Don't wait after last bot
 			await get_tree().create_timer(0.1).timeout
 	print("All pending bots spawned. Total players: ", get_tree().get_nodes_in_group("players").size())
+
+func despawn_all_bots() -> void:
+	"""Remove all bot players from the game"""
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bots_removed: int = 0
+
+	for player in players:
+		if player:
+			# Check if this is a bot (ID >= 9000)
+			var player_id: int = str(player.name).to_int()
+			if player_id >= 9000:
+				print("Despawning bot: %s (ID: %d)" % [player.name, player_id])
+				# Remove from scores/deaths tracking
+				player_scores.erase(player_id)
+				player_deaths.erase(player_id)
+				# Remove from scene
+				player.queue_free()
+				bots_removed += 1
+
+	bot_counter = 0
+	pending_bot_count = 0
+	print("Despawned %d bots. Remaining players: %d" % [bots_removed, get_tree().get_nodes_in_group("players").size() - bots_removed])
 
 func spawn_abilities_and_orbs() -> void:
 	"""Trigger spawning of abilities and orbs when match becomes active"""

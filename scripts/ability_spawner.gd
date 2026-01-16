@@ -33,8 +33,19 @@ func _ready() -> void:
 	# Don't spawn automatically - wait for world to call spawn_abilities() when match starts
 
 func _process(delta: float) -> void:
-	# Disabled: Don't auto-respawn abilities during gameplay
-	pass
+	# Server-side respawn timer - only when game is active
+	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
+		return
+
+	# Check if game is active
+	var world: Node = get_parent()
+	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+		return
+
+	respawn_timer += delta
+	if respawn_timer >= respawn_interval:
+		respawn_timer = 0.0
+		check_and_respawn_pickups()
 
 func spawn_abilities() -> void:
 	"""Spawn ability pickups at random 3D positions in the map volume"""
