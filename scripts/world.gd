@@ -399,6 +399,7 @@ func ask_bot_count() -> int:
 		var count_value = count  # Capture the current count value
 		button.pressed.connect(func():
 			selected_count = count_value  # Use captured value
+			print("User selected %d bots" % count_value)
 			dialog.hide()
 		)
 		grid.add_child(button)
@@ -412,12 +413,13 @@ func ask_bot_count() -> int:
 	add_child(dialog)
 	dialog.popup_centered()
 
-	# Wait for dialog to close
-	await dialog.visibility_changed
+	# Wait for dialog to close (hidden signal fires when dialog is dismissed)
+	await dialog.hidden
 
 	# Clean up
 	dialog.queue_free()
 
+	print("Bot count selected: %d" % selected_count)
 	return selected_count
 
 func start_practice_mode(bot_count: int) -> void:
@@ -988,7 +990,9 @@ func spawn_bot() -> void:
 
 func spawn_pending_bots() -> void:
 	"""Spawn all pending bots (called when match becomes active)"""
+	print("spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
 	for i in range(pending_bot_count):
+		print("Spawning bot %d of %d" % [i + 1, pending_bot_count])
 		spawn_bot()
 		# Small delay between spawns for visual effect
 		if i < pending_bot_count - 1:  # Don't wait after last bot
