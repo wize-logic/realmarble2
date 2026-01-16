@@ -83,7 +83,7 @@ func create_detection_area():
 
 		var collision = CollisionShape3D.new()
 		var shape = SphereShape3D.new()
-		shape.radius = 1.2  # Smaller sphere for more precise detection
+		shape.radius = 2.5  # Large enough to catch players jumping nearby
 		collision.shape = shape
 		area.add_child(collision)
 
@@ -92,11 +92,13 @@ func create_detection_area():
 
 func _on_body_entered(body):
 	# Auto-start grinding when player gets close to rail
-	if body.has_method("start_grinding") and not body.is_grinding and not body.is_grounded:
-		# Only start if player is actually close to the rail path (within 1.5 units)
+	if body.has_method("start_grinding") and not body.is_grinding:
+		# Only start if player is actually close to the rail path (within 3 units)
 		var rail_data = get_nearest_point_on_rail(body.global_position)
 		var distance = (rail_data["position"] - body.global_position).length()
-		if distance < 1.5:
+		print("Player near rail! Distance: %.2f, Grounded: %s" % [distance, body.is_grounded])
+		if distance < 3.0:
+			print("Starting grinding!")
 			body.start_grinding(self)
 
 func _on_body_exited(body):

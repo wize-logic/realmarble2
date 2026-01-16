@@ -287,7 +287,7 @@ func generate_rails() -> void:
 
 	for i in range(rail_count):
 		var angle: float = (float(i) / rail_count) * TAU
-		var rail_distance: float = arena_size * 0.57  # Just outside the walls (walls are at 0.55)
+		var rail_distance: float = arena_size * 0.52  # Closer to arena (walls are at 0.55)
 
 		# Create rail path
 		var rail: Path3D = RailScene.instantiate()
