@@ -82,8 +82,8 @@ func create_detection_area():
 		segment_follow.add_child(area)
 
 		var collision = CollisionShape3D.new()
-		var shape = BoxShape3D.new()
-		shape.size = Vector3(2.0, 2.0, 2.0)  # Detection box around rail
+		var shape = SphereShape3D.new()
+		shape.radius = 1.2  # Smaller sphere for more precise detection
 		collision.shape = shape
 		area.add_child(collision)
 
@@ -91,13 +91,16 @@ func create_detection_area():
 		area.body_exited.connect(_on_body_exited)
 
 func _on_body_entered(body):
-	if body.has_method("set_nearby_rail"):
-		body.set_nearby_rail(self)
+	# Auto-start grinding when player gets close to rail
+	if body.has_method("start_grinding") and not body.is_grinding and not body.is_grounded:
+		# Only start if player is actually close to the rail path (within 1.5 units)
+		var rail_data = get_nearest_point_on_rail(body.global_position)
+		var distance = (rail_data["position"] - body.global_position).length()
+		if distance < 1.5:
+			body.start_grinding(self)
 
 func _on_body_exited(body):
-	if body.has_method("clear_nearby_rail"):
-		body.clear_nearby_rail(self)
-	# Also stop grinding if they're grinding on this rail
+	# Stop grinding if they leave the rail area
 	if body.has_method("stop_grinding") and body.is_grinding and body.current_rail == self:
 		body.stop_grinding()
 

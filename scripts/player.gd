@@ -117,7 +117,6 @@ var rail_progress: float = 0.0
 var rail_speed: float = 15.0
 var grinding_particles: CPUParticles3D = null
 var grinding_sound: AudioStreamPlayer3D = null
-var nearby_rail: Path3D = null  # Rail we can grind on (detected by Area3D)
 
 # Ability system
 var current_ability: Node = null  # The currently equipped ability
@@ -696,14 +695,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 			mouse_captured = true
 
-	# Jump - Space key (with double jump OR start grinding)
+	# Jump - Space key (with double jump)
 	if event is InputEventKey and event.keycode == KEY_SPACE:
 		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps)
 		if event.pressed and not event.echo:
-			# If near a rail and in the air, start grinding instead of jumping
-			if nearby_rail and not is_grounded and not is_grinding:
-				start_grinding()
-			elif jump_count < max_jumps:
+			if jump_count < max_jumps:
 				var jump_strength: float = current_jump_impulse
 				# Second jump is slightly weaker
 				if jump_count == 1:
@@ -1514,25 +1510,9 @@ func spawn_death_orb() -> void:
 # RAIL GRINDING SYSTEM
 # ============================================================================
 
-func set_nearby_rail(rail: Path3D) -> void:
-	"""Called by rail when player enters detection area"""
-	nearby_rail = rail
-
-func clear_nearby_rail(rail: Path3D) -> void:
-	"""Called by rail when player exits detection area"""
-	if nearby_rail == rail:
-		nearby_rail = null
-
-func start_grinding(rail: Path3D = null) -> void:
-	"""Start grinding on a rail - manual trigger"""
-	if is_grinding:
-		return
-
-	# Use nearby rail if no specific rail provided
-	if rail == null:
-		rail = nearby_rail
-
-	if rail == null:
+func start_grinding(rail: Path3D) -> void:
+	"""Start grinding on a rail - automatic when close"""
+	if is_grinding or not rail:
 		return
 
 	is_grinding = true
@@ -1630,12 +1610,12 @@ func update_grinding(delta: float) -> void:
 
 	# Apply forces to keep player on rail (instead of direct position setting)
 	# This is much smoother and won't cause teleportation issues
-	var pull_to_rail_force = direction_to_rail * 500.0  # Strong force to keep on rail
+	var pull_to_rail_force = direction_to_rail * 200.0  # Gentler force to keep on rail
 	apply_central_force(pull_to_rail_force)
 
 	# Apply forward force along rail
 	var desired_velocity = global_forward * move_speed
-	var velocity_correction = (desired_velocity - linear_velocity) * 10.0
+	var velocity_correction = (desired_velocity - linear_velocity) * 5.0  # Gentler correction
 	apply_central_force(velocity_correction)
 
 	# Update particle position
