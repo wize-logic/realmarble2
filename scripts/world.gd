@@ -1047,9 +1047,7 @@ func despawn_all_bots() -> void:
 			var player_id: int = str(player.name).to_int()
 			if player_id >= 9000:
 				print("Despawning bot: %s (ID: %d)" % [player.name, player_id])
-				# Remove from scores/deaths tracking
-				player_scores.erase(player_id)
-				player_deaths.erase(player_id)
+				# Keep scores/deaths on leaderboard - don't erase them
 				# Remove from scene
 				player.queue_free()
 				bots_removed += 1
