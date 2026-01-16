@@ -56,6 +56,10 @@ var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
 const BotAI = preload("res://scripts/bot_ai.gd")
 
+# Bot count selection dialog state (instance variables for proper closure sharing)
+var bot_count_dialog_closed: bool = false
+var bot_count_selected: int = 3
+
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
 
@@ -353,10 +357,12 @@ func ask_bot_count() -> int:
 	separator.add_theme_constant_override("separation", 2)
 	vbox.add_child(separator)
 
+	# Reset instance variables for this dialog
+	bot_count_dialog_closed = false
+	bot_count_selected = 3  # Default
+
 	# Bot count options
 	var bot_counts = [1, 3, 5, 7, 10, 15]
-	var selected_count = 3  # Default
-	var dialog_closed = false  # Flag to track when dialog is dismissed
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -404,10 +410,10 @@ func ask_bot_count() -> int:
 		button.pressed.connect(func():
 			print("=== BUTTON PRESSED CALLBACK START ===")
 			print("Button clicked for count: %d" % count_value)
-			selected_count = count_value  # Use captured value
-			print("selected_count set to: %d" % selected_count)
-			dialog_closed = true
-			print("dialog_closed set to: true")
+			bot_count_selected = count_value  # Use instance variable
+			print("bot_count_selected set to: %d" % bot_count_selected)
+			bot_count_dialog_closed = true  # Use instance variable
+			print("bot_count_dialog_closed set to: true")
 			dialog.hide()
 			print("dialog.hide() called")
 			print("=== BUTTON PRESSED CALLBACK END ===")
@@ -424,16 +430,17 @@ func ask_bot_count() -> int:
 	dialog.popup_centered()
 	print("Dialog shown, waiting for user selection...")
 
-	# Wait for user to select an option (flag-based waiting)
-	while not dialog_closed:
+	# Wait for user to select an option (flag-based waiting using instance variable)
+	while not bot_count_dialog_closed:
 		await get_tree().process_frame
+		print("Still waiting... bot_count_dialog_closed = ", bot_count_dialog_closed)
 
 	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
 
-	print("Bot count selected: %d" % selected_count)
-	return selected_count
+	print("Bot count selected: %d" % bot_count_selected)
+	return bot_count_selected
 
 func start_practice_mode(bot_count: int) -> void:
 	"""Start practice mode with specified number of bots"""
