@@ -34,25 +34,50 @@ func _ready():
 	if not curve:
 		curve = Curve3D.new()
 		push_warning("GrindRail: No curve assigned, created empty curve")
+		return
 
-	# Add collision detection area
-	var area = Area3D.new()
-	area.name = "DetectionArea"
-	area.collision_layer = 0
-	area.collision_mask = 2  ## Detect players (layer 2)
-	add_child(area)
+	# Wait for curve to be fully set up
+	await get_tree().process_frame
 
-	# Add collision shape
-	var collision_shape = CollisionShape3D.new()
-	var shape = CylinderShape3D.new()
-	shape.radius = detection_radius
-	shape.height = curve.get_baked_length() if curve.get_baked_length() > 0 else 10.0
-	collision_shape.shape = shape
-	area.add_child(collision_shape)
+	# Create collision detection along the entire rail path
+	_create_rail_collision()
 
-	# Connect signals
-	area.body_entered.connect(_on_body_entered)
-	area.body_exited.connect(_on_body_exited)
+
+func _create_rail_collision():
+	"""Create collision detection areas along the rail curve"""
+	if not curve or curve.get_baked_length() == 0:
+		push_warning("GrindRail: Cannot create collision - curve is empty")
+		return
+
+	var curve_length = curve.get_baked_length()
+	var segment_length = 3.0  # Create a detection area every 3 units
+	var num_segments = max(int(curve_length / segment_length), 4)  # At least 4 segments
+
+	for i in range(num_segments):
+		var t = float(i) / float(num_segments - 1)
+		var offset = t * curve_length
+		var pos = curve.sample_baked(offset)
+
+		# Create Area3D for this segment
+		var area = Area3D.new()
+		area.name = "DetectionSegment" + str(i)
+		area.collision_layer = 0
+		area.collision_mask = 2  # Detect players (layer 2)
+		area.position = pos
+		add_child(area)
+
+		# Add sphere collision shape
+		var collision_shape = CollisionShape3D.new()
+		var shape = SphereShape3D.new()
+		shape.radius = detection_radius
+		collision_shape.shape = shape
+		area.add_child(collision_shape)
+
+		# Connect signals
+		area.body_entered.connect(_on_body_entered)
+		area.body_exited.connect(_on_body_exited)
+
+	print("Created ", num_segments, " detection segments for rail ", name)
 
 
 func _process(delta: float):
