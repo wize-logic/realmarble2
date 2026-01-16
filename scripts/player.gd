@@ -413,9 +413,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 		return
 
 	if is_spin_dashing:
-		# RAPID SPINNING during spindash - spin on all axes
-		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin
-		marble_mesh.rotate_y(delta * 25.0)  # Add some tumble
+		# RAPID SPINNING during spindash - only spin forward (no side-to-side)
+		marble_mesh.rotate_x(delta * 30.0)  # Fast forward spin only
 	elif not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
@@ -664,25 +663,11 @@ func check_ground() -> void:
 
 func execute_spin_dash() -> void:
 	"""Execute a Sonic-style spin dash"""
-	# Calculate dash direction based on camera or input
+	# Calculate dash direction based on reticle/camera direction ONLY
 	var dash_direction: Vector3 = Vector3.ZERO
 
-	# Try to use current input direction
-	var input_dir := Input.get_vector("left", "right", "up", "down")
-
-	if input_dir != Vector2.ZERO and camera_arm:
-		# Dash in input direction
-		var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
-		cam_forward.y = 0
-		cam_forward = cam_forward.normalized()
-
-		var cam_right: Vector3 = camera_arm.global_transform.basis.x
-		cam_right.y = 0
-		cam_right = cam_right.normalized()
-
-		dash_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
-	elif camera_arm:
-		# No input - dash forward relative to camera
+	if camera_arm:
+		# ALWAYS dash towards the reticle (camera forward direction)
 		dash_direction = -camera_arm.global_transform.basis.z
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
