@@ -4,8 +4,10 @@ class_name GrindRail
 ## Rail grinding system similar to Sonic Adventure 2
 ## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
-@export var detection_radius: float = 1.5  ## How close player needs to be to snap to rail
-@export var rail_constraint_strength: float = 50.0  ## How strongly rail pulls player onto it
+@export var detection_radius: float = 4.0  ## How close player needs to be to snap to rail
+@export var rope_length: float = 1.5  ## Length of the rope connecting player to rail
+@export var rope_stiffness: float = 200.0  ## How strongly the rope pulls player (spring constant)
+@export var rope_damping: float = 5.0  ## Damping to prevent excessive swinging
 @export var min_grind_speed: float = 2.0  ## Minimum speed to stay on rail (very low)
 @export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
 @export var rail_friction: float = 0.98  ## Speed retention per second (0.98 = loses 2% per second)
@@ -109,13 +111,13 @@ func _on_body_entered(body: Node3D):
 	var to_player = player_pos - world_closest
 	var vertical_offset = to_player.y
 
-	# Must be above the rail (positive Y) and very close to directly above
-	if vertical_offset < 0.3 or vertical_offset > 1.2:  # Must be 0.3-1.2 units above rail
+	# Must be above the rail (positive Y) - generous range for easier attachment
+	if vertical_offset < 0.2:  # Must be at least 0.2 units above
 		return
 
-	# Check horizontal distance - must be almost exactly above the rail
+	# Check horizontal distance - reasonably generous for rope attachment
 	var horizontal_offset = Vector2(to_player.x, to_player.z).length()
-	if horizontal_offset > 0.6:  # Max 0.6 units horizontal offset - must be hugging the rail
+	if horizontal_offset > 3.0:  # Max 3.0 units horizontal offset - can attach from the side
 		return
 
 	# Start grinding
@@ -170,69 +172,72 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	# Find closest point on rail to player's current position
 	var player_local_pos = to_local(grinder.global_position)
 	var closest_offset = curve.get_closest_offset(player_local_pos)
-	var closest_point = curve.sample_baked(closest_offset)
-	var rail_pos_with_rotation = curve.sample_baked_with_rotation(closest_offset)
 
-	# Get rail tangent (direction along rail) and up vector
-	var rail_tangent = rail_pos_with_rotation.basis.z
-	var rail_up = rail_pos_with_rotation.basis.y
-	var world_rail_tangent = global_transform.basis * rail_tangent
-	var world_rail_up = global_transform.basis * rail_up
-
-	# Get rail position in world space (slightly above for player to sit on top)
-	var rail_height_offset = 0.6
-	var world_rail_pos = to_global(closest_point) + world_rail_up * rail_height_offset
-
-	# CONSTRAINT: Apply force perpendicular to rail to keep player on rail
-	# Calculate vector from player to rail position
-	var to_rail = world_rail_pos - grinder.global_position
-
-	# Apply strong constraint force to keep player on rail (perpendicular only)
-	# This keeps the player attached to the rail without preventing forward movement
-	var constraint_force = to_rail * rail_constraint_strength
-	grinder.apply_central_force(constraint_force)
-
-	# PROJECT velocity along rail tangent (maintain momentum direction)
+	# ROPE PHYSICS: Move attachment point along rail based on player momentum
+	# Look slightly ahead in the direction of player's velocity along the rail
 	var current_velocity = grinder.linear_velocity
+	var rail_pos_with_rotation = curve.sample_baked_with_rotation(closest_offset)
+	var rail_tangent = rail_pos_with_rotation.basis.z
+	var world_rail_tangent = global_transform.basis * rail_tangent
+
+	# Project player velocity onto rail to determine sliding direction
 	var velocity_along_rail = current_velocity.dot(world_rail_tangent)
+	var slide_speed = velocity_along_rail * delta * 2.0  # How far attachment point slides
 
-	# Get perpendicular velocity (will be dampened)
-	var perpendicular_velocity = current_velocity - (world_rail_tangent * velocity_along_rail)
+	# Update attachment point offset (slide along rail with player)
+	var attachment_offset = closest_offset + slide_speed
+	attachment_offset = clamp(attachment_offset, 0, curve_length)
 
-	# Keep only the velocity component along the rail and dampen perpendicular movement
-	var speed_magnitude = abs(velocity_along_rail)
-	var velocity_direction = sign(velocity_along_rail)
+	# Get attachment point on rail
+	var attachment_point = curve.sample_baked(attachment_offset)
+	var world_attachment_pos = to_global(attachment_point)
 
-	# If player has very low velocity, give them a direction based on rail orientation
-	if abs(velocity_along_rail) < 0.1:
-		velocity_direction = 1.0  # Default to forward along rail
+	# ROPE CONSTRAINT: Apply spring-damper forces to maintain rope length
+	var rope_vector = grinder.global_position - world_attachment_pos
+	var current_rope_length = rope_vector.length()
 
-	# FORWARD PUSH: Give player a constant push to prevent getting stuck
-	speed_magnitude += 5.0 * delta  # Add constant forward momentum
+	# Only apply constraint if rope is stretched beyond target length
+	if current_rope_length > rope_length:
+		var rope_direction = rope_vector.normalized()
+		var rope_extension = current_rope_length - rope_length
 
-	# GRAVITY EFFECT on slopes (adjust speed based on slope)
-	# Calculate slope direction (is rail going up or down?)
-	var lookahead_offset = closest_offset + velocity_direction * 2.0
+		# Spring force (Hooke's law: F = -kx)
+		var spring_force = -rope_direction * rope_stiffness * rope_extension
+
+		# Damping force (F = -cv) - only along rope direction
+		var velocity_along_rope = current_velocity.dot(rope_direction)
+		var damping_force = -rope_direction * rope_damping * velocity_along_rope
+
+		# Apply total rope force
+		var total_rope_force = spring_force + damping_force
+		grinder.apply_central_force(total_rope_force)
+
+	# FORWARD MOMENTUM: Give player a push along the rail to keep grinding
+	var push_force = world_rail_tangent * 150.0  # Constant forward push
+	grinder.apply_central_force(push_force)
+
+	# GRAVITY EFFECT on slopes: Accelerate downhill, decelerate uphill
+	var lookahead_offset = attachment_offset + sign(velocity_along_rail) * 2.0
 	lookahead_offset = clamp(lookahead_offset, 0, curve_length)
 	var lookahead_point = curve.sample_baked(lookahead_offset)
 	var world_lookahead = to_global(lookahead_point)
-	var slope_delta_y = world_lookahead.y - to_global(closest_point).y
+	var slope_delta_y = world_lookahead.y - world_attachment_pos.y
 
-	# Adjust speed based on slope (downhill = faster, uphill = slower)
-	var gravity_acceleration = slope_delta_y * -gravity_multiplier * 10.0 * delta
-	speed_magnitude += gravity_acceleration
+	# Apply gravity-based slope force along rail
+	var slope_force = world_rail_tangent * (-slope_delta_y * gravity_multiplier * 150.0)
+	grinder.apply_central_force(slope_force)
 
-	# Update velocity: along rail + heavily dampened perpendicular
-	grinder.linear_velocity = (world_rail_tangent * velocity_direction * speed_magnitude) + (perpendicular_velocity * 0.1)
+	# Calculate grinding speed (along rail component)
+	var grind_speed = abs(velocity_along_rail)
 
 	# Check if moving too slow - fall off rail
-	if speed_magnitude < min_grind_speed:
-		print("Speed too low (", speed_magnitude, "), falling off rail")
+	if grind_speed < min_grind_speed:
+		print("Speed too low (", grind_speed, "), falling off rail")
 		_remove_grinder(grinder)
 		return
 
 	# Check if reached end of rail
-	if closest_offset <= 0.5 or closest_offset >= curve_length - 0.5:
+	if attachment_offset <= 0.5 or attachment_offset >= curve_length - 0.5:
 		# Launch player off the end
 		var launch_velocity = grinder.linear_velocity
 		if grinder.has_method("launch_from_rail"):
@@ -242,7 +247,7 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 
 	# Update tracking data
 	data.last_offset = data.closest_offset
-	data.closest_offset = closest_offset
+	data.closest_offset = attachment_offset
 
 	# Reduce angular velocity (prevent spinning)
 	grinder.angular_velocity *= 0.3
