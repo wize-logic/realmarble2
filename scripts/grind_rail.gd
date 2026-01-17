@@ -4,11 +4,11 @@ class_name GrindRail
 ## Rail grinding system similar to Sonic Adventure 2
 ## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
-@export var detection_radius: float = 4.0  ## How close player needs to be to snap to rail
-@export var rope_length: float = 1.5  ## Length of the rope connecting player to rail
-@export var rope_stiffness: float = 200.0  ## How strongly the rope pulls player (spring constant)
-@export var rope_damping: float = 5.0  ## Damping to prevent excessive swinging
-@export var min_grind_speed: float = 2.0  ## Minimum speed to stay on rail (very low)
+@export var detection_radius: float = 12.0  ## How close player needs to be to snap to rail
+@export var rope_length: float = 3.0  ## Length of the rope connecting player to rail
+@export var rope_stiffness: float = 500.0  ## How strongly the rope pulls player (spring constant)
+@export var rope_damping: float = 10.0  ## Damping to prevent excessive swinging
+@export var min_grind_speed: float = 0.5  ## Minimum speed to stay on rail (very low)
 @export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
 @export var rail_friction: float = 0.98  ## Speed retention per second (0.98 = loses 2% per second)
 
@@ -19,6 +19,7 @@ var grinder_data: Dictionary = {}  ## Stores grinding data per player
 class GrinderData:
 	var closest_offset: float = 0.0  ## Current position along curve
 	var last_offset: float = 0.0  ## Previous position (for direction detection)
+	var rope_visual: MeshInstance3D = null  ## Visual rope line
 
 	func _init(start_offset: float):
 		closest_offset = start_offset
@@ -111,13 +112,13 @@ func _on_body_entered(body: Node3D):
 	var to_player = player_pos - world_closest
 	var vertical_offset = to_player.y
 
-	# Must be above the rail (positive Y) - generous range for easier attachment
-	if vertical_offset < 0.2:  # Must be at least 0.2 units above
+	# Must be above the rail (positive Y) - very generous range for easier attachment
+	if vertical_offset < -1.0:  # Can even attach slightly below
 		return
 
-	# Check horizontal distance - reasonably generous for rope attachment
+	# Check horizontal distance - very generous for rope attachment
 	var horizontal_offset = Vector2(to_player.x, to_player.z).length()
-	if horizontal_offset > 3.0:  # Max 3.0 units horizontal offset - can attach from the side
+	if horizontal_offset > 8.0:  # Max 8.0 units horizontal offset - very generous
 		return
 
 	# Start grinding
@@ -142,6 +143,11 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 	grinder_data[grinder] = data
 	active_grinders.append(grinder)
 
+	# Create visual rope line
+	data.rope_visual = MeshInstance3D.new()
+	data.rope_visual.name = "RopeVisual"
+	add_child(data.rope_visual)
+
 	# Notify player they're grinding
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
@@ -152,6 +158,12 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 func _remove_grinder(grinder: RigidBody3D):
 	if not active_grinders.has(grinder):
 		return
+
+	# Remove visual rope
+	if grinder_data.has(grinder):
+		var data: GrinderData = grinder_data[grinder]
+		if data.rope_visual and is_instance_valid(data.rope_visual):
+			data.rope_visual.queue_free()
 
 	active_grinders.erase(grinder)
 	grinder_data.erase(grinder)
@@ -196,12 +208,12 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var rope_vector = grinder.global_position - world_attachment_pos
 	var current_rope_length = rope_vector.length()
 
-	# Only apply constraint if rope is stretched beyond target length
-	if current_rope_length > rope_length:
+	# ALWAYS apply rope constraint for stability
+	if current_rope_length > 0.1:  # Avoid division by zero
 		var rope_direction = rope_vector.normalized()
 		var rope_extension = current_rope_length - rope_length
 
-		# Spring force (Hooke's law: F = -kx)
+		# Spring force (Hooke's law: F = -kx) - stronger when stretched
 		var spring_force = -rope_direction * rope_stiffness * rope_extension
 
 		# Damping force (F = -cv) - only along rope direction
@@ -212,9 +224,31 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 		var total_rope_force = spring_force + damping_force
 		grinder.apply_central_force(total_rope_force)
 
-	# FORWARD MOMENTUM: Give player a push along the rail to keep grinding
-	var push_force = world_rail_tangent * 150.0  # Constant forward push
+	# FORWARD MOMENTUM: Give player a strong push along the rail to keep grinding
+	var push_force = world_rail_tangent * 300.0  # Stronger constant forward push
 	grinder.apply_central_force(push_force)
+
+	# DRAW ROPE VISUAL
+	if data.rope_visual and is_instance_valid(data.rope_visual):
+		var immediate_mesh = ImmediateMesh.new()
+		data.rope_visual.mesh = immediate_mesh
+
+		# Create material for rope
+		var material = StandardMaterial3D.new()
+		material.albedo_color = Color(0.9, 0.9, 0.3, 1.0)  # Yellow rope
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+		immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
+
+		# Draw line from attachment point to player
+		var local_attachment = to_local(world_attachment_pos)
+		var local_player = to_local(grinder.global_position)
+
+		immediate_mesh.surface_add_vertex(local_attachment)
+		immediate_mesh.surface_add_vertex(local_player)
+
+		immediate_mesh.surface_end()
 
 	# GRAVITY EFFECT on slopes: Accelerate downhill, decelerate uphill
 	var lookahead_offset = attachment_offset + sign(velocity_along_rail) * 2.0
