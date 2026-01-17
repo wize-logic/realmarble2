@@ -5,11 +5,12 @@ class_name GrindRail
 ## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
 @export var detection_radius: float = 12.0  ## How close player needs to be to snap to rail
-@export var rope_length: float = 3.0  ## Length of the rope connecting player to rail
-@export var rope_stiffness: float = 500.0  ## How strongly the rope pulls player (spring constant)
-@export var rope_damping: float = 10.0  ## Damping to prevent excessive swinging
+@export var rope_length: float = 2.0  ## Length of the rope connecting player to rail
+@export var rope_stiffness: float = 50.0  ## How strongly the rope pulls player (spring constant)
+@export var rope_damping: float = 20.0  ## Damping to prevent excessive swinging
+@export var max_rope_force: float = 100.0  ## Maximum force rope can apply (prevents extreme pulls)
 @export var min_grind_speed: float = 0.5  ## Minimum speed to stay on rail (very low)
-@export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
+@export var gravity_multiplier: float = 0.5  ## How much gravity affects grind speed on slopes
 @export var rail_friction: float = 0.98  ## Speed retention per second (0.98 = loses 2% per second)
 
 var active_grinders: Array[RigidBody3D] = []  ## Players currently grinding this rail
@@ -148,11 +149,24 @@ func _attach_grinder(grinder: RigidBody3D, offset: float, velocity: Vector3):
 	data.rope_visual.name = "RopeVisual"
 	add_child(data.rope_visual)
 
+	# Give player an initial boost along the rail direction
+	var rail_pos_with_rotation = curve.sample_baked_with_rotation(offset)
+	var rail_tangent = rail_pos_with_rotation.basis.z
+	var world_rail_tangent = global_transform.basis * rail_tangent
+
+	# Determine initial direction based on player's approach velocity
+	var velocity_along_rail = velocity.dot(world_rail_tangent)
+	var initial_direction = sign(velocity_along_rail) if abs(velocity_along_rail) > 1.0 else 1.0
+
+	# Set player's velocity to move along rail at a good speed
+	var initial_speed = max(abs(velocity_along_rail), 10.0)  # At least 10 units/sec
+	grinder.linear_velocity = world_rail_tangent * initial_direction * initial_speed
+
 	# Notify player they're grinding
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
 
-	print("Rail: Player attached at offset ", offset, " with velocity ", velocity.length())
+	print("Rail: Player attached at offset ", offset, " with velocity ", velocity.length(), " -> rail speed: ", initial_speed)
 
 
 func _remove_grinder(grinder: RigidBody3D):
@@ -208,24 +222,31 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var rope_vector = grinder.global_position - world_attachment_pos
 	var current_rope_length = rope_vector.length()
 
-	# ALWAYS apply rope constraint for stability
-	if current_rope_length > 0.1:  # Avoid division by zero
+	# Only apply rope constraint when stretched beyond target length (gentle)
+	if current_rope_length > rope_length and current_rope_length > 0.1:  # Avoid division by zero
 		var rope_direction = rope_vector.normalized()
 		var rope_extension = current_rope_length - rope_length
 
-		# Spring force (Hooke's law: F = -kx) - stronger when stretched
+		# Spring force (Hooke's law: F = -kx) - gentle pull
 		var spring_force = -rope_direction * rope_stiffness * rope_extension
 
 		# Damping force (F = -cv) - only along rope direction
 		var velocity_along_rope = current_velocity.dot(rope_direction)
 		var damping_force = -rope_direction * rope_damping * velocity_along_rope
 
-		# Apply total rope force
+		# Calculate total rope force
 		var total_rope_force = spring_force + damping_force
+
+		# LIMIT maximum rope force to prevent extreme pulls
+		var force_magnitude = total_rope_force.length()
+		if force_magnitude > max_rope_force:
+			total_rope_force = total_rope_force.normalized() * max_rope_force
+
+		# Apply limited rope force
 		grinder.apply_central_force(total_rope_force)
 
-	# FORWARD MOMENTUM: Give player a strong push along the rail to keep grinding
-	var push_force = world_rail_tangent * 300.0  # Stronger constant forward push
+	# FORWARD MOMENTUM: Give player a gentle push along the rail to keep grinding
+	var push_force = world_rail_tangent * 100.0  # Gentle constant forward push
 	grinder.apply_central_force(push_force)
 
 	# DRAW ROPE VISUAL
@@ -250,15 +271,15 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 
 		immediate_mesh.surface_end()
 
-	# GRAVITY EFFECT on slopes: Accelerate downhill, decelerate uphill
+	# GRAVITY EFFECT on slopes: Accelerate downhill, decelerate uphill (gentle)
 	var lookahead_offset = attachment_offset + sign(velocity_along_rail) * 2.0
 	lookahead_offset = clamp(lookahead_offset, 0, curve_length)
 	var lookahead_point = curve.sample_baked(lookahead_offset)
 	var world_lookahead = to_global(lookahead_point)
 	var slope_delta_y = world_lookahead.y - world_attachment_pos.y
 
-	# Apply gravity-based slope force along rail
-	var slope_force = world_rail_tangent * (-slope_delta_y * gravity_multiplier * 150.0)
+	# Apply gentle gravity-based slope force along rail
+	var slope_force = world_rail_tangent * (-slope_delta_y * gravity_multiplier * 50.0)
 	grinder.apply_central_force(slope_force)
 
 	# Calculate grinding speed (along rail component)
