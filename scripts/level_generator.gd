@@ -219,10 +219,26 @@ func generate_grind_rails() -> void:
 			# Add point to curve
 			rail.curve.add_point(Vector3(x, y, z))
 
-		# Smooth the curve for nice grinding
+		# Calculate proper tangent handles based on curve direction
 		for j in range(rail.curve.point_count):
-			rail.curve.set_point_in(j, Vector3(-1, 0, 0))
-			rail.curve.set_point_out(j, Vector3(1, 0, 0))
+			var tangent: Vector3
+
+			if j == 0:
+				# First point - use direction to next point
+				tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+			elif j == rail.curve.point_count - 1:
+				# Last point - use direction from previous point
+				tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+			else:
+				# Middle points - use average direction from previous to next
+				var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+				var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+				tangent = (prev_to_curr + curr_to_next).normalized()
+
+			# Set in/out handles based on actual curve direction (scaled for smoothness)
+			var handle_length: float = 0.5  # Adjust for curve smoothness
+			rail.curve.set_point_in(j, -tangent * handle_length)
+			rail.curve.set_point_out(j, tangent * handle_length)
 
 		add_child(rail)
 
@@ -268,10 +284,26 @@ func generate_vertical_rails() -> void:
 
 			rail.curve.add_point(Vector3(x, y, z))
 
-		# Smooth the curve
+		# Calculate proper tangent handles based on curve direction
 		for j in range(rail.curve.point_count):
-			rail.curve.set_point_in(j, Vector3(-0.5, 0, 0))
-			rail.curve.set_point_out(j, Vector3(0.5, 0, 0))
+			var tangent: Vector3
+
+			if j == 0:
+				# First point - use direction to next point
+				tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+			elif j == rail.curve.point_count - 1:
+				# Last point - use direction from previous point
+				tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+			else:
+				# Middle points - use average direction from previous to next
+				var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+				var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+				tangent = (prev_to_curr + curr_to_next).normalized()
+
+			# Set in/out handles based on actual curve direction (scaled for smoothness)
+			var handle_length: float = 0.5  # Adjust for curve smoothness
+			rail.curve.set_point_in(j, -tangent * handle_length)
+			rail.curve.set_point_out(j, tangent * handle_length)
 
 		add_child(rail)
 		create_rail_visual(rail)
