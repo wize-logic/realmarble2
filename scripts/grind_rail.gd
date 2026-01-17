@@ -4,7 +4,7 @@ class_name GrindRail
 ## Rail grinding system similar to Sonic Adventure 2
 ## Dynamic physics-based grinding - player maintains momentum and responds to gravity
 
-@export var detection_radius: float = 5.0  ## How close player needs to be to snap to rail
+@export var detection_radius: float = 1.5  ## How close player needs to be to snap to rail
 @export var rail_constraint_strength: float = 50.0  ## How strongly rail pulls player onto it
 @export var min_grind_speed: float = 2.0  ## Minimum speed to stay on rail (very low)
 @export var gravity_multiplier: float = 1.5  ## How much gravity affects grind speed on slopes
@@ -109,13 +109,13 @@ func _on_body_entered(body: Node3D):
 	var to_player = player_pos - world_closest
 	var vertical_offset = to_player.y
 
-	# Must be above the rail (positive Y) and close to directly above
-	if vertical_offset < 0.2:  # Must be at least 0.2 units above
+	# Must be above the rail (positive Y) and very close to directly above
+	if vertical_offset < 0.3 or vertical_offset > 1.2:  # Must be 0.3-1.2 units above rail
 		return
 
-	# Check horizontal distance - shouldn't be too far to the side
+	# Check horizontal distance - must be almost exactly above the rail
 	var horizontal_offset = Vector2(to_player.x, to_player.z).length()
-	if horizontal_offset > 2.5:  # Max 2.5 units horizontal offset (increased for easier grinding)
+	if horizontal_offset > 0.6:  # Max 0.6 units horizontal offset - must be hugging the rail
 		return
 
 	# Start grinding
