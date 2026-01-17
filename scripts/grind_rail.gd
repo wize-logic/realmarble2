@@ -183,22 +183,32 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var rail_height_offset = 0.6
 	var world_rail_pos = to_global(closest_point) + world_rail_up * rail_height_offset
 
-	# AGGRESSIVE SNAP: Force player position to be exactly on top of rail
-	grinder.global_position = world_rail_pos
+	# CONSTRAINT: Apply force perpendicular to rail to keep player on rail
+	# Calculate vector from player to rail position
+	var to_rail = world_rail_pos - grinder.global_position
+
+	# Apply strong constraint force to keep player on rail (perpendicular only)
+	# This keeps the player attached to the rail without preventing forward movement
+	var constraint_force = to_rail * rail_constraint_strength
+	grinder.apply_central_force(constraint_force)
 
 	# PROJECT velocity along rail tangent (maintain momentum direction)
 	var current_velocity = grinder.linear_velocity
 	var velocity_along_rail = current_velocity.dot(world_rail_tangent)
 
-	# Keep only the velocity component along the rail
+	# Get perpendicular velocity (will be dampened)
+	var perpendicular_velocity = current_velocity - (world_rail_tangent * velocity_along_rail)
+
+	# Keep only the velocity component along the rail and dampen perpendicular movement
 	var speed_magnitude = abs(velocity_along_rail)
 	var velocity_direction = sign(velocity_along_rail)
 
+	# If player has very low velocity, give them a direction based on rail orientation
+	if abs(velocity_along_rail) < 0.1:
+		velocity_direction = 1.0  # Default to forward along rail
+
 	# FORWARD PUSH: Give player a constant push to prevent getting stuck
 	speed_magnitude += 5.0 * delta  # Add constant forward momentum
-
-	# Set velocity to be along rail tangent only
-	grinder.linear_velocity = world_rail_tangent * velocity_direction * speed_magnitude
 
 	# GRAVITY EFFECT on slopes (adjust speed based on slope)
 	# Calculate slope direction (is rail going up or down?)
@@ -212,8 +222,8 @@ func _update_grinder(grinder: RigidBody3D, delta: float):
 	var gravity_acceleration = slope_delta_y * -gravity_multiplier * 10.0 * delta
 	speed_magnitude += gravity_acceleration
 
-	# Update velocity with gravity effect
-	grinder.linear_velocity = world_rail_tangent * velocity_direction * speed_magnitude
+	# Update velocity: along rail + heavily dampened perpendicular
+	grinder.linear_velocity = (world_rail_tangent * velocity_direction * speed_magnitude) + (perpendicular_velocity * 0.1)
 
 	# Check if moving too slow - fall off rail
 	if speed_magnitude < min_grind_speed:
