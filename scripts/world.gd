@@ -1747,8 +1747,22 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 	var player_states: Dictionary = {}
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 
+	print("======================================")
+	print("FREEZING ", players.size(), " PLAYERS FOR SHOWCASE")
+	print("======================================")
+
 	for player in players:
 		var state: Dictionary = {}
+
+		print("Storing state for player: ", player.name)
+
+		# Store position and transform
+		if player is Node3D:
+			state["position"] = player.global_position
+			state["rotation"] = player.global_rotation
+			state["visible"] = player.visible
+			print("  Position: ", player.global_position)
+			print("  Visible: ", player.visible)
 
 		# Store and disable camera
 		if player.has_node("Camera3D"):
@@ -1756,6 +1770,7 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			state["camera"] = camera
 			state["was_current"] = camera.current
 			camera.current = false
+			print("  Camera stored (was_current: ", state["was_current"], ")")
 
 		# Freeze player physics (RigidBody3D)
 		if player is RigidBody3D:
@@ -1765,13 +1780,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			player.freeze = true
 			player.linear_velocity = Vector3.ZERO
 			player.angular_velocity = Vector3.ZERO
+			print("  Physics frozen (was frozen: ", state["original_freeze"], ")")
 
 		# Disable player input processing
 		state["original_process_mode"] = player.process_mode
 		player.set_process_input(false)
 		player.set_process_unhandled_input(false)
+		print("  Input disabled")
 
 		player_states[player] = state
+
+	print("All players frozen and stored")
 
 	# Make showcase camera active
 	showcase_camera.current = true
@@ -1821,6 +1840,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 
 		print("Processing player: ", player.name, " (is_local: ", is_local_player, ")")
 
+		# Restore position and visibility
+		if player is Node3D:
+			if state.has("position"):
+				player.global_position = state["position"]
+				print("✓ Restored position: ", state["position"])
+			if state.has("rotation"):
+				player.global_rotation = state["rotation"]
+			if state.has("visible"):
+				player.visible = state["visible"]
+				print("✓ Restored visibility: ", state["visible"])
+
 		# Restore camera - ALWAYS restore for local player
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
@@ -1828,13 +1858,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			if is_local_player:
 				camera.current = true
 				print("✓ Restored camera for LOCAL player: ", player.name)
-			elif state["was_current"]:
+			elif state.get("was_current", false):
 				camera.current = true
 				print("✓ Restored camera for player: ", player.name, " (was current before)")
 
 		# Unfreeze player physics
 		if player is RigidBody3D and state.has("original_freeze"):
 			player.freeze = state["original_freeze"]
+			# Ensure player is not stuck
+			if not player.freeze:
+				player.linear_velocity = Vector3.ZERO
+				player.angular_velocity = Vector3.ZERO
 			print("✓ Unfroze player: ", player.name, " (freeze: ", player.freeze, ")")
 
 		# Re-enable player input processing
