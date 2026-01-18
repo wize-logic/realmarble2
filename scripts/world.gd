@@ -51,6 +51,11 @@ var player_deaths: Dictionary = {}  # player_id: death_count
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
+# Mid-round expansion system
+var expansion_triggered: bool = false
+var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds remaining)
+var expansion_notification: Control = null
+
 # Bot system
 var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
@@ -117,6 +122,9 @@ func _ready() -> void:
 	if game_hud:
 		game_hud.visible = false
 
+	# Create expansion notification UI
+	create_expansion_notification()
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
@@ -179,6 +187,12 @@ func _process(delta: float) -> void:
 		# Log every 30 seconds
 		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
 			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+
+		# Check for mid-round expansion trigger
+		if not expansion_triggered and game_time_remaining <= expansion_trigger_time:
+			print("Mid-round expansion trigger reached!")
+			trigger_mid_round_expansion()
+
 		if game_time_remaining <= 0:
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
@@ -787,6 +801,9 @@ func return_to_main_menu() -> void:
 	game_active = false
 	countdown_active = false
 	game_time_remaining = 300.0
+
+	# Reset mid-round expansion
+	expansion_triggered = false
 
 	# Reset bot counter
 	bot_counter = 0
@@ -1643,3 +1660,253 @@ func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
 	if music_notification and music_notification.has_method("show_notification"):
 		music_notification.show_notification(metadata)
+
+# ============================================================================
+# MID-ROUND EXPANSION SYSTEM
+# ============================================================================
+
+func create_expansion_notification() -> void:
+	"""Create the expansion notification UI"""
+	var ExpansionNotification = preload("res://scripts/ui/expansion_notification.gd")
+	expansion_notification = Control.new()
+	expansion_notification.name = "ExpansionNotification"
+	expansion_notification.set_script(ExpansionNotification)
+	add_child(expansion_notification)
+	print("Expansion notification UI created")
+
+func trigger_mid_round_expansion() -> void:
+	"""Trigger the mid-round expansion - show notification, spawn new area, connect with rail"""
+	print("======================================")
+	print("TRIGGERING MID-ROUND EXPANSION!")
+	print("======================================")
+
+	expansion_triggered = true
+
+	# Show notification
+	if expansion_notification and expansion_notification.has_method("show_notification"):
+		expansion_notification.show_notification()
+
+	# Calculate position for secondary arena (1000 feet = 304.8 meters away)
+	var expansion_offset: Vector3 = Vector3(304.8, 0, 0)  # 1000 feet to the right
+
+	# Wait 1 second for dramatic effect
+	await get_tree().create_timer(1.0).timeout
+
+	# Spawn POOF particle effect at the secondary arena location
+	var PoofEffect = preload("res://scripts/poof_particle_effect.gd")
+	var poof = Node3D.new()
+	poof.set_script(PoofEffect)
+	add_child(poof)
+	poof.global_position = expansion_offset
+	# Trigger the effect
+	if poof.has_method("play_poof"):
+		poof.play_poof()
+
+	# Wait a brief moment for the POOF to be visible
+	await get_tree().create_timer(0.3).timeout
+
+	# Generate secondary arena
+	if level_generator and level_generator.has_method("generate_secondary_map"):
+		level_generator.generate_secondary_map(expansion_offset)
+		print("Secondary arena generated at offset: ", expansion_offset)
+
+		# Apply textures to new platforms (only new ones, not regenerating entire map)
+		if level_generator.has_method("apply_procedural_textures"):
+			level_generator.apply_procedural_textures()
+
+		# Generate connecting rail from main arena to secondary arena
+		var start_rail_pos: Vector3 = Vector3(60, 5, 0)  # Edge of main arena
+		var end_rail_pos: Vector3 = expansion_offset + Vector3(-60, 5, 0)  # Edge of secondary arena
+
+		if level_generator.has_method("generate_connecting_rail"):
+			level_generator.generate_connecting_rail(start_rail_pos, end_rail_pos)
+			print("Connecting rail generated!")
+
+	# Showcase the new arena with a dolly camera
+	await showcase_new_arena(expansion_offset)
+
+	print("======================================")
+	print("MID-ROUND EXPANSION COMPLETE!")
+	print("======================================")
+
+func showcase_new_arena(arena_position: Vector3) -> void:
+	"""Temporarily show all players the new arena with a dolly camera"""
+	print("Starting arena showcase...")
+
+	# Create a showcase camera
+	var showcase_camera = Camera3D.new()
+	showcase_camera.name = "ShowcaseCamera"
+	add_child(showcase_camera)
+
+	# Position camera to orbit around the new arena
+	var orbit_radius: float = 100.0
+	var orbit_height: float = 40.0
+	var orbit_duration: float = 4.0  # 4 seconds of showcase
+
+	# Store player states and freeze them
+	var player_states: Dictionary = {}
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+
+	print("======================================")
+	print("FREEZING ", players.size(), " PLAYERS FOR SHOWCASE")
+	print("======================================")
+
+	for player in players:
+		var state: Dictionary = {}
+
+		print("Storing state for player: ", player.name)
+
+		# Store position and transform
+		if player is Node3D:
+			state["position"] = player.global_position
+			state["rotation"] = player.global_rotation
+			state["visible"] = player.visible
+			print("  Position: ", player.global_position)
+			print("  Visible: ", player.visible)
+
+		# Store and disable camera
+		if player.has_node("Camera3D"):
+			var camera = player.get_node("Camera3D")
+			state["camera"] = camera
+			state["was_current"] = camera.current
+			state["camera_position"] = camera.position  # Local position relative to player
+			state["camera_rotation"] = camera.rotation  # Local rotation
+			state["camera_transform"] = camera.transform  # Full local transform
+			camera.current = false
+			print("  Camera stored (was_current: ", state["was_current"], ")")
+			print("  Camera local position: ", camera.position)
+
+		# Freeze player physics (RigidBody3D)
+		if player is RigidBody3D:
+			state["original_freeze"] = player.freeze
+			state["original_linear_velocity"] = player.linear_velocity
+			state["original_angular_velocity"] = player.angular_velocity
+			player.freeze = true
+			player.linear_velocity = Vector3.ZERO
+			player.angular_velocity = Vector3.ZERO
+			print("  Physics frozen (was frozen: ", state["original_freeze"], ")")
+
+		# Disable player input processing
+		state["original_process_mode"] = player.process_mode
+		player.set_process_input(false)
+		player.set_process_unhandled_input(false)
+		print("  Input disabled")
+
+		player_states[player] = state
+
+	print("All players frozen and stored")
+
+	# Make showcase camera active
+	showcase_camera.current = true
+
+	# Animate the dolly camera orbiting around the new arena
+	var start_time: float = Time.get_ticks_msec() / 1000.0
+	var elapsed: float = 0.0
+
+	while elapsed < orbit_duration:
+		var current_time: float = Time.get_ticks_msec() / 1000.0
+		elapsed = current_time - start_time
+
+		# Calculate orbit position (circular path around arena)
+		var orbit_progress: float = elapsed / orbit_duration
+		var angle: float = orbit_progress * PI  # Half circle (180 degrees)
+
+		var x: float = arena_position.x + cos(angle) * orbit_radius
+		var z: float = arena_position.z + sin(angle) * orbit_radius
+		var y: float = arena_position.y + orbit_height
+
+		showcase_camera.global_position = Vector3(x, y, z)
+		showcase_camera.look_at(arena_position + Vector3(0, 10, 0), Vector3.UP)
+
+		await get_tree().process_frame
+
+	# Clean up showcase camera first
+	showcase_camera.queue_free()
+
+	# Wait a frame for showcase camera cleanup
+	await get_tree().process_frame
+
+	# Identify the local player (same logic as game_hud.gd)
+	var local_player_id: int = 1  # Default to player 1 for practice mode
+	if multiplayer.has_multiplayer_peer():
+		local_player_id = multiplayer.get_unique_id()
+	var local_player_name: String = str(local_player_id)
+	print("Identifying local player: ", local_player_name)
+
+	# Restore all player states
+	for player in player_states.keys():
+		if not is_instance_valid(player):
+			print("Warning: Player instance invalid during restoration")
+			continue
+
+		var state: Dictionary = player_states[player]
+		var is_local_player: bool = (player.name == local_player_name)
+
+		print("Processing player: ", player.name, " (is_local: ", is_local_player, ")")
+
+		# Restore position and visibility
+		if player is Node3D:
+			if state.has("position"):
+				player.global_position = state["position"]
+				print("✓ Restored position: ", state["position"])
+			if state.has("rotation"):
+				player.global_rotation = state["rotation"]
+			if state.has("visible"):
+				player.visible = state["visible"]
+				print("✓ Restored visibility: ", state["visible"])
+
+		# Unfreeze player physics FIRST
+		if player is RigidBody3D and state.has("original_freeze"):
+			player.freeze = state["original_freeze"]
+			# Ensure player is not stuck
+			if not player.freeze:
+				player.linear_velocity = Vector3.ZERO
+				player.angular_velocity = Vector3.ZERO
+			print("✓ Unfroze player: ", player.name, " (freeze: ", player.freeze, ")")
+
+		# Re-enable player input processing
+		player.set_process_input(true)
+		player.set_process_unhandled_input(true)
+		player.set_process(true)
+		player.set_physics_process(true)
+		print("✓ Re-enabled processing for player: ", player.name)
+
+		# Ensure all child meshes are visible
+		for child in player.get_children():
+			if child is MeshInstance3D:
+				child.visible = true
+				print("✓ Made mesh visible: ", child.name)
+
+		# Restore camera - ALWAYS restore for local player (do this LAST)
+		if state.has("camera") and is_instance_valid(state["camera"]):
+			var camera = state["camera"]
+
+			# Restore camera's local transform (position relative to player)
+			if state.has("camera_transform"):
+				camera.transform = state["camera_transform"]
+				print("  Restored camera local transform")
+			elif state.has("camera_position") and state.has("camera_rotation"):
+				camera.position = state["camera_position"]
+				camera.rotation = state["camera_rotation"]
+				print("  Restored camera local position: ", camera.position)
+
+			# Always activate camera for local player
+			if is_local_player:
+				camera.current = true
+				# Force camera to update its transform
+				camera.force_update_transform()
+				print("✓ Restored camera for LOCAL player: ", player.name)
+				print("  Camera global position: ", camera.global_position)
+				print("  Player position: ", player.global_position)
+				print("  Camera local position: ", camera.position)
+			elif state.get("was_current", false):
+				camera.current = true
+				camera.force_update_transform()
+				print("✓ Restored camera for player: ", player.name, " (was current before)")
+
+	# Wait another frame to ensure everything is properly restored
+	await get_tree().process_frame
+
+	print("======================================")
+	print("Arena showcase complete - control returned to players")
+	print("======================================")
