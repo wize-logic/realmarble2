@@ -974,6 +974,7 @@ func _load_music_from_directory(dir: String) -> int:
 			print("Failed to open music directory: %s" % dir)
 		return 0
 
+	print("[MUSIC] Scanning directory: %s" % dir)
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
@@ -981,22 +982,26 @@ func _load_music_from_directory(dir: String) -> int:
 	while file_name != "":
 		if not dir_access.current_is_dir():
 			var ext: String = file_name.get_extension().to_lower()
+			print("[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
 
 			# Check if it's a supported audio format
 			if ext in ["mp3", "ogg", "wav"]:
 				var file_path: String = dir.path_join(file_name)
+				print("[MUSIC] Attempting to load: %s" % file_path)
 				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 				if audio_stream and gameplay_music.has_method("add_song"):
 					gameplay_music.add_song(audio_stream, file_path)
 					songs_loaded += 1
+					print("[MUSIC] ✅ Successfully loaded: %s" % file_name)
+				else:
+					print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
 
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
 
-	if songs_loaded > 0:
-		print("Loaded %d songs from %s" % [songs_loaded, dir])
+	print("[MUSIC] Scan complete. Songs loaded: %d" % songs_loaded)
 	return songs_loaded
 
 func _on_music_directory_button_pressed() -> void:
@@ -1031,23 +1036,29 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 	# For res:// paths, try ResourceLoader first (for imported files)
 	if file_path.begins_with("res://"):
+		print("[MUSIC] Trying ResourceLoader.load(%s)..." % file_path)
 		audio_stream = ResourceLoader.load(file_path)
 		if audio_stream:
-			print("Loaded via ResourceLoader: %s" % file_path)
+			print("[MUSIC] ✅ ResourceLoader succeeded: %s" % file_path)
 			return audio_stream
 		else:
-			print("ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
+			print("[MUSIC] ⚠️ ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
 			# Fall through to FileAccess method below
 
 	# For external files (or res:// files that aren't imported), use FileAccess
+	print("[MUSIC] Trying FileAccess for %s extension..." % extension)
 	match extension:
 		"mp3":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 			if file:
+				print("[MUSIC] FileAccess opened successfully, loading MP3 data...")
 				var mp3_stream: AudioStreamMP3 = AudioStreamMP3.new()
 				mp3_stream.data = file.get_buffer(file.get_length())
 				file.close()
 				audio_stream = mp3_stream
+				print("[MUSIC] ✅ MP3 stream created successfully")
+			else:
+				print("[MUSIC] ❌ FileAccess.open failed for: %s" % file_path)
 
 		"ogg":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
