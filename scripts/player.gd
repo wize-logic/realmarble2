@@ -828,10 +828,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				apply_central_impulse(Vector3.UP * jump_strength)
 				jump_count += 1
 
-				# Play jump sound
-				if jump_sound and jump_sound.stream:
-					play_jump_sound.rpc()
-
 				# Spawn jump particle effect
 				spawn_jump_bounce_effect(1.0)
 			else:
