@@ -1797,32 +1797,42 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 
 		await get_tree().process_frame
 
+	# Clean up showcase camera first
+	showcase_camera.queue_free()
+
+	# Wait a frame for showcase camera cleanup
+	await get_tree().process_frame
+
 	# Restore all player states
 	for player in player_states.keys():
 		if not is_instance_valid(player):
+			print("Warning: Player instance invalid during restoration")
 			continue
 
 		var state: Dictionary = player_states[player]
+		var is_local_player: bool = player.is_multiplayer_authority()
 
-		# Restore camera (only if it was the current camera before)
+		# Restore camera - ALWAYS restore for local/authority players
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
-			if state["was_current"]:
+			# Always activate camera for local player, or restore previous state for others
+			if is_local_player or state["was_current"]:
 				camera.current = true
+				print("Restored camera for player: ", player.name, " (local: ", is_local_player, ")")
 
 		# Unfreeze player physics
 		if player is RigidBody3D and state.has("original_freeze"):
 			player.freeze = state["original_freeze"]
-			# Don't restore velocities - let them start fresh
+			print("Unfroze player: ", player.name, " (freeze state: ", player.freeze, ")")
 
 		# Re-enable player input processing
 		player.set_process_input(true)
 		player.set_process_unhandled_input(true)
+		player.set_process(true)
+		player.set_physics_process(true)
+		print("Re-enabled input/processing for player: ", player.name)
 
-	# Wait a frame to ensure camera switches properly
+	# Wait another frame to ensure everything is properly restored
 	await get_tree().process_frame
-
-	# Clean up showcase camera
-	showcase_camera.queue_free()
 
 	print("Arena showcase complete - control returned to players")
