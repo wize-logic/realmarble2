@@ -512,25 +512,20 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	jump_area.add_to_group("jump_pad")
 	pad_instance.add_child(jump_area)
 
+	# Set collision layers - Layer 8 for pickups/areas
+	jump_area.collision_layer = 8
+	jump_area.collision_mask = 0  # Don't detect anything
+	jump_area.monitorable = true  # Allow players to detect us
+	jump_area.monitoring = false  # We don't need to detect
+
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
 	area_shape.radius = 2.5
-	area_shape.height = 1.0
+	area_shape.height = 3.0  # Taller to catch jumping players
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
 
-	# Connect signal for jump boost (players will need to handle this)
-	jump_area.body_entered.connect(_on_jump_pad_entered.bind(index))
-
 	platforms.append(pad_instance)
-
-func _on_jump_pad_entered(body: Node3D, pad_index: int) -> void:
-	"""Handle player entering jump pad"""
-	if body is RigidBody3D and body.has_method("apply_jump_pad_boost"):
-		# Apply strong upward boost
-		var boost_force: Vector3 = Vector3.UP * 80.0
-		body.apply_central_impulse(boost_force)
-		print("Jump pad ", pad_index, " activated for ", body.name)
 
 # ============================================================================
 # TELEPORTERS
@@ -585,31 +580,21 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	teleport_area.set_meta("destination", destination)
 	teleporter_instance.add_child(teleport_area)
 
+	# Set collision layers - Layer 8 for pickups/areas
+	teleport_area.collision_layer = 8
+	teleport_area.collision_mask = 0  # Don't detect anything
+	teleport_area.monitorable = true  # Allow players to detect us
+	teleport_area.monitoring = false  # We don't need to detect
+
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
 	area_shape.radius = 3.0
-	area_shape.height = 3.0  # Tall enough to catch players
+	area_shape.height = 5.0  # Tall enough to catch players reliably
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
-	# Connect signal
-	teleport_area.body_entered.connect(_on_teleporter_entered)
-
 	platforms.append(teleporter_instance)
 	teleporters.append({"area": teleport_area, "destination": destination})
-
-func _on_teleporter_entered(body: Node3D) -> void:
-	"""Handle player entering teleporter"""
-	if body is RigidBody3D:
-		var teleport_area: Area3D = body.get_parent() if body.get_parent() is Area3D else null
-		if teleport_area and teleport_area.has_meta("destination"):
-			var destination: Vector3 = teleport_area.get_meta("destination")
-			# Teleport player (add slight height offset to ensure they're above ground)
-			body.global_position = destination + Vector3(0, 2, 0)
-			# Reset velocity to prevent momentum issues
-			if body.has_method("set_linear_velocity"):
-				body.set_linear_velocity(Vector3.ZERO)
-			print("Teleported ", body.name, " to ", destination)
 
 # ============================================================================
 # PERIMETER WALLS
