@@ -465,6 +465,10 @@ func start_practice_mode(bot_count: int) -> void:
 	# Hide marble preview when starting gameplay
 	if has_node("MarblePreview"):
 		get_node("MarblePreview").visible = false
+	# Disable preview camera explicitly
+	if preview_camera and is_instance_valid(preview_camera):
+		preview_camera.current = false
+		print("Preview camera disabled for practice mode")
 	if menu_music:
 		menu_music.stop()
 
@@ -540,6 +544,10 @@ func _on_host_button_pressed() -> void:
 	# Hide marble preview when starting gameplay
 	if has_node("MarblePreview"):
 		get_node("MarblePreview").visible = false
+	# Disable preview camera explicitly
+	if preview_camera and is_instance_valid(preview_camera):
+		preview_camera.current = false
+		print("Preview camera disabled for host mode")
 	if menu_music:
 		menu_music.stop()
 
@@ -573,6 +581,10 @@ func _on_join_button_pressed() -> void:
 	# Hide marble preview when starting gameplay
 	if has_node("MarblePreview"):
 		get_node("MarblePreview").visible = false
+	# Disable preview camera explicitly
+	if preview_camera and is_instance_valid(preview_camera):
+		preview_camera.current = false
+		print("Preview camera disabled for join mode")
 	if menu_music:
 		menu_music.stop()
 

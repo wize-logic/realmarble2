@@ -431,6 +431,8 @@ func _ready() -> void:
 		sphere.height = 1.0
 		marble_mesh.mesh = sphere
 
+	# Apply material if not already set (works for both scene-defined and dynamically created mesh)
+	if marble_mesh and not marble_mesh.material_override:
 		# Create material with texture
 		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint
@@ -449,6 +451,7 @@ func _ready() -> void:
 		mat.albedo_texture = noise_tex
 
 		marble_mesh.material_override = mat
+		print("Applied material to marble mesh for player: ", name)
 
 	# Set up aura light effect for player visibility
 	if not aura_light:
@@ -531,6 +534,11 @@ func _ready() -> void:
 
 	if camera:
 		camera.current = true
+		print("Player %s camera set to current in _ready()" % name)
+		# Ensure camera is current after a frame (to override any menu cameras)
+		await get_tree().process_frame
+		camera.current = true
+		print("Player %s camera re-confirmed as current after process frame" % name)
 
 	# Create charge meter UI
 	create_charge_meter_ui()
