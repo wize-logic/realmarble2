@@ -9,7 +9,11 @@ extends Ability
 @export var projectile_lifetime: float = 3.0
 @export var fire_rate: float = 0.5  # Cooldown between shots (increased to prevent spam)
 @export var min_charge_time: float = 0.3  # Minimum charge time before release
+@export var max_active_projectiles: int = 5  # Max active projectiles per player to prevent spam
 @onready var ability_sound: AudioStreamPlayer3D = $GunSound
+
+# Track active projectiles for this player
+var active_projectiles: Array[Node3D] = []
 
 func _ready() -> void:
 	super._ready()
@@ -60,11 +64,26 @@ func activate() -> void:
 	query.collision_mask = 3  # Check world (1) and players (2)
 	var result: Dictionary = space_state.intersect_ray(query)
 
+	# Clean up invalid projectiles from tracking array
+	active_projectiles = active_projectiles.filter(func(p): return is_instance_valid(p) and p.is_inside_tree())
+
+	# Check if we've hit the projectile limit - free oldest if needed
+	if active_projectiles.size() >= max_active_projectiles:
+		var oldest_projectile: Node3D = active_projectiles[0]
+		if is_instance_valid(oldest_projectile):
+			oldest_projectile.queue_free()
+		active_projectiles.remove_at(0)
+		if OS.is_debug_build():
+			print("Gun: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
+
 	# Spawn projectile
 	var projectile: Node3D = create_projectile()
 	if projectile:
 		# Add to world FIRST
 		player.get_parent().add_child(projectile)
+
+		# Track this projectile
+		active_projectiles.append(projectile)
 
 		# Position at gun barrel (after adding to tree)
 		projectile.global_position = barrel_position

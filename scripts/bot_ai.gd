@@ -1005,7 +1005,12 @@ func is_stuck_under_terrain() -> bool:
 
 func teleport_to_safe_position() -> void:
 	"""Teleport bot to a safe spawn position when extremely stuck"""
-	if not bot or not bot.has("spawns"):
+	if not bot or not is_instance_valid(bot):
+		return
+
+	# Check if bot has spawns property
+	if not "spawns" in bot:
+		print("Bot %s has no spawns property!" % bot.name)
 		return
 
 	# Get a random spawn point

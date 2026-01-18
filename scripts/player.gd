@@ -32,24 +32,24 @@ var rail_reticle_ui: Control = null  # Reticle for rail targeting
 ## Number of hits before respawn
 @export var health: int = 3
 ## The xyz position of the random spawns, you can add as many as you want! (16 spawns for 16 players)
-## Y=3 (raised from 2) to prevent bots sinking through floor on spawn
+## Y=4 (raised from 3, originally 2) to prevent bots sinking through floor on spawn at high player density
 @export var spawns: PackedVector3Array = [
-	Vector3(0, 3, 0),      # Center
-	Vector3(10, 3, 0),     # Ring 1
-	Vector3(-10, 3, 0),
-	Vector3(0, 3, 10),
-	Vector3(0, 3, -10),
-	Vector3(10, 3, 10),    # Ring 2 (diagonals)
-	Vector3(-10, 3, 10),
-	Vector3(10, 3, -10),
-	Vector3(-10, 3, -10),
-	Vector3(20, 3, 0),     # Ring 3 (further out)
-	Vector3(-20, 3, 0),
-	Vector3(0, 3, 20),
-	Vector3(0, 3, -20),
-	Vector3(15, 3, 15),    # Ring 4 (additional positions)
-	Vector3(-15, 3, -15),
-	Vector3(15, 3, -15)
+	Vector3(0, 4, 0),      # Center
+	Vector3(10, 4, 0),     # Ring 1
+	Vector3(-10, 4, 0),
+	Vector3(0, 4, 10),
+	Vector3(0, 4, -10),
+	Vector3(10, 4, 10),    # Ring 2 (diagonals)
+	Vector3(-10, 4, 10),
+	Vector3(10, 4, -10),
+	Vector3(-10, 4, -10),
+	Vector3(20, 4, 0),     # Ring 3 (further out)
+	Vector3(-20, 4, 0),
+	Vector3(0, 4, 20),
+	Vector3(0, 4, -20),
+	Vector3(15, 4, 15),    # Ring 4 (additional positions)
+	Vector3(-15, 4, -15),
+	Vector3(15, 4, -15)
 ]
 
 # Camera settings - 3rd person shooter style

@@ -376,6 +376,16 @@ func ask_bot_count() -> int:
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
+	# Add HTML5 warning if on web
+	if OS.has_feature("web"):
+		var warning_label = Label.new()
+		warning_label.text = "⚠ Web build recommended max: 8 bots"
+		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		warning_label.add_theme_font_size_override("font_size", 14)
+		warning_label.add_theme_color_override("font_color", Color(1, 0.8, 0.2, 1))  # Orange warning color
+		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(warning_label)
+
 	# Add separator for visual separation
 	var separator = HSeparator.new()
 	separator.add_theme_constant_override("separation", 2)
@@ -385,8 +395,8 @@ func ask_bot_count() -> int:
 	bot_count_dialog_closed = false
 	bot_count_selected = 3  # Default
 
-	# Bot count options
-	var bot_counts = [1, 3, 5, 7, 10, 15]
+	# Bot count options - cap at 8 for HTML5 to prevent physics overload
+	var bot_counts = [1, 3, 5, 7, 8] if OS.has_feature("web") else [1, 3, 5, 7, 10, 15]
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -811,7 +821,7 @@ func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
 	print("======================================")
 	print("end_deathmatch() CALLED!")
-	print("Game time was: %.2f seconds" % game_time_remaining)
+	print("Game time was: %.2f seconds" % max(0.0, game_time_remaining))
 	print("======================================")
 
 	# Prevent ending if already ended
