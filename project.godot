@@ -18,7 +18,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-Global="*res://scripts/Global.gd"
+Global="*res://scripts/global.gd"
 MultiplayerManager="*res://scripts/multiplayer_manager.gd"
 CrazyGamesSDK="*res://scripts/crazygames_sdk.gd"
 ProfileManager="*res://scripts/profile_manager.gd"
@@ -182,4 +182,4 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/use_physical_light_units=true
-anti_aliasing/quality/screen_space_aa=1
+anti_aliasing/quality/screen_space_aa=0

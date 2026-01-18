@@ -622,8 +622,12 @@ func _process(delta: float) -> void:
 		if not camera_arm:
 			print("[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name)
 
-	# Force camera to be current UNCONDITIONALLY
-	if camera and is_instance_valid(camera):
+	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
+	# Bots must NEVER activate their cameras or they'll hijack the player camera
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		# Skip camera activation for bots and non-authority players
+		pass
+	elif camera and is_instance_valid(camera):
 		if not camera.current:
 			camera.current = true
 			print("[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name)
@@ -959,7 +963,7 @@ func _physics_process(delta: float) -> void:
 		return
 	else:
 		# Stop charge sound when not charging
-		if charge_sound and charge_sound.playing:
+		if charge_sound and is_instance_valid(charge_sound) and charge_sound.playing:
 			charge_sound.stop()
 		charge_spin_rotation = 0.0
 
