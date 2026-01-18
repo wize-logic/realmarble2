@@ -1751,8 +1751,8 @@ func update_rail_targeting() -> void:
 
 					# Check if this is close enough to the ray (within targeting radius)
 					var targeting_radius: float = 5.0  # Increased for easier targeting
-					# Only allow targeting if rail is within reasonable distance (30 units)
-					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 30.0:
+					# Only allow targeting if rail is within reasonable distance (60 units - doubled from 30)
+					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 60.0:
 						# Check if we're actually in range to attach (nearby_players check)
 						if rail.has_method("can_attach"):
 							# For display purposes, we're more lenient
@@ -1764,16 +1764,10 @@ func update_rail_targeting() -> void:
 	targeted_rail = found_rail
 
 	if targeted_rail:
-		# Double-check if we can actually attach
-		var can_actually_attach: bool = false
-		if targeted_rail.has_method("can_attach"):
-			can_actually_attach = targeted_rail.can_attach(self)
-
 		rail_reticle_ui.visible = true
 
-		# Change reticle color based on whether we can attach
-		# Green if in range, yellow if too far
-		var reticle_color: Color = Color(1.0, 0.8, 0.2, 0.9) if not can_actually_attach else Color(0.2, 1.0, 0.4, 0.9)
+		# Always show green reticle when targeting a rail
+		var reticle_color: Color = Color(0.2, 1.0, 0.4, 0.9)  # Bright green
 
 		# Update all arc colors
 		for i in range(4):
@@ -1786,15 +1780,18 @@ func update_rail_targeting() -> void:
 		if center_dot is ColorRect:
 			(center_dot as ColorRect).color = reticle_color
 
-		# Update label text and color
+		# Update label text and color (always show attach prompt)
 		var label: Control = rail_reticle_ui.get_node_or_null("AttachLabel")
 		if label is Label:
-			if can_actually_attach:
-				(label as Label).text = "[E] ATTACH TO RAIL"
-				(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
-			else:
-				(label as Label).text = "TOO FAR - GET CLOSER"
-				(label as Label).add_theme_color_override("font_color", Color(1.0, 0.8, 0.2, 1.0))
+			(label as Label).text = "[E] ATTACH TO RAIL"
+			(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
+
+		# Debug: Commented out distance-based UI changes
+		# var can_actually_attach: bool = false
+		# if targeted_rail.has_method("can_attach"):
+		#	can_actually_attach = targeted_rail.can_attach(self)
+		# if not can_actually_attach:
+		#	(label as Label).text = "TOO FAR - GET CLOSER"
 	else:
 		rail_reticle_ui.visible = false
 
