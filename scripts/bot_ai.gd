@@ -38,6 +38,7 @@ var unstuck_timer: float = 0.0
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
 var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
+var stuck_print_timer: float = 0.0  # Timer to throttle stuck debug prints
 
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
@@ -94,6 +95,7 @@ func _physics_process(delta: float) -> void:
 	stuck_timer += delta
 	unstuck_timer -= delta
 	obstacle_jump_timer -= delta
+	stuck_print_timer -= delta
 
 	# Check if bot is stuck on obstacles
 	if stuck_timer >= stuck_check_interval:
@@ -953,11 +955,17 @@ func check_if_stuck() -> void:
 				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
 				# Mix perpendicular with backwards movement
 				obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
-				print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
+				# Throttle print to once every 3 seconds
+				if stuck_print_timer <= 0:
+					print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
+					stuck_print_timer = 3.0
 			else:
 				# Normal stuck - just go BACKWARDS (opposite direction)
 				obstacle_avoid_direction = opposite_dir
-				print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
+				# Throttle print to once every 3 seconds
+				if stuck_print_timer <= 0:
+					print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
+					stuck_print_timer = 3.0
 	else:
 		# Reset stuck counter if we've moved well
 		if distance_moved > 0.3:
@@ -1020,7 +1028,7 @@ func handle_unstuck_movement(delta: float) -> void:
 		var clear_dir: Vector3 = find_clear_direction(new_avoid_dir)
 		if clear_dir != Vector3.ZERO:
 			obstacle_avoid_direction = clear_dir
-			print("Bot %s changing unstuck direction" % bot.name)
+			# Already throttled by the direction change logic (every 0.3 seconds)
 
 	# Also try moving backward occasionally
 	if randf() < 0.1:

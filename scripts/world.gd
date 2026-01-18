@@ -29,6 +29,9 @@ var marble_preview: Node3D = null
 var preview_camera: Camera3D = null
 var preview_light: DirectionalLight3D = null
 
+# Audio context state (HTML5)
+var audio_context_resumed: bool = false
+
 # Game Settings
 var sensitivity: float = 0.005
 var controller_sensitivity: float = 0.010
@@ -45,6 +48,7 @@ var controller: bool = false
 
 # Deathmatch Game State
 var game_time_remaining: float = 300.0  # 5 minutes in seconds
+var last_time_print: int = -1  # Track last printed time interval to prevent spam
 var game_active: bool = false
 var player_scores: Dictionary = {}  # player_id: score
 var player_deaths: Dictionary = {}  # player_id: death_count
@@ -123,6 +127,12 @@ func _ready() -> void:
 		game_hud.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	# HTML5: Resume AudioContext on first user interaction (browser policy)
+	if not audio_context_resumed and OS.has_feature("web"):
+		if event is InputEventMouseButton or event is InputEventKey or event is InputEventJoypadButton:
+			_resume_audio_context()
+			audio_context_resumed = true
+
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
 		var lobby_visible: bool = lobby_ui and lobby_ui.visible
@@ -181,9 +191,11 @@ func _process(delta: float) -> void:
 	# Handle deathmatch timer
 	if game_active:
 		game_time_remaining -= delta
-		# Log every 30 seconds
-		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
+		# Log every 30 seconds (but only once per interval)
+		var current_interval: int = int(game_time_remaining) / 30
+		if current_interval != last_time_print and int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
 			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+			last_time_print = current_interval
 
 		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
 		# # Check for mid-round expansion trigger
@@ -285,8 +297,7 @@ func _on_practice_button_pressed() -> void:
 
 	# Prevent starting practice mode if a game is already active or counting down
 	if game_active or countdown_active:
-		print("WARNING: Cannot start practice mode - game already active or counting down!")
-		print("======================================")
+		# Silently ignore - menu should be hidden during gameplay anyway
 		return
 
 	# Prevent starting if players already exist (game already started)
@@ -445,7 +456,7 @@ func ask_bot_count() -> int:
 	# Wait for user to select an option (flag-based waiting using instance variable)
 	while not bot_count_dialog_closed:
 		await get_tree().process_frame
-		print("Still waiting... bot_count_dialog_closed = ", bot_count_dialog_closed)
+		# Silently wait - no need to spam console
 
 	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
@@ -855,6 +866,7 @@ func return_to_main_menu() -> void:
 	game_active = false
 	countdown_active = false
 	game_time_remaining = 300.0
+	last_time_print = -1  # Reset time print tracker
 
 	# Reset mid-round expansion
 	expansion_triggered = false
@@ -1554,6 +1566,26 @@ func _create_marble_preview() -> void:
 	add_child(preview_container)
 
 	print("Marble preview created")
+
+func _resume_audio_context() -> void:
+	"""Resume AudioContext on first user interaction (HTML5 browser policy fix)"""
+	if not OS.has_feature("web"):
+		return
+
+	var js_code = """
+		if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+			var AudioContext = window.AudioContext || window.webkitAudioContext;
+			if (typeof window._godotAudioContext !== 'undefined' && window._godotAudioContext) {
+				window._godotAudioContext.resume().then(function() {
+					console.log('[Godot] AudioContext resumed successfully');
+				}).catch(function(err) {
+					console.log('[Godot] Failed to resume AudioContext:', err);
+				});
+			}
+		}
+	"""
+	JavaScriptBridge.eval(js_code, true)
+	print("[HTML5] Attempted to resume AudioContext")
 
 func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""

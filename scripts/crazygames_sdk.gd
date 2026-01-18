@@ -154,7 +154,12 @@ func gameplay_start() -> void:
 		print("CrazyGames SDK: Mock gameplay started")
 		return
 
-	var js_code = "window.CrazyGamesSDK.gameplayStart();"
+	# Safe JS call - check if SDK exists before calling
+	var js_code = """
+		if (typeof window.CrazyGamesSDK !== 'undefined' && typeof window.CrazyGamesSDK.gameplayStart === 'function') {
+			window.CrazyGamesSDK.gameplayStart();
+		}
+	"""
 	JavaScriptBridge.eval(js_code, true)
 
 func gameplay_stop() -> void:
@@ -162,7 +167,12 @@ func gameplay_stop() -> void:
 		print("CrazyGames SDK: Mock gameplay stopped")
 		return
 
-	var js_code = "window.CrazyGamesSDK.gameplayStop();"
+	# Safe JS call - check if SDK exists before calling
+	var js_code = """
+		if (typeof window.CrazyGamesSDK !== 'undefined' && typeof window.CrazyGamesSDK.gameplayStop === 'function') {
+			window.CrazyGamesSDK.gameplayStop();
+		}
+	"""
 	JavaScriptBridge.eval(js_code, true)
 
 func happytime() -> void:
