@@ -69,6 +69,10 @@ const BotAI = preload("res://scripts/bot_ai.gd")
 var bot_count_dialog_closed: bool = false
 var bot_count_selected: int = 3
 
+# Level type selection dialog state
+var level_type_dialog_closed: bool = false
+var level_type_selected: String = "A"
+
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
 
@@ -77,13 +81,19 @@ const Scoreboard = preload("res://scoreboard.tscn")
 
 # Procedural level generation
 const LevelGenerator = preload("res://scripts/level_generator.gd")
+const LevelGeneratorQ3 = preload("res://scripts/level_generator_q3.gd")
 const SkyboxGenerator = preload("res://scripts/skybox_generator.gd")
 var level_generator: Node3D = null
 var skybox_generator: Node3D = null
 
+# GAME STATE: Current arena type (accessible from other scripts)
+# "A" = Type A (Original: floating platforms, grind rails, Sonic-style)
+# "B" = Type B (Quake 3 Arena: rooms, corridors, jump pads, teleporters)
+var current_level_type: String = "A"
+
 func _ready() -> void:
-	# Generate procedural level
-	generate_procedural_level()
+	# Generate procedural level (default to Type A)
+	generate_procedural_level("A")
 
 	# Initialize debug menu
 	var debug_menu_instance: Control = DebugMenu.instantiate()
@@ -209,6 +219,26 @@ func _process(delta: float) -> void:
 			end_deathmatch()
 
 # ============================================================================
+# GAME STATE FUNCTIONS
+# ============================================================================
+
+func get_current_level_type() -> String:
+	"""Get the current arena type being played
+	Returns:
+		"A" - Type A arena (Original: floating platforms, grind rails)
+		"B" - Type B arena (Quake 3: rooms, corridors, jump pads, teleporters)
+	"""
+	return current_level_type
+
+func is_type_a_arena() -> bool:
+	"""Check if currently playing on Type A arena (original style)"""
+	return current_level_type == "A"
+
+func is_type_b_arena() -> bool:
+	"""Check if currently playing on Type B arena (Quake 3 style)"""
+	return current_level_type == "B"
+
+# ============================================================================
 # MENU FUNCTIONS
 # ============================================================================
 
@@ -317,9 +347,18 @@ func _on_practice_button_pressed() -> void:
 		print("Practice mode cancelled")
 		return
 
-	# Now start practice mode with the chosen bot count
-	print("Starting practice mode with %d bots..." % bot_count_choice)
-	start_practice_mode(bot_count_choice)
+	# Ask user which level type they want (Type A or Type B)
+	print("Calling ask_level_type()...")
+	var level_type_choice = await ask_level_type()
+	print("ask_level_type() returned: ", level_type_choice)
+	if level_type_choice == "":
+		# User cancelled or error
+		print("Practice mode cancelled")
+		return
+
+	# Now start practice mode with the chosen bot count and level type
+	print("Starting practice mode with %d bots and level type %s..." % [bot_count_choice, level_type_choice])
+	start_practice_mode(bot_count_choice, level_type_choice)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -476,9 +515,175 @@ func ask_bot_count() -> int:
 	print("Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
 
-func start_practice_mode(bot_count: int) -> void:
-	"""Start practice mode with specified number of bots"""
-	print("Starting practice mode with %d bots" % bot_count)
+func ask_level_type() -> String:
+	"""Ask the user which level generation type they want (Type A or Type B)"""
+	# Create a beautiful dialog matching main menu theme
+	var dialog = AcceptDialog.new()
+	dialog.title = "Select Level Type"
+	dialog.dialog_hide_on_ok = false
+	dialog.exclusive = true
+	dialog.unresizable = false
+	dialog.size = Vector2(600, 400)
+
+	# Create custom panel style matching main menu
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	dialog.add_theme_stylebox_override("panel", panel_style)
+
+	# Hide default OK button
+	dialog.get_ok_button().hide()
+
+	# Create VBoxContainer for layout
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20)
+	dialog.add_child(vbox)
+
+	# Add title label
+	var title_label = Label.new()
+	title_label.text = "Choose Your Arena Style"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 24)
+	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	vbox.add_child(title_label)
+
+	# Add separator
+	var separator = HSeparator.new()
+	separator.add_theme_constant_override("separation", 2)
+	vbox.add_child(separator)
+
+	# Reset instance variables for this dialog
+	level_type_dialog_closed = false
+	level_type_selected = "A"  # Default
+
+	# Create centered container for buttons
+	var center_container = CenterContainer.new()
+	vbox.add_child(center_container)
+
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 30)
+	center_container.add_child(hbox)
+
+	# Type A Button
+	var type_a_button = Button.new()
+	type_a_button.text = "Type A\nOriginal Arena"
+	type_a_button.custom_minimum_size = Vector2(200, 120)
+
+	var button_style_a = StyleBoxFlat.new()
+	button_style_a.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	button_style_a.set_corner_radius_all(10)
+	button_style_a.border_width_left = 2
+	button_style_a.border_width_top = 2
+	button_style_a.border_width_right = 2
+	button_style_a.border_width_bottom = 2
+	button_style_a.border_color = Color(0.3, 0.7, 1, 0.5)
+
+	var button_hover_style_a = StyleBoxFlat.new()
+	button_hover_style_a.bg_color = Color(0.25, 0.35, 0.5, 0.95)
+	button_hover_style_a.set_corner_radius_all(10)
+	button_hover_style_a.border_width_left = 3
+	button_hover_style_a.border_width_top = 3
+	button_hover_style_a.border_width_right = 3
+	button_hover_style_a.border_width_bottom = 3
+	button_hover_style_a.border_color = Color(0.3, 0.7, 1, 1)
+
+	type_a_button.add_theme_font_size_override("font_size", 18)
+	type_a_button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	type_a_button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
+	type_a_button.add_theme_stylebox_override("normal", button_style_a)
+	type_a_button.add_theme_stylebox_override("hover", button_hover_style_a)
+	type_a_button.add_theme_stylebox_override("pressed", button_hover_style_a)
+
+	type_a_button.pressed.connect(func():
+		print("Type A button clicked")
+		level_type_selected = "A"
+		level_type_dialog_closed = true
+		dialog.hide()
+	)
+	hbox.add_child(type_a_button)
+
+	# Type B Button
+	var type_b_button = Button.new()
+	type_b_button.text = "Type B\nQuake 3 Arena"
+	type_b_button.custom_minimum_size = Vector2(200, 120)
+
+	var button_style_b = StyleBoxFlat.new()
+	button_style_b.bg_color = Color(0.15, 0.15, 0.2, 0.9)
+	button_style_b.set_corner_radius_all(10)
+	button_style_b.border_width_left = 2
+	button_style_b.border_width_top = 2
+	button_style_b.border_width_right = 2
+	button_style_b.border_width_bottom = 2
+	button_style_b.border_color = Color(1, 0.5, 0.2, 0.5)  # Orange border for Q3
+
+	var button_hover_style_b = StyleBoxFlat.new()
+	button_hover_style_b.bg_color = Color(0.5, 0.25, 0.15, 0.95)
+	button_hover_style_b.set_corner_radius_all(10)
+	button_hover_style_b.border_width_left = 3
+	button_hover_style_b.border_width_top = 3
+	button_hover_style_b.border_width_right = 3
+	button_hover_style_b.border_width_bottom = 3
+	button_hover_style_b.border_color = Color(1, 0.5, 0.2, 1)  # Orange border
+
+	type_b_button.add_theme_font_size_override("font_size", 18)
+	type_b_button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
+	type_b_button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
+	type_b_button.add_theme_stylebox_override("normal", button_style_b)
+	type_b_button.add_theme_stylebox_override("hover", button_hover_style_b)
+	type_b_button.add_theme_stylebox_override("pressed", button_hover_style_b)
+
+	type_b_button.pressed.connect(func():
+		print("Type B button clicked")
+		level_type_selected = "B"
+		level_type_dialog_closed = true
+		dialog.hide()
+	)
+	hbox.add_child(type_b_button)
+
+	# Add descriptions
+	var desc_container = VBoxContainer.new()
+	desc_container.add_theme_constant_override("separation", 10)
+	vbox.add_child(desc_container)
+
+	var desc_a = Label.new()
+	desc_a.text = "Type A: Floating platforms, ramps, and Sonic-style grind rails"
+	desc_a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_a.add_theme_font_size_override("font_size", 14)
+	desc_a.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	desc_a.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_container.add_child(desc_a)
+
+	var desc_b = Label.new()
+	desc_b.text = "Type B: Multi-tier arena with rooms, corridors, jump pads, and teleporters"
+	desc_b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_b.add_theme_font_size_override("font_size", 14)
+	desc_b.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	desc_b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_container.add_child(desc_b)
+
+	# Add dialog to scene
+	add_child(dialog)
+	dialog.popup_centered()
+	print("Level type dialog shown, waiting for user selection...")
+
+	# Wait for user to select an option
+	while not level_type_dialog_closed:
+		await get_tree().process_frame
+
+	print("Level type dialog closed, cleaning up...")
+	dialog.queue_free()
+
+	print("Level type selected: %s" % level_type_selected)
+	return level_type_selected
+
+func start_practice_mode(bot_count: int, level_type: String = "A") -> void:
+	"""Start practice mode with specified number of bots and level type"""
+	print("Starting practice mode with %d bots and level type %s" % [bot_count, level_type])
 
 	if main_menu:
 		main_menu.hide()
@@ -500,6 +705,12 @@ func start_practice_mode(bot_count: int) -> void:
 
 	if menu_music:
 		menu_music.stop()
+
+	# Regenerate level with selected type
+	current_level_type = level_type
+	print("Regenerating level with type %s..." % level_type)
+	await generate_procedural_level(level_type)
+	print("Level regeneration complete!")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -1767,10 +1978,13 @@ func play_countdown_beep() -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level() -> void:
-	"""Generate a procedural level with skybox"""
+func generate_procedural_level(level_type: String = "A") -> void:
+	"""Generate a procedural level with skybox
+	Args:
+		level_type: "A" for original generator, "B" for Quake 3 arena style
+	"""
 	if OS.is_debug_build():
-		print("Generating procedural arena...")
+		print("Generating procedural arena (Type %s)..." % level_type)
 
 	# Remove old level generator if it exists
 	if level_generator:
@@ -1785,10 +1999,19 @@ func generate_procedural_level() -> void:
 	# Wait a frame for cleanup
 	await get_tree().process_frame
 
-	# Create level generator
+	# Create level generator based on selected type
 	level_generator = Node3D.new()
 	level_generator.name = "LevelGenerator"
-	level_generator.set_script(LevelGenerator)
+
+	if level_type == "B":
+		# Use Quake 3 Arena-style generator
+		level_generator.set_script(LevelGeneratorQ3)
+		print("Using Quake 3 Arena-style level generator")
+	else:
+		# Use original generator (Type A)
+		level_generator.set_script(LevelGenerator)
+		print("Using original level generator")
+
 	add_child(level_generator)
 
 	# Wait a frame for level to generate

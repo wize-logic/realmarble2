@@ -99,6 +99,16 @@ var rail_lock_raycast: RayCast3D = null  # Raycast for detecting rails
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 
+# Jump pad system (Q3 Arena style)
+var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
+var jump_pad_cooldown_time: float = 1.0  # Cooldown duration
+var jump_pad_boost_force: float = 300.0  # Upward boost force (strong launch!)
+
+# Teleporter system (Q3 Arena style)
+var teleporter_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
+var teleporter_cooldown_time: float = 2.0  # Cooldown duration
+var area_detector: Area3D = null  # Area3D for detecting jump pads and teleporters
+
 # Spin dash properties
 var is_charging_spin: bool = false
 var is_spin_dashing: bool = false  # Actively spinning from spindash
@@ -545,6 +555,9 @@ func _ready() -> void:
 	# Create rail detection raycast
 	create_rail_raycast()
 
+	# Create area detector for jump pads and teleporters
+	create_area_detector()
+
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
 	if spawns.size() > 0:
@@ -926,6 +939,14 @@ func _physics_process(delta: float) -> void:
 	# Update spin dash cooldown
 	if spin_cooldown > 0.0:
 		spin_cooldown -= delta
+
+	# Update jump pad cooldown
+	if jump_pad_cooldown > 0.0:
+		jump_pad_cooldown -= delta
+
+	# Update teleporter cooldown
+	if teleporter_cooldown > 0.0:
+		teleporter_cooldown -= delta
 
 	# Update spin dash timer (for visual spinning)
 	if spin_dash_timer > 0.0:
@@ -2017,3 +2038,157 @@ func jump_off_rail() -> void:
 	spawn_jump_bounce_effect(1.2)
 
 	print("Jumped off rail! Velocity: ", linear_velocity)
+
+# ============================================================================
+# JUMP PAD & TELEPORTER SYSTEM (Q3 ARENA STYLE)
+# ============================================================================
+
+func create_area_detector() -> void:
+	"""Create Area3D for detecting jump pads and teleporters"""
+	area_detector = Area3D.new()
+	area_detector.name = "AreaDetector"
+	add_child(area_detector)
+
+	# Create collision shape for area detection (slightly larger than player)
+	var collision_shape: CollisionShape3D = CollisionShape3D.new()
+	var shape: SphereShape3D = SphereShape3D.new()
+	shape.radius = 0.6  # Slightly larger than player radius
+	collision_shape.shape = shape
+	area_detector.add_child(collision_shape)
+
+	# Set up collision layers - detect areas but not other players
+	area_detector.collision_layer = 0  # Don't report our presence
+	area_detector.collision_mask = 8  # Detect layer 8 (pickups/areas)
+	area_detector.monitorable = false  # Don't need other areas to detect us
+
+	# Connect signals
+	area_detector.area_entered.connect(_on_area_entered)
+
+	print("Area detector created for jump pads and teleporters")
+
+func _on_area_entered(area: Area3D) -> void:
+	"""Handle entering areas (jump pads, teleporters, etc.)"""
+	if not is_multiplayer_authority():
+		return  # Only process for local player
+
+	# Check if this is a jump pad
+	if area.is_in_group("jump_pad"):
+		activate_jump_pad()
+
+	# Check if this is a teleporter
+	elif area.is_in_group("teleporter") and area.has_meta("destination"):
+		var destination: Vector3 = area.get_meta("destination")
+		activate_teleporter(destination)
+
+func activate_jump_pad() -> void:
+	"""Apply jump pad boost to player"""
+	if jump_pad_cooldown > 0.0:
+		return  # Still on cooldown
+
+	print("Jump pad activated! Applying boost...")
+
+	# Cancel downward velocity and apply strong upward boost
+	var vel: Vector3 = linear_velocity
+	vel.y = 0  # Cancel any downward momentum
+	linear_velocity = vel
+
+	# Apply strong upward impulse
+	apply_central_impulse(Vector3.UP * jump_pad_boost_force)
+
+	# Reset bounce state (jump pad interrupts bounce)
+	is_bouncing = false
+	bounce_count = 0
+
+	# Reset double jump
+	jump_count = 0
+
+	# Play bounce sound (reuse for jump pad)
+	if bounce_sound and bounce_sound.stream:
+		bounce_sound.pitch_scale = 1.5  # Higher pitch for jump pad
+		bounce_sound.play()
+
+	# Spawn BRIGHT GREEN particle explosion effect
+	spawn_jump_pad_effect()
+
+	# Set cooldown to prevent rapid re-triggering
+	jump_pad_cooldown = jump_pad_cooldown_time
+
+	print("Jump pad boost applied! New velocity: ", linear_velocity)
+
+func activate_teleporter(destination: Vector3) -> void:
+	"""Teleport player to destination"""
+	if teleporter_cooldown > 0.0:
+		return  # Still on cooldown
+
+	print("Teleporter activated! Teleporting to: ", destination)
+
+	# Teleport player (add height offset to ensure above ground)
+	global_position = destination + Vector3(0, 2, 0)
+
+	# Reset velocity to prevent momentum issues
+	linear_velocity = Vector3.ZERO
+
+	# Reset bounce state
+	is_bouncing = false
+	bounce_count = 0
+
+	# Play a sound effect (reuse hit sound)
+	if hit_sound and hit_sound.stream:
+		hit_sound.pitch_scale = 0.7  # Lower pitch for teleport
+		hit_sound.play()
+
+	# Spawn BRIGHT PURPLE particle swirl effect at destination
+	spawn_teleporter_effect()
+
+	# Set cooldown to prevent rapid re-triggering
+	teleporter_cooldown = teleporter_cooldown_time
+
+	print("Teleported to: ", global_position)
+
+func spawn_jump_pad_effect() -> void:
+	"""Spawn BRIGHT GREEN explosive particle effect for jump pad activation"""
+	if not death_particles:
+		return
+
+	# Temporarily change death particles to bright green for jump pad effect
+	var jump_pad_gradient: Gradient = Gradient.new()
+	jump_pad_gradient.add_point(0.0, Color(0.2, 1.0, 0.3, 1.0))  # Bright green
+	jump_pad_gradient.add_point(0.3, Color(0.4, 1.0, 0.5, 0.9))  # Lighter green
+	jump_pad_gradient.add_point(0.7, Color(0.6, 1.0, 0.7, 0.5))  # Very light green
+	jump_pad_gradient.add_point(1.0, Color(0.8, 1.0, 0.9, 0.0))  # Transparent
+
+	death_particles.color_ramp = jump_pad_gradient
+	death_particles.initial_velocity_min = 15.0  # Faster burst
+	death_particles.initial_velocity_max = 25.0
+	death_particles.amount = 150  # Lots of particles
+
+	# Trigger particle burst at current position
+	death_particles.global_position = global_position
+	death_particles.emitting = true
+	death_particles.restart()
+
+	print("BRIGHT GREEN jump pad particle explosion spawned!")
+
+func spawn_teleporter_effect() -> void:
+	"""Spawn BRIGHT PURPLE/BLUE swirling particle effect for teleporter activation"""
+	if not death_particles:
+		return
+
+	# Temporarily change death particles to bright purple/blue for teleporter effect
+	var teleporter_gradient: Gradient = Gradient.new()
+	teleporter_gradient.add_point(0.0, Color(0.5, 0.3, 1.0, 1.0))  # Bright purple
+	teleporter_gradient.add_point(0.3, Color(0.6, 0.5, 1.0, 0.9))  # Lighter purple
+	teleporter_gradient.add_point(0.7, Color(0.7, 0.7, 1.0, 0.5))  # Light blue-purple
+	teleporter_gradient.add_point(1.0, Color(0.8, 0.8, 1.0, 0.0))  # Transparent
+
+	death_particles.color_ramp = teleporter_gradient
+	death_particles.initial_velocity_min = 12.0  # Swirling motion
+	death_particles.initial_velocity_max = 20.0
+	death_particles.amount = 200  # Many particles for swirl effect
+
+	# Trigger particle burst at destination position
+	death_particles.global_position = global_position
+	death_particles.emitting = true
+	death_particles.restart()
+
+	print("BRIGHT PURPLE teleporter particle swirl spawned!")
