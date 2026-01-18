@@ -779,14 +779,6 @@ func return_to_main_menu() -> void:
 	if orb_spawner and orb_spawner.has_method("clear_all"):
 		orb_spawner.clear_all()
 
-	# Clear the map and skybox
-	if level_generator:
-		level_generator.queue_free()
-		level_generator = null
-	if skybox_generator:
-		skybox_generator.queue_free()
-		skybox_generator = null
-
 	# Clear scores and deaths
 	player_scores.clear()
 	player_deaths.clear()
