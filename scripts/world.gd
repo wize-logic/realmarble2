@@ -1803,6 +1803,13 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 	# Wait a frame for showcase camera cleanup
 	await get_tree().process_frame
 
+	# Identify the local player (same logic as game_hud.gd)
+	var local_player_id: int = 1  # Default to player 1 for practice mode
+	if multiplayer.has_multiplayer_peer():
+		local_player_id = multiplayer.get_unique_id()
+	var local_player_name: String = str(local_player_id)
+	print("Identifying local player: ", local_player_name)
+
 	# Restore all player states
 	for player in player_states.keys():
 		if not is_instance_valid(player):
@@ -1810,29 +1817,36 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			continue
 
 		var state: Dictionary = player_states[player]
-		var is_local_player: bool = player.is_multiplayer_authority()
+		var is_local_player: bool = (player.name == local_player_name)
 
-		# Restore camera - ALWAYS restore for local/authority players
+		print("Processing player: ", player.name, " (is_local: ", is_local_player, ")")
+
+		# Restore camera - ALWAYS restore for local player
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
-			# Always activate camera for local player, or restore previous state for others
-			if is_local_player or state["was_current"]:
+			# Always activate camera for local player
+			if is_local_player:
 				camera.current = true
-				print("Restored camera for player: ", player.name, " (local: ", is_local_player, ")")
+				print("✓ Restored camera for LOCAL player: ", player.name)
+			elif state["was_current"]:
+				camera.current = true
+				print("✓ Restored camera for player: ", player.name, " (was current before)")
 
 		# Unfreeze player physics
 		if player is RigidBody3D and state.has("original_freeze"):
 			player.freeze = state["original_freeze"]
-			print("Unfroze player: ", player.name, " (freeze state: ", player.freeze, ")")
+			print("✓ Unfroze player: ", player.name, " (freeze: ", player.freeze, ")")
 
 		# Re-enable player input processing
 		player.set_process_input(true)
 		player.set_process_unhandled_input(true)
 		player.set_process(true)
 		player.set_physics_process(true)
-		print("Re-enabled input/processing for player: ", player.name)
+		print("✓ Re-enabled processing for player: ", player.name)
 
 	# Wait another frame to ensure everything is properly restored
 	await get_tree().process_frame
 
+	print("======================================")
 	print("Arena showcase complete - control returned to players")
+	print("======================================")
