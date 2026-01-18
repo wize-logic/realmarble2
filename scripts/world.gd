@@ -1769,8 +1769,12 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			var camera = player.get_node("Camera3D")
 			state["camera"] = camera
 			state["was_current"] = camera.current
+			state["camera_position"] = camera.position  # Local position relative to player
+			state["camera_rotation"] = camera.rotation  # Local rotation
+			state["camera_transform"] = camera.transform  # Full local transform
 			camera.current = false
 			print("  Camera stored (was_current: ", state["was_current"], ")")
+			print("  Camera local position: ", camera.position)
 
 		# Freeze player physics (RigidBody3D)
 		if player is RigidBody3D:
@@ -1876,14 +1880,25 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 		# Restore camera - ALWAYS restore for local player (do this LAST)
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
+
+			# Restore camera's local transform (position relative to player)
+			if state.has("camera_transform"):
+				camera.transform = state["camera_transform"]
+				print("  Restored camera local transform")
+			elif state.has("camera_position") and state.has("camera_rotation"):
+				camera.position = state["camera_position"]
+				camera.rotation = state["camera_rotation"]
+				print("  Restored camera local position: ", camera.position)
+
 			# Always activate camera for local player
 			if is_local_player:
 				camera.current = true
 				# Force camera to update its transform
 				camera.force_update_transform()
 				print("✓ Restored camera for LOCAL player: ", player.name)
-				print("  Camera position: ", camera.global_position)
+				print("  Camera global position: ", camera.global_position)
 				print("  Player position: ", player.global_position)
+				print("  Camera local position: ", camera.position)
 			elif state.get("was_current", false):
 				camera.current = true
 				camera.force_update_transform()
