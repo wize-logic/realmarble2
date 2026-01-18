@@ -505,6 +505,16 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	material.emission_energy = 0.5
 	pad_instance.material_override = material
 
+	# Add collision to jump pad so players can stand on it
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var collision_shape: CylinderShape3D = CylinderShape3D.new()
+	collision_shape.radius = 2.5
+	collision_shape.height = 0.5
+	collision.shape = collision_shape
+	static_body.add_child(collision)
+	pad_instance.add_child(static_body)
+
 	# Area3D for jump boost detection
 	var jump_area: Area3D = Area3D.new()
 	jump_area.name = "JumpPadArea"
@@ -571,6 +581,16 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	material.emission = Color(0.5, 0.3, 1.0)  # Purple glow
 	material.emission_energy = 1.0
 	teleporter_instance.material_override = material
+
+	# Add collision to teleporter so players can stand on it
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var collision_shape: CylinderShape3D = CylinderShape3D.new()
+	collision_shape.radius = 3.0
+	collision_shape.height = 0.3
+	collision.shape = collision_shape
+	static_body.add_child(collision)
+	teleporter_instance.add_child(static_body)
 
 	# Area3D for teleportation
 	var teleport_area: Area3D = Area3D.new()

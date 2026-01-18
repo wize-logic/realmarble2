@@ -102,7 +102,7 @@ var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
 var jump_pad_cooldown_time: float = 1.0  # Cooldown duration
-var jump_pad_boost_force: float = 80.0  # Upward boost force
+var jump_pad_boost_force: float = 150.0  # Upward boost force (strong launch!)
 
 # Teleporter system (Q3 Arena style)
 var teleporter_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
