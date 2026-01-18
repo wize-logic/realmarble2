@@ -3,6 +3,7 @@ class_name GrindRail
 
 ## 100% NO AUTO-DETACH + VERY FAST SPEED BUILDUP + STRONG UPWARD LAUNCH
 ## Now attaches from a LARGE AREA BELOW the rail
+## STUCK SAFEGUARD: Detects when player can't make progress and applies boosts or safe detachment
 
 @export var detection_radius: float = 18.0
 @export var rope_length: float = 3.2
@@ -23,6 +24,14 @@ class_name GrindRail
 @export var end_launch_upward_impulse: float = 200.0
 @export var end_launch_forward_boost: float = 1.5
 
+# Stuck safeguard settings
+@export var stuck_detection_interval: float = 1.0  # Check progress every N seconds
+@export var stuck_min_progress: float = 2.0  # Minimum distance to travel in interval
+@export var stuck_threshold_time: float = 2.5  # Time stuck before applying boost
+@export var emergency_boost_force: float = 800.0  # Force applied when stuck
+@export var max_boost_attempts: int = 3  # Max boosts before detaching
+@export var boost_cooldown: float = 1.5  # Time between boost attempts
+
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
 
@@ -31,9 +40,19 @@ class GrinderData:
 	var rope_visual: MeshInstance3D = null
 	var attach_time: float = 0.0
 
+	# Stuck detection safeguard
+	var last_progress_check_time: float = 0.0
+	var last_progress_offset: float = 0.0
+	var stuck_time: float = 0.0
+	var boost_attempts: int = 0
+	var last_boost_time: float = 0.0
+
 	func _init(start_offset: float):
 		closest_offset = start_offset
 		attach_time = Time.get_ticks_msec() / 1000.0
+		last_progress_check_time = attach_time
+		last_progress_offset = start_offset
+		last_boost_time = attach_time
 
 
 func _ready() -> void:
@@ -236,6 +255,49 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float) -> void:
 	var dy: float = ahead_pos.y - attach_pos.y
 	var slope_f: Vector3 = tangent * (-dy * gravity_multiplier * 120.0)
 	grinder.apply_central_force(slope_f)
+
+	# STUCK DETECTION SAFEGUARD
+	# Check if player is making sufficient progress along the rail
+	if current_time - data.last_progress_check_time >= stuck_detection_interval:
+		var progress: float = abs(attach_offset - data.last_progress_offset)
+
+		if progress < stuck_min_progress:
+			# Not making enough progress - increment stuck time
+			data.stuck_time += stuck_detection_interval
+
+			if data.stuck_time >= stuck_threshold_time:
+				# Player is stuck! Try to help them
+				if data.boost_attempts < max_boost_attempts and current_time - data.last_boost_time >= boost_cooldown:
+					# Apply emergency boost in the direction of nearest end
+					var to_start: float = attach_offset
+					var to_end: float = length - attach_offset
+					var boost_direction: Vector3 = tangent if to_end < to_start else -tangent
+
+					grinder.apply_central_impulse(boost_direction * emergency_boost_force)
+					data.boost_attempts += 1
+					data.last_boost_time = current_time
+
+					print("[", name, "] STUCK SAFEGUARD: Applied boost #", data.boost_attempts, " toward ",
+						("end" if to_end < to_start else "start"))
+
+				elif data.boost_attempts >= max_boost_attempts:
+					# Tried multiple boosts, still stuck - detach player safely
+					print("[", name, "] STUCK SAFEGUARD: Max boost attempts reached, detaching player safely")
+
+					# Give player a gentle upward and forward impulse
+					grinder.apply_central_impulse(Vector3.UP * 80.0)
+					grinder.apply_central_impulse(tangent * 100.0)
+
+					_remove_grinder(grinder)
+					return
+		else:
+			# Making good progress - reset stuck tracking
+			data.stuck_time = 0.0
+			data.boost_attempts = 0
+
+		# Update progress tracking
+		data.last_progress_check_time = current_time
+		data.last_progress_offset = attach_offset
 
 	# Only detach at end of rail
 	if attach_offset <= 1.5 or attach_offset >= length - 1.5:
