@@ -480,6 +480,17 @@ func start_practice_mode(bot_count: int) -> void:
 	local_player.name = "1"
 	add_child(local_player)
 	local_player.add_to_group("players")
+
+	# Update player spawns from level generator (same as bots)
+	if level_generator and level_generator.has_method("get_spawn_points"):
+		var spawn_points: PackedVector3Array = level_generator.get_spawn_points()
+		if spawn_points.size() > 0:
+			local_player.spawns = spawn_points
+			# Reposition player to correct spawn point
+			var spawn_index: int = 1 % spawn_points.size()
+			local_player.global_position = spawn_points[spawn_index]
+			print("Player spawned at position %d: %s" % [spawn_index, local_player.global_position])
+
 	player_scores[1] = 0
 	player_deaths[1] = 0
 	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
@@ -591,6 +602,16 @@ func add_player(peer_id: int) -> void:
 
 	# Add to players group for AI targeting
 	player.add_to_group("players")
+
+	# Update player spawns from level generator (same as bots)
+	if level_generator and level_generator.has_method("get_spawn_points"):
+		var spawn_points: PackedVector3Array = level_generator.get_spawn_points()
+		if spawn_points.size() > 0:
+			player.spawns = spawn_points
+			# Reposition player to correct spawn point
+			var spawn_index: int = peer_id % spawn_points.size()
+			player.global_position = spawn_points[spawn_index]
+			print("Multiplayer player %d spawned at position %d: %s" % [peer_id, spawn_index, player.global_position])
 
 	# Initialize player score and deaths
 	player_scores[peer_id] = 0

@@ -543,8 +543,13 @@ func _ready() -> void:
 
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
-	var spawn_index: int = player_id % spawns.size()
-	global_position = spawns[spawn_index]
+	if spawns.size() > 0:
+		var spawn_index: int = player_id % spawns.size()
+		global_position = spawns[spawn_index]
+		print("Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position])
+	else:
+		print("WARNING: No spawn points available! Player %s using default position." % name)
+		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Reset velocity on spawn
 	linear_velocity = Vector3.ZERO
@@ -1164,7 +1169,8 @@ func respawn() -> void:
 		global_position = spawns[spawn_index]
 		print("Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot])
 	else:
-		print("ERROR: No spawn points available for player %s!" % name)
+		print("WARNING: No spawn points available for player %s! Using fallback position." % name)
+		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Play spawn sound effect
 	if spawn_sound:

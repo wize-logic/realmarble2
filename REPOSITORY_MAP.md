@@ -1,6 +1,6 @@
 # Repository Map: Marble Physics Deathmatch (Godot 4.5.1)
 
-**Version:** Godot 4.5.1 (Forward Plus Renderer)
+**Version:** Godot 4.5.1 (GL Compatibility Renderer)
 **Genre:** Physics-based Multiplayer Deathmatch
 **Inspiration:** Sonic Adventure 2 movement + Kirby ability system
 **Platform:** Web (CrazyGames), Desktop
@@ -42,11 +42,11 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 
 ### Technology Stack
 
-- **Engine:** Godot 4.5.1 (Forward Plus)
+- **Engine:** Godot 4.5.1 (GL Compatibility)
 - **Language:** GDScript
 - **Networking:** WebSocket (browser), ENet (desktop)
 - **Physics:** RigidBody3D with force-based movement
-- **Rendering:** Forward Plus (for web compatibility)
+- **Rendering:** GL Compatibility (for web compatibility)
 
 ---
 
