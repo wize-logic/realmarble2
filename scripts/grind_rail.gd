@@ -147,16 +147,25 @@ func can_attach(grinder: RigidBody3D) -> bool:
 
 func try_attach_player(grinder: RigidBody3D) -> bool:
 	"""Attempt to attach a player to the rail (called when player presses E)"""
-	if not can_attach(grinder):
-		return false
+	# Allow attachment if visually targeting, regardless of physical proximity
+	# The player.gd visual targeting system has already validated the distance
+	if active_grinders.has(grinder):
+		return false  # Already attached
 
 	var pos: Vector3 = grinder.global_position
 	var local: Vector3 = to_local(pos)
 	var offset: float = curve.get_closest_offset(local)
 	var closest_world: Vector3 = to_global(curve.sample_baked(offset))
 
+	# Validate distance one more time (max 30 units as per player.gd)
+	var distance: float = pos.distance_to(closest_world)
+	if distance > 30.0:
+		print("[", name, "] Attachment failed - too far: ", distance)
+		return false
+
 	_attach(grinder, offset, closest_world)
-	nearby_players.erase(grinder)  # Remove from nearby list
+	nearby_players.erase(grinder)  # Remove from nearby list if present
+	print("[", name, "] Manual attachment successful! Distance: ", distance)
 	return true
 
 
