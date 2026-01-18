@@ -39,6 +39,7 @@ var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
 var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
 var stuck_print_timer: float = 0.0  # Timer to throttle stuck debug prints
+const MAX_STUCK_ATTEMPTS: int = 15  # Teleport bot after this many consecutive stuck checks
 
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
@@ -939,6 +940,14 @@ func check_if_stuck() -> void:
 	if distance_moved < 0.15 and is_trying_to_move:
 		consecutive_stuck_checks += 1
 
+		# EMERGENCY: Teleport bot if stuck for too long (prevents infinite stuck loops)
+		if consecutive_stuck_checks >= MAX_STUCK_ATTEMPTS:
+			print("Bot %s EXTREMELY STUCK (%d attempts)! Emergency teleport to spawn" % [bot.name, consecutive_stuck_checks])
+			teleport_to_safe_position()
+			consecutive_stuck_checks = 0
+			is_stuck = false
+			return
+
 		# Trigger stuck state after 2 consecutive failed movement checks
 		if consecutive_stuck_checks >= 2 and not is_stuck:
 			is_stuck = true
@@ -993,6 +1002,23 @@ func is_stuck_under_terrain() -> bool:
 
 	# If we hit something above us, we're stuck under terrain
 	return result.size() > 0
+
+func teleport_to_safe_position() -> void:
+	"""Teleport bot to a safe spawn position when extremely stuck"""
+	if not bot or not bot.has("spawns"):
+		return
+
+	# Get a random spawn point
+	if bot.spawns.size() > 0:
+		var spawn_index: int = randi() % bot.spawns.size()
+		var spawn_pos: Vector3 = bot.spawns[spawn_index]
+
+		# Teleport bot
+		bot.global_position = spawn_pos
+		bot.linear_velocity = Vector3.ZERO
+		bot.angular_velocity = Vector3.ZERO
+
+		print("Bot %s teleported to spawn %d: %s" % [bot.name, spawn_index, spawn_pos])
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Handle movement when bot is stuck - try to get unstuck"""

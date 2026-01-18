@@ -204,6 +204,7 @@ func _process(delta: float) -> void:
 		# 	trigger_mid_round_expansion()
 
 		if game_time_remaining <= 0:
+			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
@@ -471,6 +472,8 @@ func start_practice_mode(bot_count: int) -> void:
 
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
@@ -522,6 +525,40 @@ func start_practice_mode(bot_count: int) -> void:
 	# Start the deathmatch
 	start_deathmatch()
 
+func _set_practice_button_disabled(disabled: bool) -> void:
+	"""Disable or enable the practice button to prevent spam during gameplay"""
+	if not main_menu:
+		return
+
+	# Navigate to PracticeButton: MainMenu -> PlaySubmenu -> MarginContainer -> VBoxContainer -> SubmenuButtons -> PracticeButton
+	var play_submenu: Node = main_menu.get_node_or_null("PlaySubmenu")
+	if not play_submenu:
+		return
+
+	var margin: Node = play_submenu.get_node_or_null("MarginContainer")
+	if not margin:
+		return
+
+	var vbox: Node = margin.get_node_or_null("VBoxContainer")
+	if not vbox:
+		return
+
+	var submenu_buttons: Node = vbox.get_node_or_null("SubmenuButtons")
+	if not submenu_buttons:
+		return
+
+	var practice_button: Node = submenu_buttons.get_node_or_null("PracticeButton")
+	if not practice_button:
+		return
+
+	# Disable the button (or use visible = false if preferred)
+	if "disabled" in practice_button:
+		practice_button.disabled = disabled
+		if disabled:
+			print("[UI] Practice button disabled (game active)")
+		else:
+			print("[UI] Practice button enabled (game inactive)")
+
 func _on_settings_pressed() -> void:
 	"""Open settings menu from main menu"""
 	_on_options_button_toggled(true)
@@ -555,6 +592,8 @@ func _on_friends_pressed() -> void:
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 
@@ -598,6 +637,8 @@ func _on_host_button_pressed() -> void:
 func _on_join_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 
@@ -885,6 +926,8 @@ func return_to_main_menu() -> void:
 	# Show main menu
 	if main_menu:
 		main_menu.show()
+		# Re-enable practice button now that we're back in menu
+		_set_practice_button_disabled(false)
 
 	# CRITICAL FIX: Recreate marble preview if it was destroyed during gameplay
 	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
@@ -938,8 +981,9 @@ func get_kd_ratio(player_id: int) -> float:
 
 func get_time_remaining_formatted() -> String:
 	"""Get formatted time string (MM:SS)"""
-	var minutes: int = int(game_time_remaining) / 60
-	var seconds: int = int(game_time_remaining) % 60
+	var time_clamped: float = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
+	var minutes: int = int(time_clamped) / 60
+	var seconds: int = int(time_clamped) % 60
 	return "%02d:%02d" % [minutes, seconds]
 
 # ============================================================================

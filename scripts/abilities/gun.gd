@@ -7,7 +7,8 @@ extends Ability
 @export var projectile_damage: int = 1
 @export var projectile_speed: float = 40.0
 @export var projectile_lifetime: float = 3.0
-@export var fire_rate: float = 0.3  # Shots per second
+@export var fire_rate: float = 0.5  # Cooldown between shots (increased to prevent spam)
+@export var min_charge_time: float = 0.3  # Minimum charge time before release
 @onready var ability_sound: AudioStreamPlayer3D = $GunSound
 
 func _ready() -> void:
@@ -97,13 +98,29 @@ func activate() -> void:
 		ability_sound.global_position = barrel_position
 		ability_sound.play()
 
+## Override release_charge to enforce minimum charge time
+func release_charge() -> void:
+	# Enforce minimum charge time to prevent spam
+	if charge_time < min_charge_time:
+		print("Gun: Too fast! Need at least %.1fs charge (currently %.1fs)" % [min_charge_time, charge_time])
+		# Cancel the charge instead of releasing
+		cancel_charge()
+		return
+
+	# Call parent implementation
+	super.release_charge()
+
 func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	"""Handle projectile collision with another body"""
-	# CRITICAL FIX: Cache projectile data FIRST before any potential freeing
-	# This prevents "!is_inside_tree()" errors when accessing transform/position later
+	# CRITICAL FIX: Validate BOTH body and projectile FIRST
+	# Multiple projectiles can hit simultaneously - first might free the body!
+	if not body or not is_instance_valid(body) or not body.is_inside_tree():
+		return  # Body already freed or invalid (killed by another bullet)
+
 	if not projectile or not is_instance_valid(projectile) or not projectile.is_inside_tree():
 		return  # Projectile already freed or invalid
 
+	# Cache projectile data immediately to prevent issues if it gets freed
 	var projectile_position: Vector3 = projectile.global_position
 	var projectile_velocity: Vector3 = projectile.linear_velocity
 
