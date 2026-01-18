@@ -47,7 +47,7 @@ var target_stuck_position: Vector3 = Vector3.ZERO
 const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds of no progress
 
 # Ability preferences based on situation
-const GUN_OPTIMAL_RANGE: float = 20.0
+const CANNON_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
@@ -392,8 +392,8 @@ func get_optimal_combat_distance() -> float:
 	var ability_name: String = bot.current_ability.ability_name if "ability_name" in bot.current_ability else ""
 
 	match ability_name:
-		"Gun":
-			return GUN_OPTIMAL_RANGE
+		"Cannon":
+			return CANNON_OPTIMAL_RANGE
 		"Sword":
 			return SWORD_OPTIMAL_RANGE
 		"Dash Attack":
@@ -415,8 +415,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 
 	# Determine if we should use ability based on distance and ability type
 	match ability_name:
-		"Gun":
-			# Use gun at almost any range - guns are versatile
+		"Cannon":
+			# Use cannon at almost any range - cannons are versatile
 			if distance_to_target > 3.0 and distance_to_target < 50.0:
 				should_use = true
 				should_charge = distance_to_target > 12.0 and randf() < 0.5

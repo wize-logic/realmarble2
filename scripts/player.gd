@@ -7,7 +7,7 @@ const AbilityPickupScene = preload("res://ability_pickup.tscn")
 # Preload ability scenes for dropping
 const DashAttackScene = preload("res://abilities/dash_attack.tscn")
 const ExplosionScene = preload("res://abilities/explosion.tscn")
-const GunScene = preload("res://abilities/gun.tscn")
+const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
 
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
@@ -1394,8 +1394,8 @@ func get_ability_scene_from_name(ability_name: String) -> PackedScene:
 			return DashAttackScene
 		"Explosion":
 			return ExplosionScene
-		"Gun":
-			return GunScene
+		"Cannon":
+			return CannonScene
 		"Sword":
 			return SwordScene
 		_:
