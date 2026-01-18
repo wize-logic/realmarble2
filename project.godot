@@ -34,6 +34,18 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/vsync/vsync_mode=0
 
+[dotnet]
+
+project/assembly_name="Marble Multiplayer Deathmatch"
+
+[editor_plugins]
+
+enabled=PackedStringArray()
+
+[export]
+
+web/html_head=""
+
 [input]
 
 ui_accept={
@@ -124,26 +136,6 @@ use_ability={
 ]
 }
 
-[rendering]
-
-renderer/rendering_method="gl_compatibility"
-renderer/rendering_method.mobile="gl_compatibility"
-textures/vram_compression/import_etc2_astc=true
-lights_and_shadows/use_physical_light_units=true
-anti_aliasing/quality/screen_space_aa=1
-
-[editor_plugins]
-
-enabled=PackedStringArray()
-
-[dotnet]
-
-project/assembly_name="Marble Multiplayer Deathmatch"
-
-[export]
-
-web/html_head=""
-
 [preset.0]
 
 name="HTML5"
@@ -183,3 +175,11 @@ progressive_web_app/icon_180x180=""
 progressive_web_app/icon_512x512=""
 progressive_web_app/background_color=Color(0, 0, 0, 1)
 progressive_web_app/offline_page=""
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+lights_and_shadows/use_physical_light_units=true
+anti_aliasing/quality/screen_space_aa=1
