@@ -1,5 +1,82 @@
 # HTML5 Export Instructions for CrazyGames
 
+## 🚨 IMPORTANT: Create Export Preset First
+
+If you don't see any export presets when you click "Export", follow these steps:
+
+### Step 1: Install Export Templates
+
+1. Open Godot 4.5.1 editor
+2. Go to **Editor** → **Manage Export Templates**
+3. Click **Download and Install** if templates aren't installed
+4. Wait for download to complete (may take a few minutes)
+5. Close the Export Templates dialog
+
+### Step 2: Create HTML5 Export Preset Manually
+
+Since the preset in `project.godot` may not load automatically, create it manually:
+
+1. Go to **Project** → **Export**
+2. Click **Add...** button at the top
+3. Select **Web** from the list
+4. A new preset called "Web" will appear in the left panel
+
+### Step 3: Configure the Export Preset
+
+With the "Web" preset selected, configure these settings:
+
+#### **Export Tab** (Basic Settings)
+- **Export Path**: Click the folder icon and set to `build/web/index.html`
+- **Runnable**: ✅ Check this box
+- **Export Mode**: "Export all resources in the project"
+
+#### **Resources Tab**
+- Leave as default (all resources included)
+
+#### **Features Tab**
+- Leave as default
+
+#### **Options Tab** - Configure these carefully:
+
+**Custom Template**
+- Debug: (leave empty)
+- Release: (leave empty)
+
+**Variant**
+- Extensions Support: ❌ Unchecked
+- Thread Support: ✅ **CHECKED** (important for performance)
+
+**HTML**
+- Export Icon: ✅ Checked
+- Custom HTML Shell: `res://scripts/html/full-size.html` ← **IMPORTANT!**
+- Head Include: (leave empty)
+- Canvas Resize Policy: `Adaptive`
+- Focus Canvas on Start: ✅ Checked
+- Experimental Virtual Keyboard: ❌ Unchecked
+
+**Texture Format**
+- VRAM Compression For Desktop: ✅ Checked
+- VRAM Compression For Mobile: ❌ Unchecked
+
+**Progressive Web App**
+- Enabled: ❌ Unchecked
+- Ensure Cross Origin Isolation Headers: ✅ Checked
+- Orientation: `Landscape`
+- (Leave icon fields empty)
+- Background Color: Black (0, 0, 0, 1)
+
+### Step 4: Export
+
+1. Click **Export Project** button at the bottom
+2. Navigate to your project folder
+3. Create/select `build/web/` folder
+4. Name the file `index.html`
+5. Click **Save**
+
+The export should begin. This may take 1-5 minutes depending on your system.
+
+---
+
 ## ✅ Pre-Export Setup Complete
 
 The project has been configured for HTML5 export with the following changes:
