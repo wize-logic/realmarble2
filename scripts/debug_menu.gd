@@ -1,82 +1,64 @@
 extends Control
 
 ## Debug Menu
-## Provides debugging tools and cheats
+## Provides debugging tools and cheats with pagination
 
 @onready var panel: PanelContainer = $Panel
-@onready var spawn_bot_button: Button = $Panel/VBoxContainer/SpawnBotButton
-@onready var bot_count_label: Label = $Panel/VBoxContainer/BotCount/Label
-@onready var remove_bot_button: Button = $Panel/VBoxContainer/BotCount/RemoveBotButton
-@onready var add_bot_button: Button = $Panel/VBoxContainer/BotCount/AddBotButton
-@onready var god_mode_button: Button = $Panel/VBoxContainer/GodModeButton
-@onready var max_level_button: Button = $Panel/VBoxContainer/MaxLevelButton
-@onready var teleport_button: Button = $Panel/VBoxContainer/TeleportButton
-@onready var clear_abilities_button: Button = $Panel/VBoxContainer/ClearAbilitiesButton
-@onready var spawn_ability_button: Button = $Panel/VBoxContainer/SpawnAbilityButton
-@onready var kill_player_button: Button = $Panel/VBoxContainer/KillPlayerButton
-@onready var kill_all_button: Button = $Panel/VBoxContainer/KillAllButton
-@onready var add_score_button: Button = $Panel/VBoxContainer/AddScoreButton
-@onready var reset_timer_button: Button = $Panel/VBoxContainer/ResetTimerButton
-@onready var end_match_button: Button = $Panel/VBoxContainer/EndMatchButton
-@onready var collision_shapes_button: Button = $Panel/VBoxContainer/CollisionShapesButton
-@onready var regenerate_level_button: Button = $Panel/VBoxContainer/RegenerateLevelButton
-@onready var change_skybox_button: Button = $Panel/VBoxContainer/ChangeSkyboxButton
-@onready var speed_mult_slider: HSlider = $Panel/VBoxContainer/SpeedMultiplier/Slider
-@onready var speed_label: Label = $Panel/VBoxContainer/SpeedMultiplier/Label
+var vbox: VBoxContainer = null
 
+# Pagination system
+var current_page: int = 0
+var total_pages: int = 3
+var page_title: Label = null
+var page_indicator: Label = null
+var prev_button: Button = null
+var next_button: Button = null
+var page_content: VBoxContainer = null
+
+# State variables
 var is_visible: bool = false
 var god_mode_enabled: bool = false
 var collision_shapes_visible: bool = false
 var speed_multiplier: float = 1.0
 
+# Dynamic button references (will be created per page)
+var god_mode_button: Button = null
+var collision_shapes_button: Button = null
+var bot_count_label: Label = null
+var speed_label: Label = null
+
 func _ready() -> void:
 	visible = false
 	panel.visible = false
 
-	# Connect signals
-	if spawn_bot_button:
-		spawn_bot_button.pressed.connect(_on_spawn_bot_pressed)
-	if add_bot_button:
-		add_bot_button.pressed.connect(_on_add_bot_pressed)
-	if remove_bot_button:
-		remove_bot_button.pressed.connect(_on_remove_bot_pressed)
-	if god_mode_button:
-		god_mode_button.pressed.connect(_on_god_mode_pressed)
-	if max_level_button:
-		max_level_button.pressed.connect(_on_max_level_pressed)
-	if teleport_button:
-		teleport_button.pressed.connect(_on_teleport_pressed)
-	if clear_abilities_button:
-		clear_abilities_button.pressed.connect(_on_clear_abilities_pressed)
-	if spawn_ability_button:
-		spawn_ability_button.pressed.connect(_on_spawn_ability_pressed)
-	if kill_player_button:
-		kill_player_button.pressed.connect(_on_kill_player_pressed)
-	if kill_all_button:
-		kill_all_button.pressed.connect(_on_kill_all_pressed)
-	if add_score_button:
-		add_score_button.pressed.connect(_on_add_score_pressed)
-	if reset_timer_button:
-		reset_timer_button.pressed.connect(_on_reset_timer_pressed)
-	if end_match_button:
-		end_match_button.pressed.connect(_on_end_match_pressed)
-	if collision_shapes_button:
-		collision_shapes_button.pressed.connect(_on_collision_shapes_pressed)
-	if regenerate_level_button:
-		regenerate_level_button.pressed.connect(_on_regenerate_level_pressed)
-	if change_skybox_button:
-		change_skybox_button.pressed.connect(_on_change_skybox_pressed)
-	if speed_mult_slider:
-		speed_mult_slider.value_changed.connect(_on_speed_changed)
-		speed_mult_slider.value = 1.0
+	# Clear existing VBoxContainer and rebuild with pagination
+	vbox = panel.get_node("VBoxContainer")
+	if vbox:
+		# Clear all existing children
+		for child in vbox.get_children():
+			child.queue_free()
 
-	# Update bot count on startup
-	update_bot_count()
+	# Wait a frame for cleanup
+	await get_tree().process_frame
+
+	# Build pagination structure
+	build_pagination_ui()
+
+	# Show first page
+	show_page(0)
 
 func _input(event: InputEvent) -> void:
 	# Toggle debug menu with F3
 	if event is InputEventKey and event.keycode == KEY_F3 and event.pressed and not event.echo:
 		toggle_menu()
+
+	# Pagination shortcuts (only when menu is visible)
+	if is_visible and event is InputEventKey and event.pressed and not event.echo:
+		match event.keycode:
+			KEY_LEFT, KEY_PAGEUP:
+				_on_prev_page()
+			KEY_RIGHT, KEY_PAGEDOWN:
+				_on_next_page()
 
 func toggle_menu() -> void:
 	"""Toggle debug menu visibility"""
@@ -93,6 +75,288 @@ func toggle_menu() -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+# ============================================================================
+# PAGINATION SYSTEM
+# ============================================================================
+
+func build_pagination_ui() -> void:
+	"""Build the pagination structure"""
+	if not vbox:
+		return
+
+	# Title
+	page_title = Label.new()
+	page_title.text = "DEBUG MENU (F3)"
+	page_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(page_title)
+
+	# Page indicator
+	page_indicator = Label.new()
+	page_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_indicator.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(page_indicator)
+
+	var separator1 = HSeparator.new()
+	vbox.add_child(separator1)
+
+	# Navigation buttons
+	var nav_hbox = HBoxContainer.new()
+	nav_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(nav_hbox)
+
+	prev_button = Button.new()
+	prev_button.text = "< Previous"
+	prev_button.custom_minimum_size = Vector2(80, 0)
+	prev_button.pressed.connect(_on_prev_page)
+	nav_hbox.add_child(prev_button)
+
+	next_button = Button.new()
+	next_button.text = "Next >"
+	next_button.custom_minimum_size = Vector2(80, 0)
+	next_button.pressed.connect(_on_next_page)
+	nav_hbox.add_child(next_button)
+
+	var separator2 = HSeparator.new()
+	vbox.add_child(separator2)
+
+	# Content container (will be filled per page)
+	page_content = VBoxContainer.new()
+	page_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(page_content)
+
+func show_page(page: int) -> void:
+	"""Show a specific page of debug options"""
+	current_page = clamp(page, 0, total_pages - 1)
+
+	# Update page indicator
+	if page_indicator:
+		page_indicator.text = "Page %d/%d" % [current_page + 1, total_pages]
+
+	# Update navigation button states
+	if prev_button:
+		prev_button.disabled = (current_page == 0)
+	if next_button:
+		next_button.disabled = (current_page == total_pages - 1)
+
+	# Clear current page content
+	if page_content:
+		for child in page_content.get_children():
+			child.queue_free()
+
+	# Wait a frame for cleanup
+	await get_tree().process_frame
+
+	# Build page content
+	match current_page:
+		0:
+			build_page_0()  # Player & Bot Controls
+		1:
+			build_page_1()  # Match & World Controls
+		2:
+			build_page_2()  # Expansion & Advanced Controls
+
+func _on_prev_page() -> void:
+	"""Go to previous page"""
+	if current_page > 0:
+		show_page(current_page - 1)
+
+func _on_next_page() -> void:
+	"""Go to next page"""
+	if current_page < total_pages - 1:
+		show_page(current_page + 1)
+
+# ============================================================================
+# PAGE BUILDERS
+# ============================================================================
+
+func build_page_0() -> void:
+	"""Build Page 0: Player & Bot Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "PLAYER & BOT CONTROLS"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Bot controls
+	var spawn_bot_btn = Button.new()
+	spawn_bot_btn.text = "Spawn Bot"
+	spawn_bot_btn.pressed.connect(_on_spawn_bot_pressed)
+	page_content.add_child(spawn_bot_btn)
+
+	var bot_count_hbox = HBoxContainer.new()
+	page_content.add_child(bot_count_hbox)
+
+	bot_count_label = Label.new()
+	bot_count_label.text = "Bots: 0"
+	bot_count_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bot_count_hbox.add_child(bot_count_label)
+
+	var remove_bot_btn = Button.new()
+	remove_bot_btn.text = "-"
+	remove_bot_btn.pressed.connect(_on_remove_bot_pressed)
+	bot_count_hbox.add_child(remove_bot_btn)
+
+	var add_bot_btn = Button.new()
+	add_bot_btn.text = "+"
+	add_bot_btn.pressed.connect(_on_add_bot_pressed)
+	bot_count_hbox.add_child(add_bot_btn)
+
+	update_bot_count()
+
+	# Player controls
+	god_mode_button = Button.new()
+	god_mode_button.text = "God Mode: OFF"
+	god_mode_button.pressed.connect(_on_god_mode_pressed)
+	page_content.add_child(god_mode_button)
+
+	var max_level_btn = Button.new()
+	max_level_btn.text = "Max Level"
+	max_level_btn.pressed.connect(_on_max_level_pressed)
+	page_content.add_child(max_level_btn)
+
+	var teleport_btn = Button.new()
+	teleport_btn.text = "Teleport"
+	teleport_btn.pressed.connect(_on_teleport_pressed)
+	page_content.add_child(teleport_btn)
+
+	var kill_player_btn = Button.new()
+	kill_player_btn.text = "Kill Player (Respawn)"
+	kill_player_btn.pressed.connect(_on_kill_player_pressed)
+	page_content.add_child(kill_player_btn)
+
+	var kill_all_btn = Button.new()
+	kill_all_btn.text = "Kill All Other Players/Bots"
+	kill_all_btn.pressed.connect(_on_kill_all_pressed)
+	page_content.add_child(kill_all_btn)
+
+	var add_score_btn = Button.new()
+	add_score_btn.text = "Add 5 Score"
+	add_score_btn.pressed.connect(_on_add_score_pressed)
+	page_content.add_child(add_score_btn)
+
+func build_page_1() -> void:
+	"""Build Page 1: Match & World Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "MATCH & WORLD CONTROLS"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Ability controls
+	var clear_abilities_btn = Button.new()
+	clear_abilities_btn.text = "Clear All Abilities"
+	clear_abilities_btn.pressed.connect(_on_clear_abilities_pressed)
+	page_content.add_child(clear_abilities_btn)
+
+	var spawn_ability_btn = Button.new()
+	spawn_ability_btn.text = "Spawn Random Ability"
+	spawn_ability_btn.pressed.connect(_on_spawn_ability_pressed)
+	page_content.add_child(spawn_ability_btn)
+
+	# Match controls
+	var reset_timer_btn = Button.new()
+	reset_timer_btn.text = "Reset Match Timer"
+	reset_timer_btn.pressed.connect(_on_reset_timer_pressed)
+	page_content.add_child(reset_timer_btn)
+
+	var end_match_btn = Button.new()
+	end_match_btn.text = "End Match Immediately"
+	end_match_btn.pressed.connect(_on_end_match_pressed)
+	page_content.add_child(end_match_btn)
+
+	# World controls
+	var regenerate_level_btn = Button.new()
+	regenerate_level_btn.text = "Regenerate Level"
+	regenerate_level_btn.pressed.connect(_on_regenerate_level_pressed)
+	page_content.add_child(regenerate_level_btn)
+
+	var change_skybox_btn = Button.new()
+	change_skybox_btn.text = "Change Skybox Colors"
+	change_skybox_btn.pressed.connect(_on_change_skybox_pressed)
+	page_content.add_child(change_skybox_btn)
+
+	# Speed multiplier
+	page_content.add_child(HSeparator.new())
+
+	var speed_hbox = HBoxContainer.new()
+	page_content.add_child(speed_hbox)
+
+	speed_label = Label.new()
+	speed_label.text = "Speed: 1.0x"
+	speed_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	speed_hbox.add_child(speed_label)
+
+	var speed_slider = HSlider.new()
+	speed_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	speed_slider.min_value = 0.1
+	speed_slider.max_value = 3.0
+	speed_slider.step = 0.1
+	speed_slider.value = 1.0
+	speed_slider.value_changed.connect(_on_speed_changed)
+	speed_hbox.add_child(speed_slider)
+
+func build_page_2() -> void:
+	"""Build Page 2: Expansion & Advanced Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "EXPANSION & ADVANCED"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# MID-ROUND EXPANSION BUTTON (NEW!)
+	var trigger_expansion_btn = Button.new()
+	trigger_expansion_btn.text = "⚡ Trigger Map Expansion NOW"
+	trigger_expansion_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.0))  # Gold color
+	trigger_expansion_btn.pressed.connect(_on_trigger_expansion_pressed)
+	page_content.add_child(trigger_expansion_btn)
+
+	var expansion_info = Label.new()
+	expansion_info.text = "Creates 2nd arena 1000ft away"
+	expansion_info.add_theme_font_size_override("font_size", 10)
+	expansion_info.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	expansion_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(expansion_info)
+
+	page_content.add_child(HSeparator.new())
+
+	# Debug visualization
+	collision_shapes_button = Button.new()
+	collision_shapes_button.text = "Show Collision: OFF"
+	collision_shapes_button.pressed.connect(_on_collision_shapes_pressed)
+	page_content.add_child(collision_shapes_button)
+
+	# Info section
+	page_content.add_child(HSeparator.new())
+
+	var info_label = Label.new()
+	info_label.text = "F3: Toggle Debug Menu\nArrows/Page Keys: Navigate"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(info_label)
+
+# ============================================================================
+# BUTTON HANDLERS
+# ============================================================================
 
 func _on_spawn_bot_pressed() -> void:
 	"""Spawn a bot player"""
@@ -283,6 +547,30 @@ func _on_change_skybox_pressed() -> void:
 		if skybox and skybox.has_method("randomize_colors"):
 			skybox.randomize_colors()
 			print("Skybox colors randomized!")
+
+func _on_trigger_expansion_pressed() -> void:
+	"""Trigger mid-round expansion immediately"""
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world:
+		print("Error: World node not found")
+		return
+
+	# Check if game is active
+	if not world.game_active:
+		print("Error: Cannot trigger expansion - match is not active!")
+		print("Start a match first, then trigger the expansion.")
+		return
+
+	# Check if already triggered
+	if world.expansion_triggered:
+		print("Error: Expansion already triggered for this match!")
+		return
+
+	print("Debug: Triggering mid-round expansion immediately...")
+	if world.has_method("trigger_mid_round_expansion"):
+		world.trigger_mid_round_expansion()
+	else:
+		print("Error: trigger_mid_round_expansion method not found on World")
 
 func get_local_player() -> Node:
 	"""Get the local player"""
