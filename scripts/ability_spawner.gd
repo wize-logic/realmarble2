@@ -78,25 +78,25 @@ func spawn_abilities() -> void:
 	for i in range(scaled_dash):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Dash Attack %d spawning at: %s" % [i+1, pos])
-		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.ORANGE_RED)
+		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.RED)
 
 	# Spawn explosions
 	for i in range(scaled_explosion):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Explosion %d spawning at: %s" % [i+1, pos])
-		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
+		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.YELLOW)
 
 	# Spawn cannons
 	for i in range(scaled_cannon):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Cannon %d spawning at: %s" % [i+1, pos])
-		spawn_ability_at(pos, CannonScene, "Cannon", Color.ORANGE_RED)
+		spawn_ability_at(pos, CannonScene, "Cannon", Color.PURPLE)
 
 	# Spawn swords
 	for i in range(scaled_sword):
 		var pos: Vector3 = get_random_spawn_position()
 		print("Sword %d spawning at: %s" % [i+1, pos])
-		spawn_ability_at(pos, SwordScene, "Sword", Color.STEEL_BLUE)
+		spawn_ability_at(pos, SwordScene, "Sword", Color.CYAN)
 
 	print("=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
@@ -164,10 +164,10 @@ func check_and_respawn_pickups() -> void:
 func spawn_random_ability(pos: Vector3) -> void:
 	"""Spawn a random ability at the given position (for debug menu)"""
 	var ability_types: Array = [
-		[DashAttackScene, "Dash Attack", Color.ORANGE_RED],
-		[ExplosionScene, "Explosion", Color.ORANGE],
-		[CannonScene, "Cannon", Color.ORANGE_RED],
-		[SwordScene, "Sword", Color.STEEL_BLUE]
+		[DashAttackScene, "Dash Attack", Color.RED],
+		[ExplosionScene, "Explosion", Color.YELLOW],
+		[CannonScene, "Cannon", Color.PURPLE],
+		[SwordScene, "Sword", Color.CYAN]
 	]
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]
