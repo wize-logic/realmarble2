@@ -54,7 +54,8 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 - ✅ **Deathmatch mode** (5-minute matches, K/D tracking)
 - ✅ **Multiplayer** (up to 16 players, room code-based matchmaking)
 - ✅ **Advanced Bot AI** (state machine, combat tactics, obstacle avoidance)
-- ✅ **Procedural level generation** (platforms, ramps, grind rails)
+- ✅ **Dual arena types** (Type A: Sonic-style with grind rails; Type B: Quake 3-style with jump pads/teleporters)
+- ✅ **Procedural level generation** (Type A: platforms, ramps, grind rails; Type B: multi-tier, rooms, corridors)
 - ✅ **CrazyGames integration** (profiles, friends, ads)
 - ✅ **Music playlist system** (auto-load from directory, shuffle)
 
@@ -131,7 +132,8 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 │   ├── friends_manager.gd        # Friends system manager
 │   ├── global.gd                 # Global singleton (settings)
 │   ├── grind_rail.gd             # Rail grinding system
-│   ├── level_generator.gd        # Procedural arena generator
+│   ├── level_generator.gd        # Procedural arena generator (Type A)
+│   ├── level_generator_q3.gd     # Quake 3 Arena generator (Type B)
 │   ├── lobby_ui.gd               # Multiplayer lobby interface
 │   ├── multiplayer_manager.gd    # Networking manager
 │   ├── music_playlist.gd         # Music playlist system
@@ -174,6 +176,20 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 # ⚠️ HTML5 COMPATIBILITY REMINDER ⚠️
 **All core systems listed below MUST remain HTML5-compatible!**
 **Before modifying ANY system, verify it will work in web browsers!**
+
+### Overview
+
+The game features **13 core systems** organized into the following categories:
+
+1. **Physics & Movement** - RigidBody3D physics, Sonic-inspired mechanics
+2. **Combat & Abilities** - Health, abilities, level-up system
+3. **Multiplayer** - WebSocket/ENet networking, room system
+4. **AI** - Advanced bot state machine
+5. **Level Generation** - Two arena types (Type A: Sonic-style, Type B: Quake 3-style)
+6. **UI/UX** - Rocket League-style menus, HUD
+7. **Integration** - CrazyGames SDK, profile system
+
+---
 
 ### 1. Physics System
 
@@ -482,6 +498,326 @@ WANDER ──→ CHASE ──→ ATTACK
 
 ---
 
+### 8a. Level Generation System - Type B (Quake 3 Arena Style)
+
+**Location:** `scripts/level_generator_q3.gd`
+
+**🌐 HTML5 COMPATIBILITY:** Procedural generation is HTML5-compatible but creates more complex geometry than Type A. Monitor performance in browsers!
+
+#### Type Selection
+
+The game supports two distinct arena types that can be selected before match start:
+
+| Type | Name | Style | Features |
+|------|------|-------|----------|
+| **Type A** | Original | Sonic-inspired | Floating platforms, grind rails, ramps, open arena |
+| **Type B** | Quake 3 Arena | FPS-inspired | Multi-tier platforms, rooms, corridors, jump pads, teleporters |
+
+**Selection:** Players choose arena type in pre-game menu (see `scripts/world.gd:start_game()`)
+
+#### Generated Elements (Type B)
+
+| Element | Quantity | Description |
+|---------|----------|-------------|
+| **Main Arena Floor** | 1 | 84x84 unit central combat area |
+| **Arena Pillars** | 4 | Tall decorative columns (4x12x4) |
+| **Cover Objects** | 8 | Small cover boxes scattered in arena |
+| **Tier 1 Platforms** | 4 | Large mid-level ring platforms (12x12) at height 8 |
+| **Tier 2 Platforms** | 8 | Medium upper platforms (8x8) at height 15 |
+| **Tier 3 Platforms** | 4 | Small sniper platforms (6x6) at height 22 |
+| **Connecting Ramps** | 2 | Ramps from ground to tier 1 platforms |
+| **Side Rooms** | 4 | Enclosed rooms with doorways (16x10x16) |
+| **Room Platforms** | 4 | Raised item spawn platforms inside rooms |
+| **Corridors** | 4 | Connecting corridors between areas |
+| **Jump Pads** | 5 | Vertical boost pads (see Jump Pads section) |
+| **Teleporters** | 4 | Teleporter pads in 2 bidirectional pairs |
+| **Perimeter Walls** | 4 | Taller outer walls (25 units high) |
+| **Death Zone** | 1 | Below Y = -50.0 |
+| **Spawn Points** | 16+ | Main arena, rooms, and platforms |
+
+#### Multi-Tier Platform System
+
+**Design Philosophy:** Vertical gameplay inspired by Quake 3 Arena
+
+**Tier 1 (Height 8):**
+- 4 large platforms (12x12 units)
+- Positioned 25 units from center
+- Connected to ground via ramps
+- Medium-range combat positions
+
+**Tier 2 (Height 15):**
+- 8 medium platforms (8x8 units)
+- Positioned 20 units from center
+- Requires jump or jump pad to access
+- High-ground advantage positions
+
+**Tier 3 (Height 22):**
+- 4 small platforms (6x6 units)
+- Positioned 15 units from center
+- Sniper/observation positions
+- Requires jump pad for easy access
+
+#### Side Rooms System
+
+**Room Layout:**
+- **Count:** 4 rooms (North, South, East, West)
+- **Position:** 45 units from center
+- **Size:** 16x10x16 units (width x height x depth)
+- **Features:** Floor, ceiling, 4 walls with doorway
+- **Doorway:** 6 units wide, faces arena center
+- **Interior:** Raised platform (6x6x1) for weapon spawns
+
+**Purpose:**
+- Enclosed combat areas
+- Strategic item spawn locations
+- Cover from long-range attacks
+- Multiple entry/exit paths via corridors
+
+**See:** `scripts/level_generator_q3.gd:generate_side_rooms()` (lines 256-420)
+
+#### Corridor System
+
+**Count:** 4 corridors connecting arena to rooms
+**Width:** 6 units
+**Length:** ~15 units each
+**Purpose:** Transitional combat zones between open arena and enclosed rooms
+
+**See:** `scripts/level_generator_q3.gd:generate_corridors()` (lines 425-464)
+
+---
+
+### 8b. Jump Pads (Quake 3 Arena Feature)
+
+**Location:** `scripts/level_generator_q3.gd:generate_jump_pads()` (lines 469-539)
+**Player Integration:** `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
+
+#### Overview
+
+Jump pads provide instant vertical boost for quick access to upper platforms, inspired by Quake 3 Arena's jump pad mechanics.
+
+#### Jump Pad Properties
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| **Visual Shape** | Cylinder | Top/bottom radius: 2.5 units, height: 0.5 units |
+| **Color** | Bright Green | RGB(0.2, 1.0, 0.3) with emission |
+| **Emission Energy** | 0.5 | Glowing effect to stand out |
+| **Boost Force** | 300.0 | Strong upward impulse (vertical launch) |
+| **Cooldown** | 1.0 seconds | Prevents repeated triggering |
+| **Collision Layer** | 8 | Pickup/area layer |
+| **Group** | "jump_pad" | For detection |
+
+#### Jump Pad Locations (Type B Arena)
+
+1. **Center** - Vector3(0, 0, 0) - Main arena center, access to all tiers
+2. **Northeast** - Vector3(30, 0, 30)
+3. **Northwest** - Vector3(-30, 0, 30)
+4. **Southeast** - Vector3(30, 0, -30)
+5. **Southwest** - Vector3(-30, 0, -30)
+
+#### How Jump Pads Work
+
+**Detection:**
+- Player's Area3D detector enters jump pad's Area3D
+- Signal: `area_detector.area_entered` → `_on_area_entered()`
+- Check: `area.is_in_group("jump_pad")`
+
+**Activation Sequence:**
+1. Check cooldown (skip if active)
+2. Cancel horizontal velocity
+3. Apply upward impulse (300.0 force)
+4. Reset bounce state
+5. Play bounce sound
+6. Spawn bright green particle effect
+7. Set 1-second cooldown
+
+**Visual Effect:**
+- Bright green explosive particle burst
+- 150 particles
+- Initial velocity: 15-25 units/second
+- Gradient: Bright green → Light green → Transparent
+
+**See:**
+- `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
+- `scripts/player.gd:spawn_jump_pad_effect()` (lines 2148-2173)
+
+---
+
+### 8c. Teleporters (Quake 3 Arena Feature)
+
+**Location:** `scripts/level_generator_q3.gd:generate_teleporters()` (lines 544-618)
+**Player Integration:** `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
+
+#### Overview
+
+Teleporters enable instant travel between two locations, creating strategic map traversal options inspired by Quake 3 Arena.
+
+#### Teleporter Properties
+
+| Property | Value | Description |
+|----------|-------|-------------|
+| **Visual Shape** | Cylinder | Top/bottom radius: 3.0 units, height: 0.3 units |
+| **Color** | Blue/Purple | Albedo: RGB(0.3, 0.3, 1.0), Emission: RGB(0.5, 0.3, 1.0) |
+| **Emission Energy** | 1.0 | Strong glow effect |
+| **Cooldown** | 2.0 seconds | Prevents rapid re-teleportation |
+| **Collision Layer** | 8 | Pickup/area layer |
+| **Group** | "teleporter" | For detection |
+| **Metadata** | "destination" | Vector3 destination position |
+
+#### Teleporter Pairs (Type B Arena)
+
+**Pair 1 (Diagonal):**
+- Teleporter A: Vector3(35, 0, 35) → Teleporter B: Vector3(-35, 0, -35)
+- Teleporter B: Vector3(-35, 0, -35) → Teleporter A: Vector3(35, 0, 35)
+
+**Pair 2 (Diagonal):**
+- Teleporter C: Vector3(-35, 0, 35) → Teleporter D: Vector3(35, 0, -35)
+- Teleporter D: Vector3(35, 0, -35) → Teleporter C: Vector3(-35, 0, 35)
+
+**Design:** Bidirectional pairs connect opposite corners of the arena
+
+#### How Teleporters Work
+
+**Detection:**
+- Player's Area3D detector enters teleporter's Area3D
+- Signal: `area_detector.area_entered` → `_on_area_entered()`
+- Check: `area.is_in_group("teleporter") and area.has_meta("destination")`
+- Get destination: `area.get_meta("destination")`
+
+**Activation Sequence:**
+1. Check cooldown (skip if active)
+2. Read destination from Area3D metadata
+3. Preserve vertical velocity (Y component)
+4. Teleport: Set `global_position = destination + Vector3(0, 2, 0)` (spawn 2 units above)
+5. Cancel horizontal velocity (X and Z)
+6. Play hit sound (teleport audio)
+7. Spawn bright purple particle swirl effect
+8. Set 2-second cooldown
+
+**Velocity Behavior:**
+- **Horizontal (X/Z):** Canceled on teleport
+- **Vertical (Y):** Preserved (player keeps upward/downward momentum)
+- **Purpose:** Prevents players from flying off teleporter destination
+
+**Visual Effect:**
+- Bright purple/blue particle swirl
+- 120 particles
+- Initial velocity: 12-20 units/second
+- Gradient: Bright purple → Light purple → Transparent
+
+**See:**
+- `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
+- `scripts/player.gd:spawn_teleporter_effect()` (lines 2175-2200)
+
+---
+
+### 8d. Arena Type Game State System
+
+**Location:** `scripts/world.gd`
+**Variable:** `current_level_type: String` (line 92)
+
+#### Overview
+
+The game supports dynamic arena type selection before match start, allowing players to choose between two distinct gameplay experiences.
+
+#### Arena Type Variable
+
+```gdscript
+# scripts/world.gd line 92
+var current_level_type: String = "A"
+```
+
+**Values:**
+- **"A"** - Type A (Original): Floating platforms, grind rails, Sonic-style movement focus
+- **"B"** - Type B (Quake 3 Arena): Multi-tier platforms, rooms, corridors, jump pads, teleporters
+
+#### Game Flow with Arena Type Selection
+
+**1. Menu Phase:**
+- Player clicks "Play" button in main menu
+- `_on_play_pressed()` called
+- Arena type selection panel displayed
+
+**2. Arena Type Selection Panel:**
+- **Type A Button:** "Original - Open arena with grind rails and floating platforms"
+- **Type B Button:** "Multi-tier arena with rooms, corridors, jump pads, and teleporters"
+- Player clicks desired type
+
+**3. Level Generation:**
+```gdscript
+# scripts/world.gd:start_game() line 712
+current_level_type = level_type  # "A" or "B"
+await generate_procedural_level(level_type)
+```
+
+**4. Generator Selection:**
+```gdscript
+# scripts/world.gd:generate_procedural_level() lines 1981-2010
+func generate_procedural_level(level_type: String = "A") -> void:
+    if level_type == "A":
+        level_generator = LevelGenerator.new()  # Original generator
+    else:  # level_type == "B"
+        level_generator = LevelGeneratorQ3.new()  # Quake 3 Arena generator
+
+    add_child(level_generator)
+    level_generator.generate_level()
+```
+
+**5. Game Starts:**
+- Selected arena type is now active
+- Players spawn in the generated arena
+- Arena-specific features available (grind rails for A, jump pads/teleporters for B)
+
+#### Accessing Current Arena Type
+
+**From Other Scripts:**
+```gdscript
+# Get current arena type from world script
+var world = get_tree().root.get_node("World")
+var arena_type = world.get_current_level_type()
+
+if arena_type == "A":
+    # Type A specific logic (grind rails)
+    pass
+elif arena_type == "B":
+    # Type B specific logic (jump pads, teleporters)
+    pass
+```
+
+**Public Method:**
+```gdscript
+# scripts/world.gd:get_current_level_type() lines 226-231
+func get_current_level_type() -> String:
+    """Returns: "A" or "B" """
+    return current_level_type
+```
+
+#### Type-Specific Features
+
+**Type A Features:**
+- 12 grind rails (8 curved perimeter + 4 vertical/spiral)
+- 24 floating platforms at varied heights
+- 12 ramps for vertical movement
+- Open arena layout
+- Sonic-style movement focus
+
+**Type B Features:**
+- 3-tier platform system (heights: 8, 15, 22)
+- 4 side rooms with doorways
+- 4 connecting corridors
+- 5 jump pads for vertical boost
+- 4 teleporters (2 bidirectional pairs)
+- More enclosed, tactical layout
+- Quake 3 Arena combat focus
+
+**See:**
+- `scripts/world.gd:start_game()` (line 680-730)
+- `scripts/world.gd:generate_procedural_level()` (lines 1981-2025)
+- `scripts/level_generator.gd` (Type A)
+- `scripts/level_generator_q3.gd` (Type B)
+
+---
+
 ### 9. Menu System (Rocket League-Style)
 
 **Location:** `scripts/ui/menu/rocket_menu.gd`, `rl_main_menu.tscn`
@@ -786,8 +1122,8 @@ var players_in_lobby: Array = []
 
 ---
 
-#### `scripts/level_generator.gd` (Procedural Level Generator)
-**Purpose:** Generate arenas with platforms, ramps, grind rails
+#### `scripts/level_generator.gd` (Procedural Level Generator - Type A)
+**Purpose:** Generate Sonic-inspired arenas with platforms, ramps, grind rails
 
 **Key Functions:**
 - `generate_level()` - Main generation function
@@ -819,6 +1155,80 @@ func _generate_grind_rails():
         )
         add_child(rail)
 ```
+
+---
+
+#### `scripts/level_generator_q3.gd` (Quake 3 Arena Generator - Type B)
+**Lines:** 765
+**Purpose:** Generate multi-tier arenas with rooms, corridors, jump pads, teleporters
+
+**Key Functions:**
+- `generate_level()` - Main generation function
+- `generate_main_arena()` - Central combat floor with pillars and cover
+- `generate_upper_platforms()` - 3-tier platform system (heights: 8, 15, 22)
+- `generate_tier_platforms(tier, count, height, distance)` - Generate platform ring
+- `generate_side_rooms()` - 4 enclosed rooms with doorways
+- `generate_room(center_pos, room_index)` - Single room with walls
+- `generate_corridors()` - 4 connecting corridors
+- `generate_jump_pads()` - 5 vertical boost pads
+- `generate_teleporters()` - 4 teleporter pads (2 pairs)
+- `create_jump_pad(pos, index)` - Single jump pad with Area3D
+- `create_teleporter(pos, destination, index)` - Single teleporter with metadata
+- `generate_perimeter_walls()` - 4 tall outer walls
+- `get_spawn_points()` - 16+ spawn positions
+
+**Key Variables:**
+```gdscript
+var arena_size: float = 140.0  # Larger than Type A
+var platforms: Array = []
+var teleporters: Array = []  # Track teleporter destinations
+```
+
+**Multi-Tier Generation Example:**
+```gdscript
+# scripts/level_generator_q3.gd ~lines 155-213
+func generate_upper_platforms():
+    # Tier 1: Mid-level ring (4 large platforms)
+    generate_tier_platforms(1, 4, 8.0, 25.0)
+
+    # Tier 2: Upper-level (8 medium platforms)
+    generate_tier_platforms(2, 8, 15.0, 20.0)
+
+    # Tier 3: Highest sniper platforms (4 small)
+    generate_tier_platforms(3, 4, 22.0, 15.0)
+
+func generate_tier_platforms(tier, count, height, distance):
+    for i in range(count):
+        var angle = (float(i) / count) * TAU
+        var x = cos(angle) * distance
+        var z = sin(angle) * distance
+
+        # Platform size varies by tier
+        var platform_size = match tier:
+            1: Vector3(12.0, 1.5, 12.0)  # Large
+            2: Vector3(8.0, 1.5, 8.0)    # Medium
+            3: Vector3(6.0, 1.5, 6.0)    # Small
+
+        create_platform(Vector3(x, height, z), platform_size)
+```
+
+**Jump Pad Creation Example:**
+```gdscript
+# scripts/level_generator_q3.gd ~lines 485-539
+func create_jump_pad(pos: Vector3, index: int):
+    # Visual cylinder mesh (bright green, glowing)
+    var pad_mesh = CylinderMesh.new()
+    pad_mesh.top_radius = 2.5
+    pad_mesh.height = 0.5
+
+    # Area3D for boost detection
+    var jump_area = Area3D.new()
+    jump_area.add_to_group("jump_pad")
+
+    # Player detects this and applies boost
+```
+
+**See:** Lines 1-765 for full Q3 Arena generator implementation
 
 ---
 
@@ -1034,6 +1444,23 @@ var profile_data: Dictionary = {
 | **F** | Respawn | Force respawn (debug) |
 | **Tab (hold)** | Scoreboard | Show K/D ratios |
 | **Esc** | Pause | Open pause menu |
+
+#### Arena-Specific Mechanics (Type B Only)
+
+| Mechanic | Trigger | Description | Notes |
+|----------|---------|-------------|-------|
+| **Jump Pads** | Touch green pad | Strong upward boost (300 force) | 1s cooldown, cancels horizontal velocity |
+| **Teleporters** | Touch blue/purple pad | Instant teleport to destination | 2s cooldown, preserves vertical velocity |
+
+**Visual Cues:**
+- **Jump Pads:** Bright green cylinders with emission glow
+- **Teleporters:** Blue/purple cylinders with purple glow
+- **Jump Pad Effect:** Bright green particle explosion
+- **Teleporter Effect:** Purple particle swirl
+
+**See:**
+- `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
+- `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
 
 ---
 
@@ -1343,7 +1770,11 @@ if velocity.length() < 1.0 and desired_velocity > 5.0:
 | **Bot AI** | `scripts/bot_ai.gd` (1,043 lines) |
 | **Multiplayer** | `scripts/multiplayer_manager.gd`, `MULTIPLAYER_README.md` |
 | **Match logic** | `scripts/world.gd` (1,646 lines) |
-| **Level generation** | `scripts/level_generator.gd` |
+| **Level generation (Type A)** | `scripts/level_generator.gd` |
+| **Level generation (Type B)** | `scripts/level_generator_q3.gd` |
+| **Arena type selection** | `scripts/world.gd:current_level_type`, `get_current_level_type()` |
+| **Jump pads** | `scripts/level_generator_q3.gd:generate_jump_pads()`, `scripts/player.gd:activate_jump_pad()` |
+| **Teleporters** | `scripts/level_generator_q3.gd:generate_teleporters()`, `scripts/player.gd:activate_teleporter()` |
 | **Main menu** | `scripts/ui/menu/rocket_menu.gd`, `rl_main_menu.tscn` |
 | **CrazyGames SDK** | `scripts/crazygames_sdk.gd` |
 | **Profile system** | `scripts/profile_manager.gd` |
@@ -1394,11 +1825,26 @@ if velocity.length() < 1.0 and desired_velocity > 5.0:
 5. **⚠️ HTML5: Complex AI logic can impact browser FPS! Keep bot count at 8 max for web!**
 
 #### Customize Level Generation
+**Type A (Original):**
 1. Open `scripts/level_generator.gd`
 2. Modify platform count, sizes, heights
 3. Adjust grind rail positions/quantities
 4. Change procedural texturing
 5. **⚠️ HTML5: Too many platforms/meshes can hurt web performance! Test in browsers!**
+
+**Type B (Quake 3 Arena):**
+1. Open `scripts/level_generator_q3.gd`
+2. Modify tier platform counts and heights (`generate_tier_platforms`)
+3. Adjust room count and sizes (`generate_side_rooms`)
+4. Change jump pad positions and boost force (`jump_pad_boost_force`)
+5. Modify teleporter pairs (`generate_teleporters`)
+6. **⚠️ HTML5: Complex room geometry can impact web performance! Test in browsers!**
+
+#### Switch Default Arena Type
+1. Open `scripts/world.gd`
+2. Find `generate_procedural_level("A")` (line ~96)
+3. Change to `generate_procedural_level("B")` for Type B default
+4. **⚠️ HTML5: Both arena types are HTML5-compatible!**
 
 ---
 
