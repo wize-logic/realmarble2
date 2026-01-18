@@ -770,6 +770,14 @@ func return_to_main_menu() -> void:
 	for player in players:
 		player.queue_free()
 
+	# Clear the map and skybox
+	if level_generator:
+		level_generator.queue_free()
+		level_generator = null
+	if skybox_generator:
+		skybox_generator.queue_free()
+		skybox_generator = null
+
 	# Clear scores and deaths
 	player_scores.clear()
 	player_deaths.clear()
