@@ -1751,8 +1751,8 @@ func update_rail_targeting() -> void:
 
 					# Check if this is close enough to the ray (within targeting radius)
 					var targeting_radius: float = 5.0  # Increased for easier targeting
-					# Only allow targeting if rail is within reasonable distance (60 units - doubled from 30)
-					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 60.0:
+					# Only allow targeting if rail is within reasonable distance (30 units)
+					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 30.0:
 						# Check if we're actually in range to attach (nearby_players check)
 						if rail.has_method("can_attach"):
 							# For display purposes, we're more lenient

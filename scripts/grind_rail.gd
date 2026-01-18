@@ -6,7 +6,7 @@ class_name GrindRail
 ## STUCK SAFEGUARD: Detects when player can't make progress and applies boosts or safe detachment
 ## MANUAL ATTACHMENT: Players must press E while looking at the rail to attach
 
-@export var detection_radius: float = 36.0  # Doubled from 18.0 for longer range attachment
+@export var detection_radius: float = 18.0
 @export var manual_attachment_only: bool = true  # Require E key press to attach
 @export var rope_length: float = 3.2
 @export var max_allowed_stretch: float = 30.0
