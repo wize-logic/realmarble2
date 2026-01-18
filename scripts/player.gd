@@ -169,6 +169,7 @@ func _ready() -> void:
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
 		camera_arm.top_level = true
+		print("[CAMERA] Camera arm top_level set to true")
 
 	# Set up ground detection raycast
 	if not ground_ray:
@@ -607,6 +608,23 @@ func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 		_find_all_cameras(child, camera_list)
 
 func _process(delta: float) -> void:
+	# CRITICAL HTML5 FIX: Position camera arm FIRST, before ANY other code
+	# This MUST run every frame for the camera to follow the player
+	if camera_arm and is_instance_valid(camera_arm):
+		camera_arm.global_position = global_position
+	else:
+		if not camera_arm:
+			print("[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name)
+
+	# Force camera to be current UNCONDITIONALLY
+	if camera and is_instance_valid(camera):
+		if not camera.current:
+			camera.current = true
+			print("[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name)
+	else:
+		if not camera:
+			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+
 	# Handle falling death state - MUST run for ALL entities (players AND bots)
 	if is_falling_to_death:
 		fall_death_timer += delta
@@ -639,10 +657,6 @@ func _process(delta: float) -> void:
 		return
 
 	# CRITICAL HTML5 FIX: Force camera to be current every frame
-	if not camera.current:
-		print("[CAMERA FIX] Player %s: Camera was not current! Forcing activation..." % name)
-		camera.current = true
-
 	sensitivity = Global.sensitivity
 	controller_sensitivity = Global.controller_sensitivity
 
@@ -655,8 +669,7 @@ func _process(delta: float) -> void:
 		camera_pitch -= axis_vector.y * controller_sensitivity * delta * 60.0
 		camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
 
-	# Position camera arm at player (CRITICAL for camera to follow)
-	camera_arm.global_position = global_position
+	# NOTE: Camera arm positioning moved to TOP of _process() for HTML5 compatibility
 
 	# Apply yaw rotation to camera arm (horizontal look)
 	camera_arm.global_rotation = Vector3(0, deg_to_rad(camera_yaw), 0)
@@ -879,6 +892,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			spin_charge = 0.0
 
 func _physics_process(delta: float) -> void:
+	# CRITICAL HTML5 FIX: Also position camera arm in physics_process as fallback
+	if camera_arm and is_instance_valid(camera_arm):
+		camera_arm.global_position = global_position
+
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
