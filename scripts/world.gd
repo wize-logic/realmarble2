@@ -817,9 +817,11 @@ func end_deathmatch() -> void:
 			winner_id = player_id
 
 	if winner_id != -1:
-		print("Winner: Player %d with %d kills!" % [winner_id, highest_score])
+		# Determine bot or player
+		var winner_type: String = " (Bot)" if winner_id >= 9000 else ""
+		print("🏆 Winner: Player %d%s with %d points!" % [winner_id, winner_type, highest_score])
 	else:
-		print("No winner - no kills recorded!")
+		print("Match ended - no scores recorded")
 
 	# Show scoreboard for 10 seconds
 	var scoreboard: Control = get_node_or_null("Scoreboard")
@@ -959,7 +961,8 @@ func _auto_load_music() -> void:
 
 	if songs_loaded > 0:
 		print("Auto-loaded %d songs from music directory" % songs_loaded)
-	else:
+	elif not OS.has_feature("web"):
+		# Only print error for non-HTML5 builds (HTML5 won't have music files in res://)
 		print("No music files found in either %s or res://music" % music_dir)
 
 func _load_music_from_directory(dir: String) -> int:

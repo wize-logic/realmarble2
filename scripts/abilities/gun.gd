@@ -99,6 +99,14 @@ func activate() -> void:
 
 func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	"""Handle projectile collision with another body"""
+	# CRITICAL FIX: Cache projectile data FIRST before any potential freeing
+	# This prevents "!is_inside_tree()" errors when accessing transform/position later
+	if not projectile or not is_instance_valid(projectile) or not projectile.is_inside_tree():
+		return  # Projectile already freed or invalid
+
+	var projectile_position: Vector3 = projectile.global_position
+	var projectile_velocity: Vector3 = projectile.linear_velocity
+
 	# Get projectile metadata
 	var damage: int = projectile.get_meta("damage", 1)
 	var owner_id: int = projectile.get_meta("owner_id", -1)
@@ -131,21 +139,22 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		var total_knockback: float = base_knockback * charge_mult * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
-		var knockback_dir: Vector3 = projectile.linear_velocity.normalized()
+		# Use cached velocity to avoid accessing freed projectile
+		var knockback_dir: Vector3 = projectile_velocity.normalized()
 		knockback_dir.y = 0.15  # Slight upward knockback
 		body.apply_central_impulse(knockback_dir * total_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
-		if projectile and projectile.is_inside_tree():
-			var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-			hit_sound.max_distance = 20.0
-			hit_sound.volume_db = 3.0
-			hit_sound.pitch_scale = randf_range(1.2, 1.4)
-			hit_sound.global_position = projectile.global_position
-			if player and player.get_parent():
-				player.get_parent().add_child(hit_sound)
-				hit_sound.play()
-				# Sound will auto-cleanup when it finishes
+		# Use cached position to avoid accessing freed projectile
+		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		hit_sound.max_distance = 20.0
+		hit_sound.volume_db = 3.0
+		hit_sound.pitch_scale = randf_range(1.2, 1.4)
+		hit_sound.global_position = projectile_position  # Use cached position
+		if player and player.get_parent():
+			player.get_parent().add_child(hit_sound)
+			hit_sound.play()
+			# Sound will auto-cleanup when it finishes
 
 	# Destroy projectile on hit
 	if projectile and is_instance_valid(projectile):
