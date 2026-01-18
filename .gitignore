@@ -20,5 +20,8 @@ export_presets.cfg
 data_*/
 mono_crash.*.json
 
+# Build outputs
+/build/
+
 #extra
 /.vscode

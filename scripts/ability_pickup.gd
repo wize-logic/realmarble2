@@ -43,10 +43,10 @@ func _ready() -> void:
 		glow_material = StandardMaterial3D.new()
 		glow_material.albedo_color = ability_color
 		glow_material.emission_enabled = true
-		glow_material.emission = ability_color
-		glow_material.emission_energy_multiplier = 2.5
-		glow_material.metallic = 0.5
-		glow_material.roughness = 0.1
+		glow_material.emission = ability_color * 0.3  # Darker emission to preserve color
+		glow_material.emission_energy_multiplier = 0.2
+		glow_material.metallic = 0.3
+		glow_material.roughness = 0.3
 		mesh_instance.material_override = glow_material
 
 	# Randomize starting animation phase
@@ -60,7 +60,7 @@ func _ready() -> void:
 
 		# Configure light properties using ability color
 		aura_light.light_color = ability_color
-		aura_light.light_energy = 2.0  # Brighter than player light to stand out
+		aura_light.light_energy = 0.5  # Subtle brightness to preserve color
 		aura_light.omni_range = 4.0  # Larger radius for pickups
 		aura_light.omni_attenuation = 1.5  # Moderate falloff
 
@@ -93,7 +93,7 @@ func _process(delta: float) -> void:
 
 		# Pulse emission
 		if glow_material:
-			var pulse: float = 2.0 + sin(time * 4.0) * 0.5
+			var pulse: float = 0.2 + sin(time * 4.0) * 0.1
 			glow_material.emission_energy_multiplier = pulse
 
 func _on_body_entered(body: Node3D) -> void:

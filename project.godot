@@ -13,7 +13,7 @@ config_version=5
 config/name="Marble Multiplayer Deathmatch"
 config/tags=PackedStringArray("marble", "multiplayer", "deathmatch", "physics", "gamepad")
 run/main_scene="res://world.tscn"
-config/features=PackedStringArray("4.5", "Forward Plus")
+config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
 [autoload]
@@ -126,6 +126,60 @@ use_ability={
 
 [rendering]
 
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 lights_and_shadows/use_physical_light_units=true
 anti_aliasing/quality/screen_space_aa=1
+
+[editor_plugins]
+
+enabled=PackedStringArray()
+
+[dotnet]
+
+project/assembly_name="Marble Multiplayer Deathmatch"
+
+[export]
+
+web/html_head=""
+
+[preset.0]
+
+name="HTML5"
+platform="Web"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/web/index.html"
+encryption_include_filters=""
+encryption_exclude_filters=""
+encrypt_pck=false
+encrypt_directory=false
+script_encryption_key=""
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+variant/extensions_support=false
+variant/thread_support=true
+vram_texture_compression/for_desktop=true
+vram_texture_compression/for_mobile=false
+html/export_icon=true
+html/custom_html_shell="res://scripts/html/full-size.html"
+html/head_include=""
+html/canvas_resize_policy=2
+html/focus_canvas_on_start=true
+html/experimental_virtual_keyboard=false
+progressive_web_app/enabled=false
+progressive_web_app/ensure_cross_origin_isolation_headers=true
+progressive_web_app/orientation=1
+progressive_web_app/icon_144x144=""
+progressive_web_app/icon_180x180=""
+progressive_web_app/icon_512x512=""
+progressive_web_app/background_color=Color(0, 0, 0, 1)
+progressive_web_app/offline_page=""

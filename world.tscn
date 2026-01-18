@@ -30,8 +30,13 @@ background_mode = 2
 sky = SubResource("Sky_78err")
 tonemap_mode = 2
 tonemap_white = 6.0
-ssao_enabled = true
-glow_blend_mode = 4
+ssao_enabled = false
+glow_enabled = true
+glow_intensity = 0.2
+glow_strength = 0.4
+glow_blend_mode = 0
+glow_hdr_threshold = 2.5
+glow_hdr_scale = 0.5
 fog_enabled = true
 fog_sun_scatter = 0.17
 fog_density = 0.0099
@@ -111,15 +116,13 @@ camera_attributes = SubResource("CameraAttributesPractical_wntx8")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.835807, -0.47011, 0.283589, -0.375944, 0.866496, 0.328406, -0.400115, 0.167871, -0.900959, 0, 4.88489, 0)
-light_temperature = 4300.0
-light_energy = 0.5
+light_color = Color(0.988235, 0.929412, 0.87451, 1)
+light_energy = 0.8
 shadow_enabled = true
-shadow_bias = 0.0
-directional_shadow_split_1 = 0.04
-directional_shadow_split_2 = 0.11
-directional_shadow_split_3 = 0.33
-directional_shadow_blend_splits = true
-directional_shadow_max_distance = 99.3
+shadow_bias = 0.05
+shadow_blur = 1.0
+directional_shadow_mode = 1
+directional_shadow_max_distance = 100.0
 
 [node name="FpsCounter" type="Label" parent="."]
 offset_right = 40.0
