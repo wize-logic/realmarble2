@@ -477,3 +477,245 @@ func get_spawn_points() -> PackedVector3Array:
 			spawns.append(spawn_pos)
 
 	return spawns
+
+# ============================================================================
+# MID-ROUND EXPANSION SYSTEM
+# ============================================================================
+
+func generate_secondary_map(offset: Vector3) -> void:
+	"""Generate a secondary map at the specified offset position"""
+	print("Generating secondary map at offset: ", offset)
+
+	# Store current seed to generate varied but consistent secondary map
+	var secondary_seed: int = noise.seed + 1000  # Different but deterministic
+	var old_seed: int = noise.seed
+	noise.seed = secondary_seed
+
+	# Generate a complete secondary arena at the offset
+	generate_secondary_floor(offset)
+	generate_secondary_platforms(offset)
+	generate_secondary_ramps(offset)
+	generate_secondary_walls(offset)
+	generate_secondary_rails(offset)
+
+	# Restore original seed
+	noise.seed = old_seed
+
+	print("Secondary map generation complete at offset: ", offset)
+
+func generate_secondary_floor(offset: Vector3) -> void:
+	"""Generate floor for secondary map"""
+	var floor_size: float = arena_size * 0.7
+
+	var floor_mesh: BoxMesh = BoxMesh.new()
+	floor_mesh.size = Vector3(floor_size, 2.0, floor_size)
+
+	var floor_instance: MeshInstance3D = MeshInstance3D.new()
+	floor_instance.mesh = floor_mesh
+	floor_instance.name = "SecondaryFloor"
+	floor_instance.position = offset + Vector3(0, -1, 0)
+	add_child(floor_instance)
+
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = floor_mesh.size
+	collision.shape = shape
+	static_body.add_child(collision)
+	floor_instance.add_child(static_body)
+
+	platforms.append(floor_instance)
+
+func generate_secondary_platforms(offset: Vector3) -> void:
+	"""Generate platforms for secondary map"""
+	var radius: float = arena_size * 0.4
+
+	for i in range(platform_count):
+		var angle: float = (float(i) / platform_count) * TAU
+		var distance: float = radius * (0.6 + randf() * 0.4)
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+		var y: float = 3.0 + randf() * 8.0
+
+		var width: float = 6.0 + randf() * 6.0
+		var depth: float = 6.0 + randf() * 6.0
+		var height: float = 1.0 + randf() * 1.0
+
+		var platform_mesh: BoxMesh = BoxMesh.new()
+		platform_mesh.size = Vector3(width, height, depth)
+
+		var platform_instance: MeshInstance3D = MeshInstance3D.new()
+		platform_instance.mesh = platform_mesh
+		platform_instance.name = "SecondaryPlatform" + str(i)
+		platform_instance.position = offset + Vector3(x, y, z)
+		add_child(platform_instance)
+
+		var static_body: StaticBody3D = StaticBody3D.new()
+		var collision: CollisionShape3D = CollisionShape3D.new()
+		var shape: BoxShape3D = BoxShape3D.new()
+		shape.size = platform_mesh.size
+		collision.shape = shape
+		static_body.add_child(collision)
+		platform_instance.add_child(static_body)
+
+		platforms.append(platform_instance)
+
+func generate_secondary_ramps(offset: Vector3) -> void:
+	"""Generate ramps for secondary map"""
+	for i in range(ramp_count):
+		var angle: float = (float(i) / ramp_count) * TAU + (TAU / ramp_count * 0.5)
+		var distance: float = arena_size * 0.3
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+		var y: float = 0.0
+
+		var ramp_mesh: BoxMesh = BoxMesh.new()
+		ramp_mesh.size = Vector3(8.0, 0.5, 12.0)
+
+		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
+		ramp_instance.mesh = ramp_mesh
+		ramp_instance.name = "SecondaryRamp" + str(i)
+		ramp_instance.position = offset + Vector3(x, y + 3, z)
+		ramp_instance.rotation_degrees = Vector3(-25, rad_to_deg(angle), 0)
+		add_child(ramp_instance)
+
+		var static_body: StaticBody3D = StaticBody3D.new()
+		var collision: CollisionShape3D = CollisionShape3D.new()
+		var shape: BoxShape3D = BoxShape3D.new()
+		shape.size = ramp_mesh.size
+		collision.shape = shape
+		static_body.add_child(collision)
+		ramp_instance.add_child(static_body)
+
+		platforms.append(ramp_instance)
+
+func generate_secondary_walls(offset: Vector3) -> void:
+	"""Generate walls for secondary map"""
+	var wall_distance: float = arena_size * 0.55
+	var wall_height: float = 15.0
+	var wall_thickness: float = 2.0
+
+	var wall_configs: Array = [
+		{"pos": Vector3(0, wall_height/2, wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
+		{"pos": Vector3(0, wall_height/2, -wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
+		{"pos": Vector3(wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)},
+		{"pos": Vector3(-wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)}
+	]
+
+	for i in range(wall_configs.size()):
+		var config: Dictionary = wall_configs[i]
+
+		var wall_mesh: BoxMesh = BoxMesh.new()
+		wall_mesh.size = config.size
+
+		var wall_instance: MeshInstance3D = MeshInstance3D.new()
+		wall_instance.mesh = wall_mesh
+		wall_instance.name = "SecondaryWall" + str(i)
+		wall_instance.position = offset + config.pos
+		add_child(wall_instance)
+
+		var static_body: StaticBody3D = StaticBody3D.new()
+		var collision: CollisionShape3D = CollisionShape3D.new()
+		var shape: BoxShape3D = BoxShape3D.new()
+		shape.size = wall_mesh.size
+		collision.shape = shape
+		static_body.add_child(collision)
+		wall_instance.add_child(static_body)
+
+		platforms.append(wall_instance)
+
+func generate_secondary_rails(offset: Vector3) -> void:
+	"""Generate rails for secondary map"""
+	var rail_count: int = 8
+	var rail_distance: float = arena_size * 0.47
+
+	for i in range(rail_count):
+		var angle_start: float = (float(i) / rail_count) * TAU
+		var angle_end: float = angle_start + (TAU / rail_count) * 0.7
+
+		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
+		rail.name = "SecondaryGrindRail" + str(i)
+		rail.curve = Curve3D.new()
+
+		var base_height: float = 3.0 + (i % 3) * 2.5
+
+		var num_points: int = 12
+		for j in range(num_points):
+			var t: float = float(j) / (num_points - 1)
+			var angle: float = lerp(angle_start, angle_end, t)
+
+			var x: float = cos(angle) * rail_distance
+			var z: float = sin(angle) * rail_distance
+			var height_offset: float = sin(t * PI) * 1.0
+			var y: float = base_height + height_offset
+
+			rail.curve.add_point(offset + Vector3(x, y, z))
+
+		for j in range(rail.curve.point_count):
+			var tangent: Vector3
+
+			if j == 0:
+				tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+			elif j == rail.curve.point_count - 1:
+				tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+			else:
+				var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+				var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+				tangent = (prev_to_curr + curr_to_next).normalized()
+
+			var handle_length: float = 0.5
+			rail.curve.set_point_in(j, -tangent * handle_length)
+			rail.curve.set_point_out(j, tangent * handle_length)
+
+		add_child(rail)
+		create_rail_visual(rail)
+
+func generate_connecting_rail(start_pos: Vector3, end_pos: Vector3) -> void:
+	"""Generate a long connecting rail between two map areas"""
+	print("Generating connecting rail from ", start_pos, " to ", end_pos)
+
+	var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
+	rail.name = "ConnectingRail"
+	rail.curve = Curve3D.new()
+
+	# Calculate distance and create enough points for a smooth path
+	var distance: float = start_pos.distance_to(end_pos)
+	var num_points: int = max(20, int(distance / 15.0))  # At least 20 points, more for longer rails
+
+	# Create a gentle curve from start to end
+	for i in range(num_points):
+		var t: float = float(i) / (num_points - 1)
+
+		# Interpolate between start and end positions
+		var pos: Vector3 = start_pos.lerp(end_pos, t)
+
+		# Add a slight upward arc for visual interest (parabolic arc)
+		var arc_height: float = 15.0  # Maximum height of the arc
+		var height_offset: float = sin(t * PI) * arc_height
+		pos.y += height_offset
+
+		rail.curve.add_point(pos)
+
+	# Set smooth tangent handles
+	for j in range(rail.curve.point_count):
+		var tangent: Vector3
+
+		if j == 0:
+			tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+		elif j == rail.curve.point_count - 1:
+			tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+		else:
+			var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+			var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+			tangent = (prev_to_curr + curr_to_next).normalized()
+
+		var handle_length: float = distance / float(num_points) * 0.5
+		rail.curve.set_point_in(j, -tangent * handle_length)
+		rail.curve.set_point_out(j, tangent * handle_length)
+
+	add_child(rail)
+	create_rail_visual(rail)
+
+	print("Connecting rail created with ", num_points, " points")

@@ -51,6 +51,11 @@ var player_deaths: Dictionary = {}  # player_id: death_count
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
+# Mid-round expansion system
+var expansion_triggered: bool = false
+var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds remaining)
+var expansion_notification: Control = null
+
 # Bot system
 var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
@@ -117,6 +122,9 @@ func _ready() -> void:
 	if game_hud:
 		game_hud.visible = false
 
+	# Create expansion notification UI
+	create_expansion_notification()
+
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
@@ -179,6 +187,12 @@ func _process(delta: float) -> void:
 		# Log every 30 seconds
 		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
 			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+
+		# Check for mid-round expansion trigger
+		if not expansion_triggered and game_time_remaining <= expansion_trigger_time:
+			print("Mid-round expansion trigger reached!")
+			trigger_mid_round_expansion()
+
 		if game_time_remaining <= 0:
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
@@ -787,6 +801,9 @@ func return_to_main_menu() -> void:
 	game_active = false
 	countdown_active = false
 	game_time_remaining = 300.0
+
+	# Reset mid-round expansion
+	expansion_triggered = false
 
 	# Reset bot counter
 	bot_counter = 0
@@ -1643,3 +1660,68 @@ func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
 	if music_notification and music_notification.has_method("show_notification"):
 		music_notification.show_notification(metadata)
+
+# ============================================================================
+# MID-ROUND EXPANSION SYSTEM
+# ============================================================================
+
+func create_expansion_notification() -> void:
+	"""Create the expansion notification UI"""
+	var ExpansionNotification = preload("res://scripts/ui/expansion_notification.gd")
+	expansion_notification = Control.new()
+	expansion_notification.name = "ExpansionNotification"
+	expansion_notification.set_script(ExpansionNotification)
+	add_child(expansion_notification)
+	print("Expansion notification UI created")
+
+func trigger_mid_round_expansion() -> void:
+	"""Trigger the mid-round expansion - show notification, spawn new area, connect with rail"""
+	print("======================================")
+	print("TRIGGERING MID-ROUND EXPANSION!")
+	print("======================================")
+
+	expansion_triggered = true
+
+	# Show notification
+	if expansion_notification and expansion_notification.has_method("show_notification"):
+		expansion_notification.show_notification()
+
+	# Calculate position for secondary map (1000 feet = 304.8 meters away)
+	var expansion_offset: Vector3 = Vector3(304.8, 0, 0)  # 1000 feet to the right
+
+	# Wait 1 second for dramatic effect
+	await get_tree().create_timer(1.0).timeout
+
+	# Spawn POOF particle effect at the secondary map location
+	var PoofEffect = preload("res://scripts/poof_particle_effect.gd")
+	var poof = Node3D.new()
+	poof.set_script(PoofEffect)
+	add_child(poof)
+	poof.global_position = expansion_offset
+	# Trigger the effect
+	if poof.has_method("play_poof"):
+		poof.play_poof()
+
+	# Wait a brief moment for the POOF to be visible
+	await get_tree().create_timer(0.3).timeout
+
+	# Generate secondary map
+	if level_generator and level_generator.has_method("generate_secondary_map"):
+		level_generator.generate_secondary_map(expansion_offset)
+		print("Secondary map generated at offset: ", expansion_offset)
+
+		# Apply textures to new platforms
+		if level_generator.has_method("apply_procedural_textures"):
+			level_generator.apply_procedural_textures()
+
+		# Generate connecting rail from main map to secondary map
+		var start_rail_pos: Vector3 = Vector3(60, 5, 0)  # Edge of main arena
+		var end_rail_pos: Vector3 = expansion_offset + Vector3(-60, 5, 0)  # Edge of secondary arena
+
+		if level_generator.has_method("generate_connecting_rail"):
+			level_generator.generate_connecting_rail(start_rail_pos, end_rail_pos)
+			print("Connecting rail generated!")
+
+	print("======================================")
+	print("MID-ROUND EXPANSION COMPLETE!")
+	print("======================================")
