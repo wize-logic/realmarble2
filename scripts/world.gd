@@ -1743,16 +1743,35 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 	var orbit_height: float = 40.0
 	var orbit_duration: float = 4.0  # 4 seconds of showcase
 
-	# Store original cameras for all players
-	var player_cameras: Dictionary = {}
+	# Store player states and freeze them
+	var player_states: Dictionary = {}
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 
 	for player in players:
+		var state: Dictionary = {}
+
+		# Store and disable camera
 		if player.has_node("Camera3D"):
 			var camera = player.get_node("Camera3D")
-			player_cameras[player] = camera
-			# Disable player's camera
+			state["camera"] = camera
+			state["was_current"] = camera.current
 			camera.current = false
+
+		# Freeze player physics (RigidBody3D)
+		if player is RigidBody3D:
+			state["original_freeze"] = player.freeze
+			state["original_linear_velocity"] = player.linear_velocity
+			state["original_angular_velocity"] = player.angular_velocity
+			player.freeze = true
+			player.linear_velocity = Vector3.ZERO
+			player.angular_velocity = Vector3.ZERO
+
+		# Disable player input processing
+		state["original_process_mode"] = player.process_mode
+		player.set_process_input(false)
+		player.set_process_unhandled_input(false)
+
+		player_states[player] = state
 
 	# Make showcase camera active
 	showcase_camera.current = true
@@ -1778,10 +1797,30 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 
 		await get_tree().process_frame
 
-	# Restore player cameras
-	for player in player_cameras.keys():
-		var camera = player_cameras[player]
-		camera.current = true
+	# Restore all player states
+	for player in player_states.keys():
+		if not is_instance_valid(player):
+			continue
+
+		var state: Dictionary = player_states[player]
+
+		# Restore camera (only if it was the current camera before)
+		if state.has("camera") and is_instance_valid(state["camera"]):
+			var camera = state["camera"]
+			if state["was_current"]:
+				camera.current = true
+
+		# Unfreeze player physics
+		if player is RigidBody3D and state.has("original_freeze"):
+			player.freeze = state["original_freeze"]
+			# Don't restore velocities - let them start fresh
+
+		# Re-enable player input processing
+		player.set_process_input(true)
+		player.set_process_unhandled_input(true)
+
+	# Wait a frame to ensure camera switches properly
+	await get_tree().process_frame
 
 	# Clean up showcase camera
 	showcase_camera.queue_free()
