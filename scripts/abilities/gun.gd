@@ -7,8 +7,13 @@ extends Ability
 @export var projectile_damage: int = 1
 @export var projectile_speed: float = 40.0
 @export var projectile_lifetime: float = 3.0
-@export var fire_rate: float = 0.3  # Shots per second
+@export var fire_rate: float = 0.5  # Cooldown between shots (increased to prevent spam)
+@export var min_charge_time: float = 0.3  # Minimum charge time before release
+@export var max_active_projectiles: int = 5  # Max active projectiles per player to prevent spam
 @onready var ability_sound: AudioStreamPlayer3D = $GunSound
+
+# Track active projectiles for this player
+var active_projectiles: Array[Node3D] = []
 
 func _ready() -> void:
 	super._ready()
@@ -59,11 +64,26 @@ func activate() -> void:
 	query.collision_mask = 3  # Check world (1) and players (2)
 	var result: Dictionary = space_state.intersect_ray(query)
 
+	# Clean up invalid projectiles from tracking array
+	active_projectiles = active_projectiles.filter(func(p): return is_instance_valid(p) and p.is_inside_tree())
+
+	# Check if we've hit the projectile limit - free oldest if needed
+	if active_projectiles.size() >= max_active_projectiles:
+		var oldest_projectile: Node3D = active_projectiles[0]
+		if is_instance_valid(oldest_projectile):
+			oldest_projectile.queue_free()
+		active_projectiles.remove_at(0)
+		if OS.is_debug_build():
+			print("Gun: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
+
 	# Spawn projectile
 	var projectile: Node3D = create_projectile()
 	if projectile:
 		# Add to world FIRST
 		player.get_parent().add_child(projectile)
+
+		# Track this projectile
+		active_projectiles.append(projectile)
 
 		# Position at gun barrel (after adding to tree)
 		projectile.global_position = barrel_position
@@ -97,8 +117,32 @@ func activate() -> void:
 		ability_sound.global_position = barrel_position
 		ability_sound.play()
 
+## Override release_charge to enforce minimum charge time
+func release_charge() -> void:
+	# Enforce minimum charge time to prevent spam
+	if charge_time < min_charge_time:
+		print("Gun: Too fast! Need at least %.1fs charge (currently %.1fs)" % [min_charge_time, charge_time])
+		# Cancel the charge instead of releasing
+		cancel_charge()
+		return
+
+	# Call parent implementation
+	super.release_charge()
+
 func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	"""Handle projectile collision with another body"""
+	# CRITICAL FIX: Validate BOTH body and projectile FIRST
+	# Multiple projectiles can hit simultaneously - first might free the body!
+	if not body or not is_instance_valid(body) or not body.is_inside_tree():
+		return  # Body already freed or invalid (killed by another bullet)
+
+	if not projectile or not is_instance_valid(projectile) or not projectile.is_inside_tree():
+		return  # Projectile already freed or invalid
+
+	# Cache projectile data immediately to prevent issues if it gets freed
+	var projectile_position: Vector3 = projectile.global_position
+	var projectile_velocity: Vector3 = projectile.linear_velocity
+
 	# Get projectile metadata
 	var damage: int = projectile.get_meta("damage", 1)
 	var owner_id: int = projectile.get_meta("owner_id", -1)
@@ -131,21 +175,22 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		var total_knockback: float = base_knockback * charge_mult * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
-		var knockback_dir: Vector3 = projectile.linear_velocity.normalized()
+		# Use cached velocity to avoid accessing freed projectile
+		var knockback_dir: Vector3 = projectile_velocity.normalized()
 		knockback_dir.y = 0.15  # Slight upward knockback
 		body.apply_central_impulse(knockback_dir * total_knockback)
 
 		# Play attack hit sound (satisfying feedback for landing a hit)
-		if projectile and projectile.is_inside_tree():
-			var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-			hit_sound.max_distance = 20.0
-			hit_sound.volume_db = 3.0
-			hit_sound.pitch_scale = randf_range(1.2, 1.4)
-			hit_sound.global_position = projectile.global_position
-			if player and player.get_parent():
-				player.get_parent().add_child(hit_sound)
-				hit_sound.play()
-				# Sound will auto-cleanup when it finishes
+		# Use cached position to avoid accessing freed projectile
+		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		hit_sound.max_distance = 20.0
+		hit_sound.volume_db = 3.0
+		hit_sound.pitch_scale = randf_range(1.2, 1.4)
+		hit_sound.global_position = projectile_position  # Use cached position
+		if player and player.get_parent():
+			player.get_parent().add_child(hit_sound)
+			hit_sound.play()
+			# Sound will auto-cleanup when it finishes
 
 	# Destroy projectile on hit
 	if projectile and is_instance_valid(projectile):

@@ -515,7 +515,7 @@ func _on_end_match_pressed() -> void:
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("end_deathmatch"):
 		world.end_deathmatch()
-		print("Match ended immediately")
+		print("Match ended manually via debug menu")
 
 func _on_collision_shapes_pressed() -> void:
 	"""Toggle collision shape visualization"""

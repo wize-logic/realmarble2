@@ -13,6 +13,10 @@ var music_directory: String = _get_default_music_directory()
 
 func _get_default_music_directory() -> String:
 	"""Get the default music directory based on whether we're in editor or exported"""
+	# HTML5 builds must use res:// paths only (no filesystem access)
+	if OS.has_feature("web"):
+		return "res://music"
+
 	var exe_path: String = OS.get_executable_path()
 
 	# In editor, exe_path is empty, so use res://music

@@ -16,7 +16,8 @@ func _ready() -> void:
 
 func generate_level() -> void:
 	"""Generate a complete procedural level"""
-	print("Generating procedural level with seed: ", level_seed)
+	if OS.is_debug_build():
+		print("Generating procedural level with seed: ", level_seed)
 
 	# Initialize noise for variation
 	noise = FastNoiseLite.new()
@@ -68,7 +69,8 @@ func generate_main_floor() -> void:
 	# Store for texture application
 	platforms.append(floor_instance)
 
-	print("Generated main floor: ", floor_size, "x", floor_size)
+	if OS.is_debug_build():
+		print("Generated main floor: ", floor_size, "x", floor_size)
 
 func generate_platforms() -> void:
 	"""Generate elevated platforms around the arena"""
@@ -109,7 +111,8 @@ func generate_platforms() -> void:
 
 		platforms.append(platform_instance)
 
-	print("Generated ", platform_count, " platforms")
+	if OS.is_debug_build():
+		print("Generated ", platform_count, " platforms")
 
 func generate_ramps() -> void:
 	"""Generate ramps connecting different levels"""
@@ -143,7 +146,8 @@ func generate_ramps() -> void:
 
 		platforms.append(ramp_instance)
 
-	print("Generated ", ramp_count, " ramps")
+	if OS.is_debug_build():
+		print("Generated ", ramp_count, " ramps")
 
 func generate_walls() -> void:
 	"""Generate perimeter walls"""

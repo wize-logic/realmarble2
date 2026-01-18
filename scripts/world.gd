@@ -29,6 +29,9 @@ var marble_preview: Node3D = null
 var preview_camera: Camera3D = null
 var preview_light: DirectionalLight3D = null
 
+# Audio context state (HTML5)
+var audio_context_resumed: bool = false
+
 # Game Settings
 var sensitivity: float = 0.005
 var controller_sensitivity: float = 0.010
@@ -45,6 +48,7 @@ var controller: bool = false
 
 # Deathmatch Game State
 var game_time_remaining: float = 300.0  # 5 minutes in seconds
+var last_time_print: int = -1  # Track last printed time interval to prevent spam
 var game_active: bool = false
 var player_scores: Dictionary = {}  # player_id: score
 var player_deaths: Dictionary = {}  # player_id: death_count
@@ -123,6 +127,12 @@ func _ready() -> void:
 		game_hud.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
+	# HTML5: Resume AudioContext on first user interaction (browser policy)
+	if not audio_context_resumed and OS.has_feature("web"):
+		if event is InputEventMouseButton or event is InputEventKey or event is InputEventJoypadButton:
+			_resume_audio_context()
+			audio_context_resumed = true
+
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
 		var lobby_visible: bool = lobby_ui and lobby_ui.visible
@@ -181,9 +191,11 @@ func _process(delta: float) -> void:
 	# Handle deathmatch timer
 	if game_active:
 		game_time_remaining -= delta
-		# Log every 30 seconds
-		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
+		# Log every 30 seconds (but only once per interval)
+		var current_interval: int = int(game_time_remaining) / 30
+		if current_interval != last_time_print and int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
 			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+			last_time_print = current_interval
 
 		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
 		# # Check for mid-round expansion trigger
@@ -192,6 +204,7 @@ func _process(delta: float) -> void:
 		# 	trigger_mid_round_expansion()
 
 		if game_time_remaining <= 0:
+			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
 
@@ -285,8 +298,7 @@ func _on_practice_button_pressed() -> void:
 
 	# Prevent starting practice mode if a game is already active or counting down
 	if game_active or countdown_active:
-		print("WARNING: Cannot start practice mode - game already active or counting down!")
-		print("======================================")
+		# Silently ignore - menu should be hidden during gameplay anyway
 		return
 
 	# Prevent starting if players already exist (game already started)
@@ -364,6 +376,16 @@ func ask_bot_count() -> int:
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
+	# Add HTML5 warning if on web
+	if OS.has_feature("web"):
+		var warning_label = Label.new()
+		warning_label.text = "⚠ Web build recommended max: 8 bots"
+		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		warning_label.add_theme_font_size_override("font_size", 14)
+		warning_label.add_theme_color_override("font_color", Color(1, 0.8, 0.2, 1))  # Orange warning color
+		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vbox.add_child(warning_label)
+
 	# Add separator for visual separation
 	var separator = HSeparator.new()
 	separator.add_theme_constant_override("separation", 2)
@@ -373,8 +395,8 @@ func ask_bot_count() -> int:
 	bot_count_dialog_closed = false
 	bot_count_selected = 3  # Default
 
-	# Bot count options
-	var bot_counts = [1, 3, 5, 7, 10, 15]
+	# Bot count options - cap at 8 for HTML5 to prevent physics overload
+	var bot_counts = [1, 3, 5, 7, 8] if OS.has_feature("web") else [1, 3, 5, 7, 10, 15]
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -445,7 +467,7 @@ func ask_bot_count() -> int:
 	# Wait for user to select an option (flag-based waiting using instance variable)
 	while not bot_count_dialog_closed:
 		await get_tree().process_frame
-		print("Still waiting... bot_count_dialog_closed = ", bot_count_dialog_closed)
+		# Silently wait - no need to spam console
 
 	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
@@ -460,6 +482,8 @@ func start_practice_mode(bot_count: int) -> void:
 
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
@@ -511,6 +535,40 @@ func start_practice_mode(bot_count: int) -> void:
 	# Start the deathmatch
 	start_deathmatch()
 
+func _set_practice_button_disabled(disabled: bool) -> void:
+	"""Disable or enable the practice button to prevent spam during gameplay"""
+	if not main_menu:
+		return
+
+	# Navigate to PracticeButton: MainMenu -> PlaySubmenu -> MarginContainer -> VBoxContainer -> SubmenuButtons -> PracticeButton
+	var play_submenu: Node = main_menu.get_node_or_null("PlaySubmenu")
+	if not play_submenu:
+		return
+
+	var margin: Node = play_submenu.get_node_or_null("MarginContainer")
+	if not margin:
+		return
+
+	var vbox: Node = margin.get_node_or_null("VBoxContainer")
+	if not vbox:
+		return
+
+	var submenu_buttons: Node = vbox.get_node_or_null("SubmenuButtons")
+	if not submenu_buttons:
+		return
+
+	var practice_button: Node = submenu_buttons.get_node_or_null("PracticeButton")
+	if not practice_button:
+		return
+
+	# Disable the button (or use visible = false if preferred)
+	if "disabled" in practice_button:
+		practice_button.disabled = disabled
+		if disabled:
+			print("[UI] Practice button disabled (game active)")
+		else:
+			print("[UI] Practice button enabled (game inactive)")
+
 func _on_settings_pressed() -> void:
 	"""Open settings menu from main menu"""
 	_on_options_button_toggled(true)
@@ -544,6 +602,8 @@ func _on_friends_pressed() -> void:
 func _on_host_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 
@@ -587,6 +647,8 @@ func _on_host_button_pressed() -> void:
 func _on_join_button_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
+		# Disable practice button to prevent spam during gameplay
+		_set_practice_button_disabled(true)
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 
@@ -759,7 +821,7 @@ func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
 	print("======================================")
 	print("end_deathmatch() CALLED!")
-	print("Game time was: %.2f seconds" % game_time_remaining)
+	print("Game time was: %.2f seconds" % max(0.0, game_time_remaining))
 	print("======================================")
 
 	# Prevent ending if already ended
@@ -806,9 +868,11 @@ func end_deathmatch() -> void:
 			winner_id = player_id
 
 	if winner_id != -1:
-		print("Winner: Player %d with %d kills!" % [winner_id, highest_score])
+		# Determine bot or player
+		var winner_type: String = " (Bot)" if winner_id >= 9000 else ""
+		print("🏆 Winner: Player %d%s with %d points!" % [winner_id, winner_type, highest_score])
 	else:
-		print("No winner - no kills recorded!")
+		print("Match ended - no scores recorded")
 
 	# Show scoreboard for 10 seconds
 	var scoreboard: Control = get_node_or_null("Scoreboard")
@@ -855,6 +919,7 @@ func return_to_main_menu() -> void:
 	game_active = false
 	countdown_active = false
 	game_time_remaining = 300.0
+	last_time_print = -1  # Reset time print tracker
 
 	# Reset mid-round expansion
 	expansion_triggered = false
@@ -871,6 +936,8 @@ func return_to_main_menu() -> void:
 	# Show main menu
 	if main_menu:
 		main_menu.show()
+		# Re-enable practice button now that we're back in menu
+		_set_practice_button_disabled(false)
 
 	# CRITICAL FIX: Recreate marble preview if it was destroyed during gameplay
 	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
@@ -924,8 +991,9 @@ func get_kd_ratio(player_id: int) -> float:
 
 func get_time_remaining_formatted() -> String:
 	"""Get formatted time string (MM:SS)"""
-	var minutes: int = int(game_time_remaining) / 60
-	var seconds: int = int(game_time_remaining) % 60
+	var time_clamped: float = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
+	var minutes: int = int(time_clamped) / 60
+	var seconds: int = int(time_clamped) % 60
 	return "%02d:%02d" % [minutes, seconds]
 
 # ============================================================================
@@ -947,46 +1015,69 @@ func _auto_load_music() -> void:
 
 	if songs_loaded > 0:
 		print("Auto-loaded %d songs from music directory" % songs_loaded)
-	else:
+	elif not OS.has_feature("web"):
+		# Only print error for non-HTML5 builds (HTML5 won't have music files in res://)
 		print("No music files found in either %s or res://music" % music_dir)
 
 func _load_music_from_directory(dir: String) -> int:
 	"""Load all music files from a directory and return count of songs loaded"""
-	print("Attempting to open directory: %s" % dir)
 	var dir_access: DirAccess = DirAccess.open(dir)
 	if not dir_access:
-		print("Failed to open directory: %s" % dir)
+		# Only print error if not HTML5 trying to access non-res:// path
+		if not (OS.has_feature("web") and not dir.begins_with("res://")):
+			print("Failed to open music directory: %s" % dir)
 		return 0
 
-	print("Successfully opened directory: %s" % dir)
+	print("[MUSIC] Scanning directory: %s" % dir)
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
-	var files_found: int = 0
 
 	while file_name != "":
 		if not dir_access.current_is_dir():
-			files_found += 1
-			var ext: String = file_name.get_extension().to_lower()
-			print("Found file: %s (extension: %s)" % [file_name, ext])
+			# Skip .import files - we want the original audio files
+			if file_name.ends_with(".import"):
+				# Extract the original filename (remove .import extension)
+				var original_name: String = file_name.trim_suffix(".import")
+				var ext: String = original_name.get_extension().to_lower()
+				print("[MUSIC] Found imported file: %s -> original: %s (ext: %s)" % [file_name, original_name, ext])
 
-			# Check if it's a supported audio format
-			if ext in ["mp3", "ogg", "wav"]:
-				var file_path: String = dir.path_join(file_name)
-				print("Attempting to load audio file: %s" % file_path)
-				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+				# Check if it's a supported audio format
+				if ext in ["mp3", "ogg", "wav"]:
+					# Use the ORIGINAL filename (without .import) for loading
+					var file_path: String = dir.path_join(original_name)
+					print("[MUSIC] Attempting to load: %s" % file_path)
+					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
-				if audio_stream and gameplay_music.has_method("add_song"):
-					gameplay_music.add_song(audio_stream, file_path)
-					songs_loaded += 1
-					print("Successfully loaded: %s" % file_name)
-				else:
-					print("Failed to load or add: %s" % file_name)
+					if audio_stream and gameplay_music.has_method("add_song"):
+						gameplay_music.add_song(audio_stream, file_path)
+						songs_loaded += 1
+						print("[MUSIC] ✅ Successfully loaded: %s" % original_name)
+					else:
+						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [original_name, "null" if not audio_stream else "exists"])
+			else:
+				# Non-imported file (external music directory)
+				var ext: String = file_name.get_extension().to_lower()
+				print("[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
+
+				# Check if it's a supported audio format
+				if ext in ["mp3", "ogg", "wav"]:
+					var file_path: String = dir.path_join(file_name)
+					print("[MUSIC] Attempting to load: %s" % file_path)
+					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+
+					if audio_stream and gameplay_music.has_method("add_song"):
+						gameplay_music.add_song(audio_stream, file_path)
+						songs_loaded += 1
+						print("[MUSIC] ✅ Successfully loaded: %s" % file_name)
+					else:
+						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
 
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
-	print("Directory scan complete. Files found: %d, Songs loaded: %d" % [files_found, songs_loaded])
+
+	print("[MUSIC] Scan complete. Songs loaded: %d" % songs_loaded)
 	return songs_loaded
 
 func _on_music_directory_button_pressed() -> void:
@@ -1021,23 +1112,29 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 	# For res:// paths, try ResourceLoader first (for imported files)
 	if file_path.begins_with("res://"):
+		print("[MUSIC] Trying ResourceLoader.load(%s)..." % file_path)
 		audio_stream = ResourceLoader.load(file_path)
 		if audio_stream:
-			print("Loaded via ResourceLoader: %s" % file_path)
+			print("[MUSIC] ✅ ResourceLoader succeeded: %s" % file_path)
 			return audio_stream
 		else:
-			print("ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
+			print("[MUSIC] ⚠️ ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
 			# Fall through to FileAccess method below
 
 	# For external files (or res:// files that aren't imported), use FileAccess
+	print("[MUSIC] Trying FileAccess for %s extension..." % extension)
 	match extension:
 		"mp3":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 			if file:
+				print("[MUSIC] FileAccess opened successfully, loading MP3 data...")
 				var mp3_stream: AudioStreamMP3 = AudioStreamMP3.new()
 				mp3_stream.data = file.get_buffer(file.get_length())
 				file.close()
 				audio_stream = mp3_stream
+				print("[MUSIC] ✅ MP3 stream created successfully")
+			else:
+				print("[MUSIC] ❌ FileAccess.open failed for: %s" % file_path)
 
 		"ogg":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
@@ -1555,6 +1652,26 @@ func _create_marble_preview() -> void:
 
 	print("Marble preview created")
 
+func _resume_audio_context() -> void:
+	"""Resume AudioContext on first user interaction (HTML5 browser policy fix)"""
+	if not OS.has_feature("web"):
+		return
+
+	var js_code = """
+		if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+			var AudioContext = window.AudioContext || window.webkitAudioContext;
+			if (typeof window._godotAudioContext !== 'undefined' && window._godotAudioContext) {
+				window._godotAudioContext.resume().then(function() {
+					console.log('[Godot] AudioContext resumed successfully');
+				}).catch(function(err) {
+					console.log('[Godot] Failed to resume AudioContext:', err);
+				});
+			}
+		}
+	"""
+	JavaScriptBridge.eval(js_code, true)
+	print("[HTML5] Attempted to resume AudioContext")
+
 func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
 	if profile_panel:
@@ -1652,7 +1769,8 @@ func play_countdown_beep() -> void:
 
 func generate_procedural_level() -> void:
 	"""Generate a procedural level with skybox"""
-	print("Generating procedural arena...")
+	if OS.is_debug_build():
+		print("Generating procedural arena...")
 
 	# Remove old level generator if it exists
 	if level_generator:

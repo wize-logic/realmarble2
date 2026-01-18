@@ -38,6 +38,8 @@ var unstuck_timer: float = 0.0
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
 var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
+var stuck_print_timer: float = 0.0  # Timer to throttle stuck debug prints
+const MAX_STUCK_ATTEMPTS: int = 15  # Teleport bot after this many consecutive stuck checks
 
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
@@ -94,6 +96,7 @@ func _physics_process(delta: float) -> void:
 	stuck_timer += delta
 	unstuck_timer -= delta
 	obstacle_jump_timer -= delta
+	stuck_print_timer -= delta
 
 	# Check if bot is stuck on obstacles
 	if stuck_timer >= stuck_check_interval:
@@ -937,6 +940,14 @@ func check_if_stuck() -> void:
 	if distance_moved < 0.15 and is_trying_to_move:
 		consecutive_stuck_checks += 1
 
+		# EMERGENCY: Teleport bot if stuck for too long (prevents infinite stuck loops)
+		if consecutive_stuck_checks >= MAX_STUCK_ATTEMPTS:
+			print("Bot %s EXTREMELY STUCK (%d attempts)! Emergency teleport to spawn" % [bot.name, consecutive_stuck_checks])
+			teleport_to_safe_position()
+			consecutive_stuck_checks = 0
+			is_stuck = false
+			return
+
 		# Trigger stuck state after 2 consecutive failed movement checks
 		if consecutive_stuck_checks >= 2 and not is_stuck:
 			is_stuck = true
@@ -953,11 +964,17 @@ func check_if_stuck() -> void:
 				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
 				# Mix perpendicular with backwards movement
 				obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
-				print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
+				# Throttle print to once every 3 seconds
+				if stuck_print_timer <= 0:
+					print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
+					stuck_print_timer = 3.0
 			else:
 				# Normal stuck - just go BACKWARDS (opposite direction)
 				obstacle_avoid_direction = opposite_dir
-				print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
+				# Throttle print to once every 3 seconds
+				if stuck_print_timer <= 0:
+					print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
+					stuck_print_timer = 3.0
 	else:
 		# Reset stuck counter if we've moved well
 		if distance_moved > 0.3:
@@ -985,6 +1002,28 @@ func is_stuck_under_terrain() -> bool:
 
 	# If we hit something above us, we're stuck under terrain
 	return result.size() > 0
+
+func teleport_to_safe_position() -> void:
+	"""Teleport bot to a safe spawn position when extremely stuck"""
+	if not bot or not is_instance_valid(bot):
+		return
+
+	# Check if bot has spawns property
+	if not "spawns" in bot:
+		print("Bot %s has no spawns property!" % bot.name)
+		return
+
+	# Get a random spawn point
+	if bot.spawns.size() > 0:
+		var spawn_index: int = randi() % bot.spawns.size()
+		var spawn_pos: Vector3 = bot.spawns[spawn_index]
+
+		# Teleport bot
+		bot.global_position = spawn_pos
+		bot.linear_velocity = Vector3.ZERO
+		bot.angular_velocity = Vector3.ZERO
+
+		print("Bot %s teleported to spawn %d: %s" % [bot.name, spawn_index, spawn_pos])
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Handle movement when bot is stuck - try to get unstuck"""
@@ -1020,7 +1059,7 @@ func handle_unstuck_movement(delta: float) -> void:
 		var clear_dir: Vector3 = find_clear_direction(new_avoid_dir)
 		if clear_dir != Vector3.ZERO:
 			obstacle_avoid_direction = clear_dir
-			print("Bot %s changing unstuck direction" % bot.name)
+			# Already throttled by the direction change logic (every 0.3 seconds)
 
 	# Also try moving backward occasionally
 	if randf() < 0.1:
