@@ -981,21 +981,43 @@ func _load_music_from_directory(dir: String) -> int:
 
 	while file_name != "":
 		if not dir_access.current_is_dir():
-			var ext: String = file_name.get_extension().to_lower()
-			print("[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
+			# Skip .import files - we want the original audio files
+			if file_name.ends_with(".import"):
+				# Extract the original filename (remove .import extension)
+				var original_name: String = file_name.trim_suffix(".import")
+				var ext: String = original_name.get_extension().to_lower()
+				print("[MUSIC] Found imported file: %s -> original: %s (ext: %s)" % [file_name, original_name, ext])
 
-			# Check if it's a supported audio format
-			if ext in ["mp3", "ogg", "wav"]:
-				var file_path: String = dir.path_join(file_name)
-				print("[MUSIC] Attempting to load: %s" % file_path)
-				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+				# Check if it's a supported audio format
+				if ext in ["mp3", "ogg", "wav"]:
+					# Use the ORIGINAL filename (without .import) for loading
+					var file_path: String = dir.path_join(original_name)
+					print("[MUSIC] Attempting to load: %s" % file_path)
+					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
-				if audio_stream and gameplay_music.has_method("add_song"):
-					gameplay_music.add_song(audio_stream, file_path)
-					songs_loaded += 1
-					print("[MUSIC] ✅ Successfully loaded: %s" % file_name)
-				else:
-					print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
+					if audio_stream and gameplay_music.has_method("add_song"):
+						gameplay_music.add_song(audio_stream, file_path)
+						songs_loaded += 1
+						print("[MUSIC] ✅ Successfully loaded: %s" % original_name)
+					else:
+						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [original_name, "null" if not audio_stream else "exists"])
+			else:
+				# Non-imported file (external music directory)
+				var ext: String = file_name.get_extension().to_lower()
+				print("[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
+
+				# Check if it's a supported audio format
+				if ext in ["mp3", "ogg", "wav"]:
+					var file_path: String = dir.path_join(file_name)
+					print("[MUSIC] Attempting to load: %s" % file_path)
+					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+
+					if audio_stream and gameplay_music.has_method("add_song"):
+						gameplay_music.add_song(audio_stream, file_path)
+						songs_loaded += 1
+						print("[MUSIC] ✅ Successfully loaded: %s" % file_name)
+					else:
+						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
 
 		file_name = dir_access.get_next()
 
