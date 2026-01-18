@@ -1686,13 +1686,13 @@ func trigger_mid_round_expansion() -> void:
 	if expansion_notification and expansion_notification.has_method("show_notification"):
 		expansion_notification.show_notification()
 
-	# Calculate position for secondary map (1000 feet = 304.8 meters away)
+	# Calculate position for secondary arena (1000 feet = 304.8 meters away)
 	var expansion_offset: Vector3 = Vector3(304.8, 0, 0)  # 1000 feet to the right
 
 	# Wait 1 second for dramatic effect
 	await get_tree().create_timer(1.0).timeout
 
-	# Spawn POOF particle effect at the secondary map location
+	# Spawn POOF particle effect at the secondary arena location
 	var PoofEffect = preload("res://scripts/poof_particle_effect.gd")
 	var poof = Node3D.new()
 	poof.set_script(PoofEffect)
@@ -1705,16 +1705,16 @@ func trigger_mid_round_expansion() -> void:
 	# Wait a brief moment for the POOF to be visible
 	await get_tree().create_timer(0.3).timeout
 
-	# Generate secondary map
+	# Generate secondary arena
 	if level_generator and level_generator.has_method("generate_secondary_map"):
 		level_generator.generate_secondary_map(expansion_offset)
-		print("Secondary map generated at offset: ", expansion_offset)
+		print("Secondary arena generated at offset: ", expansion_offset)
 
-		# Apply textures to new platforms
+		# Apply textures to new platforms (only new ones, not regenerating entire map)
 		if level_generator.has_method("apply_procedural_textures"):
 			level_generator.apply_procedural_textures()
 
-		# Generate connecting rail from main map to secondary map
+		# Generate connecting rail from main arena to secondary arena
 		var start_rail_pos: Vector3 = Vector3(60, 5, 0)  # Edge of main arena
 		var end_rail_pos: Vector3 = expansion_offset + Vector3(-60, 5, 0)  # Edge of secondary arena
 
@@ -1722,6 +1722,68 @@ func trigger_mid_round_expansion() -> void:
 			level_generator.generate_connecting_rail(start_rail_pos, end_rail_pos)
 			print("Connecting rail generated!")
 
+	# Showcase the new arena with a dolly camera
+	await showcase_new_arena(expansion_offset)
+
 	print("======================================")
 	print("MID-ROUND EXPANSION COMPLETE!")
 	print("======================================")
+
+func showcase_new_arena(arena_position: Vector3) -> void:
+	"""Temporarily show all players the new arena with a dolly camera"""
+	print("Starting arena showcase...")
+
+	# Create a showcase camera
+	var showcase_camera = Camera3D.new()
+	showcase_camera.name = "ShowcaseCamera"
+	add_child(showcase_camera)
+
+	# Position camera to orbit around the new arena
+	var orbit_radius: float = 100.0
+	var orbit_height: float = 40.0
+	var orbit_duration: float = 4.0  # 4 seconds of showcase
+
+	# Store original cameras for all players
+	var player_cameras: Dictionary = {}
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+
+	for player in players:
+		if player.has_node("Camera3D"):
+			var camera = player.get_node("Camera3D")
+			player_cameras[player] = camera
+			# Disable player's camera
+			camera.current = false
+
+	# Make showcase camera active
+	showcase_camera.current = true
+
+	# Animate the dolly camera orbiting around the new arena
+	var start_time: float = Time.get_ticks_msec() / 1000.0
+	var elapsed: float = 0.0
+
+	while elapsed < orbit_duration:
+		var current_time: float = Time.get_ticks_msec() / 1000.0
+		elapsed = current_time - start_time
+
+		# Calculate orbit position (circular path around arena)
+		var orbit_progress: float = elapsed / orbit_duration
+		var angle: float = orbit_progress * PI  # Half circle (180 degrees)
+
+		var x: float = arena_position.x + cos(angle) * orbit_radius
+		var z: float = arena_position.z + sin(angle) * orbit_radius
+		var y: float = arena_position.y + orbit_height
+
+		showcase_camera.global_position = Vector3(x, y, z)
+		showcase_camera.look_at(arena_position + Vector3(0, 10, 0), Vector3.UP)
+
+		await get_tree().process_frame
+
+	# Restore player cameras
+	for player in player_cameras.keys():
+		var camera = player_cameras[player]
+		camera.current = true
+
+	# Clean up showcase camera
+	showcase_camera.queue_free()
+
+	print("Arena showcase complete - control returned to players")
