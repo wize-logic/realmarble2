@@ -462,13 +462,18 @@ func start_practice_mode(bot_count: int) -> void:
 		main_menu.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
-	# Hide marble preview when starting gameplay
-	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = false
-	# Disable preview camera explicitly
+	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
+		print("[CAMERA] Destroying preview camera for practice mode")
 		preview_camera.current = false
-		print("Preview camera disabled for practice mode")
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		print("[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
 	if menu_music:
 		menu_music.stop()
 
@@ -541,13 +546,19 @@ func _on_host_button_pressed() -> void:
 		main_menu.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
-	# Hide marble preview when starting gameplay
-	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = false
-	# Disable preview camera explicitly
+
+	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
+		print("[CAMERA] Destroying preview camera for host mode")
 		preview_camera.current = false
-		print("Preview camera disabled for host mode")
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		print("[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
 	if menu_music:
 		menu_music.stop()
 
@@ -578,13 +589,19 @@ func _on_join_button_pressed() -> void:
 		main_menu.hide()
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
-	# Hide marble preview when starting gameplay
-	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = false
-	# Disable preview camera explicitly
+
+	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
+		print("[CAMERA] Destroying preview camera for join mode")
 		preview_camera.current = false
-		print("Preview camera disabled for join mode")
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		print("[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
 	if menu_music:
 		menu_music.stop()
 

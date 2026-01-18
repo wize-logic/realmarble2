@@ -532,14 +532,6 @@ func _ready() -> void:
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-	if camera:
-		camera.current = true
-		print("Player %s camera set to current in _ready()" % name)
-		# Ensure camera is current after a frame (to override any menu cameras)
-		await get_tree().process_frame
-		camera.current = true
-		print("Player %s camera re-confirmed as current after process frame" % name)
-
 	# Create charge meter UI
 	create_charge_meter_ui()
 
@@ -562,6 +554,57 @@ func _ready() -> void:
 	# Reset velocity on spawn
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+
+	# CRITICAL HTML5 FIX: Set camera immediately and use deferred call for persistence
+	if camera and camera_arm:
+		print("[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)])
+		# Position camera arm at player immediately
+		camera_arm.global_position = global_position
+		# Set camera as current
+		camera.current = true
+		print("[CAMERA] Player %s camera.current set to: %s" % [name, camera.current])
+		# Use deferred call to re-confirm after full scene initialization (HTML5 compatibility)
+		call_deferred("_force_camera_activation")
+
+func _force_camera_activation() -> void:
+	"""Force camera to be active - called via deferred to ensure it happens after full initialization (HTML5 fix)"""
+	if not camera or not camera_arm:
+		print("[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name)
+		return
+
+	print("[CAMERA] _force_camera_activation called for player %s" % name)
+
+	# Position camera arm at current player position
+	camera_arm.global_position = global_position
+
+	# Get list of all cameras in the scene
+	var all_cameras: Array[Camera3D] = []
+	_find_all_cameras(get_tree().root, all_cameras)
+
+	print("[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name])
+
+	# Disable all other cameras
+	for other_camera in all_cameras:
+		if other_camera != camera and other_camera.current:
+			print("[CAMERA] Disabling other camera: %s" % other_camera.get_path())
+			other_camera.current = false
+
+	# Force our camera to be current
+	camera.current = true
+
+	# Force update the transform
+	camera_arm.force_update_transform()
+	camera.force_update_transform()
+
+	print("[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position])
+
+func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
+	"""Recursively find all Camera3D nodes in the scene"""
+	if node is Camera3D:
+		camera_list.append(node)
+
+	for child in node.get_children():
+		_find_all_cameras(child, camera_list)
 
 func _process(delta: float) -> void:
 	# Handle falling death state - MUST run for ALL entities (players AND bots)
@@ -592,7 +635,13 @@ func _process(delta: float) -> void:
 		return
 
 	if not camera or not camera_arm:
+		print("[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name)
 		return
+
+	# CRITICAL HTML5 FIX: Force camera to be current every frame
+	if not camera.current:
+		print("[CAMERA FIX] Player %s: Camera was not current! Forcing activation..." % name)
+		camera.current = true
 
 	sensitivity = Global.sensitivity
 	controller_sensitivity = Global.controller_sensitivity
@@ -606,7 +655,7 @@ func _process(delta: float) -> void:
 		camera_pitch -= axis_vector.y * controller_sensitivity * delta * 60.0
 		camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
 
-	# Position camera arm at player
+	# Position camera arm at player (CRITICAL for camera to follow)
 	camera_arm.global_position = global_position
 
 	# Apply yaw rotation to camera arm (horizontal look)
