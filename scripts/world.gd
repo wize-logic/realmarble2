@@ -1851,18 +1851,7 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 				player.visible = state["visible"]
 				print("✓ Restored visibility: ", state["visible"])
 
-		# Restore camera - ALWAYS restore for local player
-		if state.has("camera") and is_instance_valid(state["camera"]):
-			var camera = state["camera"]
-			# Always activate camera for local player
-			if is_local_player:
-				camera.current = true
-				print("✓ Restored camera for LOCAL player: ", player.name)
-			elif state.get("was_current", false):
-				camera.current = true
-				print("✓ Restored camera for player: ", player.name, " (was current before)")
-
-		# Unfreeze player physics
+		# Unfreeze player physics FIRST
 		if player is RigidBody3D and state.has("original_freeze"):
 			player.freeze = state["original_freeze"]
 			# Ensure player is not stuck
@@ -1877,6 +1866,28 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 		player.set_process(true)
 		player.set_physics_process(true)
 		print("✓ Re-enabled processing for player: ", player.name)
+
+		# Ensure all child meshes are visible
+		for child in player.get_children():
+			if child is MeshInstance3D:
+				child.visible = true
+				print("✓ Made mesh visible: ", child.name)
+
+		# Restore camera - ALWAYS restore for local player (do this LAST)
+		if state.has("camera") and is_instance_valid(state["camera"]):
+			var camera = state["camera"]
+			# Always activate camera for local player
+			if is_local_player:
+				camera.current = true
+				# Force camera to update its transform
+				camera.force_update_transform()
+				print("✓ Restored camera for LOCAL player: ", player.name)
+				print("  Camera position: ", camera.global_position)
+				print("  Player position: ", player.global_position)
+			elif state.get("was_current", false):
+				camera.current = true
+				camera.force_update_transform()
+				print("✓ Restored camera for player: ", player.name, " (was current before)")
 
 	# Wait another frame to ensure everything is properly restored
 	await get_tree().process_frame
