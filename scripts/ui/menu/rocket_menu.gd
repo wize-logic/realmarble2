@@ -54,6 +54,10 @@ func generate_sounds() -> void:
 		select_sound.stream = SoundGen.generate_select_sound()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Only process input if menu is visible
+	if not visible:
+		return
+
 	# Handle keyboard/gamepad navigation
 	if event.is_action_pressed("ui_down"):
 		navigate_down()
