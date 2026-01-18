@@ -1679,6 +1679,18 @@ func create_rail_raycast() -> void:
 
 	print("Rail lock raycast created")
 
+func find_all_rails(node: Node) -> Array[GrindRail]:
+	"""Recursively find all GrindRail nodes in the scene"""
+	var rails: Array[GrindRail] = []
+
+	if node is GrindRail:
+		rails.append(node as GrindRail)
+
+	for child in node.get_children():
+		rails.append_array(find_all_rails(child))
+
+	return rails
+
 func update_rail_targeting() -> void:
 	"""Update rail targeting system - check if player is looking at a rail"""
 	if not camera or not rail_reticle_ui:
@@ -1691,57 +1703,98 @@ func update_rail_targeting() -> void:
 		return
 
 	# Raycast from camera to detect rails
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
 	var ray_origin: Vector3 = camera.global_position
 	var ray_direction: Vector3 = -camera.global_transform.basis.z
-	var ray_end: Vector3 = ray_origin + ray_direction * 50.0
 
 	# Check for rails in the scene
 	var found_rail: GrindRail = null
 	var closest_distance: float = INF
+	var max_target_distance: float = 50.0  # Maximum distance to target rails
 
-	# Find all rails in range by checking children of parent (world node)
-	var world: Node = get_parent()
+	# Find all rails in the scene (recursively search)
+	var world: Node = get_tree().root.get_node_or_null("World")
+	if not world:
+		world = get_parent()
+
 	if world:
-		for child in world.get_children():
-			if child is GrindRail:
-				var rail: GrindRail = child as GrindRail
+		var all_rails: Array[GrindRail] = find_all_rails(world)
 
-				# Check if rail can accept attachment
-				if rail.has_method("can_attach") and rail.can_attach(self):
-					# Get closest point on rail path to camera ray
-					var rail_curve: Curve3D = rail.curve
-					if not rail_curve:
-						continue
+		# Debug: Print rail count once per second
+		if Engine.get_physics_frames() % 60 == 0 and all_rails.size() > 0:
+			print("Rail targeting: Found %d rails in scene" % all_rails.size())
 
-					# Sample points along the rail and find closest to ray
-					var sample_count: int = 20
-					for i in range(sample_count):
-						var t: float = float(i) / float(sample_count - 1)
-						var offset: float = t * rail_curve.get_baked_length()
-						var point_local: Vector3 = rail_curve.sample_baked(offset)
-						var point_world: Vector3 = rail.to_global(point_local)
+		for rail in all_rails:
+			# Get closest point on rail path to camera ray
+			var rail_curve: Curve3D = rail.curve
+			if not rail_curve or rail_curve.get_baked_length() <= 0:
+				continue
 
-						# Calculate distance from camera ray to this point
-						var to_point: Vector3 = point_world - ray_origin
-						var projection: float = to_point.dot(ray_direction)
+			# Sample points along the rail and find closest to ray
+			var sample_count: int = 30  # Increased for better detection
+			for i in range(sample_count):
+				var t: float = float(i) / float(sample_count - 1)
+				var offset: float = t * rail_curve.get_baked_length()
+				var point_local: Vector3 = rail_curve.sample_baked(offset)
+				var point_world: Vector3 = rail.to_global(point_local)
 
-						# Only consider points in front of camera
-						if projection > 0 and projection < 50.0:
-							var closest_on_ray: Vector3 = ray_origin + ray_direction * projection
-							var distance_to_ray: float = point_world.distance_to(closest_on_ray)
+				# Calculate distance from camera ray to this point
+				var to_point: Vector3 = point_world - ray_origin
+				var projection: float = to_point.dot(ray_direction)
 
-							# Check if this is close enough to the ray (within targeting radius)
-							var targeting_radius: float = 3.0
-							if distance_to_ray < targeting_radius and projection < closest_distance:
-								found_rail = rail
-								closest_distance = projection
+				# Only consider points in front of camera and within range
+				if projection > 0 and projection < max_target_distance:
+					var closest_on_ray: Vector3 = ray_origin + ray_direction * projection
+					var distance_to_ray: float = point_world.distance_to(closest_on_ray)
+
+					# Distance from player to the rail point
+					var distance_from_player: float = global_position.distance_to(point_world)
+
+					# Check if this is close enough to the ray (within targeting radius)
+					var targeting_radius: float = 5.0  # Increased for easier targeting
+					# Only allow targeting if rail is within reasonable distance (30 units)
+					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 30.0:
+						# Check if we're actually in range to attach (nearby_players check)
+						if rail.has_method("can_attach"):
+							# For display purposes, we're more lenient
+							# We show the reticle even if slightly out of range
+							found_rail = rail
+							closest_distance = projection
 
 	# Update targeted rail and reticle visibility
 	targeted_rail = found_rail
 
 	if targeted_rail:
+		# Double-check if we can actually attach
+		var can_actually_attach: bool = false
+		if targeted_rail.has_method("can_attach"):
+			can_actually_attach = targeted_rail.can_attach(self)
+
 		rail_reticle_ui.visible = true
+
+		# Change reticle color based on whether we can attach
+		# Green if in range, yellow if too far
+		var reticle_color: Color = Color(1.0, 0.8, 0.2, 0.9) if not can_actually_attach else Color(0.2, 1.0, 0.4, 0.9)
+
+		# Update all arc colors
+		for i in range(4):
+			var arc: Control = rail_reticle_ui.get_node_or_null("ReticleArc" + str(i))
+			if arc is ColorRect:
+				(arc as ColorRect).color = reticle_color
+
+		# Update center dot color
+		var center_dot: Control = rail_reticle_ui.get_node_or_null("CenterDot")
+		if center_dot is ColorRect:
+			(center_dot as ColorRect).color = reticle_color
+
+		# Update label text and color
+		var label: Control = rail_reticle_ui.get_node_or_null("AttachLabel")
+		if label is Label:
+			if can_actually_attach:
+				(label as Label).text = "[E] ATTACH TO RAIL"
+				(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
+			else:
+				(label as Label).text = "TOO FAR - GET CLOSER"
+				(label as Label).add_theme_color_override("font_color", Color(1.0, 0.8, 0.2, 1.0))
 	else:
 		rail_reticle_ui.visible = false
 
