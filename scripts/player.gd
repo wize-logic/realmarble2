@@ -13,7 +13,7 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
 @onready var camera_arm: Node3D = get_node_or_null("CameraArm")
 @onready var ground_ray: RayCast3D = get_node_or_null("GroundRay")
-@onready var marble_mesh: MeshInstance3D = get_node_or_null("MarbleMesh")
+@onready var marble_mesh: MeshInstance3D = get_node_or_null("MeshInstance3D")
 @onready var jump_sound: AudioStreamPlayer3D = get_node_or_null("JumpSound")
 @onready var spin_sound: AudioStreamPlayer3D = get_node_or_null("SpinSound")
 @onready var land_sound: AudioStreamPlayer3D = get_node_or_null("LandSound")
@@ -169,6 +169,7 @@ func _ready() -> void:
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
 		camera_arm.top_level = true
+		print("[CAMERA] Camera arm top_level set to true")
 
 	# Set up ground detection raycast
 	if not ground_ray:
@@ -431,6 +432,8 @@ func _ready() -> void:
 		sphere.height = 1.0
 		marble_mesh.mesh = sphere
 
+	# Apply material if not already set (works for both scene-defined and dynamically created mesh)
+	if marble_mesh and not marble_mesh.material_override:
 		# Create material with texture
 		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint
@@ -449,6 +452,7 @@ func _ready() -> void:
 		mat.albedo_texture = noise_tex
 
 		marble_mesh.material_override = mat
+		print("Applied material to marble mesh for player: ", name)
 
 	# Set up aura light effect for player visibility
 	if not aura_light:
@@ -522,13 +526,12 @@ func _ready() -> void:
 		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
 		grind_particles.color_ramp = grind_gradient
 
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	# Otherwise, only run for nodes we have authority over
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	if camera:
-		camera.current = true
 
 	# Create charge meter UI
 	create_charge_meter_ui()
@@ -541,14 +544,93 @@ func _ready() -> void:
 
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
-	var spawn_index: int = player_id % spawns.size()
-	global_position = spawns[spawn_index]
+	if spawns.size() > 0:
+		var spawn_index: int = player_id % spawns.size()
+		global_position = spawns[spawn_index]
+		print("Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position])
+	else:
+		print("WARNING: No spawn points available! Player %s using default position." % name)
+		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Reset velocity on spawn
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
 
+	# CRITICAL HTML5 FIX: Set camera immediately and use deferred call for persistence
+	if camera and camera_arm:
+		print("[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)])
+		# Position camera arm at player immediately
+		camera_arm.global_position = global_position
+		# Set camera as current
+		camera.current = true
+		print("[CAMERA] Player %s camera.current set to: %s" % [name, camera.current])
+		# Use deferred call to re-confirm after full scene initialization (HTML5 compatibility)
+		call_deferred("_force_camera_activation")
+
+func _force_camera_activation() -> void:
+	"""Force camera to be active - called via deferred to ensure it happens after full initialization (HTML5 fix)"""
+	# CRITICAL: Only local player with authority should activate camera
+	# Bots must NEVER activate their cameras or they'll hijack the player camera
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		print("[CAMERA] Player %s: Skipping camera activation (not authority)" % name)
+		return
+
+	if not camera or not camera_arm:
+		print("[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name)
+		return
+
+	print("[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name)
+
+	# Position camera arm at current player position
+	camera_arm.global_position = global_position
+
+	# Get list of all cameras in the scene
+	var all_cameras: Array[Camera3D] = []
+	_find_all_cameras(get_tree().root, all_cameras)
+
+	print("[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name])
+
+	# Disable all other cameras
+	for other_camera in all_cameras:
+		if other_camera != camera and other_camera.current:
+			print("[CAMERA] Disabling other camera: %s" % other_camera.get_path())
+			other_camera.current = false
+
+	# Force our camera to be current
+	camera.current = true
+
+	# Force update the transform
+	camera_arm.force_update_transform()
+	camera.force_update_transform()
+
+	print("[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position])
+
+func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
+	"""Recursively find all Camera3D nodes in the scene"""
+	if node is Camera3D:
+		camera_list.append(node)
+
+	for child in node.get_children():
+		_find_all_cameras(child, camera_list)
+
 func _process(delta: float) -> void:
+	# CRITICAL HTML5 FIX: Position camera arm FIRST, before ANY other code
+	# This MUST run every frame for the camera to follow the player
+	if camera_arm and is_instance_valid(camera_arm):
+		camera_arm.global_position = global_position
+	else:
+		if not camera_arm:
+			print("[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name)
+
+	# Force camera to be current UNCONDITIONALLY
+	if camera and is_instance_valid(camera):
+		if not camera.current:
+			camera.current = true
+			print("[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name)
+	else:
+		if not camera:
+			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+
 	# Handle falling death state - MUST run for ALL entities (players AND bots)
 	if is_falling_to_death:
 		fall_death_timer += delta
@@ -572,12 +654,15 @@ func _process(delta: float) -> void:
 		return  # Skip normal processing while falling to death
 
 	# Early return for non-authority (bots)
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	if not camera or not camera_arm:
+		print("[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name)
 		return
 
+	# CRITICAL HTML5 FIX: Force camera to be current every frame
 	sensitivity = Global.sensitivity
 	controller_sensitivity = Global.controller_sensitivity
 
@@ -590,8 +675,7 @@ func _process(delta: float) -> void:
 		camera_pitch -= axis_vector.y * controller_sensitivity * delta * 60.0
 		camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
 
-	# Position camera arm at player
-	camera_arm.global_position = global_position
+	# NOTE: Camera arm positioning moved to TOP of _process() for HTML5 compatibility
 
 	# Apply yaw rotation to camera arm (horizontal look)
 	camera_arm.global_rotation = Vector3(0, deg_to_rad(camera_yaw), 0)
@@ -665,7 +749,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
 
 func _input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	# Mouse look - 3rd person shooter style (handled in _input for priority)
@@ -680,7 +765,8 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	# Respawn on command
@@ -812,6 +898,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			spin_charge = 0.0
 
 func _physics_process(delta: float) -> void:
+	# CRITICAL HTML5 FIX: Also position camera arm in physics_process as fallback
+	if camera_arm and is_instance_valid(camera_arm):
+		camera_arm.global_position = global_position
+
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
@@ -1159,7 +1249,8 @@ func respawn() -> void:
 		global_position = spawns[spawn_index]
 		print("Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot])
 	else:
-		print("ERROR: No spawn points available for player %s!" % name)
+		print("WARNING: No spawn points available for player %s! Using fallback position." % name)
+		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Play spawn sound effect
 	if spawn_sound:
