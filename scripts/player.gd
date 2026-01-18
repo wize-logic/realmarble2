@@ -102,7 +102,7 @@ var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
 var jump_pad_cooldown_time: float = 1.0  # Cooldown duration
-var jump_pad_boost_force: float = 150.0  # Upward boost force (strong launch!)
+var jump_pad_boost_force: float = 1000.0  # Upward boost force (EXTREME launch!)
 
 # Teleporter system (Q3 Arena style)
 var teleporter_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
@@ -2104,11 +2104,11 @@ func activate_jump_pad() -> void:
 
 	# Play bounce sound (reuse for jump pad)
 	if bounce_sound and bounce_sound.stream:
-		bounce_sound.pitch_scale = 1.2  # Higher pitch for jump pad
+		bounce_sound.pitch_scale = 1.5  # Higher pitch for jump pad
 		bounce_sound.play()
 
-	# Spawn particle effect
-	spawn_jump_bounce_effect(1.5)
+	# Spawn BRIGHT GREEN particle explosion effect
+	spawn_jump_pad_effect()
 
 	# Set cooldown to prevent rapid re-triggering
 	jump_pad_cooldown = jump_pad_cooldown_time
@@ -2134,13 +2134,61 @@ func activate_teleporter(destination: Vector3) -> void:
 
 	# Play a sound effect (reuse hit sound)
 	if hit_sound and hit_sound.stream:
-		hit_sound.pitch_scale = 0.8  # Lower pitch for teleport
+		hit_sound.pitch_scale = 0.7  # Lower pitch for teleport
 		hit_sound.play()
 
-	# Spawn particle effect at destination
-	spawn_jump_bounce_effect(2.0)
+	# Spawn BRIGHT PURPLE particle swirl effect at destination
+	spawn_teleporter_effect()
 
 	# Set cooldown to prevent rapid re-triggering
 	teleporter_cooldown = teleporter_cooldown_time
 
 	print("Teleported to: ", global_position)
+
+func spawn_jump_pad_effect() -> void:
+	"""Spawn BRIGHT GREEN explosive particle effect for jump pad activation"""
+	if not death_particles:
+		return
+
+	# Temporarily change death particles to bright green for jump pad effect
+	var jump_pad_gradient: Gradient = Gradient.new()
+	jump_pad_gradient.add_point(0.0, Color(0.2, 1.0, 0.3, 1.0))  # Bright green
+	jump_pad_gradient.add_point(0.3, Color(0.4, 1.0, 0.5, 0.9))  # Lighter green
+	jump_pad_gradient.add_point(0.7, Color(0.6, 1.0, 0.7, 0.5))  # Very light green
+	jump_pad_gradient.add_point(1.0, Color(0.8, 1.0, 0.9, 0.0))  # Transparent
+
+	death_particles.color_ramp = jump_pad_gradient
+	death_particles.initial_velocity_min = 15.0  # Faster burst
+	death_particles.initial_velocity_max = 25.0
+	death_particles.amount = 150  # Lots of particles
+
+	# Trigger particle burst at current position
+	death_particles.global_position = global_position
+	death_particles.emitting = true
+	death_particles.restart()
+
+	print("BRIGHT GREEN jump pad particle explosion spawned!")
+
+func spawn_teleporter_effect() -> void:
+	"""Spawn BRIGHT PURPLE/BLUE swirling particle effect for teleporter activation"""
+	if not death_particles:
+		return
+
+	# Temporarily change death particles to bright purple/blue for teleporter effect
+	var teleporter_gradient: Gradient = Gradient.new()
+	teleporter_gradient.add_point(0.0, Color(0.5, 0.3, 1.0, 1.0))  # Bright purple
+	teleporter_gradient.add_point(0.3, Color(0.6, 0.5, 1.0, 0.9))  # Lighter purple
+	teleporter_gradient.add_point(0.7, Color(0.7, 0.7, 1.0, 0.5))  # Light blue-purple
+	teleporter_gradient.add_point(1.0, Color(0.8, 0.8, 1.0, 0.0))  # Transparent
+
+	death_particles.color_ramp = teleporter_gradient
+	death_particles.initial_velocity_min = 12.0  # Swirling motion
+	death_particles.initial_velocity_max = 20.0
+	death_particles.amount = 200  # Many particles for swirl effect
+
+	# Trigger particle burst at destination position
+	death_particles.global_position = global_position
+	death_particles.emitting = true
+	death_particles.restart()
+
+	print("BRIGHT PURPLE teleporter particle swirl spawned!")
