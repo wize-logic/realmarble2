@@ -1,22 +1,25 @@
-# Repository Map: Marble Physics Deathmatch (Godot 4.5.1)
+# Repository Map: Marble Physics Deathmatch
 
-# ⚠️ CRITICAL: HTML5 COMPATIBILITY MUST BE MAINTAINED AT ALL TIMES ⚠️
-**BEFORE MAKING ANY CODE CHANGES, ALWAYS VERIFY HTML5/WEB COMPATIBILITY!**
+**Version:** Godot 4.5.1 (GL Compatibility - Required for HTML5)
+**Genre:** Physics-based Multiplayer Deathmatch
+**Platform:** Web (CrazyGames) - PRIMARY, Desktop - SECONDARY
+
+## ⚠️ HTML5 COMPATIBILITY REQUIREMENTS
+
 **This game MUST run in browsers. HTML5 compatibility is the #1 priority!**
 
-**Version:** Godot 4.5.1 (GL Compatibility Renderer - **REQUIRED FOR HTML5**)
-**Genre:** Physics-based Multiplayer Deathmatch
-**Inspiration:** Sonic Adventure 2 movement + Kirby ability system
-**Platform:** Web (CrazyGames) - **PRIMARY PLATFORM**, Desktop - **SECONDARY**
+**Critical Requirements:**
+- ✅ **Renderer:** GL Compatibility (NEVER Forward+ or Mobile)
+- ✅ **Networking:** WebSocket for HTML5, ENet desktop only
+- ✅ **Audio:** OGG, WAV, MP3 formats only
+- ✅ **Performance:** Optimize for 60 FPS in browsers
+- ❌ **NO threading** (not supported in HTML5)
+- ❌ **NO direct file I/O** (use JavaScriptBridge or user://)
+- ❌ **NO ENet for web** (WebSocket only)
+- ⚠️ **Bot limit:** Max 8 bots on web builds
+- ⚠️ **Shaders:** WebGL2/GLES3 compatible only
 
-# ⚠️ HTML5 COMPATIBILITY REQUIREMENTS ⚠️
-- **Renderer:** MUST use GL Compatibility (NEVER Forward+ or Mobile)
-- **Threading:** NO threading (not supported in HTML5)
-- **File access:** NO direct file I/O (use JavaScript bridge)
-- **Networking:** WebSocket ONLY for HTML5 (ENet desktop only)
-- **Audio:** Use Web-compatible formats (OGG, WAV, MP3)
-- **Shaders:** GLES3/WebGL2 compatible only
-- **Performance:** Optimize for 60 FPS on web browsers
+**Always check `OS.has_feature("web")` before using platform-specific features!**
 
 ---
 
@@ -29,54 +32,39 @@
 5. [Script Reference](#script-reference)
 6. [Game Mechanics](#game-mechanics)
 7. [Asset Catalog](#asset-catalog)
-8. [Multiplayer Architecture](#multiplayer-architecture)
-9. [AI System](#ai-system)
-10. [Quick Reference](#quick-reference)
+8. [Multiplayer & AI](#multiplayer--ai)
+9. [Quick Reference](#quick-reference)
 
 ---
 
 ## Project Overview
 
-### ⚠️ HTML5 FIRST: This is a Web-Based Game ⚠️
-**Every feature, system, and change MUST be HTML5-compatible. Test in browsers frequently!**
-
 ### What is This Game?
 
-A **Sonic-inspired physics-based multiplayer deathmatch game** where players control marbles with advanced movement mechanics (spin dash, bounce attack, rail grinding) and Kirby-style pickup abilities in procedurally generated arenas.
-
-**HTML5 DEPLOYMENT:** This game is built for CrazyGames (browser-based platform). All development must prioritize web compatibility.
+A **Sonic-inspired physics-based multiplayer deathmatch** where players control marbles with advanced movement (spin dash, bounce attack, rail grinding) and Kirby-style pickup abilities in procedurally generated arenas.
 
 ### Key Features
 
-- ✅ **Sonic-inspired movement** (spin dash, bounce attack, rail grinding, double jump)
-- ✅ **Kirby-style abilities** (pickup one at a time, drop on death)
-- ✅ **Level-up system** (collect orbs for stat boosts, 3 levels max)
-- ✅ **Deathmatch mode** (5-minute matches, K/D tracking)
-- ✅ **Multiplayer** (up to 16 players, room code-based matchmaking)
-- ✅ **Advanced Bot AI** (state machine, combat tactics, obstacle avoidance)
-- ✅ **Dual arena types** (Type A: Sonic-style with grind rails; Type B: Quake 3-style with jump pads/teleporters)
-- ✅ **Procedural level generation** (Type A: platforms, ramps, grind rails; Type B: multi-tier, rooms, corridors)
-- ✅ **CrazyGames integration** (profiles, friends, ads)
-- ✅ **Music playlist system** (auto-load from directory, shuffle)
+- **Sonic-inspired movement** (spin dash, bounce attack, rail grinding, double jump)
+- **Kirby-style abilities** (pickup one at a time, drop on death)
+- **Level-up system** (collect orbs for stat boosts, 3 levels max)
+- **Deathmatch mode** (5-minute matches, K/D tracking)
+- **Multiplayer** (up to 16 players, room code-based matchmaking)
+- **Advanced Bot AI** (state machine, combat tactics, obstacle avoidance)
+- **Dual arena types**
+  - **Type A:** Sonic-style with grind rails and floating platforms
+  - **Type B:** Quake 3-style with jump pads, teleporters, rooms, corridors
+- **Procedural level generation**
+- **CrazyGames integration** (profiles, friends, ads)
+- **Music playlist system** (auto-load from directory, shuffle)
 
 ### Technology Stack
 
-# ⚠️ HTML5 COMPATIBILITY CRITICAL ⚠️
-
-- **Engine:** Godot 4.5.1 (GL Compatibility) **← HTML5 REQUIREMENT: DO NOT CHANGE!**
-- **Language:** GDScript **← Web-safe language**
-- **Networking:** WebSocket (browser - **PRIMARY**), ENet (desktop only - **SECONDARY**)
-- **Physics:** RigidBody3D with force-based movement **← HTML5-compatible physics**
-- **Rendering:** GL Compatibility **← REQUIRED FOR HTML5 - NEVER use Forward+ or Mobile renderer!**
-
-**HTML5 CONSTRAINTS YOU MUST FOLLOW:**
-1. ❌ NO threading (Thread class not supported)
-2. ❌ NO direct file I/O (use JavaScriptBridge or user:// only)
-3. ❌ NO ENet for web builds (WebSocket only)
-4. ✅ MUST use GL Compatibility renderer
-5. ✅ MUST test audio formats (prefer OGG/WAV)
-6. ✅ MUST keep bot count reasonable (max 8 bots on web)
-7. ✅ MUST optimize for 60 FPS in browsers
+- **Engine:** Godot 4.5.1
+- **Language:** GDScript
+- **Networking:** WebSocket (browser), ENet (desktop)
+- **Physics:** RigidBody3D with force-based movement
+- **Rendering:** GL Compatibility (HTML5-required)
 
 ---
 
@@ -84,793 +72,348 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 
 ```
 /home/user/realmarble2/
-├── abilities/                      # Ability scene files (.tscn)
-│   ├── dash_attack.tscn           # Dash attack ability
-│   ├── explosion.tscn             # AoE explosion ability
-│   ├── gun.tscn                   # Ranged projectile weapon
-│   └── sword.tscn                 # Melee sword ability
+├── abilities/                      # Ability scenes
+│   ├── dash_attack.tscn
+│   ├── explosion.tscn
+│   └── sword.tscn
 │
-├── audio/                          # Sound effects
-│   ├── *.wav, *.ogg, *.mp3        # Jump, spin, bounce, hit, death sounds
-│   └── 661248__magmadiverrr__video-game-menu-music.ogg  # Menu music
+├── audio/                          # Sound effects (WAV, OGG, MP3)
+│   └── *.wav, *.ogg, *.mp3
 │
-├── music/                          # Game music files
-│   └── impulse.mp3                # Default gameplay track
+├── music/                          # Game music
+│   └── impulse.mp3
 │
 ├── scripts/                        # All GDScript files
-│   ├── abilities/                 # Ability system scripts
-│   │   ├── ability_base.gd       # Base ability class (charging, cooldown)
-│   │   ├── dash_attack.gd        # Dash attack implementation
-│   │   ├── explosion.gd          # Explosion ability implementation
-│   │   ├── gun.gd                # Gun ability implementation
-│   │   └── sword.gd              # Sword ability implementation
+│   ├── abilities/
+│   │   ├── ability_base.gd        # Base ability class
+│   │   ├── cannon.gd              # Cannon ability (explosive projectiles)
+│   │   ├── dash_attack.gd
+│   │   ├── explosion.gd
+│   │   └── sword.gd
 │   │
-│   ├── html/                      # HTML templates for web export
-│   │   └── crazygames_template.html  # CrazyGames SDK integration
+│   ├── html/
+│   │   └── full-size.html         # CrazyGames template
 │   │
-│   ├── shaders/                   # Custom shader files
-│   │   └── plasma_glow.gdshader  # Animated plasma glow effect
+│   ├── shaders/
+│   │   ├── blur.gdshader
+│   │   ├── card_glow.gdshader
+│   │   └── plasma_glow.gdshader
 │   │
-│   ├── ui/                        # UI-related scripts
-│   │   ├── menu/                 # Menu system
-│   │   │   ├── options/          # Options submenu scripts
-│   │   │   └── pause/            # Pause menu scripts
-│   │   ├── crosshair.gd          # Dynamic crosshair
-│   │   ├── fps_counter.gd        # FPS display
-│   │   ├── friends_panel.gd      # Friends list panel
-│   │   ├── game_hud.gd           # In-game HUD
-│   │   ├── music_notification.gd # Track name notifications
-│   │   ├── profile_panel.gd      # Profile panel (stats, XP, login)
-│   │   ├── rl_menu_button.gd     # Menu button behavior
-│   │   ├── rocket_menu.gd        # Main menu controller
-│   │   └── sound_generator.gd    # Procedural UI sounds
+│   ├── ui/
+│   │   ├── menu/
+│   │   │   ├── options/           # Options menu scripts
+│   │   │   ├── pause/             # Pause menu scripts
+│   │   │   ├── host_button.gd
+│   │   │   ├── menu_card_button.gd
+│   │   │   ├── options_button.gd
+│   │   │   ├── rl_main_menu.gd
+│   │   │   ├── rl_menu_button.gd
+│   │   │   ├── rocket_menu.gd
+│   │   │   └── sound_generator.gd
+│   │   ├── crosshair.gd
+│   │   ├── expansion_notification.gd  # Expansion notifications
+│   │   ├── fps_counter.gd
+│   │   ├── friends_panel.gd
+│   │   ├── game_hud.gd
+│   │   ├── music_notification.gd
+│   │   └── profile_panel.gd
 │   │
-│   ├── audio_metadata_parser.gd  # Audio file metadata parser
-│   ├── bot_ai.gd                 # Advanced bot AI (1,043 lines)
-│   ├── camera_occlusion.gd       # Camera anti-clipping
-│   ├── crazygames_sdk.gd         # CrazyGames SDK bridge
-│   ├── friends_manager.gd        # Friends system manager
-│   ├── global.gd                 # Global singleton (settings)
-│   ├── grind_rail.gd             # Rail grinding system
-│   ├── level_generator.gd        # Procedural arena generator (Type A)
-│   ├── level_generator_q3.gd     # Quake 3 Arena generator (Type B)
-│   ├── lobby_ui.gd               # Multiplayer lobby interface
-│   ├── multiplayer_manager.gd    # Networking manager
-│   ├── music_playlist.gd         # Music playlist system
-│   ├── player.gd                 # Player marble controller (1,695 lines)
-│   ├── profile_manager.gd        # User profile system
-│   ├── scoreboard.gd             # Scoreboard display
-│   ├── skybox_generator.gd       # Procedural skybox
-│   ├── world.gd                  # Main game controller (1,646 lines)
-│   ├── ability_spawner.gd        # Ability pickup spawner
-│   └── orb_spawner.gd            # Collectible orb spawner
+│   ├── ability_pickup.gd          # Ability pickup logic
+│   ├── ability_spawner.gd
+│   ├── audio_metadata_parser.gd
+│   ├── bot_ai.gd                  # Advanced bot AI (1,043 lines)
+│   ├── camera_occlusion.gd
+│   ├── collectible_orb.gd         # Collectible orb logic
+│   ├── crazygames_sdk.gd
+│   ├── debug_menu.gd              # Debug menu with cheats
+│   ├── friends_manager.gd
+│   ├── global.gd                  # Global singleton
+│   ├── grind_rail.gd
+│   ├── level_generator.gd         # Type A arena generator
+│   ├── level_generator_q3.gd      # Type B arena generator
+│   ├── lobby_ui.gd
+│   ├── multiplayer_manager.gd
+│   ├── music_playlist.gd
+│   ├── orb_spawner.gd
+│   ├── orbit_camera.gd            # Orbiting camera for menus
+│   ├── player.gd                  # Player controller (1,695 lines)
+│   ├── poof_particle_effect.gd    # Particle effect system
+│   ├── profile_manager.gd
+│   ├── scoreboard.gd
+│   ├── skybox_generator.gd
+│   └── world.gd                   # Main game controller (1,646 lines)
 │
-├── textures/                       # Texture assets
-│   ├── kenney_particle_pack/      # Particle textures (circles, stars)
-│   └── kenney_prototype_textures/ # Prototype textures (orange, dark, grid)
+├── textures/
+│   ├── kenney_particle_pack/      # Particle textures
+│   └── kenney_prototype_textures/ # Prototype textures
 │
-├── *.tscn                          # Scene files (root level)
+├── *.tscn                          # Scene files (root)
 │   ├── world.tscn                 # Main game scene
 │   ├── marble_player.tscn         # Player marble prefab
-│   ├── rl_main_menu.tscn         # Main menu (Rocket League style)
-│   ├── lobby_ui.tscn             # Multiplayer lobby
-│   ├── scoreboard.tscn           # In-game scoreboard
-│   ├── collectible_orb.tscn      # Level-up orb
-│   └── ability_pickup.tscn       # Ability pickup
+│   ├── rl_main_menu.tscn          # Main menu
+│   ├── lobby_ui.tscn              # Multiplayer lobby
+│   ├── scoreboard.tscn
+│   ├── collectible_orb.tscn
+│   ├── ability_pickup.tscn
+│   ├── debug_menu.tscn            # Debug menu overlay
+│   ├── menu_card_button.tscn      # Menu button prefab
+│   ├── rl_menu_button.tscn        # Another menu button variant
+│   └── rocket_league_menu.tscn    # Alternative menu scene
 │
-├── *.md                            # Documentation files
-│   ├── REPOSITORY_MAP.md         # This file
-│   ├── MULTIPLAYER_README.md     # Networking system guide
-│   ├── MUSIC_PLAYLIST.md         # Music system documentation
-│   ├── ROCKET_LEAGUE_MENU.md     # Menu system overview
-│   ├── STYLE_GUIDE.md            # UI design standards
-│   └── CRAZYGAMES_DEPLOYMENT.md  # Deployment guide
+├── *.md                            # Documentation
+│   ├── REPOSITORY_MAP.md          # This file
+│   ├── MULTIPLAYER_README.md      # Networking guide
+│   ├── MUSIC_PLAYLIST.md          # Music system docs
+│   ├── ROCKET_LEAGUE_MENU.md      # Menu system overview
+│   ├── STYLE_GUIDE.md             # UI design standards
+│   ├── CRAZYGAMES_DEPLOYMENT.md   # Deployment guide
+│   ├── EXPORT_INSTRUCTIONS.md     # HTML5 export guide
+│   └── RENDERER_COMPATIBILITY.md  # GL Compatibility migration guide
 │
-└── project.godot                   # Main project configuration
+├── default_bus_layout.tres         # Audio bus configuration
+├── world.tres                      # World configuration resource
+├── icon.svg                        # Project icon
+└── project.godot                   # Main project config
 ```
 
 ---
 
 ## Core Game Systems
 
-# ⚠️ HTML5 COMPATIBILITY REMINDER ⚠️
-**All core systems listed below MUST remain HTML5-compatible!**
-**Before modifying ANY system, verify it will work in web browsers!**
+### 1. Physics & Movement System
 
-### Overview
+**Location:** `scripts/player.gd`
+**Implementation:** Force-based RigidBody3D physics
 
-The game features **13 core systems** organized into the following categories:
+**Core Mechanics:**
 
-1. **Physics & Movement** - RigidBody3D physics, Sonic-inspired mechanics
-2. **Combat & Abilities** - Health, abilities, level-up system
-3. **Multiplayer** - WebSocket/ENet networking, room system
-4. **AI** - Advanced bot state machine
-5. **Level Generation** - Two arena types (Type A: Sonic-style, Type B: Quake 3-style)
-6. **UI/UX** - Rocket League-style menus, HUD
-7. **Integration** - CrazyGames SDK, profile system
-
----
-
-### 1. Physics System
-
-**Location:** `scripts/player.gd` (movement), RigidBody3D configuration
-**Implementation:** Force-based marble physics
-
-**🌐 HTML5 COMPATIBILITY:** This physics system uses RigidBody3D which is HTML5-compatible. Do NOT add threading or complex physics that may degrade web performance!
+| Mechanic | Key | Description | Cooldown |
+|----------|-----|-------------|----------|
+| **Rolling** | WASD | Force-based movement, camera-relative | None |
+| **Jump** | Space | Standard jump + double jump | None |
+| **Spin Dash** | Shift (hold) | Charge & release dash toward camera | 0.8s |
+| **Bounce Attack** | Ctrl | Plunge down, bounce up on impact | 0.3s |
+| **Rail Grinding** | Auto | Auto-attach to rails, gravity affects speed | None |
 
 **Physics Properties:**
 ```gdscript
 Mass: 8.0          # Dense marbles
-Gravity: 2.5x      # Stronger than normal
-Linear Damp: 0.5   # Air resistance
-Angular Damp: 0.3  # Rotation damping
-Friction: 0.4      # Ground friction
-Bounce: 0.6        # Bouncy marbles
+Gravity: 2.5x      # Stronger than default
+Speed: 80.0        # Base movement speed
+Jump Force: 25.0   # Base jump impulse
+Spin Dash: 100.0 + (charge * 400.0)  # Up to 500.0
+Bounce: 150.0 * multiplier  # Up to 3x consecutive
 ```
 
-**Key Features:**
-- RigidBody3D-based player marbles
-- Force-based movement (no torque rolling)
-- Continuous collision detection
-- Ground detection via raycast
-- Camera-relative controls
-- Rotation locked (Y-axis only for camera)
+### 2. Level-Up System
 
-**See:** `scripts/player.gd:_physics_process()` for movement implementation
+**Trigger:** Collect orbs
+**Max Level:** 3
+**Reset:** On death
 
----
+| Level | Speed | Jump | Spin Dash | Bounce |
+|-------|-------|------|-----------|--------|
+| 1 | +20 | +15 | +50 | +20 |
+| 2 | +40 | +30 | +100 | +40 |
+| 3 | +60 | +45 | +150 | +60 |
 
-### 2. Movement System (Sonic-Inspired)
+**Orbs drop on death and are placed on the ground.**
 
-**Location:** `scripts/player.gd`
-**Lines:** 1-1695
+### 3. Ability System (Kirby-Style)
 
-#### Core Mechanics
+**Location:** `scripts/abilities/`
 
-| Mechanic | Key | Description | Cooldown | Implementation |
-|----------|-----|-------------|----------|----------------|
-| **Rolling** | WASD | Force-based movement, camera-relative | None | `_physics_process()` |
-| **Jump** | Space | Standard jump with double jump | None | `_input()` → `jump()` |
-| **Spin Dash** | Shift (hold) | Charge & release dash toward camera | 0.8s | `_input()` → `_spin_dash()` |
-| **Bounce Attack** | Ctrl | Plunge down, bounce up on impact | 0.3s | `_input()` → `bounce_attack()` |
-| **Rail Grinding** | Auto | Auto-attach to rails, gravity affects speed | None | `_on_grind_rail_entered()` |
-| **Double Jump** | Space (x2) | Air jump | None | `jump()` + `has_double_jumped` |
+**Available Abilities:**
 
-#### Spin Dash Details
-- **Charge time:** Up to 1.5 seconds
-- **Direction:** Always toward camera/reticle (not player facing)
-- **Visual:** Player spins during charge
-- **Force:** 100.0 base + 400.0 max charge = 500.0 total
-- **Cooldown:** 0.8 seconds
+| Ability | Type | Damage | Special |
+|---------|------|--------|---------|
+| **Cannon** | Ranged | 3 | Explosive projectiles, slow fire rate |
+| **Dash Attack** | Melee | 1-3 | Forward dash with damage scaling |
+| **Explosion** | AoE | 2-4 | Radius scales with charge |
+| **Gun** | Ranged | 1-3 | Fast projectiles, rapid fire |
+| **Sword** | Melee | 1-3 | Swing attack with AoE at max charge |
 
-**See:** `scripts/player.gd:_spin_dash()` (lines ~400-450)
-
-#### Bounce Attack Details
-- **Mechanic:** Cancel horizontal velocity, plunge downward (300 force)
-- **Bounce:** Strong upward impulse on impact (150 base)
-- **Consecutive bounces:** Scale up to 3x multiplier
-- **Cooldown:** 0.3 seconds
-- **Inspiration:** Sonic Adventure 2 bounce bracelet
-
-**See:** `scripts/player.gd:bounce_attack()` (lines ~500-550)
-
-#### Rail Grinding (Sonic-Style)
-- **Auto-attach:** When player collides with rail area
-- **Physics:** Follows rail path, gravity affects speed
-- **Jump off:** Can jump from rails
-- **Visual:** Spark particles while grinding
-- **Rails:** 12 total (8 curved perimeter, 4 vertical/spiral)
-
-**See:**
-- `scripts/grind_rail.gd` (rail logic)
-- `scripts/player.gd:_on_grind_rail_entered()` (player interaction)
-- `scripts/level_generator.gd:_generate_grind_rails()` (rail generation)
-
----
-
-### 3. Level-Up System
-
-**Location:** `scripts/player.gd`
-**Trigger:** Collect orbs (CollectibleOrb nodes)
-
-#### Progression
-
-| Level | Speed Boost | Jump Boost | Spin Dash Boost | Bounce Boost |
-|-------|-------------|------------|-----------------|--------------|
-| 1     | +20.0       | +15.0      | +50.0           | +20.0        |
-| 2     | +40.0       | +30.0      | +100.0          | +40.0        |
-| 3 (Max)| +60.0      | +45.0      | +150.0          | +60.0        |
+**Charging System:**
+- Hold **E** to charge (3 levels: weak, medium, max)
+- Visual: Particle effects grow with charge
+- Release **E** to fire
+- Press **O** to drop ability
 
 **Behavior:**
-- Reset to Level 0 on death
-- Orbs drop on death (placed on ground)
-- Visual/audio feedback on collection
-- Particle effect (collection aura)
+- Can only hold one ability at a time
+- Pickup replaces current ability
+- Automatic drop on death
+- Random spawning via `ability_spawner.gd`
 
-**See:** `scripts/player.gd:_on_collectible_orb_collected()` (lines ~800-850)
+### 4. Combat & Health
 
----
+**Health:** 3 hits
+**Death Triggers:**
+- Health reaches 0
+- Fall below Y = -20.0 (Type A) or Y = -50.0 (Type B)
 
-### 4. Ability System (Kirby-Style)
+**Death Consequences:**
+- Drop ability
+- Drop orbs (lose all level progress)
+- Explosion particle effect
+- Respawn after 3 seconds
 
-**Location:** `scripts/abilities/ability_base.gd` (base class)
-**Player Integration:** `scripts/player.gd`
+**Scoring:**
+- Kill: +1 point
+- Death: +1 death count
+- K/D ratio calculated and displayed
 
-#### Abilities Available
+### 5. Level Generation
 
-| Ability | Type | Range | Charge Levels | Damage Scaling |
-|---------|------|-------|---------------|----------------|
-| **Dash Attack** | Melee | Close | 3 (weak/medium/max) | Scales with charge |
-| **Explosion** | AoE | Medium radius | 3 | Scales with charge |
-| **Gun** | Ranged | Long | 3 | Scales with charge |
-| **Sword** | Melee | Short | 3 | Scales with charge |
+#### Type A: Sonic-Style Arena (`level_generator.gd`)
 
-#### Charging System
-- **Hold E** to charge (up to 3 levels)
-- **Visual:** Particle effects grow with charge level
-- **UI:** Charge meter in HUD
-- **Release E** to fire
+**Elements:**
+- 100x100 main floor
+- 24 floating platforms (varied heights)
+- 12 ramps
+- 12 grind rails (8 curved perimeter + 4 vertical/spiral)
+- 4 perimeter walls
+- 16 spawn points
 
-**Behavior:**
-- **Pickup:** Press E near ability pickup (replaces current ability)
-- **Drop:** Press O to drop (or automatic on death)
-- **One at a time:** Can only hold one ability
-- **Spawning:** Abilities spawn at random locations via `ability_spawner.gd`
+#### Type B: Quake 3 Arena (`level_generator_q3.gd`)
 
-**See:**
-- `scripts/abilities/ability_base.gd` (base class, charging system)
-- `scripts/player.gd:_handle_ability_input()` (player integration)
-- Individual ability scripts in `scripts/abilities/`
+**Elements:**
+- 84x84 main arena floor with pillars and cover
+- **3-tier platforms:** Tier 1 (4 large @ height 8), Tier 2 (8 medium @ height 15), Tier 3 (4 small @ height 22)
+- **4 side rooms** with doorways (16x10x16 units each)
+- **4 connecting corridors**
+- **5 jump pads** (green, boost force 300.0)
+- **4 teleporters** (blue/purple, 2 bidirectional pairs)
+- Taller perimeter walls (25 units)
+- 16+ spawn points
 
----
+**Arena Selection:** Players choose type in pre-game menu via `scripts/world.gd:current_level_type`
 
-### 5. Combat System
+### 6. Jump Pads (Type B Only)
 
-**Location:** `scripts/player.gd` (health), `scripts/world.gd` (scoring)
+**Location:** `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
 
-#### Health & Death
-- **Health:** 3 hits
-- **Death triggers:**
-  - Health reaches 0
-  - Fall below Y = -20.0 (death zone)
-- **On death:**
-  - Drop ability (if holding one)
-  - Drop orbs (level progress lost)
-  - Explosion particle effect
-  - Death sound
-  - Respawn after 3 seconds
+**Properties:**
+- Visual: Bright green glowing cylinder
+- Boost: 300.0 vertical force
+- Cooldown: 1.0 second
+- Effect: Cancels horizontal velocity, applies upward impulse
 
-**See:** `scripts/player.gd:take_damage()`, `die()`
+**Locations:** Center + 4 corners (NE, NW, SE, SW at ±30 units)
 
-#### Scoring (Deathmatch)
-- **Kill:** +1 to killer's score
-- **Death:** +1 to death count
-- **K/D Ratio:** Calculated and displayed
-- **Winner:** Most kills after 5-minute timer
+### 7. Teleporters (Type B Only)
 
-**See:** `scripts/world.gd:_on_player_killed()` (lines ~1000-1050)
+**Location:** `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
 
----
+**Properties:**
+- Visual: Blue/purple glowing cylinder
+- Cooldown: 2.0 seconds
+- Behavior: Instant teleport, preserves vertical velocity, cancels horizontal
 
-### 6. Multiplayer System
+**Pairs:**
+- Pair 1: (35, 0, 35) ↔ (-35, 0, -35)
+- Pair 2: (-35, 0, 35) ↔ (35, 0, -35)
+
+### 8. Multiplayer System
 
 **Location:** `scripts/multiplayer_manager.gd`
-**Lines:** Full networking implementation
 
-# ⚠️ CRITICAL HTML5 NETWORKING REQUIREMENT ⚠️
-**HTML5 builds MUST use WebSocket ONLY! ENet is NOT supported in browsers!**
-**Always check `OS.has_feature("web")` before choosing networking mode!**
+**Network Modes:**
+- **WebSocket:** HTML5/browser (REQUIRED for web)
+- **ENet:** Desktop only (NOT supported in HTML5)
 
-#### Network Modes
+**Features:**
+- Room codes (6-character alphanumeric, e.g., "A3X9K2")
+- Lobby system (create, join, quick play)
+- Up to 16 players per match
+- Ready system (all players must ready before start)
+- Host controls (add bots, start game)
+- Host migration support
 
-| Mode | Protocol | Use Case | HTML5 Support |
-|------|----------|----------|---------------|
-| **WebSocket** | WSS | Browser play (CrazyGames) | ✅ **REQUIRED FOR HTML5** |
-| **ENet** | UDP | Desktop/local testing | ❌ **HTML5 INCOMPATIBLE** |
+**See:** `MULTIPLAYER_README.md` for full details
 
-**HTML5 NETWORKING RULES:**
-- ALWAYS use WebSocket for web builds
-- NEVER use ENet in HTML5 exports
-- Test multiplayer in actual browsers, not just editor
+### 9. Bot AI System
 
-#### Features
-- **Room codes:** 6-character codes for matchmaking
-- **Lobby system:** Create, join, quick play
-- **Player capacity:** Up to 16 players per match
-- **Ready system:** Players must ready up before host can start
-- **Host controls:** Add bots, start game
-- **Host migration:** Supports host leaving
+**Location:** `scripts/bot_ai.gd` (1,043 lines)
 
-#### Room Code Format
+**State Machine:**
 ```
-Example: "A3X9K2"
-- 6 characters
-- Uppercase alphanumeric
-- Generated by server
+WANDER → CHASE → ATTACK
+   ↑       ↑        ↓
+   └─── RETREAT ←──┘
+          ↓
+  COLLECT_ABILITY / COLLECT_ORB
 ```
 
-**See:**
-- `scripts/multiplayer_manager.gd` (networking logic)
-- `scripts/lobby_ui.gd` (lobby UI)
-- `MULTIPLAYER_README.md` (full documentation)
-
----
-
-### 7. Bot AI System
-
-**Location:** `scripts/bot_ai.gd`
-**Lines:** 1,043 lines of advanced AI
-
-# ⚠️ HTML5 PERFORMANCE WARNING ⚠️
-**Bot AI must be optimized for web performance! Limit bot count to 8 max on HTML5!**
-**Complex AI calculations can impact browser FPS - always test in browsers!**
-
-#### State Machine
-
-```
-WANDER ──→ CHASE ──→ ATTACK
-   ↑         ↑          ↓
-   └────── RETREAT ←────┘
-           ↓
-   COLLECT_ABILITY / COLLECT_ORB
-```
-
-#### AI States
-
-| State | Behavior | Triggers |
-|-------|----------|----------|
-| **WANDER** | Search for targets, move randomly | No targets nearby |
-| **CHASE** | Pursue target player | Player in range, has ability |
-| **ATTACK** | Combat target (strafe, use ability) | In optimal range for ability |
-| **RETREAT** | Flee to health pickup/safe area | Health < 2, no ability |
-| **COLLECT_ABILITY** | Get ability pickup (critical priority) | No ability equipped |
-| **COLLECT_ORB** | Collect level-up orbs | Has ability, low priority |
-
-#### Advanced Features
-
-**Combat Tactics:**
-- **Ability-specific optimal ranges:**
-  - Sword: 2.0-5.0 units (close)
-  - Dash: 5.0-10.0 units (medium)
-  - Gun: 10.0-20.0 units (long)
-  - Explosion: 3.0-8.0 units (medium)
-- **Strafing:** Circle around targets while attacking
-- **Charging:** Hold charge for max damage (70% chance)
-- **Tactical jumping:** Jump when target is above/below
-- **Prediction:** Lead targets for projectiles
-
-**Obstacle Avoidance:**
-- **Edge detection:** Raycasts prevent falling off map
-- **Wall detection:** Front raycasts detect walls
-- **Slope detection:** Avoid steep slopes
-- **Stuck recovery:** Detect lack of movement, jump/spin dash to escape
-
-**Target Prioritization:**
-1. **Critical:** Get abilities (can't fight without them)
-2. **High:** Combat players (kill for score)
-3. **Medium:** Collect orbs (level up for advantage)
-4. **Low:** Wander and search
-
-**Personality Variety:**
-- **Aggression:** Randomized per bot (affects chase distance)
-- **Reaction time:** 0.5-1.5 second delay (prevents instant reactions)
-- **Ability usage:** Varied timing and charging decisions
-
-**See:** `scripts/bot_ai.gd` for full implementation
-
----
-
-### 8. Level Generation System
-
-**Location:** `scripts/level_generator.gd`
-
-**🌐 HTML5 COMPATIBILITY:** Procedural generation is HTML5-compatible but watch performance! Complex geometry can impact browser FPS. Test frequently!
-
-#### Generated Elements
-
-| Element | Quantity | Description |
-|---------|----------|-------------|
-| **Main Floor** | 1 | 100x100 unit platform |
-| **Floating Platforms** | 24 | Varied heights, random positions |
-| **Ramps** | 12 | Vertical movement aids |
-| **Grind Rails** | 12 | 8 curved perimeter + 4 vertical/spiral |
-| **Perimeter Walls** | 4 | Prevent falling off edges |
-| **Death Zone** | 1 | Below Y = -20.0 |
-| **Spawn Points** | 16 | Dynamic positions for players/bots |
-
-#### Grind Rails (Sonic-Style)
-- **Curved rails:** 8 rails around map perimeter
-  - Radius: 60 units
-  - Height: 10-20 units
-  - Arc: 45 degrees each
-- **Vertical rails:** 4 spiral rails
-  - Height: 30 units
-  - Spiral pattern
-- **Visual:** Metallic cylinders with glow material
-- **Physics:** Area3D for grinding detection
-
-**Procedural Texturing:**
-- Kenney prototype textures (orange, dark)
-- Randomized per platform
-- Consistent color scheme
-
-**See:** `scripts/level_generator.gd:generate_level()`
-
----
-
-### 8a. Level Generation System - Type B (Quake 3 Arena Style)
-
-**Location:** `scripts/level_generator_q3.gd`
-
-**🌐 HTML5 COMPATIBILITY:** Procedural generation is HTML5-compatible but creates more complex geometry than Type A. Monitor performance in browsers!
-
-#### Type Selection
-
-The game supports two distinct arena types that can be selected before match start:
-
-| Type | Name | Style | Features |
-|------|------|-------|----------|
-| **Type A** | Original | Sonic-inspired | Floating platforms, grind rails, ramps, open arena |
-| **Type B** | Quake 3 Arena | FPS-inspired | Multi-tier platforms, rooms, corridors, jump pads, teleporters |
-
-**Selection:** Players choose arena type in pre-game menu (see `scripts/world.gd:start_game()`)
-
-#### Generated Elements (Type B)
-
-| Element | Quantity | Description |
-|---------|----------|-------------|
-| **Main Arena Floor** | 1 | 84x84 unit central combat area |
-| **Arena Pillars** | 4 | Tall decorative columns (4x12x4) |
-| **Cover Objects** | 8 | Small cover boxes scattered in arena |
-| **Tier 1 Platforms** | 4 | Large mid-level ring platforms (12x12) at height 8 |
-| **Tier 2 Platforms** | 8 | Medium upper platforms (8x8) at height 15 |
-| **Tier 3 Platforms** | 4 | Small sniper platforms (6x6) at height 22 |
-| **Connecting Ramps** | 2 | Ramps from ground to tier 1 platforms |
-| **Side Rooms** | 4 | Enclosed rooms with doorways (16x10x16) |
-| **Room Platforms** | 4 | Raised item spawn platforms inside rooms |
-| **Corridors** | 4 | Connecting corridors between areas |
-| **Jump Pads** | 5 | Vertical boost pads (see Jump Pads section) |
-| **Teleporters** | 4 | Teleporter pads in 2 bidirectional pairs |
-| **Perimeter Walls** | 4 | Taller outer walls (25 units high) |
-| **Death Zone** | 1 | Below Y = -50.0 |
-| **Spawn Points** | 16+ | Main arena, rooms, and platforms |
-
-#### Multi-Tier Platform System
-
-**Design Philosophy:** Vertical gameplay inspired by Quake 3 Arena
-
-**Tier 1 (Height 8):**
-- 4 large platforms (12x12 units)
-- Positioned 25 units from center
-- Connected to ground via ramps
-- Medium-range combat positions
-
-**Tier 2 (Height 15):**
-- 8 medium platforms (8x8 units)
-- Positioned 20 units from center
-- Requires jump or jump pad to access
-- High-ground advantage positions
-
-**Tier 3 (Height 22):**
-- 4 small platforms (6x6 units)
-- Positioned 15 units from center
-- Sniper/observation positions
-- Requires jump pad for easy access
-
-#### Side Rooms System
-
-**Room Layout:**
-- **Count:** 4 rooms (North, South, East, West)
-- **Position:** 45 units from center
-- **Size:** 16x10x16 units (width x height x depth)
-- **Features:** Floor, ceiling, 4 walls with doorway
-- **Doorway:** 6 units wide, faces arena center
-- **Interior:** Raised platform (6x6x1) for weapon spawns
-
-**Purpose:**
-- Enclosed combat areas
-- Strategic item spawn locations
-- Cover from long-range attacks
-- Multiple entry/exit paths via corridors
-
-**See:** `scripts/level_generator_q3.gd:generate_side_rooms()` (lines 256-420)
-
-#### Corridor System
-
-**Count:** 4 corridors connecting arena to rooms
-**Width:** 6 units
-**Length:** ~15 units each
-**Purpose:** Transitional combat zones between open arena and enclosed rooms
-
-**See:** `scripts/level_generator_q3.gd:generate_corridors()` (lines 425-464)
-
----
-
-### 8b. Jump Pads (Quake 3 Arena Feature)
-
-**Location:** `scripts/level_generator_q3.gd:generate_jump_pads()` (lines 469-539)
-**Player Integration:** `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
-
-#### Overview
-
-Jump pads provide instant vertical boost for quick access to upper platforms, inspired by Quake 3 Arena's jump pad mechanics.
-
-#### Jump Pad Properties
-
-| Property | Value | Description |
-|----------|-------|-------------|
-| **Visual Shape** | Cylinder | Top/bottom radius: 2.5 units, height: 0.5 units |
-| **Color** | Bright Green | RGB(0.2, 1.0, 0.3) with emission |
-| **Emission Energy** | 0.5 | Glowing effect to stand out |
-| **Boost Force** | 300.0 | Strong upward impulse (vertical launch) |
-| **Cooldown** | 1.0 seconds | Prevents repeated triggering |
-| **Collision Layer** | 8 | Pickup/area layer |
-| **Group** | "jump_pad" | For detection |
-
-#### Jump Pad Locations (Type B Arena)
-
-1. **Center** - Vector3(0, 0, 0) - Main arena center, access to all tiers
-2. **Northeast** - Vector3(30, 0, 30)
-3. **Northwest** - Vector3(-30, 0, 30)
-4. **Southeast** - Vector3(30, 0, -30)
-5. **Southwest** - Vector3(-30, 0, -30)
-
-#### How Jump Pads Work
-
-**Detection:**
-- Player's Area3D detector enters jump pad's Area3D
-- Signal: `area_detector.area_entered` → `_on_area_entered()`
-- Check: `area.is_in_group("jump_pad")`
-
-**Activation Sequence:**
-1. Check cooldown (skip if active)
-2. Cancel horizontal velocity
-3. Apply upward impulse (300.0 force)
-4. Reset bounce state
-5. Play bounce sound
-6. Spawn bright green particle effect
-7. Set 1-second cooldown
-
-**Visual Effect:**
-- Bright green explosive particle burst
-- 150 particles
-- Initial velocity: 15-25 units/second
-- Gradient: Bright green → Light green → Transparent
-
-**See:**
-- `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
-- `scripts/player.gd:spawn_jump_pad_effect()` (lines 2148-2173)
-
----
-
-### 8c. Teleporters (Quake 3 Arena Feature)
-
-**Location:** `scripts/level_generator_q3.gd:generate_teleporters()` (lines 544-618)
-**Player Integration:** `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
-
-#### Overview
-
-Teleporters enable instant travel between two locations, creating strategic map traversal options inspired by Quake 3 Arena.
-
-#### Teleporter Properties
-
-| Property | Value | Description |
-|----------|-------|-------------|
-| **Visual Shape** | Cylinder | Top/bottom radius: 3.0 units, height: 0.3 units |
-| **Color** | Blue/Purple | Albedo: RGB(0.3, 0.3, 1.0), Emission: RGB(0.5, 0.3, 1.0) |
-| **Emission Energy** | 1.0 | Strong glow effect |
-| **Cooldown** | 2.0 seconds | Prevents rapid re-teleportation |
-| **Collision Layer** | 8 | Pickup/area layer |
-| **Group** | "teleporter" | For detection |
-| **Metadata** | "destination" | Vector3 destination position |
-
-#### Teleporter Pairs (Type B Arena)
-
-**Pair 1 (Diagonal):**
-- Teleporter A: Vector3(35, 0, 35) → Teleporter B: Vector3(-35, 0, -35)
-- Teleporter B: Vector3(-35, 0, -35) → Teleporter A: Vector3(35, 0, 35)
-
-**Pair 2 (Diagonal):**
-- Teleporter C: Vector3(-35, 0, 35) → Teleporter D: Vector3(35, 0, -35)
-- Teleporter D: Vector3(35, 0, -35) → Teleporter C: Vector3(-35, 0, 35)
-
-**Design:** Bidirectional pairs connect opposite corners of the arena
-
-#### How Teleporters Work
-
-**Detection:**
-- Player's Area3D detector enters teleporter's Area3D
-- Signal: `area_detector.area_entered` → `_on_area_entered()`
-- Check: `area.is_in_group("teleporter") and area.has_meta("destination")`
-- Get destination: `area.get_meta("destination")`
-
-**Activation Sequence:**
-1. Check cooldown (skip if active)
-2. Read destination from Area3D metadata
-3. Preserve vertical velocity (Y component)
-4. Teleport: Set `global_position = destination + Vector3(0, 2, 0)` (spawn 2 units above)
-5. Cancel horizontal velocity (X and Z)
-6. Play hit sound (teleport audio)
-7. Spawn bright purple particle swirl effect
-8. Set 2-second cooldown
-
-**Velocity Behavior:**
-- **Horizontal (X/Z):** Canceled on teleport
-- **Vertical (Y):** Preserved (player keeps upward/downward momentum)
-- **Purpose:** Prevents players from flying off teleporter destination
-
-**Visual Effect:**
-- Bright purple/blue particle swirl
-- 120 particles
-- Initial velocity: 12-20 units/second
-- Gradient: Bright purple → Light purple → Transparent
-
-**See:**
-- `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
-- `scripts/player.gd:spawn_teleporter_effect()` (lines 2175-2200)
-
----
-
-### 8d. Arena Type Game State System
-
-**Location:** `scripts/world.gd`
-**Variable:** `current_level_type: String` (line 92)
-
-#### Overview
-
-The game supports dynamic arena type selection before match start, allowing players to choose between two distinct gameplay experiences.
-
-#### Arena Type Variable
-
-```gdscript
-# scripts/world.gd line 92
-var current_level_type: String = "A"
-```
-
-**Values:**
-- **"A"** - Type A (Original): Floating platforms, grind rails, Sonic-style movement focus
-- **"B"** - Type B (Quake 3 Arena): Multi-tier platforms, rooms, corridors, jump pads, teleporters
-
-#### Game Flow with Arena Type Selection
-
-**1. Menu Phase:**
-- Player clicks "Play" button in main menu
-- `_on_play_pressed()` called
-- Arena type selection panel displayed
-
-**2. Arena Type Selection Panel:**
-- **Type A Button:** "Original - Open arena with grind rails and floating platforms"
-- **Type B Button:** "Multi-tier arena with rooms, corridors, jump pads, and teleporters"
-- Player clicks desired type
-
-**3. Level Generation:**
-```gdscript
-# scripts/world.gd:start_game() line 712
-current_level_type = level_type  # "A" or "B"
-await generate_procedural_level(level_type)
-```
-
-**4. Generator Selection:**
-```gdscript
-# scripts/world.gd:generate_procedural_level() lines 1981-2010
-func generate_procedural_level(level_type: String = "A") -> void:
-    if level_type == "A":
-        level_generator = LevelGenerator.new()  # Original generator
-    else:  # level_type == "B"
-        level_generator = LevelGeneratorQ3.new()  # Quake 3 Arena generator
-
-    add_child(level_generator)
-    level_generator.generate_level()
-```
-
-**5. Game Starts:**
-- Selected arena type is now active
-- Players spawn in the generated arena
-- Arena-specific features available (grind rails for A, jump pads/teleporters for B)
-
-#### Accessing Current Arena Type
-
-**From Other Scripts:**
-```gdscript
-# Get current arena type from world script
-var world = get_tree().root.get_node("World")
-var arena_type = world.get_current_level_type()
-
-if arena_type == "A":
-    # Type A specific logic (grind rails)
-    pass
-elif arena_type == "B":
-    # Type B specific logic (jump pads, teleporters)
-    pass
-```
-
-**Public Method:**
-```gdscript
-# scripts/world.gd:get_current_level_type() lines 226-231
-func get_current_level_type() -> String:
-    """Returns: "A" or "B" """
-    return current_level_type
-```
-
-#### Type-Specific Features
-
-**Type A Features:**
-- 12 grind rails (8 curved perimeter + 4 vertical/spiral)
-- 24 floating platforms at varied heights
-- 12 ramps for vertical movement
-- Open arena layout
-- Sonic-style movement focus
-
-**Type B Features:**
-- 3-tier platform system (heights: 8, 15, 22)
-- 4 side rooms with doorways
-- 4 connecting corridors
-- 5 jump pads for vertical boost
-- 4 teleporters (2 bidirectional pairs)
-- More enclosed, tactical layout
-- Quake 3 Arena combat focus
-
-**See:**
-- `scripts/world.gd:start_game()` (line 680-730)
-- `scripts/world.gd:generate_procedural_level()` (lines 1981-2025)
-- `scripts/level_generator.gd` (Type A)
-- `scripts/level_generator_q3.gd` (Type B)
-
----
-
-### 9. Menu System (Rocket League-Style)
-
-**Location:** `scripts/ui/menu/rocket_menu.gd`, `rl_main_menu.tscn`
-
-#### Features
-- **Animated logo:** Plasma glow shader effect
-- **Card-style buttons:**
-  - "Play" (with bots)
-  - "Multiplayer"
-  - "Quit"
-- **Glow effects:** Buttons light up on hover
-- **Orbiting camera:** Dynamic camera movement
-- **XP/Level system:** Progress bar at bottom
-- **Profile panel:** Stats, login, XP display
-- **Friends panel:** Friends list with online status
-
-**Visual Style:**
-- **Colors:** Dark background, blue accents, orange highlights
-- **Fonts:** Bold headers, clean body text
-- **Effects:** Bloom, glow, particles
-
-**See:**
-- `ROCKET_LEAGUE_MENU.md` (full documentation)
-- `STYLE_GUIDE.md` (design standards)
-
----
-
-### 10. CrazyGames Integration
+**AI Features:**
+- **Combat tactics:** Ability-specific optimal ranges, strafing, charging
+- **Obstacle avoidance:** Edge detection, wall detection, stuck recovery
+- **Target prioritization:** Abilities > Combat > Orbs > Wander
+- **Personality variety:** Randomized aggression and reaction times
+
+**Optimal Combat Ranges:**
+- Sword: 2-5 units
+- Dash: 5-10 units
+- Gun: 10-20 units
+- Explosion: 3-8 units
+- Cannon: 8-15 units
+
+### 10. Menu System
+
+**Location:** `scripts/ui/menu/`
+
+**Features:**
+- Rocket League-style animated menu
+- Profile panel (stats, XP, login)
+- Friends panel (online status, invites)
+- Options menu (fullscreen, sensitivity)
+- Pause menu
+- Orbiting camera
+- Plasma glow shader on logo
+
+**See:** `ROCKET_LEAGUE_MENU.md` and `STYLE_GUIDE.md`
+
+### 11. CrazyGames Integration
 
 **Location:** `scripts/crazygames_sdk.gd`
 
-# ⚠️ HTML5 JAVASCRIPT BRIDGE REQUIRED ⚠️
-**CrazyGames SDK requires JavaScriptBridge which is HTML5-only!**
-**Always check for `JavaScriptBridge` singleton before making SDK calls!**
+**SDK Features:**
+- JavaScript bridge (HTML5 only via JavaScriptBridge)
+- User authentication
+- Profile system (via `profile_manager.gd`)
+- Friends system (via `friends_manager.gd`)
+- Ad support (midgame, rewarded, banner)
+- Game events (gameplayStart, gameplayStop, happyTime)
 
-#### SDK Features
-- **JavaScript Bridge:** Connects to CrazyGames SDK v3
-- **User Authentication:** Login/logout, token management
-- **Profile System:** Stats, XP, preferences (via `profile_manager.gd`)
-- **Friends System:** Friends list, online status (via `friends_manager.gd`)
-- **Ad Support:** Midgame, rewarded, banner ads
-- **Game Events:** `gameplayStart()`, `gameplayStop()`, `happyTime()`, `gameLoadingStop()`
+**Mock Mode:** Works locally without SDK for testing
 
-#### Mock Mode
-- **Local testing:** Works without CrazyGames SDK
-- **Fake data:** Mock user, friends list
-- **Console logs:** Debug output for all SDK calls
+**See:** `CRAZYGAMES_DEPLOYMENT.md`
 
-**See:**
-- `scripts/crazygames_sdk.gd` (SDK bridge)
-- `scripts/profile_manager.gd` (profile system)
-- `scripts/friends_manager.gd` (friends system)
-- `CRAZYGAMES_DEPLOYMENT.md` (deployment guide)
+### 12. Music System
+
+**Location:** `scripts/music_playlist.gd`
+
+**Features:**
+- Auto-load MP3/OGG files from music directory
+- Shuffle mode
+- Track metadata display
+- Seamless transitions
+- Menu vs gameplay music
+
+**See:** `MUSIC_PLAYLIST.md`
+
+### 13. Debug System
+
+**Location:** `scripts/debug_menu.gd`, `debug_menu.tscn`
+
+**Features:**
+- Paginated debug menu (3 pages)
+- God mode toggle
+- Collision shape visibility
+- Speed multiplier
+- Bot spawning/removal
+- Force respawn
+- Toggle with backtick (`)
 
 ---
 
@@ -879,646 +422,173 @@ func get_current_level_type() -> String:
 ### Main Game Scene (`world.tscn`)
 
 ```
-World (Node3D) ──────────────────┐
-│                                │ scripts/world.gd (1,646 lines)
-├─ WorldEnvironment             │ Sky, fog, lighting
-├─ DirectionalLight3D           │ Main light source
-├─ MenuSystem (CanvasLayer)     │ Main menu, pause, options
-│  ├─ RLMainMenu                │ Rocket League-style menu
-│  │  ├─ AnimatedLogo           │ Plasma glow shader
-│  │  ├─ PlayButton             │ Practice with bots
-│  │  ├─ MultiplayerButton      │ Join/create rooms
-│  │  ├─ QuitButton             │ Exit game
-│  │  ├─ ProfilePanel           │ Stats, XP, login
-│  │  └─ FriendsPanel           │ Friends list
-│  ├─ PauseMenu                 │ Resume, quit
-│  └─ OptionsMenu               │ Fullscreen, sensitivity
-├─ UI (CanvasLayer)             │ In-game UI
-│  ├─ GameHUD                   │ Health, timer, score
-│  ├─ Scoreboard                │ K/D ratios (Tab to show)
-│  ├─ LobbyUI                   │ Multiplayer lobby
-│  ├─ Crosshair                 │ Center reticle
-│  ├─ FPSCounter                │ Performance display
-│  └─ MusicNotification         │ Track name display
-├─ MenuMusicPlayer              │ Menu background music
-├─ GameplayMusicPlayer          │ In-game music
-├─ LevelGenerator (Node3D)      │ Procedural arena
-├─ SkyboxGenerator (Node3D)     │ Procedural skybox
-├─ AbilitySpawner (Node3D)      │ Manages ability pickups
-├─ OrbSpawner (Node3D)          │ Manages collectible orbs
-└─ Players (Node3D)             │ Container for player/bot instances
-   └─ MarblePlayer (instances)  │ Spawned dynamically
+World (Node3D) [scripts/world.gd]
+├── WorldEnvironment
+├── DirectionalLight3D
+├── MenuSystem (CanvasLayer)
+│   ├── RLMainMenu (AnimatedLogo, PlayButton, MultiplayerButton, ProfilePanel, FriendsPanel)
+│   ├── PauseMenu
+│   └── OptionsMenu
+├── UI (CanvasLayer)
+│   ├── GameHUD
+│   ├── Scoreboard
+│   ├── LobbyUI
+│   ├── Crosshair
+│   ├── FPSCounter
+│   └── MusicNotification
+├── MenuMusicPlayer
+├── GameplayMusicPlayer
+├── LevelGenerator (Type A or Type B)
+├── SkyboxGenerator
+├── AbilitySpawner
+├── OrbSpawner
+└── Players (container for MarblePlayer instances)
 ```
-
----
 
 ### Player Marble Scene (`marble_player.tscn`)
 
 ```
-MarblePlayer (RigidBody3D) ──────┐
-│                                 │ scripts/player.gd (1,695 lines)
-├─ CollisionShape3D              │ Sphere collision
-├─ MeshInstance3D                │ Sphere visual
-├─ Camera3D                      │ 3rd-person shooter style
-│  └─ CameraOcclusion            │ Anti-clipping system
-├─ GroundDetector (RayCast3D)   │ Ground check
-├─ AudioPlayers (multiple)       │ Jump, spin, bounce, hit, death
-├─ Particles (multiple)          │ Death, collection, jump trails
-├─ SpotLight3D                   │ Player light
-├─ AnimationPlayer               │ Animation controller
-├─ MultiplayerSynchronizer       │ Network sync
-└─ AbilityAttachPoint (Node3D)   │ Ability attachment point
+MarblePlayer (RigidBody3D) [scripts/player.gd]
+├── CollisionShape3D
+├── MeshInstance3D
+├── Camera3D
+│   └── CameraOcclusion [scripts/camera_occlusion.gd]
+├── GroundDetector (RayCast3D)
+├── AudioPlayers (jump, spin, bounce, hit, death)
+├── Particles (death, collection, trails)
+├── SpotLight3D
+├── AnimationPlayer
+├── MultiplayerSynchronizer
+└── AbilityAttachPoint
 ```
-
----
 
 ### Ability Scenes (e.g., `abilities/sword.tscn`)
 
 ```
-Sword (Node3D) ──────────────────┐
-│                                │ scripts/abilities/sword.gd
-├─ MeshInstance3D               │ Sword visual
-├─ AnimationPlayer              │ Swing animation
-├─ HitArea (Area3D)             │ Damage detection
-│  └─ CollisionShape3D          │ Sword hitbox
-└─ ParticleEffects              │ Charge particles
+Sword (Node3D) [scripts/abilities/sword.gd]
+├── MeshInstance3D
+├── AnimationPlayer
+├── HitArea (Area3D)
+│   └── CollisionShape3D
+└── ParticleEffects
 ```
 
 ---
 
 ## Script Reference
 
-# ⚠️ HTML5 COMPATIBILITY CHECK BEFORE MODIFYING SCRIPTS ⚠️
-**Every script modification must consider HTML5 limitations!**
-**Test changes in browsers, not just the Godot editor!**
-
 ### Core Scripts
 
-#### `scripts/global.gd` (Global Singleton)
-**Purpose:** Global settings and persistence
-**Key Variables:**
-- `player_name: String` - Player display name
-- `mouse_sensitivity: float` - Camera sensitivity (0.1-1.0)
-- `music_directory: String` - Custom music folder path
-
-**Key Functions:**
-- `save_settings()` - Save to user://settings.cfg
-- `load_settings()` - Load from user://settings.cfg
-
----
-
-#### `scripts/world.gd` (Main Game Controller)
-**Lines:** 1,646
-**Purpose:** Game state management, deathmatch logic, menu system
-
-**Key States:**
-```gdscript
-enum GameState { MENU, COUNTDOWN, ACTIVE, ENDED }
-```
-
-**Key Variables:**
-- `match_duration: float = 300.0` - 5-minute matches
-- `countdown_duration: float = 3.0` - "READY, SET, GO!"
-- `players: Dictionary` - Player instances and scores
-- `game_state: GameState` - Current game state
-
-**Key Functions:**
-- `start_game(bot_count: int)` - Start practice match
-- `start_multiplayer_game()` - Start online match
-- `spawn_player(peer_id: int, is_bot: bool)` - Spawn player/bot
-- `_on_player_killed(killer_id: int, victim_id: int)` - Handle kills
-- `end_game()` - Show final scoreboard, return to menu
-- `_update_timer()` - Countdown match timer
-- `add_bot()` - Add AI bot to match
-
-**See:** Lines 1-1646 for full implementation
-
----
-
-#### `scripts/player.gd` (Player Marble Controller)
-**Lines:** 1,695
-**Purpose:** Player physics, movement, abilities, health
-
-**Key Variables:**
-```gdscript
-# Movement
-var speed: float = 80.0
-var jump_force: float = 25.0
-var spin_dash_force: float = 100.0
-var bounce_impulse: float = 150.0
-
-# State
-var health: int = 3
-var level: int = 0
-var current_ability: Node = null
-var is_grinding: bool = false
-var is_spin_dashing: bool = false
-```
-
-**Key Functions:**
-- `_physics_process(delta)` - Movement and physics
-- `_input(event)` - Input handling
-- `jump()` - Jump and double jump
-- `_spin_dash()` - Charge and release spin dash
-- `bounce_attack()` - Bounce attack with consecutive multiplier
-- `take_damage(amount: int, attacker: Node)` - Health system
-- `die()` - Death and respawn
-- `_on_collectible_orb_collected()` - Level up
-- `_handle_ability_input()` - Ability usage and charging
-- `_on_grind_rail_entered(rail: Node)` - Start rail grinding
-
-**Movement Code Example:**
-```gdscript
-# scripts/player.gd ~lines 300-350
-func _physics_process(delta):
-    # Get camera-relative input
-    var input_dir = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-    var camera_basis = camera.global_transform.basis
-    var direction = (camera_basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
-
-    # Apply force-based movement
-    if is_on_ground and direction:
-        apply_central_force(direction * speed)
-```
-
-**See:** Lines 1-1695 for full implementation
-
----
-
-#### `scripts/bot_ai.gd` (Advanced Bot AI)
-**Lines:** 1,043
-**Purpose:** AI state machine, combat tactics, obstacle avoidance
-
-**Key States:**
-```gdscript
-enum AIState { WANDER, CHASE, ATTACK, RETREAT, COLLECT_ABILITY, COLLECT_ORB }
-```
-
-**Key Variables:**
-```gdscript
-var current_state: AIState = AIState.WANDER
-var target_player: Node = null
-var target_collectible: Node = null
-var aggression: float = randf_range(0.5, 1.5)  # Personality
-var reaction_delay: float = randf_range(0.5, 1.5)
-```
-
-**Key Functions:**
-- `_physics_process(delta)` - State machine execution
-- `_find_target()` - Target prioritization
-- `_move_towards(target: Vector3)` - Navigation with obstacle avoidance
-- `_attack_target()` - Combat tactics (strafe, charge, fire)
-- `_check_obstacles()` - Edge/wall detection
-- `_get_optimal_range()` - Ability-specific combat distance
-
-**Combat Tactics Example:**
-```gdscript
-# scripts/bot_ai.gd ~lines 500-550
-func _attack_target():
-    if not target_player:
-        current_state = AIState.WANDER
-        return
-
-    var distance = global_position.distance_to(target_player.global_position)
-    var optimal_range = _get_optimal_range()
-
-    # Strafe around target
-    var strafe_dir = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized()
-    _move_towards(target_player.global_position + strafe_dir * optimal_range)
-
-    # Use ability if in range
-    if distance <= optimal_range and player.current_ability:
-        if randf() > 0.7:  # 30% chance to charge
-            player._handle_ability_input()  # Charge and fire
-```
-
-**See:** Lines 1-1043 for full implementation
-
----
-
-#### `scripts/multiplayer_manager.gd` (Networking Manager)
-**Purpose:** WebSocket/ENet networking, room management
-
-# ⚠️ CRITICAL: HTML5 USES WEBSOCKET ONLY ⚠️
-**This script MUST detect HTML5 and use WebSocket, NOT ENet!**
-**Check `OS.has_feature("web")` to determine networking mode!**
-
-**Key Variables:**
-```gdscript
-var network_mode: String = "websocket"  # or "enet"
-var current_room_code: String = ""
-var players_in_lobby: Array = []
-```
-
-**Key Functions:**
-- `create_room() -> String` - Create new room, return code
-- `join_room(room_code: String)` - Join existing room
-- `quick_play()` - Find available room or create new one
-- `start_game()` - Host starts the match
-- `_handle_player_connected(peer_id: int)` - New player joins
-- `_handle_player_disconnected(peer_id: int)` - Player leaves
-
-**See:** `MULTIPLAYER_README.md` for full networking documentation
-
----
-
-#### `scripts/level_generator.gd` (Procedural Level Generator - Type A)
-**Purpose:** Generate Sonic-inspired arenas with platforms, ramps, grind rails
-
-**Key Functions:**
-- `generate_level()` - Main generation function
-- `_generate_main_floor()` - 100x100 base platform
-- `_generate_floating_platforms()` - 24 platforms at varied heights
-- `_generate_ramps()` - 12 ramps for vertical movement
-- `_generate_grind_rails()` - 12 Sonic-style rails
-- `_generate_perimeter_walls()` - 4 walls to prevent falling
-- `_generate_spawn_points()` - 16 spawn positions
-
-**Generation Example:**
-```gdscript
-# scripts/level_generator.gd ~lines 200-250
-func _generate_grind_rails():
-    # Curved perimeter rails
-    for i in range(8):
-        var angle = i * (TAU / 8)
-        var rail = create_curved_rail(
-            Vector3(cos(angle) * 60, 15, sin(angle) * 60),
-            45.0  # degrees of arc
-        )
-        add_child(rail)
-
-    # Vertical spiral rails
-    for i in range(4):
-        var rail = create_spiral_rail(
-            Vector3(randf_range(-40, 40), 0, randf_range(-40, 40)),
-            30.0  # height
-        )
-        add_child(rail)
-```
-
----
-
-#### `scripts/level_generator_q3.gd` (Quake 3 Arena Generator - Type B)
-**Lines:** 765
-**Purpose:** Generate multi-tier arenas with rooms, corridors, jump pads, teleporters
-
-**Key Functions:**
-- `generate_level()` - Main generation function
-- `generate_main_arena()` - Central combat floor with pillars and cover
-- `generate_upper_platforms()` - 3-tier platform system (heights: 8, 15, 22)
-- `generate_tier_platforms(tier, count, height, distance)` - Generate platform ring
-- `generate_side_rooms()` - 4 enclosed rooms with doorways
-- `generate_room(center_pos, room_index)` - Single room with walls
-- `generate_corridors()` - 4 connecting corridors
-- `generate_jump_pads()` - 5 vertical boost pads
-- `generate_teleporters()` - 4 teleporter pads (2 pairs)
-- `create_jump_pad(pos, index)` - Single jump pad with Area3D
-- `create_teleporter(pos, destination, index)` - Single teleporter with metadata
-- `generate_perimeter_walls()` - 4 tall outer walls
-- `get_spawn_points()` - 16+ spawn positions
-
-**Key Variables:**
-```gdscript
-var arena_size: float = 140.0  # Larger than Type A
-var platforms: Array = []
-var teleporters: Array = []  # Track teleporter destinations
-```
-
-**Multi-Tier Generation Example:**
-```gdscript
-# scripts/level_generator_q3.gd ~lines 155-213
-func generate_upper_platforms():
-    # Tier 1: Mid-level ring (4 large platforms)
-    generate_tier_platforms(1, 4, 8.0, 25.0)
-
-    # Tier 2: Upper-level (8 medium platforms)
-    generate_tier_platforms(2, 8, 15.0, 20.0)
-
-    # Tier 3: Highest sniper platforms (4 small)
-    generate_tier_platforms(3, 4, 22.0, 15.0)
-
-func generate_tier_platforms(tier, count, height, distance):
-    for i in range(count):
-        var angle = (float(i) / count) * TAU
-        var x = cos(angle) * distance
-        var z = sin(angle) * distance
-
-        # Platform size varies by tier
-        var platform_size = match tier:
-            1: Vector3(12.0, 1.5, 12.0)  # Large
-            2: Vector3(8.0, 1.5, 8.0)    # Medium
-            3: Vector3(6.0, 1.5, 6.0)    # Small
-
-        create_platform(Vector3(x, height, z), platform_size)
-```
-
-**Jump Pad Creation Example:**
-```gdscript
-# scripts/level_generator_q3.gd ~lines 485-539
-func create_jump_pad(pos: Vector3, index: int):
-    # Visual cylinder mesh (bright green, glowing)
-    var pad_mesh = CylinderMesh.new()
-    pad_mesh.top_radius = 2.5
-    pad_mesh.height = 0.5
-
-    # Area3D for boost detection
-    var jump_area = Area3D.new()
-    jump_area.add_to_group("jump_pad")
-
-    # Player detects this and applies boost
-```
-
-**See:** Lines 1-765 for full Q3 Arena generator implementation
-
----
+| Script | Lines | Purpose |
+|--------|-------|---------|
+| `global.gd` | - | Global singleton (settings, persistence) |
+| `world.gd` | 1,646 | Main game controller, match logic, menu system |
+| `player.gd` | 1,695 | Player physics, movement, abilities, health |
+| `bot_ai.gd` | 1,043 | Advanced bot AI state machine |
+| `multiplayer_manager.gd` | - | WebSocket/ENet networking, room management |
+| `level_generator.gd` | - | Type A arena generation |
+| `level_generator_q3.gd` | 765 | Type B arena generation |
 
 ### Ability Scripts
 
-#### `scripts/abilities/ability_base.gd` (Base Ability Class)
-**Purpose:** Shared ability functionality (charging, cooldown)
-
-**Key Variables:**
-```gdscript
-var charge_level: int = 0  # 0=none, 1=weak, 2=medium, 3=max
-var is_charging: bool = false
-var cooldown_timer: float = 0.0
-```
-
-**Key Functions:**
-- `start_charging()` - Begin charge sequence
-- `update_charge(delta: float)` - Increment charge level
-- `release_charge()` - Fire ability at current charge level
-- `_on_cooldown_finished()` - Reset cooldown
-
----
-
-#### `scripts/abilities/dash_attack.gd`
-**Purpose:** Forward dash attack
-
-**Key Variables:**
-```gdscript
-var dash_force: float = 200.0
-var damage: int = 1  # Base damage
-```
-
-**Key Functions:**
-- `use(charge_level: int)` - Execute dash based on charge level
-
----
-
-#### `scripts/abilities/explosion.gd`
-**Purpose:** AoE explosion around player
-
-**Key Variables:**
-```gdscript
-var explosion_radius: float = 10.0
-var damage: int = 2  # Base damage
-```
-
----
-
-#### `scripts/abilities/gun.gd`
-**Purpose:** Ranged projectile weapon
-
-**Key Variables:**
-```gdscript
-var projectile_speed: float = 50.0
-var damage: int = 1  # Per projectile
-```
-
----
-
-#### `scripts/abilities/sword.gd`
-**Purpose:** Melee sword swings
-
-**Key Variables:**
-```gdscript
-var swing_range: float = 3.0
-var damage: int = 1  # Per hit
-```
-
----
+| Script | Purpose |
+|--------|---------|
+| `abilities/ability_base.gd` | Base class (charging, cooldown) |
+| `abilities/cannon.gd` | Explosive projectile weapon |
+| `abilities/dash_attack.gd` | Forward dash attack |
+| `abilities/explosion.gd` | AoE explosion |
+| `abilities/sword.gd` | Melee sword swings |
 
 ### UI Scripts
 
-#### `scripts/ui/game_hud.gd`
-**Purpose:** In-game HUD display
+| Script | Purpose |
+|--------|---------|
+| `ui/game_hud.gd` | In-game HUD (health, timer, score) |
+| `ui/crosshair.gd` | Dynamic crosshair |
+| `ui/fps_counter.gd` | FPS display |
+| `ui/profile_panel.gd` | Profile stats, XP, login |
+| `ui/friends_panel.gd` | Friends list with online status |
+| `ui/music_notification.gd` | Track name display |
+| `ui/expansion_notification.gd` | Expansion notifications |
+| `ui/menu/rocket_menu.gd` | Main menu controller |
+| `ui/menu/rl_main_menu.gd` | Main menu scene controller |
+| `ui/menu/sound_generator.gd` | Procedural UI sounds |
 
-**Displays:**
-- Health bar (3 hearts)
-- Match timer (5:00 countdown)
-- Kill/Death counters
-- Ability charge meter
-- Level indicator
+### Utility Scripts
 
----
-
-#### `scripts/ui/menu/rocket_menu.gd`
-**Purpose:** Main menu controller
-
-**Key Functions:**
-- `_on_play_pressed()` - Show bot selection
-- `_on_multiplayer_pressed()` - Show lobby UI
-- `_on_quit_pressed()` - Exit game
-- `_update_profile()` - Refresh stats, XP
-
----
-
-#### `scripts/ui/profile_panel.gd`
-**Purpose:** Profile panel (stats, XP, login)
-
-**Displays:**
-- Username
-- Level and XP progress
-- Total kills, deaths, K/D
-- Matches played, win rate
-- Login/logout button (CrazyGames)
-
----
-
-#### `scripts/ui/friends_panel.gd`
-**Purpose:** Friends list panel
-
-**Displays:**
-- Friends list with online status
-- Invite buttons (send room code)
-- Empty state ("No friends yet")
-
----
-
-### CrazyGames Scripts
-
-#### `scripts/crazygames_sdk.gd`
-**Purpose:** JavaScript bridge to CrazyGames SDK v3
-
-**Key Functions:**
-- `init()` - Initialize SDK
-- `gameplayStart()` - Notify gameplay started
-- `gameplayStop()` - Notify gameplay stopped
-- `happyTime()` - Positive event (level up, kill)
-- `showAd(type: String)` - Show midgame/rewarded/banner ad
-- `getUserToken() -> String` - Get CrazyGames auth token
-- `requestInviteLink(room_code: String)` - Share room with friends
-
-**Mock Mode:**
-```gdscript
-# scripts/crazygames_sdk.gd ~lines 50-100
-if Engine.has_singleton("JavaScriptBridge"):
-    # Real SDK
-    JavaScriptBridge.eval("CrazyGames.SDK.init()")
-else:
-    # Mock mode for local testing
-    print("[CrazyGames Mock] SDK initialized")
-```
-
----
-
-#### `scripts/profile_manager.gd`
-**Purpose:** User profile system (stats, preferences)
-
-**Key Variables:**
-```gdscript
-var profile_data: Dictionary = {
-    "username": "Guest",
-    "xp": 0,
-    "level": 1,
-    "kills": 0,
-    "deaths": 0,
-    "matches": 0,
-    "wins": 0
-}
-```
-
-**Key Functions:**
-- `load_profile()` - Load from CrazyGames/local
-- `save_profile()` - Save to user://profile.save
-- `add_match_stats(kills: int, deaths: int, won: bool)` - Update stats
-- `add_xp(amount: int)` - Add XP, check for level up
-
----
-
-#### `scripts/friends_manager.gd`
-**Purpose:** Friends system integration
-
-**Key Functions:**
-- `fetch_friends_list()` - Get friends from CrazyGames
-- `send_invite(friend_id: String, room_code: String)` - Invite to room
-- `update_online_status()` - Refresh friend statuses
+| Script | Purpose |
+|--------|---------|
+| `ability_pickup.gd` | Ability pickup logic (bobbing, respawn) |
+| `ability_spawner.gd` | Manages ability pickup spawning |
+| `collectible_orb.gd` | Orb pickup logic |
+| `orb_spawner.gd` | Manages orb spawning |
+| `audio_metadata_parser.gd` | Audio file metadata extraction |
+| `camera_occlusion.gd` | Camera anti-clipping |
+| `crazygames_sdk.gd` | CrazyGames SDK bridge |
+| `debug_menu.gd` | Debug menu with cheats |
+| `friends_manager.gd` | Friends system manager |
+| `grind_rail.gd` | Rail grinding mechanics |
+| `lobby_ui.gd` | Multiplayer lobby interface |
+| `music_playlist.gd` | Music playlist system |
+| `orbit_camera.gd` | Orbiting camera for menus |
+| `poof_particle_effect.gd` | Particle effect system |
+| `profile_manager.gd` | User profile management |
+| `scoreboard.gd` | Scoreboard display |
+| `skybox_generator.gd` | Procedural skybox generation |
 
 ---
 
 ## Game Mechanics
 
-### Deathmatch Rules
-
-**Match Duration:** 5 minutes (300 seconds)
-**Victory Condition:** Most kills at timer end
-**Scoring:**
-- Kill: +1 point
-- Death: +1 death count (tracked separately)
-- K/D ratio calculated for leaderboard
-
-**Match Flow:**
-1. **Countdown:** 3 seconds ("READY", "SET", "GO!")
-2. **Active Play:** 5-minute timer counts down
-3. **Match End:** Timer expires, show scoreboard for 10 seconds
-4. **Return to Menu:** Automatic return to main menu
-
-**See:** `scripts/world.gd` for deathmatch implementation
-
----
-
 ### Movement Controls
 
 | Key | Action | Notes |
 |-----|--------|-------|
-| **W/A/S/D** | Move | Camera-relative |
-| **Mouse** | Look | Adjust camera |
-| **Space** | Jump | Double jump available |
-| **Space (x2)** | Double Jump | Uses double jump |
-| **Shift (hold)** | Spin Dash | Charge up to 1.5s, release to dash |
-| **Ctrl** | Bounce Attack | Plunge down, bounce up |
-| **E (tap)** | Use Ability | Fire current ability |
-| **E (hold)** | Charge Ability | Up to 3 charge levels |
-| **O** | Drop Ability | Manual drop |
-| **F** | Respawn | Force respawn (debug) |
-| **Tab (hold)** | Scoreboard | Show K/D ratios |
-| **Esc** | Pause | Open pause menu |
+| WASD | Move | Camera-relative |
+| Mouse | Look | Adjust camera |
+| Space | Jump | Double jump available |
+| Shift (hold) | Spin Dash | Charge up to 1.5s |
+| Ctrl | Bounce Attack | Plunge + bounce |
+| E (tap) | Use Ability | Fire at current charge |
+| E (hold) | Charge Ability | Up to 3 levels |
+| O | Drop Ability | Manual drop |
+| F | Force Respawn | Debug only |
+| Tab (hold) | Scoreboard | Show K/D ratios |
+| Esc | Pause | Open pause menu |
+| ` (backtick) | Debug Menu | Toggle debug overlay |
 
-#### Arena-Specific Mechanics (Type B Only)
+### Type B Arena Mechanics
 
-| Mechanic | Trigger | Description | Notes |
-|----------|---------|-------------|-------|
-| **Jump Pads** | Touch green pad | Strong upward boost (300 force) | 1s cooldown, cancels horizontal velocity |
-| **Teleporters** | Touch blue/purple pad | Instant teleport to destination | 2s cooldown, preserves vertical velocity |
+| Mechanic | Visual | Effect |
+|----------|--------|--------|
+| **Jump Pads** | Bright green cylinder | Vertical boost (300 force), 1s cooldown |
+| **Teleporters** | Blue/purple cylinder | Instant teleport, 2s cooldown |
 
-**Visual Cues:**
-- **Jump Pads:** Bright green cylinders with emission glow
-- **Teleporters:** Blue/purple cylinders with purple glow
-- **Jump Pad Effect:** Bright green particle explosion
-- **Teleporter Effect:** Purple particle swirl
+### Deathmatch Rules
 
-**See:**
-- `scripts/player.gd:activate_jump_pad()` (lines 2083-2116)
-- `scripts/player.gd:activate_teleporter()` (lines 2118-2146)
-
----
+- **Duration:** 5 minutes
+- **Victory:** Most kills
+- **Countdown:** 3 seconds ("READY", "SET", "GO!")
+- **Match End:** 10-second scoreboard, return to menu
 
 ### Physics Formulas
 
-#### Movement Force
 ```gdscript
-force = direction * speed
-# Base speed: 80.0
-# Level 1: 100.0
-# Level 2: 120.0
-# Level 3: 140.0
-```
+# Movement
+force = direction * (speed + level_bonus)
 
-#### Jump Impulse
-```gdscript
-impulse = Vector3.UP * jump_force
-# Base: 25.0
-# Level 1: 40.0
-# Level 2: 55.0
-# Level 3: 70.0
-```
+# Jump
+impulse = Vector3.UP * (jump_force + level_bonus)
 
-#### Spin Dash Force
-```gdscript
-force = dash_direction * (spin_dash_force + charge_amount * 400.0)
-# Base: 100.0
-# Max charge: 100.0 + 400.0 = 500.0
-# Level 1 base: 150.0
-# Level 3 max: 250.0 + 400.0 = 650.0
-```
+# Spin Dash
+force = dash_dir * (spin_dash_force + level_bonus + charge * 400.0)
 
-#### Bounce Attack
-```gdscript
-# Down force (applied immediately)
+# Bounce Attack
 down_force = Vector3.DOWN * 300.0
-
-# Up impulse (applied on collision)
-up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier
-# Base: 150.0
-# Consecutive x2: 300.0
-# Consecutive x3: 450.0
+up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier  # Up to 3x
 ```
 
----
-
-### Ability Damage Scaling
-
-| Ability | Charge 0 | Charge 1 | Charge 2 | Charge 3 (Max) |
-|---------|----------|----------|----------|----------------|
-| **Dash** | 1 damage | 1 damage | 2 damage | 3 damage |
-| **Explosion** | 2 damage (radius 10) | 2 damage | 3 damage (radius 15) | 4 damage (radius 20) |
-| **Gun** | 1 damage/bullet | 1 damage | 2 damage | 3 damage (3 bullets) |
-| **Sword** | 1 damage | 1 damage | 2 damage | 3 damage (AOE swing) |
-
----
-
-### XP and Leveling
+### XP and Leveling (Profile System)
 
 **XP Sources:**
 - Kill: +100 XP
@@ -1526,91 +596,58 @@ up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier
 - Match participation: +50 XP
 
 **Level Requirements:**
-- Level 1: 0 XP
 - Level 2: 500 XP
 - Level 3: 1,500 XP
 - Level 4: 3,000 XP
 - Level 5: 5,000 XP
 - (Continues scaling)
 
-**Profile XP is separate from match level-up orbs!**
+**Note:** Profile XP is separate from match level-up orbs!
 
 ---
 
 ## Asset Catalog
 
-# ⚠️ HTML5 AUDIO FORMAT COMPATIBILITY ⚠️
-**Use OGG, WAV, or MP3 formats only! These are web-compatible!**
-**Avoid exotic formats that browsers may not support!**
-
 ### Audio Files
 
 #### Sound Effects (`audio/`)
 
-**🌐 HTML5 AUDIO:** All sound effects must be in OGG, WAV, or MP3 format for browser compatibility!
+All sound effects use web-compatible formats (WAV, OGG, MP3).
 
-| File | Usage | Format |
-|------|-------|--------|
-| `jump_*.wav` | Jump sounds (multiple variations) | WAV |
-| `spin_charge.ogg` | Spin dash charging loop | OGG |
-| `spin_release.wav` | Spin dash release | WAV |
-| `bounce.wav` | Bounce attack sound | WAV |
-| `hit_*.wav` | Damage/impact sounds | WAV |
-| `death.ogg` | Player death | OGG |
-| `spawn.wav` | Respawn sound | WAV |
-| `collect_orb.wav` | Orb collection | WAV |
-| `ability_pickup.wav` | Ability pickup | WAV |
-| `gun_fire.wav` | Gun shot | WAV |
-| `sword_swing.wav` | Sword swing | WAV |
-| `explosion.ogg` | Explosion ability | OGG |
+**Key Files:**
+- Jump: `jump.mp3`, `nr_name26.dsp.wav`, `nr_name2c.dsp.wav`
+- Spin: `017.Synth_MLT_se_ch_sn_Spindash Charge with Ancient Light *.wav`
+- Bounce: `SonicBOUNCE.wav`, `bouncehard2.wav`
+- Hit: `hitmarker_2.mp3`, `011.Synth_MLT_se_ch_kn_punch.wav`
+- Death: `KO'ed.wav`
+- Spawn: `spawn.wav`
+- Orb: `Ring.wav`, `ChaosDrive.wav`
+- Ability pickup: (various)
+- Gun: `Fox - Laser Gun.wav`, `Raygun.wav`, `Shooting.wav`
+- Sword: `Small Sword Hit.wav`, `Moderate Sword Hit.wav`, `Strong Sword Smack.wav`
+- Explosion: `Explosion.wav`, `017.Synth_MLT_se_ac_bf_metallic explode.wav`
 
 #### Music (`audio/`, `music/`)
 
-| File | Usage | Format |
-|------|-------|--------|
-| `661248__magmadiverrr__video-game-menu-music.ogg` | Main menu background | OGG |
-| `impulse.mp3` | Gameplay music | MP3 |
-| (User music folder) | Custom playlist | MP3/OGG/WAV |
+- Menu: `661248__magmadiverrr__video-game-menu-music.ogg`
+- Gameplay: `impulse.mp3`
+- Custom: User-specified directory (MP3/OGG/WAV)
 
-**See:** `MUSIC_PLAYLIST.md` for music system documentation
+### Textures (`textures/`)
 
----
+- **Kenney Particle Pack:** `circle_05.png` (crosshair, particles), `star_05.png` (effects)
+- **Kenney Prototype Textures:** Orange, dark, grid patterns for platforms/walls
 
-### Textures
+### Shaders (`scripts/shaders/`)
 
-#### Kenney Particle Pack (`textures/kenney_particle_pack/`)
-- `circle_05.png` - Crosshair, circular particles
-- `star_05.png` - Star particles (death effect, collection)
-
-#### Kenney Prototype Textures (`textures/kenney_prototype_textures/`)
-- Orange textures (platforms)
-- Dark textures (walls, ramps)
-- Grid textures (debug/prototype)
+All shaders are WebGL2/GLES3 compatible:
+- `plasma_glow.gdshader` - Animated plasma glow (menu logo)
+- `card_glow.gdshader` - Button glow effect
+- `blur.gdshader` - Blur effect
 
 ---
 
-### Shaders
-
-# ⚠️ HTML5 SHADER COMPATIBILITY WARNING ⚠️
-**Shaders MUST be WebGL2/GLES3 compatible for HTML5!**
-**Complex shaders can degrade web performance - keep them simple!**
-
-#### `scripts/shaders/plasma_glow.gdshader`
-**Purpose:** Animated plasma glow effect for logo
-
-**🌐 HTML5 COMPATIBILITY:** This shader is WebGL2-compatible. Do NOT use advanced features that require newer OpenGL versions!
-
-**Features:**
-- Animated color cycling
-- Glow intensity pulsing
-- UV distortion
-- Bloom-friendly emission
-
-**Usage:** Main menu logo (`rl_main_menu.tscn`)
-
----
-
-## Multiplayer Architecture
+## Multiplayer & AI
 
 ### Network Topology
 
@@ -1631,352 +668,172 @@ Clients (Peer 2-16)
 
 ### Room System
 
-**Room Creation:**
-1. Host calls `MultiplayerManager.create_room()`
-2. Server generates 6-character room code (e.g., "A3X9K2")
-3. Room added to available rooms list
-4. Host waits in lobby for players
+**Creation:** Host calls `create_room()` → Server generates 6-char code → Room added to list
 
-**Room Joining:**
-1. Client enters room code
-2. Client calls `MultiplayerManager.join_room(code)`
-3. Server validates code, adds client to room
-4. Client enters lobby, sees player list
+**Joining:** Client enters code → Server validates → Client joins lobby
 
-**Quick Play:**
-1. Client calls `MultiplayerManager.quick_play()`
-2. Server finds available room with <16 players
-3. If none found, create new room automatically
-4. Join found/created room
+**Quick Play:** Find available room (<16 players) or create new
 
 ### Lobby Flow
 
-```
-Lobby UI
-├─ Display room code (host only)
-├─ Show player list (names, ready status)
-├─ Ready button (all players)
-├─ Start button (host only, requires all ready)
-├─ Add Bot button (host only)
-└─ Leave button (all players)
-
-Ready System:
-- All players must click "Ready"
-- Host can only start when all players ready
-- Bots are automatically ready
-- Unready players prevent game start
-```
+1. Display room code (host only)
+2. Show player list with ready status
+3. All players click "Ready"
+4. Host clicks "Start" (requires all ready)
+5. Match begins
 
 ### Synchronization
 
-**Player Sync:**
-- Position, rotation (via MultiplayerSynchronizer)
-- Health, level, score (RPC calls)
-- Ability usage, death/respawn (RPC calls)
-- 20 Hz update rate (configurable)
+- **Position/rotation:** MultiplayerSynchronizer (20 Hz)
+- **Health/level/score:** RPC calls
+- **Ability usage:** RPC calls
+- **Match timer:** Host-authoritative
+- **Game state:** RPC to all clients
 
-**Game State Sync:**
-- Match timer (host-authoritative)
-- Kills/deaths (RPC to all clients)
-- Game state (countdown, active, ended)
-- Scoreboard updates
+### Bot AI Summary
 
-**See:** `MULTIPLAYER_README.md` for detailed networking documentation
-
----
-
-## AI System
-
-### Bot Behavior Summary
+**State Priority:**
+1. **COLLECT_ABILITY** (critical - can't fight without one)
+2. **ATTACK** (in optimal range with ability)
+3. **CHASE** (target nearby, has ability)
+4. **RETREAT** (health < 2, no ability)
+5. **COLLECT_ORB** (has ability, low priority)
+6. **WANDER** (default state)
 
 **Combat Effectiveness:**
-- Bots can compete with human players
-- Use abilities intelligently (charging, timing)
-- Avoid obstacles and map edges
-- Prioritize targets strategically
-
-**Limitations (By Design):**
+- Uses abilities intelligently (70% charge rate)
+- Avoids obstacles and edges
+- Varied aggression levels
 - Reaction delay (0.5-1.5s) for fairness
-- Occasional "mistakes" (70% charge rate, not 100%)
-- Varied aggression levels (some bots more passive)
-
-### State Transition Logic
-
-```
-Start: WANDER
-│
-├─ No ability? → COLLECT_ABILITY (critical priority)
-│
-├─ Has ability + player nearby → CHASE
-│  └─ In optimal range → ATTACK
-│     └─ Health < 2 → RETREAT
-│
-├─ Has ability + no players → COLLECT_ORB or WANDER
-│
-└─ RETREAT → Find health/safe area → WANDER
-```
-
-### Obstacle Avoidance System
-
-**Edge Detection:**
-```gdscript
-# Raycasts at feet to detect ledges
-var forward_ray = RayCast3D.new()
-forward_ray.target_position = Vector3.FORWARD * 2.0 + Vector3.DOWN * 3.0
-
-if not forward_ray.is_colliding():
-    # Ledge detected, turn away
-    turn_away_from_edge()
-```
-
-**Wall Detection:**
-```gdscript
-# Front raycasts to detect walls
-var wall_ray = RayCast3D.new()
-wall_ray.target_position = Vector3.FORWARD * 3.0
-
-if wall_ray.is_colliding():
-    # Wall detected, find alternate path
-    strafe_around_wall()
-```
-
-**Stuck Detection:**
-```gdscript
-# Track movement over time
-if velocity.length() < 1.0 and desired_velocity > 5.0:
-    stuck_time += delta
-    if stuck_time > 2.0:
-        # Stuck! Try jump or spin dash
-        attempt_unstuck_maneuver()
-```
-
-**See:** `scripts/bot_ai.gd:_check_obstacles()` (lines ~700-800)
 
 ---
 
 ## Quick Reference
 
-### File Locations Cheat Sheet
+### Key File Locations
 
-| What You Need | Where To Look |
-|---------------|---------------|
-| **Player movement** | `scripts/player.gd:_physics_process()` |
-| **Spin dash** | `scripts/player.gd:_spin_dash()` (~line 400) |
-| **Bounce attack** | `scripts/player.gd:bounce_attack()` (~line 500) |
-| **Rail grinding** | `scripts/grind_rail.gd`, `scripts/player.gd:_on_grind_rail_entered()` |
-| **Health/damage** | `scripts/player.gd:take_damage()`, `die()` |
-| **Level-up system** | `scripts/player.gd:_on_collectible_orb_collected()` (~line 800) |
-| **Ability system** | `scripts/abilities/ability_base.gd` (base class) |
-| **Bot AI** | `scripts/bot_ai.gd` (1,043 lines) |
-| **Multiplayer** | `scripts/multiplayer_manager.gd`, `MULTIPLAYER_README.md` |
-| **Match logic** | `scripts/world.gd` (1,646 lines) |
-| **Level generation (Type A)** | `scripts/level_generator.gd` |
-| **Level generation (Type B)** | `scripts/level_generator_q3.gd` |
-| **Arena type selection** | `scripts/world.gd:current_level_type`, `get_current_level_type()` |
-| **Jump pads** | `scripts/level_generator_q3.gd:generate_jump_pads()`, `scripts/player.gd:activate_jump_pad()` |
-| **Teleporters** | `scripts/level_generator_q3.gd:generate_teleporters()`, `scripts/player.gd:activate_teleporter()` |
-| **Main menu** | `scripts/ui/menu/rocket_menu.gd`, `rl_main_menu.tscn` |
-| **CrazyGames SDK** | `scripts/crazygames_sdk.gd` |
-| **Profile system** | `scripts/profile_manager.gd` |
-| **Music system** | `scripts/music_playlist.gd`, `MUSIC_PLAYLIST.md` |
-| **UI styling** | `STYLE_GUIDE.md` |
-| **Deployment** | `CRAZYGAMES_DEPLOYMENT.md` |
-
----
+| Need | Location |
+|------|----------|
+| Player movement | `player.gd:_physics_process()` |
+| Spin dash | `player.gd:_spin_dash()` (~400) |
+| Bounce attack | `player.gd:bounce_attack()` (~500) |
+| Rail grinding | `grind_rail.gd`, `player.gd:_on_grind_rail_entered()` |
+| Health/damage | `player.gd:take_damage()`, `die()` |
+| Level-up | `player.gd:_on_collectible_orb_collected()` (~800) |
+| Ability system | `abilities/ability_base.gd` |
+| Bot AI | `bot_ai.gd` |
+| Multiplayer | `multiplayer_manager.gd` |
+| Match logic | `world.gd` |
+| Type A arena | `level_generator.gd` |
+| Type B arena | `level_generator_q3.gd` |
+| Jump pads | `player.gd:activate_jump_pad()` (2083-2116) |
+| Teleporters | `player.gd:activate_teleporter()` (2118-2146) |
+| Main menu | `ui/menu/rocket_menu.gd` |
+| CrazyGames | `crazygames_sdk.gd` |
+| Profile | `profile_manager.gd` |
+| Music | `music_playlist.gd` |
 
 ### Common Tasks
 
-# ⚠️ BEFORE MAKING ANY CHANGES: VERIFY HTML5 COMPATIBILITY! ⚠️
-**Every task below must maintain HTML5/web browser compatibility!**
-**Test ALL changes in actual browsers before committing!**
+**Add New Ability:**
+1. Duplicate existing ability scene in `abilities/`
+2. Create script in `scripts/abilities/` extending `ability_base.gd`
+3. Implement `activate()` function
+4. Add to spawner pool in `ability_spawner.gd`
 
-# 🌐 HTML5 TESTING CHECKLIST:
-- [ ] Does it work in Chrome/Firefox/Safari?
-- [ ] Does it maintain 60 FPS in browsers?
-- [ ] Does it use WebSocket (not ENet) for multiplayer?
-- [ ] Does it avoid threading or unsupported APIs?
-- [ ] Is GL Compatibility renderer still enabled?
+**Modify Physics:**
+1. Open `player.gd`
+2. Edit physics variables at top (lines 20-50)
+3. Test in-game
 
-#### Add New Ability
-1. Create scene in `abilities/` (duplicate existing ability)
-2. Create script in `scripts/abilities/` (extend `ability_base.gd`)
-3. Implement `use(charge_level: int)` function
-4. Add to ability spawner pool in `scripts/ability_spawner.gd`
-5. **⚠️ HTML5: Test ability performance in browsers! Complex abilities can lag on web!**
+**Change Match Duration:**
+1. Open `world.gd`
+2. Edit `match_duration` variable (~50)
 
-#### Modify Movement Physics
-1. Open `scripts/player.gd`
-2. Find physics variables at top (lines 20-50)
-3. Adjust `speed`, `jump_force`, `spin_dash_force`, etc.
-4. Test in-game
-5. **⚠️ HTML5: Verify physics changes work smoothly in browsers at 60 FPS!**
+**Add Bot Behavior:**
+1. Open `bot_ai.gd`
+2. Add state to `AIState` enum
+3. Implement logic in `_physics_process()`
+4. Add transitions
 
-#### Change Match Duration
-1. Open `scripts/world.gd`
-2. Find `match_duration` variable (line ~50)
-3. Change value (currently 300.0 seconds = 5 minutes)
-4. **⚠️ HTML5: No special HTML5 concerns for this change - safe to modify!**
+**Customize Level Generation:**
+- **Type A:** Edit `level_generator.gd` (platforms, rails, ramps)
+- **Type B:** Edit `level_generator_q3.gd` (tiers, rooms, pads, teleporters)
 
-#### Add New Bot Behavior
-1. Open `scripts/bot_ai.gd`
-2. Add new state to `AIState` enum (line ~20)
-3. Implement state logic in `_physics_process()` (line ~100)
-4. Add transition conditions
-5. **⚠️ HTML5: Complex AI logic can impact browser FPS! Keep bot count at 8 max for web!**
+**Switch Default Arena:**
+1. Open `world.gd`
+2. Change `generate_procedural_level("A")` to `"B"` (line ~96)
 
-#### Customize Level Generation
-**Type A (Original):**
-1. Open `scripts/level_generator.gd`
-2. Modify platform count, sizes, heights
-3. Adjust grind rail positions/quantities
-4. Change procedural texturing
-5. **⚠️ HTML5: Too many platforms/meshes can hurt web performance! Test in browsers!**
+### Debug Tools
 
-**Type B (Quake 3 Arena):**
-1. Open `scripts/level_generator_q3.gd`
-2. Modify tier platform counts and heights (`generate_tier_platforms`)
-3. Adjust room count and sizes (`generate_side_rooms`)
-4. Change jump pad positions and boost force (`jump_pad_boost_force`)
-5. Modify teleporter pairs (`generate_teleporters`)
-6. **⚠️ HTML5: Complex room geometry can impact web performance! Test in browsers!**
-
-#### Switch Default Arena Type
-1. Open `scripts/world.gd`
-2. Find `generate_procedural_level("A")` (line ~96)
-3. Change to `generate_procedural_level("B")` for Type B default
-4. **⚠️ HTML5: Both arena types are HTML5-compatible!**
-
----
-
-### Debug Tips
-
-**Enable Debug Menu:**
-- Set `debug_enabled = true` in `world.gd`
+**Enable Debug:**
 - Press ` (backtick) to toggle debug overlay
 
-**Debug Tools:**
-- FPS counter (always visible)
+**Debug Features:**
+- God mode
+- Collision shape visibility
+- Speed multiplier
+- Bot spawning
+- FPS counter
 - Player position/velocity
-- Current game state
-- Player health/level
-- Ability charge level
-- Bot AI state (for each bot)
-
-**Console Commands:**
-- `F` - Force respawn (dev feature)
-- `Tab` - Show scoreboard
-- `` ` `` - Toggle debug menu
-
-**Performance Monitoring:**
-- Check `scripts/ui/fps_counter.gd` for FPS display
-- Monitor physics process time in profiler
-- Check network bandwidth in multiplayer
-
----
+- AI state display
 
 ### Architecture Decisions
 
-# ⚠️ HTML5 COMPATIBILITY INFLUENCED THESE DECISIONS ⚠️
-**Many architectural choices were made with HTML5/web performance in mind!**
+**Why Force-Based Movement?**
+- Sonic-inspired instant response
+- Better game feel than realistic rolling
+- Less CPU-intensive for browsers
 
-#### Why Force-Based Movement (Not Torque)?
-- **Reason:** Sonic-inspired games use direct movement, not realistic rolling
-- **Benefit:** Instant response, better game feel
-- **Trade-off:** Less realistic physics simulation
-- **🌐 HTML5 BENEFIT:** Force-based movement is less CPU-intensive for browsers!
+**Why Room Codes?**
+- Friends can easily play together
+- No matchmaking server needed
+- Quick Play button available for solo players
 
-#### Why Room Codes (Not Matchmaking Queue)?
-- **Reason:** Friends can easily join together
-- **Benefit:** Social play, no waiting in queue
-- **Trade-off:** Less "quick play" friendly (added Quick Play button to mitigate)
-- **🌐 HTML5 BENEFIT:** No server-side matchmaking needed - simpler for web deployment!
+**Why Procedural Generation?**
+- Variety and replayability
+- No asset creation needed
+- Happens once at match start (minimal web impact)
 
-#### Why Procedural Generation (Not Pre-Made Maps)?
-- **Reason:** Variety, replayability, no asset creation needed
-- **Benefit:** Every match feels different
-- **Trade-off:** Less hand-crafted design, potential balance issues
-- **🌐 HTML5 CONSIDERATION:** Procedural generation happens once at match start - minimal web performance impact!
+**Why Kirby-Style Abilities?**
+- Encourages map movement
+- Dynamic risk/reward gameplay
+- No complex loadout UI (faster loading)
 
-#### Why Kirby-Style Abilities (Not Loadouts)?
-- **Reason:** Encourages map movement and combat for pickups
-- **Benefit:** Dynamic gameplay, risk/reward for powerful abilities
-- **Trade-off:** Players can't choose their preferred ability
-- **🌐 HTML5 BENEFIT:** No complex loadout UI needed - faster loading in browsers!
-
-#### Why GL Compatibility Renderer (Not Forward+)?
-- **Reason:** HTML5 export REQUIRES GL Compatibility renderer
-- **Benefit:** Works in all web browsers via WebGL2
-- **Trade-off:** Slightly less advanced graphics features
-- **🌐 HTML5 REQUIREMENT:** This is NON-NEGOTIABLE for web deployment!
+**Why GL Compatibility?**
+- HTML5 export REQUIRES it
+- Works in all web browsers via WebGL2
+- Non-negotiable for web deployment
 
 ---
 
-## Conclusion
+## Documentation Files
 
-# ⚠️⚠️⚠️ FINAL HTML5 COMPATIBILITY REMINDER ⚠️⚠️⚠️
-
-**THIS IS A WEB-FIRST GAME FOR CRAZYGAMES!**
-
-**BEFORE ANY CODE CHANGE, ASK YOURSELF:**
-1. ✅ Will this work in Chrome, Firefox, and Safari browsers?
-2. ✅ Does this maintain 60 FPS in browsers?
-3. ✅ Am I using WebSocket for multiplayer (not ENet)?
-4. ✅ Am I avoiding threading or file I/O?
-5. ✅ Is GL Compatibility renderer still enabled?
-6. ✅ Have I tested this change in an actual browser?
-
-**HTML5 IS NOT OPTIONAL - IT IS THE PRIMARY PLATFORM!**
-**Desktop support is secondary. Web support is MANDATORY!**
+- **REPOSITORY_MAP.md** - This file (comprehensive overview)
+- **MULTIPLAYER_README.md** - Detailed networking guide
+- **MUSIC_PLAYLIST.md** - Music system documentation
+- **ROCKET_LEAGUE_MENU.md** - Menu system overview
+- **STYLE_GUIDE.md** - UI design standards
+- **CRAZYGAMES_DEPLOYMENT.md** - Deployment guide
+- **EXPORT_INSTRUCTIONS.md** - HTML5 export step-by-step
+- **RENDERER_COMPATIBILITY.md** - GL Compatibility migration details
 
 ---
 
-This repository contains a **feature-complete, polished multiplayer marble physics game** ready for browser deployment on CrazyGames. The codebase demonstrates:
+## Key Strengths
 
 ✅ **Advanced game systems** (physics, AI, networking, procedural generation)
 ✅ **Excellent code organization** (modular, well-documented)
 ✅ **Modern Godot 4 practices** (signals, autoloads, scenes)
-✅ **Production readiness** (CrazyGames integration, deployment guides)
-✅ **HTML5 COMPATIBILITY** (WebSocket networking, GL Compatibility, optimized for browsers)
-
-**Key Strengths:**
-- **Player movement** feels great (Sonic-inspired mechanics) - **HTML5-optimized**
-- **Bot AI** is sophisticated and challenging - **Limited to 8 bots on web for performance**
-- **Multiplayer** supports up to 16 players smoothly - **WebSocket-based for browsers**
-- **Menu system** is polished (Rocket League-style) - **Web-compatible UI**
-- **Level generation** provides variety - **Optimized for browser performance**
-
-**Potential Improvements (MUST MAINTAIN HTML5 COMPATIBILITY):**
-- Additional abilities (more variety) - **⚠️ Must test web performance**
-- More game modes (team deathmatch, capture the flag) - **⚠️ Verify WebSocket sync**
-- Map editor (let players create custom arenas) - **⚠️ Use JavaScriptBridge for file saving**
-- Cosmetic customization (marble skins, trails) - **⚠️ Test browser rendering performance**
+✅ **Production ready** (CrazyGames integration, deployment guides)
+✅ **HTML5 compatible** (WebSocket, GL Compatibility, optimized)
 
 ---
 
 **Last Updated:** 2026-01-18
-**Godot Version:** 4.5.1 (GL Compatibility - **HTML5 REQUIRED**)
+**Godot Version:** 4.5.1 (GL Compatibility)
 **Primary Platform:** HTML5/Web (CrazyGames)
-**Author:** Claude Code Repository Mapping Agent
 
 ---
 
-# ⚠️⚠️⚠️ NEVER FORGET: HTML5 COMPATIBILITY IS MANDATORY ⚠️⚠️⚠️
-
-**THIS DOCUMENT HAS BEEN ENHANCED WITH HTML5 COMPATIBILITY WARNINGS THROUGHOUT!**
-
-**KEY HTML5 REQUIREMENTS SUMMARY:**
-- ✅ GL Compatibility renderer (NEVER change to Forward+ or Mobile)
-- ✅ WebSocket networking for browsers (ENet is desktop-only)
-- ✅ No threading (not supported in HTML5)
-- ✅ No direct file I/O (use JavaScriptBridge or user:// paths)
-- ✅ Web-compatible audio formats (OGG, WAV, MP3)
-- ✅ WebGL2/GLES3-compatible shaders only
-- ✅ Performance optimization for 60 FPS in browsers
-- ✅ Bot count limited to 8 maximum on web builds
-- ✅ Always test changes in Chrome, Firefox, and Safari
-
-**IF YOU'RE UNSURE WHETHER SOMETHING IS HTML5-COMPATIBLE, ASK OR TEST IN BROWSERS FIRST!**
-
-**REMEMBER: Web support is the PRIMARY platform. Desktop is SECONDARY.**
-
-**HTML5 COMPATIBILITY = #1 PRIORITY FOR THIS PROJECT!**
+**Remember:** This is a web-first game. Always verify HTML5 compatibility before making changes!
