@@ -23,7 +23,8 @@ var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
 var local_player_name: String = "Player"
 
 # WebSocket settings (for production, point to your relay server)
-var use_websocket: bool = true
+# CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
+var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force WebSocket
 var relay_server_url: String = "ws://localhost:9080"  # Change to your server URL
 var relay_server_port: int = 9080
 
@@ -45,6 +46,10 @@ func create_game(player_name: String) -> String:
 
 	# Generate random room code
 	room_code = generate_room_code()
+
+	# CRITICAL HTML5 FIX: Force WebSocket on HTML5 (ENet not supported in browsers)
+	if OS.has_feature("web"):
+		use_websocket = true
 
 	# Create server
 	if use_websocket:
@@ -80,6 +85,10 @@ func join_game(player_name: String, join_room_code: String) -> bool:
 	local_player_name = player_name
 	room_code = join_room_code
 	network_mode = NetworkMode.CLIENT
+
+	# CRITICAL HTML5 FIX: Force WebSocket on HTML5 (ENet not supported in browsers)
+	if OS.has_feature("web"):
+		use_websocket = true
 
 	# For this simple implementation, we use direct connection
 	# In production, you'd query your relay server for the room's IP/port
