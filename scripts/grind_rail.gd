@@ -4,8 +4,10 @@ class_name GrindRail
 ## 100% NO AUTO-DETACH + VERY FAST SPEED BUILDUP + STRONG UPWARD LAUNCH
 ## Now attaches from a LARGE AREA BELOW the rail
 ## STUCK SAFEGUARD: Detects when player can't make progress and applies boosts or safe detachment
+## MANUAL ATTACHMENT: Players must press E while looking at the rail to attach
 
 @export var detection_radius: float = 18.0
+@export var manual_attachment_only: bool = true  # Require E key press to attach
 @export var rope_length: float = 3.2
 @export var max_allowed_stretch: float = 30.0
 @export var rope_stiffness: float = 160.0
@@ -34,6 +36,7 @@ class_name GrindRail
 
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
+var nearby_players: Array[RigidBody3D] = []  # Players near rail but not attached
 
 class GrinderData:
 	var closest_offset: float = 0.0
@@ -92,6 +95,7 @@ func _create_detection_areas() -> void:
 		area.add_child(shape)
 
 		area.body_entered.connect(_on_body_entered)
+		area.body_exited.connect(_on_body_exited)
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -114,7 +118,46 @@ func _on_body_entered(body: Node3D) -> void:
 	# Reasonable horizontal range
 	if Vector2(delta.x, delta.z).length() > 6.0: return
 
-	_attach(body, offset, closest_world)
+	# If manual attachment is enabled, just track nearby players instead of auto-attaching
+	if manual_attachment_only:
+		if not nearby_players.has(body):
+			nearby_players.append(body)
+			print("[", name, "] Player nearby - ready for manual attachment")
+	else:
+		_attach(body, offset, closest_world)
+
+
+func _on_body_exited(body: Node3D) -> void:
+	"""Called when a body exits the detection area"""
+	if body in nearby_players:
+		nearby_players.erase(body)
+		print("[", name, "] Player left detection area")
+
+
+func can_attach(grinder: RigidBody3D) -> bool:
+	"""Check if a grinder can attach to this rail"""
+	if active_grinders.has(grinder):
+		return false  # Already attached
+
+	if not nearby_players.has(grinder):
+		return false  # Not in range
+
+	return true
+
+
+func try_attach_player(grinder: RigidBody3D) -> bool:
+	"""Attempt to attach a player to the rail (called when player presses E)"""
+	if not can_attach(grinder):
+		return false
+
+	var pos: Vector3 = grinder.global_position
+	var local: Vector3 = to_local(pos)
+	var offset: float = curve.get_closest_offset(local)
+	var closest_world: Vector3 = to_global(curve.sample_baked(offset))
+
+	_attach(grinder, offset, closest_world)
+	nearby_players.erase(grinder)  # Remove from nearby list
+	return true
 
 
 func _attach(grinder: RigidBody3D, offset: float, closest_world: Vector3) -> void:

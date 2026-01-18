@@ -27,6 +27,7 @@ const SwordScene = preload("res://abilities/sword.tscn")
 var charge_meter_ui: Control = null
 var charge_meter_bar: ProgressBar = null
 var charge_meter_label: Label = null
+var rail_reticle_ui: Control = null  # Reticle for rail targeting
 
 ## Number of hits before respawn
 @export var health: int = 3
@@ -92,6 +93,8 @@ var bounce_scale_per_count: float = 1.3  # Multiplier per consecutive bounce (30
 var is_grinding: bool = false  # Currently grinding on a rail
 var current_rail: GrindRail = null  # The rail we're currently grinding on
 var grind_particles: CPUParticles3D = null  # Spark particles while grinding
+var targeted_rail: GrindRail = null  # The rail currently being looked at
+var rail_lock_raycast: RayCast3D = null  # Raycast for detecting rails
 
 # Spin dash properties
 var is_charging_spin: bool = false
@@ -530,6 +533,12 @@ func _ready() -> void:
 	# Create charge meter UI
 	create_charge_meter_ui()
 
+	# Create rail reticle UI
+	create_rail_reticle_ui()
+
+	# Create rail detection raycast
+	create_rail_raycast()
+
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
 	var spawn_index: int = player_id % spawns.size()
@@ -625,6 +634,9 @@ func _process(delta: float) -> void:
 
 	# Update charge meter UI (for abilities and spin dash)
 	update_charge_meter_ui()
+
+	# Update rail targeting
+	update_rail_targeting()
 
 # MARBLE ROLLING ANIMATION - Always update for all marbles (including bots)
 func _physics_process_marble_roll(delta: float) -> void:
@@ -737,8 +749,16 @@ func _unhandled_input(event: InputEvent) -> void:
 					print("Already bouncing")
 
 	# Use ability - E key or controller X button (with charging support)
+	# PRIORITY: If looking at a rail, attach to it instead
 	if Input.is_action_just_pressed("use_ability"):
-		# Start charging the ability
+		# Check if we're targeting a rail and can attach
+		if targeted_rail and not is_grinding:
+			if targeted_rail.has_method("try_attach_player"):
+				if targeted_rail.try_attach_player(self):
+					print("Attached to rail via E key!")
+					return  # Don't use ability
+
+		# Otherwise, start charging the ability
 		if current_ability and current_ability.has_method("start_charge"):
 			current_ability.start_charge()
 	elif Input.is_action_just_released("use_ability"):
@@ -1569,6 +1589,161 @@ func create_charge_meter_ui() -> void:
 	charge_meter_ui.add_child(charge_meter_bar)
 
 	print("Charge meter UI created")
+
+func create_rail_reticle_ui() -> void:
+	"""Create the rail targeting reticle UI"""
+	# Create container
+	rail_reticle_ui = Control.new()
+	rail_reticle_ui.name = "RailReticleUI"
+	rail_reticle_ui.set_anchors_preset(Control.PRESET_CENTER)
+	rail_reticle_ui.anchor_left = 0.5
+	rail_reticle_ui.anchor_right = 0.5
+	rail_reticle_ui.anchor_top = 0.5
+	rail_reticle_ui.anchor_bottom = 0.5
+	rail_reticle_ui.offset_left = -60
+	rail_reticle_ui.offset_right = 60
+	rail_reticle_ui.offset_top = -60
+	rail_reticle_ui.offset_bottom = 60
+	rail_reticle_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rail_reticle_ui.visible = false
+	add_child(rail_reticle_ui)
+
+	# Create reticle graphic using ColorRect for the ring
+	var reticle_size: int = 80
+	var reticle_thickness: int = 3
+
+	# Outer circle (using 4 arcs to form a circle)
+	for i in range(4):
+		var arc: ColorRect = ColorRect.new()
+		arc.name = "ReticleArc" + str(i)
+		arc.color = Color(0.2, 1.0, 0.4, 0.9)  # Bright green
+		arc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		# Position arcs to form a circle
+		var angle_offset: float = (PI / 2.0) * i
+		var arc_length: float = 25.0
+		arc.size = Vector2(arc_length, reticle_thickness)
+
+		# Rotate and position to form circle
+		match i:
+			0:  # Top arc
+				arc.position = Vector2(60 - arc_length/2, 35)
+			1:  # Right arc
+				arc.position = Vector2(85, 60 - arc_length/2)
+			2:  # Bottom arc
+				arc.position = Vector2(60 - arc_length/2, 85)
+			3:  # Left arc
+				arc.position = Vector2(35, 60 - arc_length/2)
+
+		rail_reticle_ui.add_child(arc)
+
+	# Create center dot
+	var center_dot: ColorRect = ColorRect.new()
+	center_dot.name = "CenterDot"
+	center_dot.color = Color(0.2, 1.0, 0.4, 0.9)
+	center_dot.size = Vector2(4, 4)
+	center_dot.position = Vector2(58, 58)
+	center_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rail_reticle_ui.add_child(center_dot)
+
+	# Create label
+	var label: Label = Label.new()
+	label.name = "AttachLabel"
+	label.text = "[E] ATTACH TO RAIL"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
+	label.add_theme_color_override("font_outline_color", Color.BLACK)
+	label.add_theme_constant_override("outline_size", 4)
+	label.position = Vector2(-40, 95)
+	label.size = Vector2(200, 30)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rail_reticle_ui.add_child(label)
+
+	print("Rail reticle UI created")
+
+func create_rail_raycast() -> void:
+	"""Create the raycast for detecting rails"""
+	if not camera:
+		return
+
+	rail_lock_raycast = RayCast3D.new()
+	rail_lock_raycast.name = "RailLockRaycast"
+	camera.add_child(rail_lock_raycast)
+
+	rail_lock_raycast.enabled = true
+	rail_lock_raycast.target_position = Vector3(0, 0, -50.0)  # Cast forward 50 units
+	rail_lock_raycast.collision_mask = 0  # We'll use custom detection
+	rail_lock_raycast.collide_with_areas = false
+	rail_lock_raycast.collide_with_bodies = false
+
+	print("Rail lock raycast created")
+
+func update_rail_targeting() -> void:
+	"""Update rail targeting system - check if player is looking at a rail"""
+	if not camera or not rail_reticle_ui:
+		return
+
+	# Don't show reticle while grinding
+	if is_grinding:
+		rail_reticle_ui.visible = false
+		targeted_rail = null
+		return
+
+	# Raycast from camera to detect rails
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var ray_origin: Vector3 = camera.global_position
+	var ray_direction: Vector3 = -camera.global_transform.basis.z
+	var ray_end: Vector3 = ray_origin + ray_direction * 50.0
+
+	# Check for rails in the scene
+	var found_rail: GrindRail = null
+	var closest_distance: float = INF
+
+	# Find all rails in range by checking children of parent (world node)
+	var world: Node = get_parent()
+	if world:
+		for child in world.get_children():
+			if child is GrindRail:
+				var rail: GrindRail = child as GrindRail
+
+				# Check if rail can accept attachment
+				if rail.has_method("can_attach") and rail.can_attach(self):
+					# Get closest point on rail path to camera ray
+					var rail_curve: Curve3D = rail.curve
+					if not rail_curve:
+						continue
+
+					# Sample points along the rail and find closest to ray
+					var sample_count: int = 20
+					for i in range(sample_count):
+						var t: float = float(i) / float(sample_count - 1)
+						var offset: float = t * rail_curve.get_baked_length()
+						var point_local: Vector3 = rail_curve.sample_baked(offset)
+						var point_world: Vector3 = rail.to_global(point_local)
+
+						# Calculate distance from camera ray to this point
+						var to_point: Vector3 = point_world - ray_origin
+						var projection: float = to_point.dot(ray_direction)
+
+						# Only consider points in front of camera
+						if projection > 0 and projection < 50.0:
+							var closest_on_ray: Vector3 = ray_origin + ray_direction * projection
+							var distance_to_ray: float = point_world.distance_to(closest_on_ray)
+
+							# Check if this is close enough to the ray (within targeting radius)
+							var targeting_radius: float = 3.0
+							if distance_to_ray < targeting_radius and projection < closest_distance:
+								found_rail = rail
+								closest_distance = projection
+
+	# Update targeted rail and reticle visibility
+	targeted_rail = found_rail
+
+	if targeted_rail:
+		rail_reticle_ui.visible = true
+	else:
+		rail_reticle_ui.visible = false
 
 func update_charge_meter_ui() -> void:
 	"""Update the charge meter display"""
