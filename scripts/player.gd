@@ -153,6 +153,9 @@ func _ready() -> void:
 	linear_damp = 0.5   # Moderate damp for better momentum and ramming
 	angular_damp = 0.3   # Low rolling resistance but some friction
 
+	# Apply enhanced graphics
+	_apply_enhanced_graphics()
+
 	# Physics material properties
 	physics_material_override = PhysicsMaterial.new()
 	physics_material_override.friction = 0.4  # Higher friction for better control
@@ -2017,3 +2020,22 @@ func jump_off_rail() -> void:
 	spawn_jump_bounce_effect(1.2)
 
 	print("Jumped off rail! Velocity: ", linear_velocity)
+
+# ============================================================================
+# ENHANCED GRAPHICS SYSTEM
+# ============================================================================
+
+func _apply_enhanced_graphics() -> void:
+	"""Apply enhanced graphics to the player marble - HTML5 compatible"""
+	# Generate a player color based on ID (unique color per player)
+	var player_id: int = name.to_int() if name.is_valid_int() else 1
+	var hue: float = fmod(player_id * 0.3, 1.0)
+	var player_color: Color = Color.from_hsv(hue, 0.7, 0.9)
+
+	# Apply marble shader and lighting
+	GraphicsEnhancer.enhance_marble(self, player_color)
+
+	# Add movement trail particles
+	GraphicsEnhancer.add_movement_trail(self, player_color.lightened(0.2))
+
+	print("Enhanced graphics applied to player: ", name)

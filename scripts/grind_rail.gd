@@ -365,3 +365,20 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float) -> void:
 
 	grinder.angular_velocity *= 0.15
 	data.closest_offset = closest_offset
+
+
+func _update_grind_sparks(grinder: RigidBody3D) -> void:
+	"""Update spark particles at the grinder's position on the rail (enhanced graphics)"""
+	if not grinder_data.has(grinder):
+		return
+
+	# Check if grinder already has spark particles
+	var existing_sparks = grinder.get_node_or_null("GrindSparks")
+	if not existing_sparks:
+		# Create new spark particles
+		var sparks = GraphicsEnhancer.create_spark_particles(grinder, Vector3(0, -0.5, 0))
+		sparks.name = "GrindSparks"
+		sparks.emitting = true
+	elif existing_sparks is GPUParticles3D:
+		# Make sure sparks are emitting
+		(existing_sparks as GPUParticles3D).emitting = true

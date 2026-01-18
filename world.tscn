@@ -20,27 +20,74 @@
 [ext_resource type="PackedScene" uid="uid://rl_main_menu" path="res://rl_main_menu.tscn" id="19_rlmenu"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
-energy_multiplier = 1.25
+energy_multiplier = 2.0
+rayleigh_coefficient = 3.0
+rayleigh_color = Color(0.3, 0.5, 0.9, 1)
+mie_coefficient = 0.02
+mie_eccentricity = 0.8
+mie_color = Color(0.6, 0.7, 1, 1)
+turbidity = 8.0
+sun_disk_scale = 2.0
+ground_color = Color(0.3, 0.25, 0.35, 1)
 
 [sub_resource type="Sky" id="Sky_78err"]
 sky_material = SubResource("PhysicalSkyMaterial_r06yd")
 
 [sub_resource type="Environment" id="Environment_v7lsv"]
 background_mode = 2
+background_energy_multiplier = 1.2
 sky = SubResource("Sky_78err")
+ambient_light_source = 3
+ambient_light_color = Color(0.4, 0.5, 0.7, 1)
+ambient_light_sky_contribution = 0.6
+ambient_light_energy = 0.8
+reflected_light_source = 2
 tonemap_mode = 2
-tonemap_white = 6.0
+tonemap_exposure = 1.1
+tonemap_white = 6.5
+ssr_enabled = false
 ssao_enabled = false
+ssil_enabled = false
+sdfgi_enabled = false
 glow_enabled = true
-glow_intensity = 0.2
-glow_strength = 0.4
+glow_levels/1 = 1.0
+glow_levels/2 = 1.0
+glow_levels/3 = 1.0
+glow_levels/4 = 0.8
+glow_levels/5 = 0.5
+glow_intensity = 1.2
+glow_strength = 1.0
+glow_mix = 0.8
+glow_bloom = 0.3
 glow_blend_mode = 0
-glow_hdr_threshold = 2.5
-glow_hdr_scale = 0.5
+glow_hdr_threshold = 1.5
+glow_hdr_scale = 1.0
+glow_hdr_luminance_cap = 12.0
+glow_map_strength = 0.8
 fog_enabled = true
-fog_sun_scatter = 0.17
-fog_density = 0.0099
-fog_aerial_perspective = 1.0
+fog_light_color = Color(0.5, 0.6, 0.9, 1)
+fog_light_energy = 0.8
+fog_sun_scatter = 0.25
+fog_density = 0.015
+fog_aerial_perspective = 0.8
+fog_sky_affect = 0.6
+fog_height = -10.0
+fog_height_density = 0.05
+volumetric_fog_enabled = true
+volumetric_fog_density = 0.02
+volumetric_fog_albedo = Color(0.5, 0.6, 0.8, 1)
+volumetric_fog_emission = Color(0.1, 0.15, 0.3, 1)
+volumetric_fog_emission_energy = 0.5
+volumetric_fog_gi_inject = 0.5
+volumetric_fog_anisotropy = 0.3
+volumetric_fog_length = 64.0
+volumetric_fog_detail_spread = 2.0
+volumetric_fog_ambient_inject = 0.3
+volumetric_fog_sky_affect = 0.6
+adjustment_enabled = true
+adjustment_brightness = 1.05
+adjustment_contrast = 1.1
+adjustment_saturation = 1.15
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
 
@@ -116,13 +163,22 @@ camera_attributes = SubResource("CameraAttributesPractical_wntx8")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.835807, -0.47011, 0.283589, -0.375944, 0.866496, 0.328406, -0.400115, 0.167871, -0.900959, 0, 4.88489, 0)
-light_color = Color(0.988235, 0.929412, 0.87451, 1)
-light_energy = 0.8
+light_color = Color(1, 0.95, 0.9, 1)
+light_energy = 1.2
+light_indirect_energy = 1.5
+light_volumetric_fog_energy = 1.0
 shadow_enabled = true
+shadow_opacity = 0.85
 shadow_bias = 0.05
-shadow_blur = 1.0
+shadow_normal_bias = 1.5
+shadow_blur = 1.5
 directional_shadow_mode = 1
-directional_shadow_max_distance = 100.0
+directional_shadow_split_1 = 0.1
+directional_shadow_split_2 = 0.3
+directional_shadow_split_3 = 0.6
+directional_shadow_blend_splits = true
+directional_shadow_max_distance = 150.0
+directional_shadow_pancake_size = 20.0
 
 [node name="FpsCounter" type="Label" parent="."]
 offset_right = 40.0

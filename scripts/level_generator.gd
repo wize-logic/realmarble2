@@ -1,12 +1,13 @@
 extends Node3D
 
 ## Procedural Level Generator
-## Creates Marble Blast Gold / Quake 3 style arenas
+## Creates Marble Blast Gold / Quake 3 style arenas with enhanced graphics
 
 @export var level_seed: int = 0
 @export var arena_size: float = 120.0
 @export var platform_count: int = 24
 @export var ramp_count: int = 12
+@export var enhanced_graphics: bool = true  # Enable enhanced shaders and lighting
 
 var noise: FastNoiseLite
 var platforms: Array = []
@@ -69,6 +70,10 @@ func generate_main_floor() -> void:
 	# Store for texture application
 	platforms.append(floor_instance)
 
+	# Apply enhanced graphics
+	if enhanced_graphics:
+		GraphicsEnhancer.enhance_platform(floor_instance, "main")
+
 	if OS.is_debug_build():
 		print("Generated main floor: ", floor_size, "x", floor_size)
 
@@ -111,6 +116,10 @@ func generate_platforms() -> void:
 
 		platforms.append(platform_instance)
 
+		# Apply enhanced graphics
+		if enhanced_graphics:
+			GraphicsEnhancer.enhance_platform(platform_instance, "platform")
+
 	if OS.is_debug_build():
 		print("Generated ", platform_count, " platforms")
 
@@ -145,6 +154,10 @@ func generate_ramps() -> void:
 		ramp_instance.add_child(static_body)
 
 		platforms.append(ramp_instance)
+
+		# Apply enhanced graphics
+		if enhanced_graphics:
+			GraphicsEnhancer.enhance_platform(ramp_instance, "ramp")
 
 	if OS.is_debug_build():
 		print("Generated ", ramp_count, " ramps")
@@ -185,6 +198,10 @@ func generate_walls() -> void:
 		wall_instance.add_child(static_body)
 
 		platforms.append(wall_instance)
+
+		# Apply enhanced graphics
+		if enhanced_graphics:
+			GraphicsEnhancer.enhance_platform(wall_instance, "wall")
 
 	print("Generated perimeter walls")
 
@@ -249,6 +266,11 @@ func generate_grind_rails() -> void:
 		# Create visual rail mesh (cylinder along the path)
 		create_rail_visual(rail)
 
+		# Apply enhanced graphics
+		if enhanced_graphics:
+			await get_tree().process_frame
+			GraphicsEnhancer.enhance_grind_rail(rail)
+
 	# Add some vertical connecting rails (like loops)
 	generate_vertical_rails()
 
@@ -311,6 +333,11 @@ func generate_vertical_rails() -> void:
 
 		add_child(rail)
 		create_rail_visual(rail)
+
+		# Apply enhanced graphics
+		if enhanced_graphics:
+			await get_tree().process_frame
+			GraphicsEnhancer.enhance_grind_rail(rail)
 
 	print("Generated ", vertical_rail_count, " vertical rails")
 
