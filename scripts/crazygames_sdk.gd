@@ -33,7 +33,11 @@ func _setup_javascript_bridge() -> void:
 	if not is_web:
 		return
 
+	# Safe JS code - ensure godotCallbacks exists before setting properties
 	var js_code = """
+		if (typeof window.godotCallbacks === 'undefined') {
+			window.godotCallbacks = {};
+		}
 		window.godotCallbacks.onCrazyGamesEvent = function(eventType, dataJson) {
 			// Send event to Godot
 			if (window.godotInstance) {

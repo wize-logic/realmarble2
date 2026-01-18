@@ -95,6 +95,8 @@ var current_rail: GrindRail = null  # The rail we're currently grinding on
 var grind_particles: CPUParticles3D = null  # Spark particles while grinding
 var targeted_rail: GrindRail = null  # The rail currently being looked at
 var rail_lock_raycast: RayCast3D = null  # Raycast for detecting rails
+var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
+var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 
 # Spin dash properties
 var is_charging_spin: bool = false
@@ -1807,53 +1809,55 @@ func update_rail_targeting() -> void:
 	var max_target_distance: float = 50.0  # Maximum distance to target rails
 
 	# Find all rails in the scene (recursively search)
-	var world: Node = get_tree().root.get_node_or_null("World")
-	if not world:
-		world = get_parent()
+	# Refresh rail cache every 2 seconds or if empty
+	rails_cache_timer += get_process_delta_time()
+	if cached_rails.is_empty() or rails_cache_timer >= 2.0:
+		var world: Node = get_tree().root.get_node_or_null("World")
+		if not world:
+			world = get_parent()
 
-	if world:
-		var all_rails: Array[GrindRail] = find_all_rails(world)
+		if world:
+			cached_rails = find_all_rails(world)
+			rails_cache_timer = 0.0
 
-		# Debug: Print rail count once per second
-		if Engine.get_physics_frames() % 60 == 0 and all_rails.size() > 0:
-			print("Rail targeting: Found %d rails in scene" % all_rails.size())
+	var all_rails: Array[GrindRail] = cached_rails
 
-		for rail in all_rails:
-			# Get closest point on rail path to camera ray
-			var rail_curve: Curve3D = rail.curve
-			if not rail_curve or rail_curve.get_baked_length() <= 0:
-				continue
+	for rail in all_rails:
+		# Get closest point on rail path to camera ray
+		var rail_curve: Curve3D = rail.curve
+		if not rail_curve or rail_curve.get_baked_length() <= 0:
+			continue
 
-			# Sample points along the rail and find closest to ray
-			var sample_count: int = 30  # Increased for better detection
-			for i in range(sample_count):
-				var t: float = float(i) / float(sample_count - 1)
-				var offset: float = t * rail_curve.get_baked_length()
-				var point_local: Vector3 = rail_curve.sample_baked(offset)
-				var point_world: Vector3 = rail.to_global(point_local)
+		# Sample points along the rail and find closest to ray
+		var sample_count: int = 30  # Increased for better detection
+		for i in range(sample_count):
+			var t: float = float(i) / float(sample_count - 1)
+			var offset: float = t * rail_curve.get_baked_length()
+			var point_local: Vector3 = rail_curve.sample_baked(offset)
+			var point_world: Vector3 = rail.to_global(point_local)
 
-				# Calculate distance from camera ray to this point
-				var to_point: Vector3 = point_world - ray_origin
-				var projection: float = to_point.dot(ray_direction)
+			# Calculate distance from camera ray to this point
+			var to_point: Vector3 = point_world - ray_origin
+			var projection: float = to_point.dot(ray_direction)
 
-				# Only consider points in front of camera and within range
-				if projection > 0 and projection < max_target_distance:
-					var closest_on_ray: Vector3 = ray_origin + ray_direction * projection
-					var distance_to_ray: float = point_world.distance_to(closest_on_ray)
+			# Only consider points in front of camera and within range
+			if projection > 0 and projection < max_target_distance:
+				var closest_on_ray: Vector3 = ray_origin + ray_direction * projection
+				var distance_to_ray: float = point_world.distance_to(closest_on_ray)
 
-					# Distance from player to the rail point
-					var distance_from_player: float = global_position.distance_to(point_world)
+				# Distance from player to the rail point
+				var distance_from_player: float = global_position.distance_to(point_world)
 
-					# Check if this is close enough to the ray (within targeting radius)
-					var targeting_radius: float = 5.0  # Increased for easier targeting
-					# Only allow targeting if rail is within reasonable distance (30 units)
-					if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 30.0:
-						# Check if we're actually in range to attach (nearby_players check)
-						if rail.has_method("can_attach"):
-							# For display purposes, we're more lenient
-							# We show the reticle even if slightly out of range
-							found_rail = rail
-							closest_distance = projection
+				# Check if this is close enough to the ray (within targeting radius)
+				var targeting_radius: float = 5.0  # Increased for easier targeting
+				# Only allow targeting if rail is within reasonable distance (30 units)
+				if distance_to_ray < targeting_radius and projection < closest_distance and distance_from_player < 30.0:
+					# Check if we're actually in range to attach (nearby_players check)
+					if rail.has_method("can_attach"):
+						# For display purposes, we're more lenient
+						# We show the reticle even if slightly out of range
+						found_rail = rail
+						closest_distance = projection
 
 	# Update targeted rail and reticle visibility
 	targeted_rail = found_rail

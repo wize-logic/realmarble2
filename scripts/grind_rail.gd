@@ -122,7 +122,7 @@ func _on_body_entered(body: Node3D) -> void:
 	if manual_attachment_only:
 		if not nearby_players.has(body):
 			nearby_players.append(body)
-			print("[", name, "] Player nearby - ready for manual attachment")
+			# Player nearby - ready for manual attachment (removed print to reduce spam)
 	else:
 		_attach(body, offset, closest_world)
 
@@ -131,7 +131,7 @@ func _on_body_exited(body: Node3D) -> void:
 	"""Called when a body exits the detection area"""
 	if body in nearby_players:
 		nearby_players.erase(body)
-		print("[", name, "] Player left detection area")
+		# Player left detection area (removed print to reduce spam)
 
 
 func can_attach(grinder: RigidBody3D) -> bool:

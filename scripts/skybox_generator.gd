@@ -20,7 +20,8 @@ func _process(delta: float) -> void:
 
 func generate_skybox() -> void:
 	"""Generate a psychedelic procedural skybox"""
-	print("Generating procedural skybox...")
+	if OS.is_debug_build():
+		print("Generating procedural skybox...")
 
 	# Get existing WorldEnvironment
 	var world_env: WorldEnvironment = get_node_or_null("/root/World/WorldEnvironment")

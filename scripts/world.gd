@@ -964,41 +964,36 @@ func _auto_load_music() -> void:
 
 func _load_music_from_directory(dir: String) -> int:
 	"""Load all music files from a directory and return count of songs loaded"""
-	print("Attempting to open directory: %s" % dir)
 	var dir_access: DirAccess = DirAccess.open(dir)
 	if not dir_access:
-		print("Failed to open directory: %s" % dir)
+		# Only print error if not HTML5 trying to access non-res:// path
+		if not (OS.has_feature("web") and not dir.begins_with("res://")):
+			print("Failed to open music directory: %s" % dir)
 		return 0
 
-	print("Successfully opened directory: %s" % dir)
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
-	var files_found: int = 0
 
 	while file_name != "":
 		if not dir_access.current_is_dir():
-			files_found += 1
 			var ext: String = file_name.get_extension().to_lower()
-			print("Found file: %s (extension: %s)" % [file_name, ext])
 
 			# Check if it's a supported audio format
 			if ext in ["mp3", "ogg", "wav"]:
 				var file_path: String = dir.path_join(file_name)
-				print("Attempting to load audio file: %s" % file_path)
 				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 				if audio_stream and gameplay_music.has_method("add_song"):
 					gameplay_music.add_song(audio_stream, file_path)
 					songs_loaded += 1
-					print("Successfully loaded: %s" % file_name)
-				else:
-					print("Failed to load or add: %s" % file_name)
 
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
-	print("Directory scan complete. Files found: %d, Songs loaded: %d" % [files_found, songs_loaded])
+
+	if songs_loaded > 0:
+		print("Loaded %d songs from %s" % [songs_loaded, dir])
 	return songs_loaded
 
 func _on_music_directory_button_pressed() -> void:
@@ -1684,7 +1679,8 @@ func play_countdown_beep() -> void:
 
 func generate_procedural_level() -> void:
 	"""Generate a procedural level with skybox"""
-	print("Generating procedural arena...")
+	if OS.is_debug_build():
+		print("Generating procedural arena...")
 
 	# Remove old level generator if it exists
 	if level_generator:
