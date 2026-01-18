@@ -40,7 +40,7 @@ func _ready() -> void:
 		glow_material.albedo_color = Color(0.3, 0.7, 1.0, 1.0)  # Cyan/blue color
 		glow_material.emission_enabled = true
 		glow_material.emission = Color(0.5, 0.8, 1.0)
-		glow_material.emission_energy_multiplier = 2.0
+		glow_material.emission_energy_multiplier = 0.8
 		glow_material.metallic = 0.3
 		glow_material.roughness = 0.2
 		mesh_instance.material_override = glow_material
@@ -56,7 +56,7 @@ func _ready() -> void:
 
 		# Configure light properties - bright cyan for orbs
 		aura_light.light_color = Color(0.5, 0.9, 1.0)  # Bright cyan
-		aura_light.light_energy = 2.5  # Brightest to make orbs very visible
+		aura_light.light_energy = 1.2  # Moderate brightness for visibility
 		aura_light.omni_range = 4.5  # Large radius for high visibility
 		aura_light.omni_attenuation = 1.5  # Moderate falloff
 
@@ -88,7 +88,7 @@ func _process(delta: float) -> void:
 
 		# Pulse emission for extra effect
 		if glow_material:
-			var pulse: float = 1.5 + sin(time * 3.0) * 0.5
+			var pulse: float = 0.6 + sin(time * 3.0) * 0.3
 			glow_material.emission_energy_multiplier = pulse
 
 func _on_body_entered(body: Node3D) -> void:

@@ -330,7 +330,7 @@ func create_rail_visual(rail: Path3D) -> void:
 	material.roughness = 0.2
 	material.emission_enabled = true
 	material.emission = Color(0.3, 0.5, 1.0)  # Slight blue glow
-	material.emission_energy_multiplier = 0.3
+	material.emission_energy_multiplier = 0.1
 
 	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
 

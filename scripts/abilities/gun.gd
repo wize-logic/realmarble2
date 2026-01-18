@@ -178,7 +178,7 @@ func create_projectile() -> Node3D:
 	mat.albedo_color = Color.CYAN
 	mat.emission_enabled = true
 	mat.emission = Color.CYAN
-	mat.emission_energy_multiplier = 2.0
+	mat.emission_energy_multiplier = 1.0
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
 
