@@ -1,9 +1,22 @@
 # Repository Map: Marble Physics Deathmatch (Godot 4.5.1)
 
-**Version:** Godot 4.5.1 (GL Compatibility Renderer)
+# ⚠️ CRITICAL: HTML5 COMPATIBILITY MUST BE MAINTAINED AT ALL TIMES ⚠️
+**BEFORE MAKING ANY CODE CHANGES, ALWAYS VERIFY HTML5/WEB COMPATIBILITY!**
+**This game MUST run in browsers. HTML5 compatibility is the #1 priority!**
+
+**Version:** Godot 4.5.1 (GL Compatibility Renderer - **REQUIRED FOR HTML5**)
 **Genre:** Physics-based Multiplayer Deathmatch
 **Inspiration:** Sonic Adventure 2 movement + Kirby ability system
-**Platform:** Web (CrazyGames), Desktop
+**Platform:** Web (CrazyGames) - **PRIMARY PLATFORM**, Desktop - **SECONDARY**
+
+# ⚠️ HTML5 COMPATIBILITY REQUIREMENTS ⚠️
+- **Renderer:** MUST use GL Compatibility (NEVER Forward+ or Mobile)
+- **Threading:** NO threading (not supported in HTML5)
+- **File access:** NO direct file I/O (use JavaScript bridge)
+- **Networking:** WebSocket ONLY for HTML5 (ENet desktop only)
+- **Audio:** Use Web-compatible formats (OGG, WAV, MP3)
+- **Shaders:** GLES3/WebGL2 compatible only
+- **Performance:** Optimize for 60 FPS on web browsers
 
 ---
 
@@ -24,9 +37,14 @@
 
 ## Project Overview
 
+### ⚠️ HTML5 FIRST: This is a Web-Based Game ⚠️
+**Every feature, system, and change MUST be HTML5-compatible. Test in browsers frequently!**
+
 ### What is This Game?
 
 A **Sonic-inspired physics-based multiplayer deathmatch game** where players control marbles with advanced movement mechanics (spin dash, bounce attack, rail grinding) and Kirby-style pickup abilities in procedurally generated arenas.
+
+**HTML5 DEPLOYMENT:** This game is built for CrazyGames (browser-based platform). All development must prioritize web compatibility.
 
 ### Key Features
 
@@ -42,11 +60,22 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 
 ### Technology Stack
 
-- **Engine:** Godot 4.5.1 (GL Compatibility)
-- **Language:** GDScript
-- **Networking:** WebSocket (browser), ENet (desktop)
-- **Physics:** RigidBody3D with force-based movement
-- **Rendering:** GL Compatibility (for web compatibility)
+# ⚠️ HTML5 COMPATIBILITY CRITICAL ⚠️
+
+- **Engine:** Godot 4.5.1 (GL Compatibility) **← HTML5 REQUIREMENT: DO NOT CHANGE!**
+- **Language:** GDScript **← Web-safe language**
+- **Networking:** WebSocket (browser - **PRIMARY**), ENet (desktop only - **SECONDARY**)
+- **Physics:** RigidBody3D with force-based movement **← HTML5-compatible physics**
+- **Rendering:** GL Compatibility **← REQUIRED FOR HTML5 - NEVER use Forward+ or Mobile renderer!**
+
+**HTML5 CONSTRAINTS YOU MUST FOLLOW:**
+1. ❌ NO threading (Thread class not supported)
+2. ❌ NO direct file I/O (use JavaScriptBridge or user:// only)
+3. ❌ NO ENet for web builds (WebSocket only)
+4. ✅ MUST use GL Compatibility renderer
+5. ✅ MUST test audio formats (prefer OGG/WAV)
+6. ✅ MUST keep bot count reasonable (max 8 bots on web)
+7. ✅ MUST optimize for 60 FPS in browsers
 
 ---
 
@@ -142,10 +171,16 @@ A **Sonic-inspired physics-based multiplayer deathmatch game** where players con
 
 ## Core Game Systems
 
+# ⚠️ HTML5 COMPATIBILITY REMINDER ⚠️
+**All core systems listed below MUST remain HTML5-compatible!**
+**Before modifying ANY system, verify it will work in web browsers!**
+
 ### 1. Physics System
 
 **Location:** `scripts/player.gd` (movement), RigidBody3D configuration
 **Implementation:** Force-based marble physics
+
+**🌐 HTML5 COMPATIBILITY:** This physics system uses RigidBody3D which is HTML5-compatible. Do NOT add threading or complex physics that may degrade web performance!
 
 **Physics Properties:**
 ```gdscript
@@ -306,12 +341,21 @@ Bounce: 0.6        # Bouncy marbles
 **Location:** `scripts/multiplayer_manager.gd`
 **Lines:** Full networking implementation
 
+# ⚠️ CRITICAL HTML5 NETWORKING REQUIREMENT ⚠️
+**HTML5 builds MUST use WebSocket ONLY! ENet is NOT supported in browsers!**
+**Always check `OS.has_feature("web")` before choosing networking mode!**
+
 #### Network Modes
 
-| Mode | Protocol | Use Case |
-|------|----------|----------|
-| **WebSocket** | WSS | Browser play (CrazyGames) |
-| **ENet** | UDP | Desktop/local testing |
+| Mode | Protocol | Use Case | HTML5 Support |
+|------|----------|----------|---------------|
+| **WebSocket** | WSS | Browser play (CrazyGames) | ✅ **REQUIRED FOR HTML5** |
+| **ENet** | UDP | Desktop/local testing | ❌ **HTML5 INCOMPATIBLE** |
+
+**HTML5 NETWORKING RULES:**
+- ALWAYS use WebSocket for web builds
+- NEVER use ENet in HTML5 exports
+- Test multiplayer in actual browsers, not just editor
 
 #### Features
 - **Room codes:** 6-character codes for matchmaking
@@ -340,6 +384,10 @@ Example: "A3X9K2"
 
 **Location:** `scripts/bot_ai.gd`
 **Lines:** 1,043 lines of advanced AI
+
+# ⚠️ HTML5 PERFORMANCE WARNING ⚠️
+**Bot AI must be optimized for web performance! Limit bot count to 8 max on HTML5!**
+**Complex AI calculations can impact browser FPS - always test in browsers!**
 
 #### State Machine
 
@@ -399,6 +447,8 @@ WANDER ──→ CHASE ──→ ATTACK
 ### 8. Level Generation System
 
 **Location:** `scripts/level_generator.gd`
+
+**🌐 HTML5 COMPATIBILITY:** Procedural generation is HTML5-compatible but watch performance! Complex geometry can impact browser FPS. Test frequently!
 
 #### Generated Elements
 
@@ -462,6 +512,10 @@ WANDER ──→ CHASE ──→ ATTACK
 ### 10. CrazyGames Integration
 
 **Location:** `scripts/crazygames_sdk.gd`
+
+# ⚠️ HTML5 JAVASCRIPT BRIDGE REQUIRED ⚠️
+**CrazyGames SDK requires JavaScriptBridge which is HTML5-only!**
+**Always check for `JavaScriptBridge` singleton before making SDK calls!**
 
 #### SDK Features
 - **JavaScript Bridge:** Connects to CrazyGames SDK v3
@@ -557,6 +611,10 @@ Sword (Node3D) ──────────────────┐
 ---
 
 ## Script Reference
+
+# ⚠️ HTML5 COMPATIBILITY CHECK BEFORE MODIFYING SCRIPTS ⚠️
+**Every script modification must consider HTML5 limitations!**
+**Test changes in browsers, not just the Godot editor!**
 
 ### Core Scripts
 
@@ -704,6 +762,10 @@ func _attack_target():
 
 #### `scripts/multiplayer_manager.gd` (Networking Manager)
 **Purpose:** WebSocket/ENet networking, room management
+
+# ⚠️ CRITICAL: HTML5 USES WEBSOCKET ONLY ⚠️
+**This script MUST detect HTML5 and use WebSocket, NOT ENet!**
+**Check `OS.has_feature("web")` to determine networking mode!**
 
 **Key Variables:**
 ```gdscript
@@ -1050,9 +1112,15 @@ up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier
 
 ## Asset Catalog
 
+# ⚠️ HTML5 AUDIO FORMAT COMPATIBILITY ⚠️
+**Use OGG, WAV, or MP3 formats only! These are web-compatible!**
+**Avoid exotic formats that browsers may not support!**
+
 ### Audio Files
 
 #### Sound Effects (`audio/`)
+
+**🌐 HTML5 AUDIO:** All sound effects must be in OGG, WAV, or MP3 format for browser compatibility!
 
 | File | Usage | Format |
 |------|-------|--------|
@@ -1096,8 +1164,14 @@ up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier
 
 ### Shaders
 
+# ⚠️ HTML5 SHADER COMPATIBILITY WARNING ⚠️
+**Shaders MUST be WebGL2/GLES3 compatible for HTML5!**
+**Complex shaders can degrade web performance - keep them simple!**
+
 #### `scripts/shaders/plasma_glow.gdshader`
 **Purpose:** Animated plasma glow effect for logo
+
+**🌐 HTML5 COMPATIBILITY:** This shader is WebGL2-compatible. Do NOT use advanced features that require newer OpenGL versions!
 
 **Features:**
 - Animated color cycling
@@ -1281,34 +1355,50 @@ if velocity.length() < 1.0 and desired_velocity > 5.0:
 
 ### Common Tasks
 
+# ⚠️ BEFORE MAKING ANY CHANGES: VERIFY HTML5 COMPATIBILITY! ⚠️
+**Every task below must maintain HTML5/web browser compatibility!**
+**Test ALL changes in actual browsers before committing!**
+
+# 🌐 HTML5 TESTING CHECKLIST:
+- [ ] Does it work in Chrome/Firefox/Safari?
+- [ ] Does it maintain 60 FPS in browsers?
+- [ ] Does it use WebSocket (not ENet) for multiplayer?
+- [ ] Does it avoid threading or unsupported APIs?
+- [ ] Is GL Compatibility renderer still enabled?
+
 #### Add New Ability
 1. Create scene in `abilities/` (duplicate existing ability)
 2. Create script in `scripts/abilities/` (extend `ability_base.gd`)
 3. Implement `use(charge_level: int)` function
 4. Add to ability spawner pool in `scripts/ability_spawner.gd`
+5. **⚠️ HTML5: Test ability performance in browsers! Complex abilities can lag on web!**
 
 #### Modify Movement Physics
 1. Open `scripts/player.gd`
 2. Find physics variables at top (lines 20-50)
 3. Adjust `speed`, `jump_force`, `spin_dash_force`, etc.
 4. Test in-game
+5. **⚠️ HTML5: Verify physics changes work smoothly in browsers at 60 FPS!**
 
 #### Change Match Duration
 1. Open `scripts/world.gd`
 2. Find `match_duration` variable (line ~50)
 3. Change value (currently 300.0 seconds = 5 minutes)
+4. **⚠️ HTML5: No special HTML5 concerns for this change - safe to modify!**
 
 #### Add New Bot Behavior
 1. Open `scripts/bot_ai.gd`
 2. Add new state to `AIState` enum (line ~20)
 3. Implement state logic in `_physics_process()` (line ~100)
 4. Add transition conditions
+5. **⚠️ HTML5: Complex AI logic can impact browser FPS! Keep bot count at 8 max for web!**
 
 #### Customize Level Generation
 1. Open `scripts/level_generator.gd`
 2. Modify platform count, sizes, heights
 3. Adjust grind rail positions/quantities
 4. Change procedural texturing
+5. **⚠️ HTML5: Too many platforms/meshes can hurt web performance! Test in browsers!**
 
 ---
 
@@ -1340,29 +1430,59 @@ if velocity.length() < 1.0 and desired_velocity > 5.0:
 
 ### Architecture Decisions
 
+# ⚠️ HTML5 COMPATIBILITY INFLUENCED THESE DECISIONS ⚠️
+**Many architectural choices were made with HTML5/web performance in mind!**
+
 #### Why Force-Based Movement (Not Torque)?
 - **Reason:** Sonic-inspired games use direct movement, not realistic rolling
 - **Benefit:** Instant response, better game feel
 - **Trade-off:** Less realistic physics simulation
+- **🌐 HTML5 BENEFIT:** Force-based movement is less CPU-intensive for browsers!
 
 #### Why Room Codes (Not Matchmaking Queue)?
 - **Reason:** Friends can easily join together
 - **Benefit:** Social play, no waiting in queue
 - **Trade-off:** Less "quick play" friendly (added Quick Play button to mitigate)
+- **🌐 HTML5 BENEFIT:** No server-side matchmaking needed - simpler for web deployment!
 
 #### Why Procedural Generation (Not Pre-Made Maps)?
 - **Reason:** Variety, replayability, no asset creation needed
 - **Benefit:** Every match feels different
 - **Trade-off:** Less hand-crafted design, potential balance issues
+- **🌐 HTML5 CONSIDERATION:** Procedural generation happens once at match start - minimal web performance impact!
 
 #### Why Kirby-Style Abilities (Not Loadouts)?
 - **Reason:** Encourages map movement and combat for pickups
 - **Benefit:** Dynamic gameplay, risk/reward for powerful abilities
 - **Trade-off:** Players can't choose their preferred ability
+- **🌐 HTML5 BENEFIT:** No complex loadout UI needed - faster loading in browsers!
+
+#### Why GL Compatibility Renderer (Not Forward+)?
+- **Reason:** HTML5 export REQUIRES GL Compatibility renderer
+- **Benefit:** Works in all web browsers via WebGL2
+- **Trade-off:** Slightly less advanced graphics features
+- **🌐 HTML5 REQUIREMENT:** This is NON-NEGOTIABLE for web deployment!
 
 ---
 
 ## Conclusion
+
+# ⚠️⚠️⚠️ FINAL HTML5 COMPATIBILITY REMINDER ⚠️⚠️⚠️
+
+**THIS IS A WEB-FIRST GAME FOR CRAZYGAMES!**
+
+**BEFORE ANY CODE CHANGE, ASK YOURSELF:**
+1. ✅ Will this work in Chrome, Firefox, and Safari browsers?
+2. ✅ Does this maintain 60 FPS in browsers?
+3. ✅ Am I using WebSocket for multiplayer (not ENet)?
+4. ✅ Am I avoiding threading or file I/O?
+5. ✅ Is GL Compatibility renderer still enabled?
+6. ✅ Have I tested this change in an actual browser?
+
+**HTML5 IS NOT OPTIONAL - IT IS THE PRIMARY PLATFORM!**
+**Desktop support is secondary. Web support is MANDATORY!**
+
+---
 
 This repository contains a **feature-complete, polished multiplayer marble physics game** ready for browser deployment on CrazyGames. The codebase demonstrates:
 
@@ -1370,22 +1490,47 @@ This repository contains a **feature-complete, polished multiplayer marble physi
 ✅ **Excellent code organization** (modular, well-documented)
 ✅ **Modern Godot 4 practices** (signals, autoloads, scenes)
 ✅ **Production readiness** (CrazyGames integration, deployment guides)
+✅ **HTML5 COMPATIBILITY** (WebSocket networking, GL Compatibility, optimized for browsers)
 
 **Key Strengths:**
-- **Player movement** feels great (Sonic-inspired mechanics)
-- **Bot AI** is sophisticated and challenging
-- **Multiplayer** supports up to 16 players smoothly
-- **Menu system** is polished (Rocket League-style)
-- **Level generation** provides variety
+- **Player movement** feels great (Sonic-inspired mechanics) - **HTML5-optimized**
+- **Bot AI** is sophisticated and challenging - **Limited to 8 bots on web for performance**
+- **Multiplayer** supports up to 16 players smoothly - **WebSocket-based for browsers**
+- **Menu system** is polished (Rocket League-style) - **Web-compatible UI**
+- **Level generation** provides variety - **Optimized for browser performance**
 
-**Potential Improvements:**
-- Additional abilities (more variety)
-- More game modes (team deathmatch, capture the flag)
-- Map editor (let players create custom arenas)
-- Cosmetic customization (marble skins, trails)
+**Potential Improvements (MUST MAINTAIN HTML5 COMPATIBILITY):**
+- Additional abilities (more variety) - **⚠️ Must test web performance**
+- More game modes (team deathmatch, capture the flag) - **⚠️ Verify WebSocket sync**
+- Map editor (let players create custom arenas) - **⚠️ Use JavaScriptBridge for file saving**
+- Cosmetic customization (marble skins, trails) - **⚠️ Test browser rendering performance**
 
 ---
 
 **Last Updated:** 2026-01-18
-**Godot Version:** 4.5.1
+**Godot Version:** 4.5.1 (GL Compatibility - **HTML5 REQUIRED**)
+**Primary Platform:** HTML5/Web (CrazyGames)
 **Author:** Claude Code Repository Mapping Agent
+
+---
+
+# ⚠️⚠️⚠️ NEVER FORGET: HTML5 COMPATIBILITY IS MANDATORY ⚠️⚠️⚠️
+
+**THIS DOCUMENT HAS BEEN ENHANCED WITH HTML5 COMPATIBILITY WARNINGS THROUGHOUT!**
+
+**KEY HTML5 REQUIREMENTS SUMMARY:**
+- ✅ GL Compatibility renderer (NEVER change to Forward+ or Mobile)
+- ✅ WebSocket networking for browsers (ENet is desktop-only)
+- ✅ No threading (not supported in HTML5)
+- ✅ No direct file I/O (use JavaScriptBridge or user:// paths)
+- ✅ Web-compatible audio formats (OGG, WAV, MP3)
+- ✅ WebGL2/GLES3-compatible shaders only
+- ✅ Performance optimization for 60 FPS in browsers
+- ✅ Bot count limited to 8 maximum on web builds
+- ✅ Always test changes in Chrome, Firefox, and Safari
+
+**IF YOU'RE UNSURE WHETHER SOMETHING IS HTML5-COMPATIBLE, ASK OR TEST IN BROWSERS FIRST!**
+
+**REMEMBER: Web support is the PRIMARY platform. Desktop is SECONDARY.**
+
+**HTML5 COMPATIBILITY = #1 PRIORITY FOR THIS PROJECT!**
