@@ -6,7 +6,7 @@ extends Node3D
 const AbilityPickupScene = preload("res://ability_pickup.tscn")
 const DashAttackScene = preload("res://abilities/dash_attack.tscn")
 const ExplosionScene = preload("res://abilities/explosion.tscn")
-const GunScene = preload("res://abilities/gun.tscn")
+const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
 
 # Map volume bounds for random spawning
@@ -16,7 +16,7 @@ const SwordScene = preload("res://abilities/sword.tscn")
 # Number of each ability type to spawn (reduced by half)
 @export var num_dash_attacks: int = 2
 @export var num_explosions: int = 2
-@export var num_guns: int = 4
+@export var num_cannons: int = 4
 @export var num_swords: int = 2
 
 # Respawn settings
@@ -64,10 +64,10 @@ func spawn_abilities() -> void:
 	var total_abilities: int = clamp(int(player_count * 2.5), 8, 25)  # Min 8, Max 25 abilities
 
 	# Distribute abilities across types (proportional to original ratios)
-	# Original ratio: Dash=2, Explosion=2, Gun=4, Sword=2 (total=10)
+	# Original ratio: Dash=2, Explosion=2, Cannon=4, Sword=2 (total=10)
 	var scaled_dash: int = max(1, int(total_abilities * 0.2))      # 20%
 	var scaled_explosion: int = max(1, int(total_abilities * 0.2))  # 20%
-	var scaled_gun: int = max(2, int(total_abilities * 0.4))        # 40%
+	var scaled_cannon: int = max(2, int(total_abilities * 0.4))     # 40%
 	var scaled_sword: int = max(1, int(total_abilities * 0.2))      # 20%
 
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
@@ -86,11 +86,11 @@ func spawn_abilities() -> void:
 		print("Explosion %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
 
-	# Spawn guns
-	for i in range(scaled_gun):
+	# Spawn cannons
+	for i in range(scaled_cannon):
 		var pos: Vector3 = get_random_spawn_position()
-		print("Gun %d spawning at: %s" % [i+1, pos])
-		spawn_ability_at(pos, GunScene, "Gun", Color.CYAN)
+		print("Cannon %d spawning at: %s" % [i+1, pos])
+		spawn_ability_at(pos, CannonScene, "Cannon", Color.ORANGE_RED)
 
 	# Spawn swords
 	for i in range(scaled_sword):
@@ -166,7 +166,7 @@ func spawn_random_ability(pos: Vector3) -> void:
 	var ability_types: Array = [
 		[DashAttackScene, "Dash Attack", Color.ORANGE_RED],
 		[ExplosionScene, "Explosion", Color.ORANGE],
-		[GunScene, "Gun", Color.CYAN],
+		[CannonScene, "Cannon", Color.ORANGE_RED],
 		[SwordScene, "Sword", Color.STEEL_BLUE]
 	]
 

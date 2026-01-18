@@ -1,27 +1,27 @@
 extends Ability
 
-## Gun Ability
-## Shoots projectiles that damage enemies
-## Like a ranged attack!
+## Cannon Ability
+## Shoots powerful explosive projectiles that deal heavy damage
+## Slower fire rate but much more impactful than a gun!
 
-@export var projectile_damage: int = 1
-@export var projectile_speed: float = 40.0
-@export var projectile_lifetime: float = 3.0
-@export var fire_rate: float = 0.5  # Cooldown between shots (increased to prevent spam)
-@export var min_charge_time: float = 0.3  # Minimum charge time before release
-@export var max_active_projectiles: int = 5  # Max active projectiles per player to prevent spam
-@onready var ability_sound: AudioStreamPlayer3D = $GunSound
+@export var projectile_damage: int = 3  # Increased from gun's 1
+@export var projectile_speed: float = 25.0  # Slower than gun's 40.0 for arc trajectory
+@export var projectile_lifetime: float = 4.0  # Slightly longer than gun's 3.0
+@export var fire_rate: float = 1.0  # Slower cooldown (gun was 0.5)
+@export var min_charge_time: float = 0.4  # Slightly longer minimum charge
+@export var max_active_projectiles: int = 3  # Fewer than gun's 5 (more powerful shots)
+@onready var ability_sound: AudioStreamPlayer3D = $CannonSound
 
 # Track active projectiles for this player
 var active_projectiles: Array[Node3D] = []
 
 func _ready() -> void:
 	super._ready()
-	ability_name = "Gun"
-	ability_color = Color.CYAN
+	ability_name = "Cannon"
+	ability_color = Color.ORANGE_RED  # Changed from gun's cyan
 	cooldown_time = fire_rate
-	supports_charging = true  # Gun supports charging for more powerful shots
-	max_charge_time = 2.0  # 2 seconds for max charge
+	supports_charging = true  # Cannon supports charging for devastating shots
+	max_charge_time = 2.5  # Longer max charge than gun (2.0)
 
 func activate() -> void:
 	if not player:
@@ -32,7 +32,7 @@ func activate() -> void:
 	var charged_damage: int = int(projectile_damage * charge_multiplier)
 	var charged_speed: float = projectile_speed * charge_multiplier
 
-	print("BANG! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
+	print("BOOM! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
 	# Get firing direction from camera (always shoot where camera is looking)
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -50,11 +50,11 @@ func activate() -> void:
 		# This is CRITICAL for bots to aim properly
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
-	# Calculate gun barrel position (offset in front of player in camera direction)
-	var barrel_offset: float = 1.0  # Distance in front of player
+	# Calculate cannon barrel position (offset further in front for larger weapon)
+	var barrel_offset: float = 1.5  # Increased from gun's 1.0
 	var barrel_position: Vector3 = player.global_position + Vector3.UP * 0.5 + fire_direction * barrel_offset
 
-	# Raycast from gun barrel in camera direction for better targeting feedback
+	# Raycast from cannon barrel in camera direction for targeting feedback
 	var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
 		barrel_position,
@@ -74,7 +74,7 @@ func activate() -> void:
 			oldest_projectile.queue_free()
 		active_projectiles.remove_at(0)
 		if OS.is_debug_build():
-			print("Gun: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
+			print("Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
 
 	# Spawn projectile
 	var projectile: Node3D = create_projectile()
@@ -85,7 +85,7 @@ func activate() -> void:
 		# Track this projectile
 		active_projectiles.append(projectile)
 
-		# Position at gun barrel (after adding to tree)
+		# Position at cannon barrel (after adding to tree)
 		projectile.global_position = barrel_position
 
 		# Set velocity - inherit player velocity + projectile velocity in fire direction
@@ -112,7 +112,7 @@ func activate() -> void:
 	# Spawn muzzle flash particles at barrel position
 	spawn_muzzle_flash(barrel_position, fire_direction)
 
-	# Play gun sound
+	# Play cannon sound
 	if ability_sound:
 		ability_sound.global_position = barrel_position
 		ability_sound.play()
@@ -121,7 +121,7 @@ func activate() -> void:
 func release_charge() -> void:
 	# Enforce minimum charge time to prevent spam
 	if charge_time < min_charge_time:
-		print("Gun: Too fast! Need at least %.1fs charge (currently %.1fs)" % [min_charge_time, charge_time])
+		print("Cannon: Too fast! Need at least %.1fs charge (currently %.1fs)" % [min_charge_time, charge_time])
 		# Cancel the charge instead of releasing
 		cancel_charge()
 		return
@@ -144,12 +144,15 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	var projectile_velocity: Vector3 = projectile.linear_velocity
 
 	# Get projectile metadata
-	var damage: int = projectile.get_meta("damage", 1)
+	var damage: int = projectile.get_meta("damage", 3)
 	var owner_id: int = projectile.get_meta("owner_id", -1)
 
 	# Don't hit the owner
 	if body.name == str(owner_id):
 		return
+
+	# Spawn explosion effect at impact point (before damaging)
+	spawn_explosion_effect(projectile_position)
 
 	# Check if it's a player
 	if body.has_method('receive_damage_from'):
@@ -158,34 +161,34 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, owner_id)
-			print('Projectile hit player (local): ', body.name, ' | Damage: ', damage)
+			print('Cannonball hit player (local): ', body.name, ' | Damage: ', damage)
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
-			print('Projectile hit player (RPC): ', body.name, ' | Damage: ', damage)
+			print('Cannonball hit player (RPC): ', body.name, ' | Damage: ', damage)
 
-		# Apply knockback from projectile impact
+		# Apply stronger knockback from cannonball impact
 		# Get charge multiplier and player level multiplier from projectile metadata
 		var charge_mult: float = projectile.get_meta("charge_multiplier", 1.0)
 		var player_level: int = projectile.get_meta("player_level", 0)
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + (player.level * 0.2)
 
-		# Calculate knockback (base 20.0, scaled by charge and level)
-		var base_knockback: float = 20.0
+		# Calculate knockback (base 40.0, double the gun's 20.0, scaled by charge and level)
+		var base_knockback: float = 40.0
 		var total_knockback: float = base_knockback * charge_mult * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
 		# Use cached velocity to avoid accessing freed projectile
 		var knockback_dir: Vector3 = projectile_velocity.normalized()
-		knockback_dir.y = 0.15  # Slight upward knockback
+		knockback_dir.y = 0.2  # Slightly stronger upward knockback than gun
 		body.apply_central_impulse(knockback_dir * total_knockback)
 
-		# Play attack hit sound (satisfying feedback for landing a hit)
+		# Play attack hit sound (deeper, more satisfying than gun)
 		# Use cached position to avoid accessing freed projectile
 		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-		hit_sound.max_distance = 20.0
-		hit_sound.volume_db = 3.0
-		hit_sound.pitch_scale = randf_range(1.2, 1.4)
+		hit_sound.max_distance = 30.0  # Louder than gun (was 20.0)
+		hit_sound.volume_db = 6.0  # Louder than gun (was 3.0)
+		hit_sound.pitch_scale = randf_range(0.8, 1.0)  # Deeper than gun (was 1.2-1.4)
 		hit_sound.global_position = projectile_position  # Use cached position
 		if player and player.get_parent():
 			player.get_parent().add_child(hit_sound)
@@ -197,49 +200,49 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		projectile.queue_free()
 
 func create_projectile() -> Node3D:
-	"""Create a projectile node"""
+	"""Create a cannonball projectile node"""
 	# Create a simple projectile
 	var projectile: RigidBody3D = RigidBody3D.new()
-	projectile.name = "Projectile"
+	projectile.name = "Cannonball"
 
-	# Physics setup
-	projectile.mass = 0.1
-	projectile.gravity_scale = 0.0  # No gravity for projectiles
+	# Physics setup - heavier and with gravity for arc
+	projectile.mass = 0.5  # Much heavier than gun (was 0.1)
+	projectile.gravity_scale = 0.3  # Add gravity for realistic arc (gun was 0.0)
 	projectile.continuous_cd = true
 	projectile.collision_layer = 4  # Projectile layer
 	projectile.collision_mask = 3   # Hit players (layer 2) and world (layer 1)
 	projectile.contact_monitor = true  # Enable contact monitoring for collision detection
 	projectile.max_contacts_reported = 10  # Allow reporting up to 10 contacts
 
-	# Create mesh
+	# Create mesh - larger cannonball
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 0.15
-	sphere.height = 0.3
+	sphere.radius = 0.4  # Much larger than gun (was 0.15)
+	sphere.height = 0.8
 	mesh_instance.mesh = sphere
 
-	# Create glowing material
+	# Create glowing material - fiery orange/red
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color.CYAN
+	mat.albedo_color = Color.ORANGE_RED
 	mat.emission_enabled = true
-	mat.emission = Color.CYAN * 0.3  # Darker emission to preserve color
-	mat.emission_energy_multiplier = 0.2
+	mat.emission = Color.ORANGE * 0.5  # Brighter emission
+	mat.emission_energy_multiplier = 0.5  # Stronger glow
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
 
-	# Create collision shape
+	# Create collision shape - larger
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var shape: SphereShape3D = SphereShape3D.new()
-	shape.radius = 0.15
+	shape.radius = 0.4  # Match mesh radius
 	collision.shape = shape
 	projectile.add_child(collision)
 
 	# Store projectile data as metadata (no dynamic script needed)
-	projectile.set_meta("damage", 1)
+	projectile.set_meta("damage", 3)
 	projectile.set_meta("owner_id", -1)
 	projectile.set_meta("lifetime", projectile_lifetime)
 
-	# Connect body_entered signal to Gun ability's handler
+	# Connect body_entered signal to Cannon ability's handler
 	# Use Callable.bind to pass projectile reference to the handler
 	projectile.body_entered.connect(_on_projectile_body_entered.bind(projectile))
 
@@ -249,22 +252,22 @@ func create_projectile() -> Node3D:
 	return projectile
 
 func add_projectile_trail(projectile: Node3D) -> void:
-	"""Add visual trail effect to projectile"""
+	"""Add visual trail effect to cannonball - fiery smoke trail"""
 	var trail: CPUParticles3D = CPUParticles3D.new()
 	trail.name = "Trail"
 	projectile.add_child(trail)
 
-	# Configure trail particles
+	# Configure trail particles - thicker, more dramatic than gun
 	trail.emitting = true
-	trail.amount = 30
-	trail.lifetime = 0.4
+	trail.amount = 50  # More particles than gun (was 30)
+	trail.lifetime = 0.6  # Longer lifetime than gun (was 0.4)
 	trail.explosiveness = 0.0  # Continuous emission
-	trail.randomness = 0.2
+	trail.randomness = 0.3
 	trail.local_coords = false  # World space - particles stay where emitted
 
-	# Set up particle mesh
+	# Set up particle mesh - larger
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.15, 0.15)
+	particle_mesh.size = Vector2(0.3, 0.3)  # Larger than gun (was 0.15)
 	trail.mesh = particle_mesh
 
 	# Create material for trail
@@ -280,51 +283,53 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	# Emission shape - point source
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-	# Movement - minimal, just fade in place
+	# Movement - more spread for smoke effect
 	trail.direction = Vector3.ZERO
-	trail.spread = 5.0
+	trail.spread = 10.0  # More spread than gun (was 5.0)
 	trail.gravity = Vector3.ZERO
-	trail.initial_velocity_min = 0.1
-	trail.initial_velocity_max = 0.5
+	trail.initial_velocity_min = 0.2
+	trail.initial_velocity_max = 1.0
 
-	# Size over lifetime - shrink and fade
-	trail.scale_amount_min = 1.5
-	trail.scale_amount_max = 2.0
+	# Size over lifetime - grow then shrink (smoke effect)
+	trail.scale_amount_min = 2.0
+	trail.scale_amount_max = 3.0
 	trail.scale_amount_curve = Curve.new()
-	trail.scale_amount_curve.add_point(Vector2(0, 1.0))
-	trail.scale_amount_curve.add_point(Vector2(0.5, 0.6))
+	trail.scale_amount_curve.add_point(Vector2(0, 0.5))
+	trail.scale_amount_curve.add_point(Vector2(0.3, 1.2))  # Grow
+	trail.scale_amount_curve.add_point(Vector2(0.7, 0.8))
 	trail.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - cyan trail fading out
+	# Color - fiery orange to dark smoke trail
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.5, 1.0, 1.0, 1.0))  # Bright cyan
-	gradient.add_point(0.5, Color(0.2, 0.8, 1.0, 0.6))  # Cyan
-	gradient.add_point(1.0, Color(0.1, 0.4, 0.6, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
+	gradient.add_point(0.3, Color(1.0, 0.5, 0.2, 0.8))  # Orange
+	gradient.add_point(0.6, Color(0.6, 0.3, 0.2, 0.5))  # Dark orange/smoke
+	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Dark/transparent
 	trail.color_ramp = gradient
 
 func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
-	"""Spawn muzzle flash particle effect at gun barrel"""
+	"""Spawn large muzzle flash particle effect at cannon barrel"""
 	if not player or not player.get_parent():
 		return
 
-	# Create muzzle flash particles
+	# Create muzzle flash particles - much larger and more dramatic than gun
 	var muzzle_flash: CPUParticles3D = CPUParticles3D.new()
 	muzzle_flash.name = "MuzzleFlash"
 	player.get_parent().add_child(muzzle_flash)
 	muzzle_flash.global_position = position
 
-	# Configure muzzle flash - quick burst
+	# Configure muzzle flash - bigger burst than gun
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 15
-	muzzle_flash.lifetime = 0.15
+	muzzle_flash.amount = 30  # More than gun (was 15)
+	muzzle_flash.lifetime = 0.25  # Longer than gun (was 0.15)
 	muzzle_flash.one_shot = true
 	muzzle_flash.explosiveness = 1.0
-	muzzle_flash.randomness = 0.3
+	muzzle_flash.randomness = 0.4
 	muzzle_flash.local_coords = false
 
-	# Set up particle mesh
+	# Set up particle mesh - larger
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.4)
+	particle_mesh.size = Vector2(0.8, 0.8)  # Much larger than gun (was 0.4)
 	muzzle_flash.mesh = particle_mesh
 
 	# Create material for flash
@@ -337,32 +342,99 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	particle_material.disable_receive_shadows = true
 	muzzle_flash.mesh.material = particle_material
 
-	# Emission shape - cone in fire direction
+	# Emission shape - larger sphere
 	muzzle_flash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	muzzle_flash.emission_sphere_radius = 0.2
+	muzzle_flash.emission_sphere_radius = 0.4  # Larger than gun (was 0.2)
 
-	# Movement - burst outward in fire direction
+	# Movement - stronger burst
 	muzzle_flash.direction = direction
-	muzzle_flash.spread = 25.0  # Cone spread
+	muzzle_flash.spread = 30.0  # More spread than gun (was 25.0)
 	muzzle_flash.gravity = Vector3.ZERO
-	muzzle_flash.initial_velocity_min = 3.0
-	muzzle_flash.initial_velocity_max = 8.0
+	muzzle_flash.initial_velocity_min = 5.0  # Faster than gun (was 3.0)
+	muzzle_flash.initial_velocity_max = 12.0  # Faster than gun (was 8.0)
 
-	# Size over lifetime - quick flash and fade
-	muzzle_flash.scale_amount_min = 2.0
-	muzzle_flash.scale_amount_max = 3.5
+	# Size over lifetime - bigger flash
+	muzzle_flash.scale_amount_min = 3.0  # Larger than gun (was 2.0)
+	muzzle_flash.scale_amount_max = 5.0  # Larger than gun (was 3.5)
 	muzzle_flash.scale_amount_curve = Curve.new()
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0, 1.5))
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0.3, 1.0))
+	muzzle_flash.scale_amount_curve.add_point(Vector2(0, 2.0))
+	muzzle_flash.scale_amount_curve.add_point(Vector2(0.3, 1.2))
 	muzzle_flash.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - bright yellow/white flash
+	# Color - bright orange/red flash (not yellow like gun)
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright white-yellow
-	gradient.add_point(0.3, Color(1.0, 0.9, 0.5, 0.8))  # Yellow
-	gradient.add_point(0.7, Color(0.8, 0.6, 0.3, 0.4))  # Orange
-	gradient.add_point(1.0, Color(0.3, 0.2, 0.1, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 0.9, 0.7, 1.0))  # Bright white-orange
+	gradient.add_point(0.3, Color(1.0, 0.6, 0.3, 0.9))  # Orange
+	gradient.add_point(0.6, Color(0.9, 0.4, 0.2, 0.6))  # Dark orange
+	gradient.add_point(1.0, Color(0.3, 0.1, 0.1, 0.0))  # Dark/transparent
 	muzzle_flash.color_ramp = gradient
 
 	# Auto-delete after lifetime
 	get_tree().create_timer(muzzle_flash.lifetime + 0.5).timeout.connect(muzzle_flash.queue_free)
+
+func spawn_explosion_effect(position: Vector3) -> void:
+	"""Spawn explosion particle effect at impact point"""
+	if not player or not player.get_parent():
+		return
+
+	# Create explosion particles
+	var explosion: CPUParticles3D = CPUParticles3D.new()
+	explosion.name = "CannonExplosion"
+	player.get_parent().add_child(explosion)
+	explosion.global_position = position
+
+	# Configure explosion - dramatic burst
+	explosion.emitting = true
+	explosion.amount = 40
+	explosion.lifetime = 0.5
+	explosion.one_shot = true
+	explosion.explosiveness = 1.0
+	explosion.randomness = 0.4
+	explosion.local_coords = false
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.6, 0.6)
+	explosion.mesh = particle_mesh
+
+	# Create material for explosion
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	explosion.mesh.material = particle_material
+
+	# Emission shape - sphere burst
+	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	explosion.emission_sphere_radius = 0.3
+
+	# Movement - explosive outward burst
+	explosion.direction = Vector3.ZERO
+	explosion.spread = 180.0  # Full sphere
+	explosion.gravity = Vector3(0, -5.0, 0)  # Gravity pulls particles down
+	explosion.initial_velocity_min = 4.0
+	explosion.initial_velocity_max = 10.0
+
+	# Size over lifetime - expand and fade
+	explosion.scale_amount_min = 2.0
+	explosion.scale_amount_max = 4.0
+	explosion.scale_amount_curve = Curve.new()
+	explosion.scale_amount_curve.add_point(Vector2(0, 1.5))
+	explosion.scale_amount_curve.add_point(Vector2(0.2, 1.8))
+	explosion.scale_amount_curve.add_point(Vector2(0.6, 1.0))
+	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
+
+	# Color - fiery explosion
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 1.0, 0.9, 1.0))  # Bright white center
+	gradient.add_point(0.2, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
+	gradient.add_point(0.5, Color(0.9, 0.4, 0.2, 0.7))  # Orange/red
+	gradient.add_point(0.8, Color(0.4, 0.2, 0.2, 0.3))  # Dark smoke
+	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Transparent
+	explosion.color_ramp = gradient
+
+	# Auto-delete after lifetime
+	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(explosion.queue_free)
