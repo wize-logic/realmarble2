@@ -11,9 +11,18 @@ extends Control
 var world: Node = null
 var player: Node = null
 
+# Expansion notification
+var expansion_notification_label: Label = null
+var expansion_flash_timer: float = 0.0
+var expansion_flash_duration: float = 5.0
+var is_expansion_flashing: bool = false
+
 func _ready() -> void:
 	# Find world and player references
 	world = get_tree().root.get_node_or_null("World")
+
+	# Create expansion notification label
+	create_expansion_notification()
 
 	# Try to find the local player
 	call_deferred("find_local_player")
@@ -38,8 +47,9 @@ func find_local_player() -> void:
 		await get_tree().create_timer(0.5).timeout
 		find_local_player()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	update_hud()
+	update_expansion_notification(delta)
 
 func update_hud() -> void:
 	"""Update all HUD elements"""
@@ -90,3 +100,67 @@ func update_hud() -> void:
 		health_label.text = "Health: %d" % player.health
 	else:
 		health_label.text = "Health: 3"
+
+func create_expansion_notification() -> void:
+	"""Create the expansion notification label"""
+	expansion_notification_label = Label.new()
+	expansion_notification_label.name = "ExpansionNotification"
+	expansion_notification_label.text = "NEW AREA AVAILABLE"
+	expansion_notification_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	expansion_notification_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+
+	# Position at top center of screen
+	expansion_notification_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	expansion_notification_label.anchor_top = 0.15
+	expansion_notification_label.anchor_bottom = 0.15
+	expansion_notification_label.offset_top = -30
+	expansion_notification_label.offset_bottom = 30
+
+	# Style the label - large, bold, attention-grabbing
+	expansion_notification_label.add_theme_font_size_override("font_size", 48)
+	expansion_notification_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.0, 1.0))  # Gold color
+	expansion_notification_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	expansion_notification_label.add_theme_constant_override("outline_size", 6)
+
+	# Start hidden
+	expansion_notification_label.visible = false
+	add_child(expansion_notification_label)
+	print("Expansion notification added to game HUD")
+
+func update_expansion_notification(delta: float) -> void:
+	"""Update the expansion notification flash effect"""
+	if not is_expansion_flashing or not expansion_notification_label:
+		return
+
+	expansion_flash_timer -= delta
+
+	# Flash effect - oscillate alpha
+	var flash_frequency: float = 4.0  # Flashes per second
+	var alpha: float = 0.5 + 0.5 * sin(expansion_flash_timer * flash_frequency * TAU)
+
+	var color = expansion_notification_label.get_theme_color("font_color", "Label")
+	color.a = alpha
+	expansion_notification_label.add_theme_color_override("font_color", color)
+
+	# Stop flashing after duration
+	if expansion_flash_timer <= 0:
+		stop_expansion_notification()
+
+func show_expansion_notification() -> void:
+	"""Show the expansion notification with flashing effect"""
+	if not expansion_notification_label:
+		return
+
+	expansion_notification_label.visible = true
+	is_expansion_flashing = true
+	expansion_flash_timer = expansion_flash_duration
+	print("Showing expansion notification in HUD: NEW AREA AVAILABLE")
+
+func stop_expansion_notification() -> void:
+	"""Stop the flashing effect and hide the notification"""
+	if not expansion_notification_label:
+		return
+
+	is_expansion_flashing = false
+	expansion_notification_label.visible = false
+	print("Expansion notification hidden from HUD")
