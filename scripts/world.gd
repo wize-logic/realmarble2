@@ -54,7 +54,7 @@ var countdown_time: float = 0.0
 # Mid-round expansion system
 var expansion_triggered: bool = false
 var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds remaining)
-var expansion_notification: Control = null
+# NOTE: Expansion notification moved to game HUD (game_hud.gd)
 
 # Bot system
 var bot_counter: int = 0
@@ -122,9 +122,6 @@ func _ready() -> void:
 	if game_hud:
 		game_hud.visible = false
 
-	# Create expansion notification UI
-	create_expansion_notification()
-
 func _unhandled_input(event: InputEvent) -> void:
 	# Pause menu toggle - only allow pausing during active gameplay
 	if main_menu and options_menu:
@@ -188,10 +185,11 @@ func _process(delta: float) -> void:
 		if int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
 			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 
-		# Check for mid-round expansion trigger
-		if not expansion_triggered and game_time_remaining <= expansion_trigger_time:
-			print("Mid-round expansion trigger reached!")
-			trigger_mid_round_expansion()
+		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
+		# # Check for mid-round expansion trigger
+		# if not expansion_triggered and game_time_remaining <= expansion_trigger_time:
+		# 	print("Mid-round expansion trigger reached!")
+		# 	trigger_mid_round_expansion()
 
 		if game_time_remaining <= 0:
 			print("Time's up! Ending deathmatch...")
@@ -1665,15 +1663,6 @@ func _on_track_started(metadata: Dictionary) -> void:
 # MID-ROUND EXPANSION SYSTEM
 # ============================================================================
 
-func create_expansion_notification() -> void:
-	"""Create the expansion notification UI"""
-	var ExpansionNotification = preload("res://scripts/ui/expansion_notification.gd")
-	expansion_notification = Control.new()
-	expansion_notification.name = "ExpansionNotification"
-	expansion_notification.set_script(ExpansionNotification)
-	add_child(expansion_notification)
-	print("Expansion notification UI created")
-
 func trigger_mid_round_expansion() -> void:
 	"""Trigger the mid-round expansion - show notification, spawn new area, connect with rail"""
 	print("======================================")
@@ -1682,9 +1671,9 @@ func trigger_mid_round_expansion() -> void:
 
 	expansion_triggered = true
 
-	# Show notification
-	if expansion_notification and expansion_notification.has_method("show_notification"):
-		expansion_notification.show_notification()
+	# Show notification in HUD
+	if game_hud and game_hud.has_method("show_expansion_notification"):
+		game_hud.show_expansion_notification()
 
 	# Calculate position for secondary arena (1000 feet = 304.8 meters away)
 	var expansion_offset: Vector3 = Vector3(304.8, 0, 0)  # 1000 feet to the right
@@ -1765,16 +1754,27 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			print("  Visible: ", player.visible)
 
 		# Store and disable camera
-		if player.has_node("Camera3D"):
-			var camera = player.get_node("Camera3D")
+		if player.has_node("CameraArm/Camera3D"):
+			var camera = player.get_node("CameraArm/Camera3D")
+			var camera_arm = player.get_node("CameraArm")
+
 			state["camera"] = camera
+			state["camera_arm"] = camera_arm
 			state["was_current"] = camera.current
-			state["camera_position"] = camera.position  # Local position relative to player
-			state["camera_rotation"] = camera.rotation  # Local rotation
-			state["camera_transform"] = camera.transform  # Full local transform
+
+			# Store camera local transform (relative to CameraArm)
+			state["camera_position"] = camera.position
+			state["camera_rotation"] = camera.rotation
+			state["camera_transform"] = camera.transform
+
+			# Store CameraArm global position (it has top_level = true)
+			state["camera_arm_position"] = camera_arm.global_position
+			state["camera_arm_rotation"] = camera_arm.global_rotation
+
 			camera.current = false
 			print("  Camera stored (was_current: ", state["was_current"], ")")
 			print("  Camera local position: ", camera.position)
+			print("  CameraArm global position: ", camera_arm.global_position)
 
 		# Freeze player physics (RigidBody3D)
 		if player is RigidBody3D:
@@ -1881,7 +1881,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
 
-			# Restore camera's local transform (position relative to player)
+			# First restore CameraArm position (it has top_level = true)
+			if state.has("camera_arm") and is_instance_valid(state["camera_arm"]):
+				var camera_arm = state["camera_arm"]
+				if state.has("camera_arm_position"):
+					camera_arm.global_position = state["camera_arm_position"]
+					print("  Restored CameraArm global position: ", camera_arm.global_position)
+				if state.has("camera_arm_rotation"):
+					camera_arm.global_rotation = state["camera_arm_rotation"]
+					print("  Restored CameraArm global rotation")
+
+			# Then restore camera's local transform (position relative to CameraArm)
 			if state.has("camera_transform"):
 				camera.transform = state["camera_transform"]
 				print("  Restored camera local transform")
