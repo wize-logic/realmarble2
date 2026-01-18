@@ -85,7 +85,11 @@ const LevelGeneratorQ3 = preload("res://scripts/level_generator_q3.gd")
 const SkyboxGenerator = preload("res://scripts/skybox_generator.gd")
 var level_generator: Node3D = null
 var skybox_generator: Node3D = null
-var current_level_type: String = "A"  # "A" for original, "B" for Q3 arena
+
+# GAME STATE: Current arena type (accessible from other scripts)
+# "A" = Type A (Original: floating platforms, grind rails, Sonic-style)
+# "B" = Type B (Quake 3 Arena: rooms, corridors, jump pads, teleporters)
+var current_level_type: String = "A"
 
 func _ready() -> void:
 	# Generate procedural level (default to Type A)
@@ -213,6 +217,26 @@ func _process(delta: float) -> void:
 			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
 			print("Time's up! Ending deathmatch...")
 			end_deathmatch()
+
+# ============================================================================
+# GAME STATE FUNCTIONS
+# ============================================================================
+
+func get_current_level_type() -> String:
+	"""Get the current arena type being played
+	Returns:
+		"A" - Type A arena (Original: floating platforms, grind rails)
+		"B" - Type B arena (Quake 3: rooms, corridors, jump pads, teleporters)
+	"""
+	return current_level_type
+
+func is_type_a_arena() -> bool:
+	"""Check if currently playing on Type A arena (original style)"""
+	return current_level_type == "A"
+
+func is_type_b_arena() -> bool:
+	"""Check if currently playing on Type B arena (Quake 3 style)"""
+	return current_level_type == "B"
 
 # ============================================================================
 # MENU FUNCTIONS
