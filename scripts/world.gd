@@ -1765,16 +1765,27 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			print("  Visible: ", player.visible)
 
 		# Store and disable camera
-		if player.has_node("Camera3D"):
-			var camera = player.get_node("Camera3D")
+		if player.has_node("CameraArm/Camera3D"):
+			var camera = player.get_node("CameraArm/Camera3D")
+			var camera_arm = player.get_node("CameraArm")
+
 			state["camera"] = camera
+			state["camera_arm"] = camera_arm
 			state["was_current"] = camera.current
-			state["camera_position"] = camera.position  # Local position relative to player
-			state["camera_rotation"] = camera.rotation  # Local rotation
-			state["camera_transform"] = camera.transform  # Full local transform
+
+			# Store camera local transform (relative to CameraArm)
+			state["camera_position"] = camera.position
+			state["camera_rotation"] = camera.rotation
+			state["camera_transform"] = camera.transform
+
+			# Store CameraArm global position (it has top_level = true)
+			state["camera_arm_position"] = camera_arm.global_position
+			state["camera_arm_rotation"] = camera_arm.global_rotation
+
 			camera.current = false
 			print("  Camera stored (was_current: ", state["was_current"], ")")
 			print("  Camera local position: ", camera.position)
+			print("  CameraArm global position: ", camera_arm.global_position)
 
 		# Freeze player physics (RigidBody3D)
 		if player is RigidBody3D:
@@ -1881,7 +1892,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 		if state.has("camera") and is_instance_valid(state["camera"]):
 			var camera = state["camera"]
 
-			# Restore camera's local transform (position relative to player)
+			# First restore CameraArm position (it has top_level = true)
+			if state.has("camera_arm") and is_instance_valid(state["camera_arm"]):
+				var camera_arm = state["camera_arm"]
+				if state.has("camera_arm_position"):
+					camera_arm.global_position = state["camera_arm_position"]
+					print("  Restored CameraArm global position: ", camera_arm.global_position)
+				if state.has("camera_arm_rotation"):
+					camera_arm.global_rotation = state["camera_arm_rotation"]
+					print("  Restored CameraArm global rotation")
+
+			# Then restore camera's local transform (position relative to CameraArm)
 			if state.has("camera_transform"):
 				camera.transform = state["camera_transform"]
 				print("  Restored camera local transform")
