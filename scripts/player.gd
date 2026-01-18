@@ -569,11 +569,17 @@ func _ready() -> void:
 
 func _force_camera_activation() -> void:
 	"""Force camera to be active - called via deferred to ensure it happens after full initialization (HTML5 fix)"""
+	# CRITICAL: Only local player with authority should activate camera
+	# Bots must NEVER activate their cameras or they'll hijack the player camera
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		print("[CAMERA] Player %s: Skipping camera activation (not authority)" % name)
+		return
+
 	if not camera or not camera_arm:
 		print("[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name)
 		return
 
-	print("[CAMERA] _force_camera_activation called for player %s" % name)
+	print("[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name)
 
 	# Position camera arm at current player position
 	camera_arm.global_position = global_position

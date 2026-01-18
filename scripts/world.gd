@@ -691,11 +691,17 @@ func show_main_menu() -> void:
 	"""Show the main menu"""
 	if main_menu:
 		main_menu.visible = true
-	# Show marble preview and make camera current
-	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = true
-	if preview_camera:
-		preview_camera.make_current()
+
+	# CRITICAL FIX: Recreate marble preview if it was destroyed
+	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
+		print("[CAMERA] Recreating marble preview for main menu")
+		_create_marble_preview()
+	else:
+		# Show existing marble preview and make camera current
+		if has_node("MarblePreview"):
+			get_node("MarblePreview").visible = true
+		if preview_camera:
+			preview_camera.make_current()
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
@@ -866,11 +872,16 @@ func return_to_main_menu() -> void:
 	if main_menu:
 		main_menu.show()
 
-	# Show marble preview and make camera current
-	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = true
-	if preview_camera:
-		preview_camera.make_current()
+	# CRITICAL FIX: Recreate marble preview if it was destroyed during gameplay
+	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
+		print("[CAMERA] Recreating marble preview for main menu")
+		_create_marble_preview()
+	else:
+		# Show existing marble preview and make camera current
+		if has_node("MarblePreview"):
+			get_node("MarblePreview").visible = true
+		if preview_camera:
+			preview_camera.make_current()
 
 	# Start menu music
 	if menu_music:
