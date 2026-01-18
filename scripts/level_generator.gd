@@ -325,12 +325,12 @@ func create_rail_visual(rail: Path3D) -> void:
 
 	# Material for the rail
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.8, 0.8, 0.9)  # Metallic silver
+	material.albedo_color = Color(0.7, 0.7, 0.8)  # Metallic silver/gray
 	material.metallic = 0.9
 	material.roughness = 0.2
 	material.emission_enabled = true
-	material.emission = Color(0.3, 0.5, 1.0)  # Slight blue glow
-	material.emission_energy_multiplier = 0.1
+	material.emission = Color(0.15, 0.25, 0.5)  # Very subtle blue glow
+	material.emission_energy_multiplier = 0.05
 
 	immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
 
