@@ -13,7 +13,7 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
 @onready var camera_arm: Node3D = get_node_or_null("CameraArm")
 @onready var ground_ray: RayCast3D = get_node_or_null("GroundRay")
-@onready var marble_mesh: MeshInstance3D = get_node_or_null("MarbleMesh")
+@onready var marble_mesh: MeshInstance3D = get_node_or_null("MeshInstance3D")
 @onready var jump_sound: AudioStreamPlayer3D = get_node_or_null("JumpSound")
 @onready var spin_sound: AudioStreamPlayer3D = get_node_or_null("SpinSound")
 @onready var land_sound: AudioStreamPlayer3D = get_node_or_null("LandSound")
@@ -522,7 +522,9 @@ func _ready() -> void:
 		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
 		grind_particles.color_ramp = grind_gradient
 
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	# Otherwise, only run for nodes we have authority over
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -572,7 +574,8 @@ func _process(delta: float) -> void:
 		return  # Skip normal processing while falling to death
 
 	# Early return for non-authority (bots)
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	if not camera or not camera_arm:
@@ -665,7 +668,8 @@ func _physics_process_marble_roll(delta: float) -> void:
 			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
 
 func _input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	# Mouse look - 3rd person shooter style (handled in _input for priority)
@@ -680,7 +684,8 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not is_multiplayer_authority():
+	# In practice mode (no multiplayer peer), we're always the authority
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
 	# Respawn on command
