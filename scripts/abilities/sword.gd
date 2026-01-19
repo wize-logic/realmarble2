@@ -54,21 +54,21 @@ func _ready() -> void:
 	slash_particles.name = "SlashParticles"
 	add_child(slash_particles)
 
-	# Configure slash particles - horizontal arc
+	# Configure slash particles - beautiful energy blade arc
 	slash_particles.emitting = false
-	slash_particles.amount = 40
-	slash_particles.lifetime = 0.3
+	slash_particles.amount = 80  # More particles for denser slash trail
+	slash_particles.lifetime = 0.5  # Longer lasting slash trail
 	slash_particles.one_shot = true
-	slash_particles.explosiveness = 1.0
-	slash_particles.randomness = 0.2
+	slash_particles.explosiveness = 0.95  # Quick burst with slight variation
+	slash_particles.randomness = 0.3
 	slash_particles.local_coords = false
 
-	# Set up particle mesh
+	# Set up particle mesh - wider blade slashes
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.1)  # Thin slashes
+	particle_mesh.size = Vector2(0.7, 0.15)  # Wider, more visible slashes
 	slash_particles.mesh = particle_mesh
 
-	# Create material for slash effect
+	# Create material for brilliant slash effect
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -80,29 +80,35 @@ func _ready() -> void:
 
 	# Emission shape - arc in front
 	slash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	slash_particles.emission_sphere_radius = 0.3
+	slash_particles.emission_sphere_radius = 0.4  # Wider emission
 
-	# Movement - slash arc
+	# Movement - sweeping slash arc
 	slash_particles.direction = Vector3(0, 0, -1)  # Forward
 	slash_particles.spread = slash_arc_angle / 2  # Spread in arc
-	slash_particles.gravity = Vector3.ZERO
-	slash_particles.initial_velocity_min = 8.0
-	slash_particles.initial_velocity_max = 15.0
+	slash_particles.gravity = Vector3.ZERO  # No gravity for clean slash
+	slash_particles.initial_velocity_min = 10.0  # Faster slash
+	slash_particles.initial_velocity_max = 18.0
 
-	# Size over lifetime - quick slash
-	slash_particles.scale_amount_min = 2.0
-	slash_particles.scale_amount_max = 4.0
+	# Add slight damping for trailing effect
+	slash_particles.damping_min = 1.0
+	slash_particles.damping_max = 2.0
+
+	# Size over lifetime - dramatic blade trail
+	slash_particles.scale_amount_min = 3.0
+	slash_particles.scale_amount_max = 5.5
 	slash_particles.scale_amount_curve = Curve.new()
-	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
-	slash_particles.scale_amount_curve.add_point(Vector2(0.5, 1.0))
-	slash_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.5))  # Start large
+	slash_particles.scale_amount_curve.add_point(Vector2(0.2, 1.5))  # Quick shrink
+	slash_particles.scale_amount_curve.add_point(Vector2(0.6, 0.8))  # Fade
+	slash_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Vanish
 
-	# Color - silver/blue sword slash
+	# Color - radiant cyan-white energy blade
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 0.9, 1.0, 1.0))  # Bright white-blue
-	gradient.add_point(0.3, Color(0.7, 0.8, 1.0, 0.8))  # Light blue
-	gradient.add_point(0.7, Color(0.5, 0.6, 0.9, 0.4))  # Darker blue
-	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # Pure white flash
+	gradient.add_point(0.15, Color(0.85, 0.95, 1.0, 1.0))  # Bright white-cyan
+	gradient.add_point(0.4, Color(0.6, 0.85, 1.0, 0.85))  # Cyan
+	gradient.add_point(0.7, Color(0.4, 0.7, 0.95, 0.5))  # Light blue
+	gradient.add_point(1.0, Color(0.2, 0.4, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
 
 func _process(delta: float) -> void:

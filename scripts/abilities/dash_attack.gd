@@ -52,20 +52,20 @@ func _ready() -> void:
 	fire_trail.name = "FireTrail"
 	add_child(fire_trail)
 
-	# Configure fire particles - Trail effect
+	# Configure fire particles - spectacular blazing trail
 	fire_trail.emitting = false
-	fire_trail.amount = 120  # More particles for better trail visibility
-	fire_trail.lifetime = 1.2  # Longer lifetime so trail persists
+	fire_trail.amount = 200  # Dense trail for dramatic effect
+	fire_trail.lifetime = 1.5  # Longer persistence
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
-	fire_trail.randomness = 0.3
+	fire_trail.randomness = 0.4
 	fire_trail.local_coords = false  # World space - particles stay where emitted
 
-	# Set up particle mesh and material for visibility
+	# Set up particle mesh - larger flames
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.5, 0.5)
+	particle_mesh.size = Vector2(0.7, 0.7)
 	fire_trail.mesh = particle_mesh
 
-	# Create material for additive blending (fire effect)
+	# Create material for brilliant fire effect
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -73,36 +73,50 @@ func _ready() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	particle_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
+	particle_material.albedo_color = Color(1.0, 0.85, 0.4, 1.0)
 	fire_trail.mesh.material = particle_material
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 
-	# Emission shape - emit from player center
+	# Emission shape - ring for better trail coverage
 	fire_trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	fire_trail.emission_sphere_radius = 0.4
+	fire_trail.emission_sphere_radius = 0.5
 
-	# Movement - minimal movement for trail effect
-	fire_trail.direction = Vector3(0, 0.5, 0)  # Slight upward drift
-	fire_trail.spread = 35.0  # Moderate spread for flame effect
-	fire_trail.gravity = Vector3(0, 0.2, 0)  # Slight upward gravity (fire rises)
-	fire_trail.initial_velocity_min = 0.3  # Very slow - particles stay in place
-	fire_trail.initial_velocity_max = 1.2
+	# Movement - dynamic flickering flames
+	fire_trail.direction = Vector3(0, 0.8, 0)  # Upward drift
+	fire_trail.spread = 40.0  # Wide flame spread
+	fire_trail.gravity = Vector3(0, 0.5, 0)  # Fire rises
+	fire_trail.initial_velocity_min = 0.5
+	fire_trail.initial_velocity_max = 2.0
 
-	# Size over lifetime - start big, shrink gradually
-	fire_trail.scale_amount_min = 2.5
-	fire_trail.scale_amount_max = 4.0
+	# Add damping for realistic fire motion
+	fire_trail.damping_min = 0.5
+	fire_trail.damping_max = 1.2
+
+	# Angular motion for flickering flames
+	fire_trail.angle_min = -180.0
+	fire_trail.angle_max = 180.0
+	fire_trail.angular_velocity_min = -90.0
+	fire_trail.angular_velocity_max = 90.0
+
+	# Size over lifetime - dramatic flame growth and fade
+	fire_trail.scale_amount_min = 3.0
+	fire_trail.scale_amount_max = 5.5
 	fire_trail.scale_amount_curve = Curve.new()
-	fire_trail.scale_amount_curve.add_point(Vector2(0, 1.0))
-	fire_trail.scale_amount_curve.add_point(Vector2(0.4, 0.8))
-	fire_trail.scale_amount_curve.add_point(Vector2(1, 0.1))
+	fire_trail.scale_amount_curve.add_point(Vector2(0, 0.8))  # Start medium
+	fire_trail.scale_amount_curve.add_point(Vector2(0.2, 1.3))  # Quick growth
+	fire_trail.scale_amount_curve.add_point(Vector2(0.5, 1.0))  # Maintain
+	fire_trail.scale_amount_curve.add_point(Vector2(0.8, 0.5))  # Shrink
+	fire_trail.scale_amount_curve.add_point(Vector2(1, 0.0))  # Extinguish
 
-	# Color - fire gradient (yellow -> orange -> red -> black)
+	# Color - brilliant fire gradient (white -> yellow -> orange -> red -> smoke)
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.5, 1.0))  # Bright yellow
-	gradient.add_point(0.3, Color(1.0, 0.6, 0.2, 1.0))  # Orange
-	gradient.add_point(0.6, Color(1.0, 0.2, 0.1, 0.8))  # Red
-	gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 1.0, 0.9, 1.0))  # White hot
+	gradient.add_point(0.15, Color(1.0, 0.95, 0.5, 1.0))  # Bright yellow
+	gradient.add_point(0.4, Color(1.0, 0.6, 0.2, 1.0))  # Orange
+	gradient.add_point(0.65, Color(1.0, 0.3, 0.1, 0.9))  # Red-orange
+	gradient.add_point(0.85, Color(0.6, 0.15, 0.1, 0.5))  # Deep red
+	gradient.add_point(1.0, Color(0.15, 0.0, 0.0, 0.0))  # Dark fade
 	fire_trail.color_ramp = gradient
 
 func _process(delta: float) -> void:

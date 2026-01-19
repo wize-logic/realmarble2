@@ -307,20 +307,20 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	trail.name = "Trail"
 	projectile.add_child(trail)
 
-	# Configure trail particles - thicker, more dramatic than gun
+	# Configure trail particles - spectacular fiery smoke trail
 	trail.emitting = true
-	trail.amount = 50  # More particles than gun (was 30)
-	trail.lifetime = 0.6  # Longer lifetime than gun (was 0.4)
+	trail.amount = 80  # Dense trail
+	trail.lifetime = 0.9  # Longer for dramatic effect
 	trail.explosiveness = 0.0  # Continuous emission
-	trail.randomness = 0.3
+	trail.randomness = 0.4
 	trail.local_coords = false  # World space - particles stay where emitted
 
-	# Set up particle mesh - larger
+	# Set up particle mesh - larger billowing smoke
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)  # Larger than gun (was 0.15)
+	particle_mesh.size = Vector2(0.5, 0.5)
 	trail.mesh = particle_mesh
 
-	# Create material for trail
+	# Create material for dramatic trail
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -333,28 +333,39 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	# Emission shape - point source
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-	# Movement - more spread for smoke effect
+	# Movement - billowing smoke spread
 	trail.direction = Vector3.ZERO
-	trail.spread = 10.0  # More spread than gun (was 5.0)
-	trail.gravity = Vector3.ZERO
-	trail.initial_velocity_min = 0.2
-	trail.initial_velocity_max = 1.0
+	trail.spread = 15.0  # Wider smoke spread
+	trail.gravity = Vector3(0, 1.0, 0)  # Slight upward drift
+	trail.initial_velocity_min = 0.5
+	trail.initial_velocity_max = 1.8
 
-	# Size over lifetime - grow then shrink (smoke effect)
-	trail.scale_amount_min = 2.0
-	trail.scale_amount_max = 3.0
+	# Add damping for smoke dissipation
+	trail.damping_min = 0.8
+	trail.damping_max = 1.5
+
+	# Angular motion for swirling smoke
+	trail.angle_min = -180.0
+	trail.angle_max = 180.0
+	trail.angular_velocity_min = -45.0
+	trail.angular_velocity_max = 45.0
+
+	# Size over lifetime - dramatic smoke expansion
+	trail.scale_amount_min = 2.5
+	trail.scale_amount_max = 4.0
 	trail.scale_amount_curve = Curve.new()
-	trail.scale_amount_curve.add_point(Vector2(0, 0.5))
-	trail.scale_amount_curve.add_point(Vector2(0.3, 1.2))  # Grow
-	trail.scale_amount_curve.add_point(Vector2(0.7, 0.8))
-	trail.scale_amount_curve.add_point(Vector2(1, 0.0))
+	trail.scale_amount_curve.add_point(Vector2(0, 0.4))  # Start small
+	trail.scale_amount_curve.add_point(Vector2(0.2, 1.3))  # Rapid expansion
+	trail.scale_amount_curve.add_point(Vector2(0.6, 1.0))  # Maintain
+	trail.scale_amount_curve.add_point(Vector2(1, 0.0))  # Dissipate
 
 	# Color - fiery orange to dark smoke trail
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
-	gradient.add_point(0.3, Color(1.0, 0.5, 0.2, 0.8))  # Orange
-	gradient.add_point(0.6, Color(0.6, 0.3, 0.2, 0.5))  # Dark orange/smoke
-	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 0.8, 0.4, 1.0))  # Bright orange-yellow
+	gradient.add_point(0.2, Color(1.0, 0.6, 0.2, 0.9))  # Orange
+	gradient.add_point(0.4, Color(0.8, 0.4, 0.2, 0.7))  # Dark orange
+	gradient.add_point(0.7, Color(0.4, 0.2, 0.15, 0.4))  # Smoke
+	gradient.add_point(1.0, Color(0.15, 0.1, 0.1, 0.0))  # Dark fade
 	trail.color_ramp = gradient
 
 func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
@@ -368,21 +379,21 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	player.get_parent().add_child(muzzle_flash)
 	muzzle_flash.global_position = position
 
-	# Configure muzzle flash - bigger burst than gun
+	# Configure muzzle flash - massive explosive burst
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 30  # More than gun (was 15)
-	muzzle_flash.lifetime = 0.25  # Longer than gun (was 0.15)
+	muzzle_flash.amount = 60  # Many particles for impressive flash
+	muzzle_flash.lifetime = 0.35  # Longer for impact
 	muzzle_flash.one_shot = true
-	muzzle_flash.explosiveness = 1.0
-	muzzle_flash.randomness = 0.4
+	muzzle_flash.explosiveness = 0.98
+	muzzle_flash.randomness = 0.5
 	muzzle_flash.local_coords = false
 
-	# Set up particle mesh - larger
+	# Set up particle mesh - large billowing flash
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.8, 0.8)  # Much larger than gun (was 0.4)
+	particle_mesh.size = Vector2(1.2, 1.2)  # Massive flash
 	muzzle_flash.mesh = particle_mesh
 
-	# Create material for flash
+	# Create material for brilliant flash
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -392,31 +403,42 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	particle_material.disable_receive_shadows = true
 	muzzle_flash.mesh.material = particle_material
 
-	# Emission shape - larger sphere
+	# Emission shape - large cone burst
 	muzzle_flash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	muzzle_flash.emission_sphere_radius = 0.4  # Larger than gun (was 0.2)
+	muzzle_flash.emission_sphere_radius = 0.6
 
-	# Movement - stronger burst
+	# Movement - powerful directional burst
 	muzzle_flash.direction = direction
-	muzzle_flash.spread = 30.0  # More spread than gun (was 25.0)
+	muzzle_flash.spread = 35.0  # Wide cone
 	muzzle_flash.gravity = Vector3.ZERO
-	muzzle_flash.initial_velocity_min = 5.0  # Faster than gun (was 3.0)
-	muzzle_flash.initial_velocity_max = 12.0  # Faster than gun (was 8.0)
+	muzzle_flash.initial_velocity_min = 8.0  # Very fast
+	muzzle_flash.initial_velocity_max = 16.0
 
-	# Size over lifetime - bigger flash
-	muzzle_flash.scale_amount_min = 3.0  # Larger than gun (was 2.0)
-	muzzle_flash.scale_amount_max = 5.0  # Larger than gun (was 3.5)
+	# Damping for expansion
+	muzzle_flash.damping_min = 2.0
+	muzzle_flash.damping_max = 4.0
+
+	# Angular motion
+	muzzle_flash.angle_min = -180.0
+	muzzle_flash.angle_max = 180.0
+	muzzle_flash.angular_velocity_min = -150.0
+	muzzle_flash.angular_velocity_max = 150.0
+
+	# Size over lifetime - explosive expansion
+	muzzle_flash.scale_amount_min = 4.0
+	muzzle_flash.scale_amount_max = 7.0
 	muzzle_flash.scale_amount_curve = Curve.new()
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0, 2.0))
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0.3, 1.2))
-	muzzle_flash.scale_amount_curve.add_point(Vector2(1, 0.0))
+	muzzle_flash.scale_amount_curve.add_point(Vector2(0, 2.5))  # Huge start
+	muzzle_flash.scale_amount_curve.add_point(Vector2(0.25, 1.5))  # Quick shrink
+	muzzle_flash.scale_amount_curve.add_point(Vector2(1, 0.0))  # Vanish
 
-	# Color - bright orange/red flash (not yellow like gun)
+	# Color - brilliant white-orange flash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.9, 0.7, 1.0))  # Bright white-orange
-	gradient.add_point(0.3, Color(1.0, 0.6, 0.3, 0.9))  # Orange
-	gradient.add_point(0.6, Color(0.9, 0.4, 0.2, 0.6))  # Dark orange
-	gradient.add_point(1.0, Color(0.3, 0.1, 0.1, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 1.0, 0.95, 1.0))  # White hot
+	gradient.add_point(0.2, Color(1.0, 0.85, 0.5, 1.0))  # Yellow-orange
+	gradient.add_point(0.5, Color(1.0, 0.5, 0.2, 0.8))  # Orange
+	gradient.add_point(0.8, Color(0.7, 0.3, 0.15, 0.4))  # Dark orange
+	gradient.add_point(1.0, Color(0.2, 0.1, 0.05, 0.0))  # Fade
 	muzzle_flash.color_ramp = gradient
 
 	# Auto-delete after lifetime
@@ -433,21 +455,21 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	player.get_parent().add_child(explosion)
 	explosion.global_position = position
 
-	# Configure explosion - dramatic burst
+	# Configure explosion - spectacular impact burst
 	explosion.emitting = true
-	explosion.amount = 40
-	explosion.lifetime = 0.5
+	explosion.amount = 100  # Dense explosion
+	explosion.lifetime = 0.8  # Longer for impact
 	explosion.one_shot = true
-	explosion.explosiveness = 1.0
-	explosion.randomness = 0.4
+	explosion.explosiveness = 0.96
+	explosion.randomness = 0.6
 	explosion.local_coords = false
 
-	# Set up particle mesh
+	# Set up particle mesh - large explosion particles
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.6, 0.6)
+	particle_mesh.size = Vector2(1.0, 1.0)
 	explosion.mesh = particle_mesh
 
-	# Create material for explosion
+	# Create material for brilliant explosion
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -457,33 +479,45 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	particle_material.disable_receive_shadows = true
 	explosion.mesh.material = particle_material
 
-	# Emission shape - sphere burst
+	# Emission shape - tight sphere for powerful blast
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	explosion.emission_sphere_radius = 0.3
+	explosion.emission_sphere_radius = 0.4
 
-	# Movement - explosive outward burst
+	# Movement - violent explosive burst
 	explosion.direction = Vector3.ZERO
 	explosion.spread = 180.0  # Full sphere
-	explosion.gravity = Vector3(0, -5.0, 0)  # Gravity pulls particles down
-	explosion.initial_velocity_min = 4.0
-	explosion.initial_velocity_max = 10.0
+	explosion.gravity = Vector3(0, -8.0, 0)  # Gravity for realistic arc
+	explosion.initial_velocity_min = 8.0  # Fast expansion
+	explosion.initial_velocity_max = 18.0
 
-	# Size over lifetime - expand and fade
-	explosion.scale_amount_min = 2.0
-	explosion.scale_amount_max = 4.0
+	# Damping for expansion
+	explosion.damping_min = 2.0
+	explosion.damping_max = 4.0
+
+	# Angular motion for chaotic explosion
+	explosion.angle_min = -180.0
+	explosion.angle_max = 180.0
+	explosion.angular_velocity_min = -200.0
+	explosion.angular_velocity_max = 200.0
+
+	# Size over lifetime - dramatic expansion and fade
+	explosion.scale_amount_min = 3.0
+	explosion.scale_amount_max = 6.0
 	explosion.scale_amount_curve = Curve.new()
-	explosion.scale_amount_curve.add_point(Vector2(0, 1.5))
-	explosion.scale_amount_curve.add_point(Vector2(0.2, 1.8))
-	explosion.scale_amount_curve.add_point(Vector2(0.6, 1.0))
-	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
+	explosion.scale_amount_curve.add_point(Vector2(0, 0.5))  # Start small
+	explosion.scale_amount_curve.add_point(Vector2(0.15, 2.2))  # Rapid expansion
+	explosion.scale_amount_curve.add_point(Vector2(0.5, 1.3))  # Maintain
+	explosion.scale_amount_curve.add_point(Vector2(0.8, 0.6))  # Shrink
+	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))  # Vanish
 
-	# Color - fiery explosion
+	# Color - brilliant fireball explosion
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.9, 1.0))  # Bright white center
-	gradient.add_point(0.2, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
-	gradient.add_point(0.5, Color(0.9, 0.4, 0.2, 0.7))  # Orange/red
-	gradient.add_point(0.8, Color(0.4, 0.2, 0.2, 0.3))  # Dark smoke
-	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White flash
+	gradient.add_point(0.1, Color(1.0, 0.95, 0.7, 1.0))  # Yellow-white
+	gradient.add_point(0.3, Color(1.0, 0.7, 0.3, 1.0))  # Orange
+	gradient.add_point(0.6, Color(0.9, 0.4, 0.2, 0.8))  # Orange-red
+	gradient.add_point(0.85, Color(0.5, 0.2, 0.15, 0.3))  # Dark smoke
+	gradient.add_point(1.0, Color(0.15, 0.1, 0.08, 0.0))  # Transparent
 	explosion.color_ramp = gradient
 
 	# Auto-delete after lifetime

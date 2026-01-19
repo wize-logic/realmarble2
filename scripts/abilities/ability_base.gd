@@ -27,20 +27,20 @@ func _ready() -> void:
 		charge_particles.name = "ChargeParticles"
 		add_child(charge_particles)
 
-		# Configure charge particles - growing glow
+		# Configure charge particles - beautiful magical energy glow
 		charge_particles.emitting = false
-		charge_particles.amount = 50
-		charge_particles.lifetime = 0.8
+		charge_particles.amount = 80  # More particles for richer effect
+		charge_particles.lifetime = 1.0  # Longer lifetime
 		charge_particles.explosiveness = 0.0  # Continuous emission
-		charge_particles.randomness = 0.3
+		charge_particles.randomness = 0.4
 		charge_particles.local_coords = true
 
-		# Set up particle mesh
+		# Set up particle mesh - larger for more visibility
 		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.2, 0.2)
+		particle_mesh.size = Vector2(0.3, 0.3)
 		charge_particles.mesh = particle_mesh
 
-		# Create material for particles
+		# Create material for particles with enhanced glow
 		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -50,26 +50,41 @@ func _ready() -> void:
 		particle_material.disable_receive_shadows = true
 		charge_particles.mesh.material = particle_material
 
-		# Emission shape - sphere around ability
-		charge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		charge_particles.emission_sphere_radius = 1.0
+		# Emission shape - ring around ability for energy focus
+		charge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		charge_particles.emission_ring_axis = Vector3.UP
+		charge_particles.emission_ring_height = 0.5
+		charge_particles.emission_ring_radius = 1.2
+		charge_particles.emission_ring_inner_radius = 0.8
 
-		# Movement - orbit around ability
+		# Movement - swirling orbital motion
 		charge_particles.direction = Vector3(0, 1, 0)
-		charge_particles.spread = 180.0
-		charge_particles.gravity = Vector3.ZERO
-		charge_particles.initial_velocity_min = 1.0
-		charge_particles.initial_velocity_max = 2.0
+		charge_particles.spread = 25.0  # More focused
+		charge_particles.gravity = Vector3(0, -0.5, 0)  # Gentle float
+		charge_particles.initial_velocity_min = 1.5
+		charge_particles.initial_velocity_max = 3.0
+
+		# Add damping for graceful motion
+		charge_particles.damping_min = 0.5
+		charge_particles.damping_max = 1.5
+
+		# Rotation for spinning particles
+		charge_particles.angle_min = -180.0
+		charge_particles.angle_max = 180.0
+		charge_particles.angular_velocity_min = -90.0
+		charge_particles.angular_velocity_max = 90.0
 
 		# Size - will scale with charge level
-		charge_particles.scale_amount_min = 1.0
-		charge_particles.scale_amount_max = 1.5
+		charge_particles.scale_amount_min = 1.5
+		charge_particles.scale_amount_max = 2.5
 
-		# Color - based on ability color, will intensify with charge
+		# Color - vibrant ability color with magical shimmer
 		var gradient: Gradient = Gradient.new()
-		gradient.add_point(0.0, ability_color * 1.5)
-		gradient.add_point(0.5, ability_color)
-		gradient.add_point(1.0, Color(ability_color.r, ability_color.g, ability_color.b, 0.0))
+		gradient.add_point(0.0, ability_color * 1.8)  # Bright start
+		gradient.add_point(0.3, ability_color * 1.4)  # Maintain brightness
+		gradient.add_point(0.6, ability_color * 1.0)  # Base color
+		gradient.add_point(0.85, ability_color * 0.6)  # Dim
+		gradient.add_point(1.0, Color(ability_color.r, ability_color.g, ability_color.b, 0.0))  # Fade
 		charge_particles.color_ramp = gradient
 
 func _process(delta: float) -> void:
@@ -193,26 +208,32 @@ func update_charge_visuals() -> void:
 	# Update particle position to follow player
 	charge_particles.global_position = player.global_position
 
-	# Scale particle intensity based on charge level
+	# Scale particle intensity based on charge level - dramatic escalation
 	match charge_level:
-		1:  # Weak - dim glow
-			charge_particles.amount = 30
-			charge_particles.scale_amount_min = 1.0
-			charge_particles.scale_amount_max = 1.5
-			charge_particles.initial_velocity_min = 1.0
-			charge_particles.initial_velocity_max = 2.0
-		2:  # Medium - bright pulse
-			charge_particles.amount = 60
+		1:  # Weak - gentle magical glow
+			charge_particles.amount = 50
 			charge_particles.scale_amount_min = 1.5
-			charge_particles.scale_amount_max = 2.5
-			charge_particles.initial_velocity_min = 2.0
-			charge_particles.initial_velocity_max = 4.0
-		3:  # Max - explosion aura
+			charge_particles.scale_amount_max = 2.0
+			charge_particles.initial_velocity_min = 1.5
+			charge_particles.initial_velocity_max = 3.0
+			charge_particles.emission_ring_radius = 1.0
+			charge_particles.lifetime = 0.8
+		2:  # Medium - intensifying energy pulse
 			charge_particles.amount = 100
 			charge_particles.scale_amount_min = 2.0
-			charge_particles.scale_amount_max = 4.0
-			charge_particles.initial_velocity_min = 3.0
-			charge_particles.initial_velocity_max = 6.0
+			charge_particles.scale_amount_max = 3.5
+			charge_particles.initial_velocity_min = 2.5
+			charge_particles.initial_velocity_max = 5.0
+			charge_particles.emission_ring_radius = 1.4
+			charge_particles.lifetime = 1.0
+		3:  # Max - spectacular power surge
+			charge_particles.amount = 180
+			charge_particles.scale_amount_min = 3.0
+			charge_particles.scale_amount_max = 5.5
+			charge_particles.initial_velocity_min = 4.0
+			charge_particles.initial_velocity_max = 8.0
+			charge_particles.emission_ring_radius = 1.8
+			charge_particles.lifetime = 1.2
 
 			# Add camera shake for max charge
 			if player and player.has_method("add_camera_shake"):

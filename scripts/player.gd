@@ -262,21 +262,21 @@ func _ready() -> void:
 		death_particles.name = "DeathParticles"
 		add_child(death_particles)
 
-		# Configure death particles - explosive burst
+		# Configure death particles - spectacular explosive burst
 		death_particles.emitting = false
-		death_particles.amount = 200  # Lots of particles for dramatic effect
-		death_particles.lifetime = 2.5
+		death_particles.amount = 400  # Massive particle count for dramatic explosion
+		death_particles.lifetime = 3.0  # Longer lifetime for more impact
 		death_particles.one_shot = true
-		death_particles.explosiveness = 1.0
-		death_particles.randomness = 0.4
+		death_particles.explosiveness = 0.95  # Slight variation for organic feel
+		death_particles.randomness = 0.6
 		death_particles.local_coords = false
 
-		# Set up particle mesh
+		# Set up particle mesh - larger quads for more visibility
 		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.3, 0.3)
+		particle_mesh.size = Vector2(0.5, 0.5)
 		death_particles.mesh = particle_mesh
 
-		# Create material for particles
+		# Create material for particles with enhanced glow
 		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -286,31 +286,44 @@ func _ready() -> void:
 		particle_material.disable_receive_shadows = true
 		death_particles.mesh.material = particle_material
 
-		# Emission shape - sphere burst
+		# Emission shape - tight sphere burst
 		death_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		death_particles.emission_sphere_radius = 0.5
+		death_particles.emission_sphere_radius = 0.3
 
-		# Movement - explosive burst
+		# Movement - powerful explosive burst with turbulence
 		death_particles.direction = Vector3(0, 1, 0)
-		death_particles.spread = 180.0  # Full sphere
-		death_particles.gravity = Vector3(0, -15.0, 0)
-		death_particles.initial_velocity_min = 10.0
-		death_particles.initial_velocity_max = 20.0
+		death_particles.spread = 180.0  # Full sphere spread
+		death_particles.gravity = Vector3(0, -12.0, 0)  # Slightly less gravity for floaty feel
+		death_particles.initial_velocity_min = 15.0  # Much faster initial burst
+		death_particles.initial_velocity_max = 30.0
 
-		# Size over lifetime
-		death_particles.scale_amount_min = 2.0
-		death_particles.scale_amount_max = 4.0
+		# Add damping for smooth deceleration
+		death_particles.damping_min = 2.0
+		death_particles.damping_max = 4.0
+
+		# Angular motion for spinning particles
+		death_particles.angle_min = -180.0
+		death_particles.angle_max = 180.0
+		death_particles.angular_velocity_min = -120.0
+		death_particles.angular_velocity_max = 120.0
+
+		# Size over lifetime - dramatic scaling
+		death_particles.scale_amount_min = 2.5
+		death_particles.scale_amount_max = 5.0
 		death_particles.scale_amount_curve = Curve.new()
-		death_particles.scale_amount_curve.add_point(Vector2(0, 1.5))
-		death_particles.scale_amount_curve.add_point(Vector2(0.3, 1.0))
-		death_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+		death_particles.scale_amount_curve.add_point(Vector2(0, 0.3))  # Start small
+		death_particles.scale_amount_curve.add_point(Vector2(0.2, 1.8))  # Explosive growth
+		death_particles.scale_amount_curve.add_point(Vector2(0.5, 1.3))  # Maintain
+		death_particles.scale_amount_curve.add_point(Vector2(0.8, 0.6))  # Shrink
+		death_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Vanish
 
 		# Color gradient - will be set based on player vs bot in spawn_death_particles()
 		var gradient: Gradient = Gradient.new()
-		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 1.0))  # Gold
-		gradient.add_point(0.3, Color(1.0, 0.3, 0.1, 1.0))  # Red-orange
-		gradient.add_point(0.7, Color(0.8, 0.1, 0.1, 0.6))  # Dark red
-		gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Transparent
+		gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))  # Bright gold
+		gradient.add_point(0.2, Color(1.0, 0.5, 0.1, 1.0))  # Orange
+		gradient.add_point(0.5, Color(1.0, 0.2, 0.1, 0.9))  # Red-orange
+		gradient.add_point(0.75, Color(0.8, 0.1, 0.1, 0.5))  # Dark red
+		gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Transparent
 		death_particles.color_ramp = gradient
 
 	# Create collection particle effect (blue aura rising upward)
@@ -319,21 +332,21 @@ func _ready() -> void:
 		collection_particles.name = "CollectionParticles"
 		add_child(collection_particles)
 
-		# Configure collection particles - upward blue aura
+		# Configure collection particles - magical upward blue aura
 		collection_particles.emitting = false
-		collection_particles.amount = 80  # Moderate amount for smooth aura
-		collection_particles.lifetime = 1.5  # Duration of effect
+		collection_particles.amount = 150  # Increased for more impressive aura
+		collection_particles.lifetime = 2.0  # Longer duration for magical effect
 		collection_particles.one_shot = true
-		collection_particles.explosiveness = 0.2  # Slightly delayed emission for flowing effect
-		collection_particles.randomness = 0.3
+		collection_particles.explosiveness = 0.15  # Smooth flowing emission
+		collection_particles.randomness = 0.4
 		collection_particles.local_coords = false
 
-		# Set up particle mesh
+		# Set up particle mesh - larger for more visibility
 		var collection_particle_mesh: QuadMesh = QuadMesh.new()
-		collection_particle_mesh.size = Vector2(0.2, 0.2)
+		collection_particle_mesh.size = Vector2(0.35, 0.35)
 		collection_particles.mesh = collection_particle_mesh
 
-		# Create material for particles
+		# Create material for particles with enhanced glow
 		var collection_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		collection_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		collection_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
@@ -346,34 +359,46 @@ func _ready() -> void:
 		# Emission shape - ring at base of player
 		collection_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 		collection_particles.emission_ring_axis = Vector3.UP
-		collection_particles.emission_ring_height = 0.1
-		collection_particles.emission_ring_radius = 0.6  # Slightly larger than player radius
-		collection_particles.emission_ring_inner_radius = 0.3
+		collection_particles.emission_ring_height = 0.2
+		collection_particles.emission_ring_radius = 0.8  # Wider ring for more dramatic effect
+		collection_particles.emission_ring_inner_radius = 0.2
 
-		# Movement - upward flow from ground
+		# Movement - graceful upward flow
 		collection_particles.direction = Vector3.UP
-		collection_particles.spread = 15.0  # Slight spread for natural look
-		collection_particles.gravity = Vector3(0, -2.0, 0)  # Slight downward gravity for arc
-		collection_particles.initial_velocity_min = 4.0
-		collection_particles.initial_velocity_max = 6.0
+		collection_particles.spread = 12.0  # Tighter spread for focused column
+		collection_particles.gravity = Vector3(0, -1.5, 0)  # Very gentle gravity for floaty feel
+		collection_particles.initial_velocity_min = 5.0
+		collection_particles.initial_velocity_max = 8.0
 
-		# Size over lifetime - start small, grow, then shrink
-		collection_particles.scale_amount_min = 1.5
-		collection_particles.scale_amount_max = 2.5
+		# Add damping for graceful deceleration
+		collection_particles.damping_min = 1.5
+		collection_particles.damping_max = 2.5
+
+		# Angular motion for swirling effect
+		collection_particles.angle_min = -180.0
+		collection_particles.angle_max = 180.0
+		collection_particles.angular_velocity_min = -60.0
+		collection_particles.angular_velocity_max = 60.0
+
+		# Size over lifetime - smooth growth and fade
+		collection_particles.scale_amount_min = 2.0
+		collection_particles.scale_amount_max = 3.5
 		var scale_curve: Curve = Curve.new()
-		scale_curve.add_point(Vector2(0, 0.3))
-		scale_curve.add_point(Vector2(0.2, 1.2))
-		scale_curve.add_point(Vector2(0.6, 1.0))
-		scale_curve.add_point(Vector2(1, 0.0))
+		scale_curve.add_point(Vector2(0, 0.2))  # Start tiny
+		scale_curve.add_point(Vector2(0.15, 1.3))  # Quick growth
+		scale_curve.add_point(Vector2(0.5, 1.1))  # Maintain
+		scale_curve.add_point(Vector2(0.75, 0.8))  # Begin shrinking
+		scale_curve.add_point(Vector2(1, 0.0))  # Vanish
 		collection_particles.scale_amount_curve = scale_curve
 
-		# Color gradient - bright blue aura fading out
+		# Color gradient - vibrant blue-cyan magical aura
 		var collection_gradient: Gradient = Gradient.new()
-		collection_gradient.add_point(0.0, Color(0.3, 0.7, 1.0, 1.0))  # Bright cyan-blue
-		collection_gradient.add_point(0.2, Color(0.4, 0.8, 1.0, 0.9))  # Light blue
-		collection_gradient.add_point(0.5, Color(0.5, 0.9, 1.0, 0.7))  # Lighter blue
-		collection_gradient.add_point(0.8, Color(0.6, 0.95, 1.0, 0.3))  # Very light blue, fading
-		collection_gradient.add_point(1.0, Color(0.7, 1.0, 1.0, 0.0))  # Transparent
+		collection_gradient.add_point(0.0, Color(0.2, 0.6, 1.0, 1.0))  # Deep cyan-blue
+		collection_gradient.add_point(0.15, Color(0.3, 0.75, 1.0, 1.0))  # Bright cyan
+		collection_gradient.add_point(0.4, Color(0.5, 0.9, 1.0, 0.9))  # Light blue shimmer
+		collection_gradient.add_point(0.65, Color(0.65, 0.95, 1.0, 0.6))  # Pale blue
+		collection_gradient.add_point(0.85, Color(0.75, 1.0, 1.0, 0.25))  # Nearly white
+		collection_gradient.add_point(1.0, Color(0.8, 1.0, 1.0, 0.0))  # Transparent
 		collection_particles.color_ramp = collection_gradient
 
 	# Create jump/bounce particle effect (Sonic Adventure 2 style blue circles)
@@ -382,28 +407,29 @@ func _ready() -> void:
 		jump_bounce_particles.name = "JumpBounceParticles"
 		add_child(jump_bounce_particles)
 
-		# Configure jump/bounce particles - 3 dark blue circles that trail below player
+		# Configure jump/bounce particles - enhanced glowing trail
 		jump_bounce_particles.emitting = false
-		jump_bounce_particles.amount = 3  # Only 3 circles like SA2
-		jump_bounce_particles.lifetime = 0.6  # Shorter lifetime for tighter trail
+		jump_bounce_particles.amount = 5  # More particles for richer trail
+		jump_bounce_particles.lifetime = 0.8  # Longer lifetime for more visible trail
 		jump_bounce_particles.one_shot = true
-		jump_bounce_particles.explosiveness = 0.9  # Very slight staggered spawn for delayed movement
-		jump_bounce_particles.randomness = 0.0  # No randomness
-		jump_bounce_particles.local_coords = true  # Local space - aggressively follow player while trailing
+		jump_bounce_particles.explosiveness = 0.85  # Smooth staggered emission
+		jump_bounce_particles.randomness = 0.1  # Slight variation
+		jump_bounce_particles.local_coords = true  # Local space for trailing
 
-		# Set up particle mesh - use sphere for perfect circles (not squares)
+		# Set up particle mesh - use sphere for perfect circles
 		var jump_particle_mesh: SphereMesh = SphereMesh.new()
 		jump_particle_mesh.radius = 0.5  # Same as marble radius
 		jump_particle_mesh.height = 1.0  # Same as marble diameter
-		jump_particle_mesh.radial_segments = 16  # Smooth circle
-		jump_particle_mesh.rings = 8
+		jump_particle_mesh.radial_segments = 20  # Smoother circles
+		jump_particle_mesh.rings = 10
 		jump_bounce_particles.mesh = jump_particle_mesh
 
-		# Create material for dark blue semi-transparent circles
+		# Create material for beautiful glowing circles
 		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		jump_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for glow
 		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.12)  # Dark blue, almost entirely transparent
+		jump_particle_material.albedo_color = Color(0.3, 0.5, 1.0, 0.3)  # Brighter blue with more visibility
 		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		jump_particle_material.disable_receive_shadows = true
 		jump_bounce_particles.mesh.material = jump_particle_material
@@ -411,29 +437,35 @@ func _ready() -> void:
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - particles trail behind player motion at moderate speed
+		# Movement - graceful trailing
 		jump_bounce_particles.direction = Vector3.DOWN  # Default direction (set dynamically)
-		jump_bounce_particles.spread = 0.0  # No spread - keep circles in a straight line
-		jump_bounce_particles.gravity = Vector3(0, -3.0, 0)  # Moderate gravity for natural arc
-		jump_bounce_particles.initial_velocity_min = 1.5  # Trail behind player at moderate speed
-		jump_bounce_particles.initial_velocity_max = 2.5
+		jump_bounce_particles.spread = 5.0  # Slight spread for organic feel
+		jump_bounce_particles.gravity = Vector3(0, -2.5, 0)  # Gentle gravity
+		jump_bounce_particles.initial_velocity_min = 2.0
+		jump_bounce_particles.initial_velocity_max = 3.5
 
-		# Size - constant, same as marble
-		jump_bounce_particles.scale_amount_min = 1.0  # Match marble size
-		jump_bounce_particles.scale_amount_max = 1.0
+		# Damping for smooth deceleration
+		jump_bounce_particles.damping_min = 1.0
+		jump_bounce_particles.damping_max = 2.0
 
-		# Fade curve - stay visible then fade at end
+		# Size - dynamic scaling
+		jump_bounce_particles.scale_amount_min = 1.2
+		jump_bounce_particles.scale_amount_max = 1.5
+
+		# Fade curve - smooth size transition
 		var jump_scale_curve: Curve = Curve.new()
-		jump_scale_curve.add_point(Vector2(0, 1.0))  # Full size
-		jump_scale_curve.add_point(Vector2(0.5, 1.0))  # Stay full size
+		jump_scale_curve.add_point(Vector2(0, 1.2))  # Start slightly larger
+		jump_scale_curve.add_point(Vector2(0.4, 1.0))  # Maintain
+		jump_scale_curve.add_point(Vector2(0.7, 0.7))  # Begin shrinking
 		jump_scale_curve.add_point(Vector2(1, 0.0))  # Fade out
 		jump_bounce_particles.scale_amount_curve = jump_scale_curve
 
-		# Color gradient - dark blue staying visible then fading
+		# Color gradient - vibrant blue trail with glow
 		var jump_gradient: Gradient = Gradient.new()
-		jump_gradient.add_point(0.0, Color(0.1, 0.2, 0.5, 0.12))  # Dark blue, almost entirely transparent
-		jump_gradient.add_point(0.5, Color(0.1, 0.2, 0.5, 0.12))  # Stay dark blue
-		jump_gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade to transparent
+		jump_gradient.add_point(0.0, Color(0.4, 0.6, 1.0, 0.4))  # Bright blue with good visibility
+		jump_gradient.add_point(0.3, Color(0.35, 0.55, 1.0, 0.35))  # Maintain blue
+		jump_gradient.add_point(0.6, Color(0.3, 0.5, 0.9, 0.25))  # Begin fading
+		jump_gradient.add_point(1.0, Color(0.2, 0.4, 0.7, 0.0))  # Transparent
 		jump_bounce_particles.color_ramp = jump_gradient
 
 	# Set up marble mesh and texture
@@ -472,22 +504,22 @@ func _ready() -> void:
 		grind_particles.name = "GrindParticles"
 		add_child(grind_particles)
 
-		# Configure grind particles - sparks flying backward
+		# Configure grind particles - spectacular sparks flying backward
 		grind_particles.emitting = false
 		# HTML5 optimization: Reduce particle count for better performance in browsers
-		grind_particles.amount = 8 if OS.has_feature("web") else 30
-		grind_particles.lifetime = 0.6
+		grind_particles.amount = 12 if OS.has_feature("web") else 50  # More sparks for dramatic effect
+		grind_particles.lifetime = 0.8  # Longer lifetime for trail
 		grind_particles.one_shot = false  # Continuous emission while grinding
-		grind_particles.explosiveness = 0.1
-		grind_particles.randomness = 0.4
+		grind_particles.explosiveness = 0.05  # Very smooth continuous emission
+		grind_particles.randomness = 0.5
 		grind_particles.local_coords = false
 
-		# Set up particle mesh
+		# Set up particle mesh - larger sparks
 		var grind_particle_mesh: QuadMesh = QuadMesh.new()
-		grind_particle_mesh.size = Vector2(0.15, 0.15)
+		grind_particle_mesh.size = Vector2(0.25, 0.25)
 		grind_particles.mesh = grind_particle_mesh
 
-		# Create material for bright spark particles
+		# Create material for brilliant spark particles
 		var grind_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		grind_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		grind_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for bright sparks
@@ -500,28 +532,41 @@ func _ready() -> void:
 		# Emission shape - point below player
 		grind_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
 
-		# Movement - sparks fly backward and down
+		# Movement - energetic sparks with wider spread
 		grind_particles.direction = Vector3(0, -1, -1)  # Down and back
-		grind_particles.spread = 25.0
-		grind_particles.gravity = Vector3(0, -20.0, 0)
-		grind_particles.initial_velocity_min = 3.0
-		grind_particles.initial_velocity_max = 6.0
+		grind_particles.spread = 35.0  # Wider spray of sparks
+		grind_particles.gravity = Vector3(0, -18.0, 0)  # Slightly less gravity for longer arcs
+		grind_particles.initial_velocity_min = 4.0  # Faster sparks
+		grind_particles.initial_velocity_max = 9.0
 
-		# Size over lifetime
-		grind_particles.scale_amount_min = 1.0
-		grind_particles.scale_amount_max = 1.5
+		# Add damping for realistic deceleration
+		grind_particles.damping_min = 1.5
+		grind_particles.damping_max = 3.0
+
+		# Angular motion for spinning sparks
+		grind_particles.angle_min = -180.0
+		grind_particles.angle_max = 180.0
+		grind_particles.angular_velocity_min = -240.0
+		grind_particles.angular_velocity_max = 240.0
+
+		# Size over lifetime - dynamic scaling
+		grind_particles.scale_amount_min = 1.5
+		grind_particles.scale_amount_max = 2.5
 		var grind_scale_curve: Curve = Curve.new()
-		grind_scale_curve.add_point(Vector2(0, 1.2))
-		grind_scale_curve.add_point(Vector2(0.3, 1.0))
-		grind_scale_curve.add_point(Vector2(1, 0.0))
+		grind_scale_curve.add_point(Vector2(0, 1.5))  # Start bright and large
+		grind_scale_curve.add_point(Vector2(0.2, 1.2))  # Quick shrink
+		grind_scale_curve.add_point(Vector2(0.5, 0.8))  # Continue shrinking
+		grind_scale_curve.add_point(Vector2(1, 0.0))  # Fade out
 		grind_particles.scale_amount_curve = grind_scale_curve
 
-		# Color gradient - bright yellow/orange sparks
+		# Color gradient - brilliant electric sparks
 		var grind_gradient: Gradient = Gradient.new()
-		grind_gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright yellow-white
-		grind_gradient.add_point(0.2, Color(1.0, 0.8, 0.2, 1.0))  # Yellow
-		grind_gradient.add_point(0.5, Color(1.0, 0.4, 0.1, 0.8))  # Orange
-		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
+		grind_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # Pure white hot
+		grind_gradient.add_point(0.15, Color(1.0, 0.95, 0.6, 1.0))  # Bright yellow-white
+		grind_gradient.add_point(0.35, Color(1.0, 0.7, 0.2, 1.0))  # Golden yellow
+		grind_gradient.add_point(0.6, Color(1.0, 0.4, 0.1, 0.8))  # Orange
+		grind_gradient.add_point(0.85, Color(0.8, 0.2, 0.1, 0.4))  # Red ember
+		grind_gradient.add_point(1.0, Color(0.4, 0.0, 0.0, 0.0))  # Dark fade
 		grind_particles.color_ramp = grind_gradient
 
 	# In practice mode (no multiplayer peer), we're always the authority
@@ -1504,20 +1549,22 @@ func spawn_death_particles() -> void:
 	var player_id: int = str(name).to_int()
 	var is_bot: bool = player_id >= 9000
 
-	# Set particle colors based on player type
+	# Set particle colors based on player type - enhanced beauty
 	var gradient: Gradient = Gradient.new()
 	if is_bot:
-		# Bot death: Blue/gray particles
-		gradient.add_point(0.0, Color(0.5, 0.7, 1.0, 1.0))  # Light blue
-		gradient.add_point(0.3, Color(0.3, 0.5, 0.9, 1.0))  # Blue
-		gradient.add_point(0.7, Color(0.2, 0.3, 0.6, 0.6))  # Dark blue
-		gradient.add_point(1.0, Color(0.1, 0.1, 0.2, 0.0))  # Transparent
+		# Bot death: Stunning blue-cyan explosion
+		gradient.add_point(0.0, Color(0.7, 0.9, 1.0, 1.0))  # Bright cyan
+		gradient.add_point(0.2, Color(0.5, 0.75, 1.0, 1.0))  # Light blue
+		gradient.add_point(0.5, Color(0.3, 0.6, 0.95, 0.9))  # Deep blue
+		gradient.add_point(0.75, Color(0.2, 0.4, 0.7, 0.5))  # Dark blue
+		gradient.add_point(1.0, Color(0.1, 0.2, 0.3, 0.0))  # Transparent
 	else:
-		# Player death: Red/gold particles
-		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 1.0))  # Gold
-		gradient.add_point(0.3, Color(1.0, 0.3, 0.1, 1.0))  # Red-orange
-		gradient.add_point(0.7, Color(0.8, 0.1, 0.1, 0.6))  # Dark red
-		gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Transparent
+		# Player death: Spectacular gold-red-orange fireball
+		gradient.add_point(0.0, Color(1.0, 0.95, 0.4, 1.0))  # Brilliant gold
+		gradient.add_point(0.2, Color(1.0, 0.6, 0.2, 1.0))  # Bright orange
+		gradient.add_point(0.5, Color(1.0, 0.3, 0.1, 0.9))  # Red-orange
+		gradient.add_point(0.75, Color(0.8, 0.15, 0.1, 0.5))  # Deep red
+		gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark fade
 
 	death_particles.color_ramp = gradient
 
@@ -2135,17 +2182,19 @@ func spawn_jump_pad_effect() -> void:
 	if not death_particles:
 		return
 
-	# Temporarily change death particles to bright green for jump pad effect
+	# Temporarily change death particles to brilliant green energy burst
 	var jump_pad_gradient: Gradient = Gradient.new()
-	jump_pad_gradient.add_point(0.0, Color(0.2, 1.0, 0.3, 1.0))  # Bright green
-	jump_pad_gradient.add_point(0.3, Color(0.4, 1.0, 0.5, 0.9))  # Lighter green
-	jump_pad_gradient.add_point(0.7, Color(0.6, 1.0, 0.7, 0.5))  # Very light green
-	jump_pad_gradient.add_point(1.0, Color(0.8, 1.0, 0.9, 0.0))  # Transparent
+	jump_pad_gradient.add_point(0.0, Color(0.5, 1.0, 0.6, 1.0))  # Bright vibrant green
+	jump_pad_gradient.add_point(0.15, Color(0.4, 1.0, 0.5, 1.0))  # Electric green
+	jump_pad_gradient.add_point(0.4, Color(0.6, 1.0, 0.7, 0.9))  # Light green shimmer
+	jump_pad_gradient.add_point(0.65, Color(0.7, 1.0, 0.85, 0.6))  # Pale green
+	jump_pad_gradient.add_point(0.85, Color(0.85, 1.0, 0.95, 0.25))  # Nearly white
+	jump_pad_gradient.add_point(1.0, Color(0.9, 1.0, 1.0, 0.0))  # Transparent
 
 	death_particles.color_ramp = jump_pad_gradient
-	death_particles.initial_velocity_min = 15.0  # Faster burst
-	death_particles.initial_velocity_max = 25.0
-	death_particles.amount = 150  # Lots of particles
+	death_particles.initial_velocity_min = 18.0  # More powerful burst
+	death_particles.initial_velocity_max = 32.0
+	death_particles.amount = 250  # Many particles for impressive effect
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2159,17 +2208,19 @@ func spawn_teleporter_effect() -> void:
 	if not death_particles:
 		return
 
-	# Temporarily change death particles to bright purple/blue for teleporter effect
+	# Temporarily change death particles to mystical purple-blue energy vortex
 	var teleporter_gradient: Gradient = Gradient.new()
-	teleporter_gradient.add_point(0.0, Color(0.5, 0.3, 1.0, 1.0))  # Bright purple
-	teleporter_gradient.add_point(0.3, Color(0.6, 0.5, 1.0, 0.9))  # Lighter purple
-	teleporter_gradient.add_point(0.7, Color(0.7, 0.7, 1.0, 0.5))  # Light blue-purple
-	teleporter_gradient.add_point(1.0, Color(0.8, 0.8, 1.0, 0.0))  # Transparent
+	teleporter_gradient.add_point(0.0, Color(0.6, 0.4, 1.0, 1.0))  # Vibrant purple
+	teleporter_gradient.add_point(0.15, Color(0.5, 0.3, 1.0, 1.0))  # Deep purple
+	teleporter_gradient.add_point(0.35, Color(0.7, 0.6, 1.0, 0.95))  # Light purple shimmer
+	teleporter_gradient.add_point(0.6, Color(0.75, 0.75, 1.0, 0.7))  # Lavender
+	teleporter_gradient.add_point(0.8, Color(0.85, 0.85, 1.0, 0.35))  # Pale blue-white
+	teleporter_gradient.add_point(1.0, Color(0.9, 0.9, 1.0, 0.0))  # Transparent
 
 	death_particles.color_ramp = teleporter_gradient
-	death_particles.initial_velocity_min = 12.0  # Swirling motion
-	death_particles.initial_velocity_max = 20.0
-	death_particles.amount = 200  # Many particles for swirl effect
+	death_particles.initial_velocity_min = 15.0  # Energetic swirling
+	death_particles.initial_velocity_max = 28.0
+	death_particles.amount = 300  # Many particles for dramatic vortex
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position
