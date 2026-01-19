@@ -6,9 +6,8 @@ extends Ability
 
 @export var projectile_damage: int = 1  # Base damage (same as gun)
 @export var projectile_speed: float = 80.0  # Very fast for accurate shots (was 25.0)
-@export var projectile_lifetime: float = 4.0  # Slightly longer than gun's 3.0
-@export var fire_rate: float = 1.0  # Slower cooldown (gun was 0.5)
-@export var min_charge_time: float = 0.4  # Slightly longer minimum charge
+@export var projectile_lifetime: float = 8.0  # Long range - doubled from 4.0
+@export var fire_rate: float = 1.5  # Slower cooldown (increased from 1.0)
 @export var max_active_projectiles: int = 3  # Fewer than gun's 5 (more powerful shots)
 @onready var ability_sound: AudioStreamPlayer3D = $CannonSound
 
@@ -20,17 +19,35 @@ func _ready() -> void:
 	ability_name = "Cannon"
 	ability_color = Color.ORANGE_RED  # Changed from gun's cyan
 	cooldown_time = fire_rate
-	supports_charging = true  # Cannon supports charging for devastating shots
-	max_charge_time = 2.5  # Longer max charge than gun (2.0)
+	supports_charging = true  # Must support charging for input to work
+	max_charge_time = 0.01  # Instant fire - minimal charge time
 
 func find_nearest_player() -> Node3D:
-	"""Find the nearest player to lock onto (excluding self)"""
+	"""Find the nearest player to lock onto (excluding self) - only targets in forward cone"""
 	if not player or not player.get_parent():
 		return null
 
 	var nearest: Node3D = null
 	var nearest_distance: float = INF
-	var max_lock_range: float = 50.0  # Reduced auto-aim range for less accuracy
+	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
+	var max_angle_degrees: float = 60.0  # Only target within 60 degrees of forward (120 degree cone total)
+
+	# Get player's forward direction (based on camera or rotation) - full 3D
+	var forward_direction: Vector3
+	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
+	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
+
+	if camera:
+		# Use camera's forward direction (full 3D)
+		forward_direction = -camera.global_transform.basis.z
+	elif camera_arm:
+		# Fallback to camera_arm
+		forward_direction = -camera_arm.global_transform.basis.z
+	else:
+		# Fallback for bots: use player's facing direction (horizontal for bots)
+		forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+	forward_direction = forward_direction.normalized()
 
 	# Get all nodes in the Players container
 	var players_container = player.get_parent()
@@ -47,6 +64,18 @@ func find_nearest_player() -> Node3D:
 		if "health" in potential_target and potential_target.health <= 0:
 			continue
 
+		# Calculate direction to target
+		var to_target: Vector3 = (potential_target.global_position - player.global_position).normalized()
+
+		# Calculate angle between forward direction and target direction
+		var dot_product: float = forward_direction.dot(to_target)
+		var angle_radians: float = acos(clamp(dot_product, -1.0, 1.0))
+		var angle_degrees: float = rad_to_deg(angle_radians)
+
+		# Skip targets outside the forward cone
+		if angle_degrees > max_angle_degrees:
+			continue
+
 		# Calculate distance
 		var distance = player.global_position.distance_to(potential_target.global_position)
 
@@ -61,53 +90,46 @@ func activate() -> void:
 	if not player:
 		return
 
-	# Get charge multiplier for scaled damage/speed
-	var charge_multiplier: float = get_charge_multiplier()
-	# Damage: 1 base, 2 when fully charged (charge_level 3)
-	var charged_damage: int = projectile_damage + (1 if charge_level >= 3 else 0)
-	var charged_speed: float = projectile_speed * charge_multiplier
+	# Cannon always does exactly 1 damage (no charge scaling)
+	var damage: int = 1  # Fixed damage, never modified
+	var speed: float = projectile_speed
 
-	print("BOOM! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
+	print("BOOM! (Instant fire)")
 
-	# Get firing direction from camera (shoot at crosshair position, which is 100px above center)
+	# Get initial firing direction from camera
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
-	if camera and camera_arm:
-		# Calculate crosshair screen position (center with 100px upward offset)
-		var viewport: Viewport = camera.get_viewport()
-		if viewport:
-			var viewport_size: Vector2 = viewport.get_visible_rect().size
-			var crosshair_screen_pos: Vector2 = Vector2(viewport_size.x / 2.0, viewport_size.y / 2.0 - 100.0)
-
-			# Project ray from camera through crosshair position to get fire direction
-			fire_direction = camera.project_ray_normal(crosshair_screen_pos)
-		else:
-			# Fallback: use camera forward direction
-			fire_direction = -camera.global_transform.basis.z
-	elif camera_arm:
-		# Fallback to camera_arm if camera not found
-		fire_direction = -camera_arm.global_transform.basis.z
-	else:
-		# Fallback for bots: use player's facing direction (rotation.y)
-		# This is CRITICAL for bots to aim properly
-		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-
 	# Auto-aim: Find nearest player and adjust fire direction
 	var nearest_player = find_nearest_player()
 	if nearest_player:
-		# Aim at the nearest player's position (with reduced prediction for less accuracy)
+		# AUTO-AIM: Aim at the nearest player's position in FULL 3D (including up/down)
 		var target_pos = nearest_player.global_position
 		# Predict where the player will be based on their velocity (only 30% prediction)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
-			var time_to_hit = distance / charged_speed
+			var time_to_hit = distance / speed
 			# Reduced prediction for less accuracy
 			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
 
-		# Calculate direction to target
+		# Calculate direction to target (full 3D - can aim up or down at targets)
 		fire_direction = (target_pos - player.global_position).normalized()
+	else:
+		# MANUAL AIM: No target found - shoot horizontally forward based on camera direction
+		if camera:
+			# Get camera's forward direction
+			fire_direction = -camera.global_transform.basis.z
+		elif camera_arm:
+			# Fallback to camera_arm if camera not found
+			fire_direction = -camera_arm.global_transform.basis.z
+		else:
+			# Fallback for bots: use player's facing direction
+			fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+		# Flatten to horizontal plane for manual aim (no up/down)
+		fire_direction.y = 0
+		fire_direction = fire_direction.normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
@@ -152,17 +174,16 @@ func activate() -> void:
 		if player and "level" in player:
 			level_multiplier = 1.0 + (player.level * 0.25)
 
-		# Projectile velocity = player velocity + fire direction * charged speed
-		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * charged_speed * level_multiplier)
+		# Projectile velocity = player velocity + fire direction * speed
+		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * speed * level_multiplier)
 		if projectile is RigidBody3D:
 			projectile.linear_velocity = projectile_velocity
 
-		# Set charged damage, owner, charge multiplier, and player level via metadata
+		# Set damage, owner, and player level via metadata (damage is always 1)
 		var owner_id: int = player.name.to_int() if player else -1
 		var player_level: int = player.level if player and "level" in player else 0
-		projectile.set_meta("damage", charged_damage)
+		projectile.set_meta("damage", damage)
 		projectile.set_meta("owner_id", owner_id)
-		projectile.set_meta("charge_multiplier", charge_multiplier)
 		projectile.set_meta("player_level", player_level)
 
 		# Auto-destroy after lifetime
@@ -175,18 +196,6 @@ func activate() -> void:
 	if ability_sound:
 		ability_sound.global_position = barrel_position
 		ability_sound.play()
-
-## Override release_charge to enforce minimum charge time
-func release_charge() -> void:
-	# Enforce minimum charge time to prevent spam
-	if charge_time < min_charge_time:
-		print("Cannon: Too fast! Need at least %.1fs charge (currently %.1fs)" % [min_charge_time, charge_time])
-		# Cancel the charge instead of releasing
-		cancel_charge()
-		return
-
-	# Call parent implementation
-	super.release_charge()
 
 func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	"""Handle projectile collision with another body"""
@@ -227,14 +236,13 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 			print('Cannonball hit player (RPC): ', body.name, ' | Damage: ', damage)
 
 		# Apply stronger knockback from cannonball impact
-		# Get charge multiplier and player level multiplier from projectile metadata
-		var charge_mult: float = projectile.get_meta("charge_multiplier", 1.0)
+		# Get player level multiplier from projectile metadata
 		var player_level: int = projectile.get_meta("player_level", 0)
 		var level_mult: float = 1.0 + (player.level * 0.2)
 
-		# Calculate knockback (base 40.0, double the gun's 20.0, scaled by charge and level)
+		# Calculate knockback (base 40.0, double the gun's 20.0, scaled by level)
 		var base_knockback: float = 40.0
-		var total_knockback: float = base_knockback * charge_mult * level_mult
+		var total_knockback: float = base_knockback * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
 		# Use cached velocity to avoid accessing freed projectile
