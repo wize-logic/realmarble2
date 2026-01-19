@@ -1,12 +1,10 @@
 extends Node3D
 
-## Beautiful Atmospheric Skybox Generator
-## Creates stunning realistic skies with detailed volumetric clouds
+## Dark Psychedelic Skybox Generator
+## Creates trippy animated skyboxes with darker colors
 
-@export var animation_speed: float = 0.02  # Slow, realistic cloud movement
-@export var cloud_density: float = 0.5  # 0.0 = clear, 1.0 = overcast
-@export var sun_intensity: float = 0.6  # Reduced to prevent blinding
-@export var time_of_day: float = 0.4  # 0.0 = sunrise, 0.5 = noon, 1.0 = sunset
+@export var animation_speed: float = 0.3
+@export var color_palette: int = 0  # Different color schemes
 
 var sky_material: ShaderMaterial
 var time_elapsed: float = 0.0
@@ -15,15 +13,15 @@ func _ready() -> void:
 	generate_skybox()
 
 func _process(delta: float) -> void:
-	# Animate the clouds slowly
+	# Animate the skybox
 	if sky_material:
 		time_elapsed += delta * animation_speed
 		sky_material.set_shader_parameter("time", time_elapsed)
 
 func generate_skybox() -> void:
-	"""Generate a beautiful atmospheric skybox with detailed clouds"""
+	"""Generate a dark psychedelic procedural skybox"""
 	if OS.is_debug_build():
-		print("Generating beautiful atmospheric skybox with HD clouds...")
+		print("Generating dark psychedelic skybox...")
 
 	# Get existing WorldEnvironment
 	var world_env: WorldEnvironment = get_node_or_null("/root/World/WorldEnvironment")
@@ -42,258 +40,192 @@ func generate_skybox() -> void:
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
 
-	# Create realistic atmospheric sky shader
-	sky_material = create_atmospheric_sky_shader()
+	# Create dark psychedelic sky material
+	sky_material = create_dark_psychedelic_shader()
 	sky.sky_material = sky_material
 
-	# Enhanced environment settings for beautiful visuals
+	# Minimal lighting to keep map dark
 	environment.glow_enabled = true
-	environment.glow_intensity = 0.2
-	environment.glow_strength = 0.8
-	environment.glow_bloom = 0.1
+	environment.glow_intensity = 0.15
+	environment.glow_strength = 0.6
+	environment.glow_bloom = 0.05
 	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 
-	# Add very subtle ambient light from sky (reduced to prevent blinding brightness)
+	# Very low ambient light for dark atmosphere
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.15
+	environment.ambient_light_energy = 0.08
 
-	# Subtle tone mapping for realistic look
+	# Dark tone mapping
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.tonemap_exposure = 0.85
+	environment.tonemap_exposure = 0.7
 	environment.tonemap_white = 1.0
 
-	print("Beautiful skybox with HD clouds generated!")
+	print("Dark psychedelic skybox generated!")
 
-func create_atmospheric_sky_shader() -> ShaderMaterial:
-	"""Create a beautiful realistic atmospheric sky shader with detailed clouds"""
+func create_dark_psychedelic_shader() -> ShaderMaterial:
+	"""Create a shader for dark psychedelic sky effects"""
 	var material: ShaderMaterial = ShaderMaterial.new()
 	var shader: Shader = Shader.new()
 
-	# Beautiful atmospheric sky with volumetric clouds
+	# Dark psychedelic sky shader with animated fractals
 	shader.code = """
 shader_type sky;
 
 uniform float time = 0.0;
-uniform float cloud_density = 0.5;
-uniform float sun_intensity = 1.0;
-uniform vec3 sun_direction = vec3(0.3, 0.5, 0.2);
+uniform vec3 color1 = vec3(0.5, 0.1, 0.4);
+uniform vec3 color2 = vec3(0.1, 0.4, 0.5);
+uniform vec3 color3 = vec3(0.4, 0.5, 0.1);
 
-// === High-Quality Noise Functions for Detailed Clouds ===
-
-// 3D Hash for better randomness
-vec3 hash3(vec3 p) {
-	p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
-			 dot(p, vec3(269.5, 183.3, 246.1)),
-			 dot(p, vec3(113.5, 271.9, 124.6)));
-	return fract(sin(p) * 43758.5453123);
+// Hash function for noise
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
-// 3D Value noise for volumetric clouds
-float noise3D(vec3 p) {
-	vec3 i = floor(p);
-	vec3 f = fract(p);
+// Smooth noise
+float noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
 
-	float n000 = dot(hash3(i), vec3(1.0));
-	float n100 = dot(hash3(i + vec3(1.0, 0.0, 0.0)), vec3(1.0));
-	float n010 = dot(hash3(i + vec3(0.0, 1.0, 0.0)), vec3(1.0));
-	float n110 = dot(hash3(i + vec3(1.0, 1.0, 0.0)), vec3(1.0));
-	float n001 = dot(hash3(i + vec3(0.0, 0.0, 1.0)), vec3(1.0));
-	float n101 = dot(hash3(i + vec3(1.0, 0.0, 1.0)), vec3(1.0));
-	float n011 = dot(hash3(i + vec3(0.0, 1.0, 1.0)), vec3(1.0));
-	float n111 = dot(hash3(i + vec3(1.0, 1.0, 1.0)), vec3(1.0));
+	float a = hash(i);
+	float b = hash(i + vec2(1.0, 0.0));
+	float c = hash(i + vec2(0.0, 1.0));
+	float d = hash(i + vec2(1.0, 1.0));
 
-	return mix(mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
-			   mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y), f.z);
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// High-detail Fractal Brownian Motion (8 octaves for HD detail)
-float fbm(vec3 p) {
+// Fractal Brownian Motion
+float fbm(vec2 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
 
-	// 8 octaves for very detailed clouds
-	for (int i = 0; i < 8; i++) {
-		value += amplitude * noise3D(p * frequency);
-		frequency *= 2.07;  // Slightly irregular for more natural look
+	for (int i = 0; i < 6; i++) {
+		value += amplitude * noise(p * frequency);
+		frequency *= 2.0;
 		amplitude *= 0.5;
 	}
 
 	return value;
 }
 
-// Worley/Cellular noise for fluffy cloud details
-float worley(vec3 p) {
-	vec3 id = floor(p);
-	vec3 fd = fract(p);
+// Voronoi pattern for extra detail
+float voronoi(vec2 p) {
+	vec2 n = floor(p);
+	vec2 f = fract(p);
 
 	float min_dist = 1.0;
 
-	for (int x = -1; x <= 1; x++) {
-		for (int y = -1; y <= 1; y++) {
-			for (int z = -1; z <= 1; z++) {
-				vec3 coord = vec3(float(x), float(y), float(z));
-				vec3 point = hash3(id + coord);
-
-				point = 0.5 + 0.5 * sin(time * 0.01 + 6.2831 * point);
-				vec3 diff = coord + point - fd;
-				float dist = length(diff);
-
-				min_dist = min(min_dist, dist);
-			}
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 b = vec2(float(i), float(j));
+			vec2 r = b - f + hash(n + b) * vec2(1.0);
+			float d = length(r);
+			min_dist = min(min_dist, d);
 		}
 	}
 
 	return min_dist;
 }
 
-// === Atmospheric Scattering ===
-
-vec3 rayleigh_scatter(float cos_theta) {
-	// Blue sky scattering (reduced intensity)
-	float phase = 0.75 * (1.0 + cos_theta * cos_theta);
-	return vec3(0.03, 0.07, 0.17) * phase;
+// Spiral pattern
+vec2 rotate(vec2 p, float a) {
+	float c = cos(a);
+	float s = sin(a);
+	return vec2(p.x * c - p.y * s, p.x * s + p.y * c);
 }
-
-vec3 mie_scatter(float cos_theta) {
-	// Sun glow scattering (reduced intensity)
-	float g = 0.76;
-	float gg = g * g;
-	float phase = (1.5 * (1.0 - gg)) / (2.0 + gg) *
-				  (1.0 + cos_theta * cos_theta) /
-				  pow(1.0 + gg - 2.0 * g * cos_theta, 1.5);
-	return vec3(1.0, 0.98, 0.95) * phase * 0.05;
-}
-
-// === Cloud Rendering ===
-
-vec4 render_clouds(vec3 dir, float height_factor) {
-	// Multiple cloud layers for depth
-	vec3 cloud_pos = dir * 2.0;
-
-	// Layer 1: Large cumulus clouds
-	float cloud_scale_1 = 1.5;
-	float clouds_1 = fbm(cloud_pos * cloud_scale_1 + vec3(time * 0.5, 0.0, time * 0.3));
-
-	// Layer 2: Medium detail clouds
-	float cloud_scale_2 = 3.0;
-	float clouds_2 = fbm(cloud_pos * cloud_scale_2 + vec3(time * 0.3, 0.0, -time * 0.2));
-
-	// Layer 3: Fine detail / wisps
-	float cloud_scale_3 = 6.0;
-	float clouds_3 = fbm(cloud_pos * cloud_scale_3 + vec3(-time * 0.4, 0.0, time * 0.25));
-
-	// Layer 4: Fluffy cellular details
-	float worley_detail = worley(cloud_pos * 4.0 + vec3(time * 0.1, 0.0, 0.0));
-
-	// Combine layers
-	float cloud_pattern = clouds_1 * 0.5 + clouds_2 * 0.3 + clouds_3 * 0.2;
-	cloud_pattern = mix(cloud_pattern, 1.0 - worley_detail, 0.3);
-
-	// Adjust by height - more clouds at horizon, less at zenith
-	float height_influence = 1.0 - smoothstep(0.0, 0.4, height_factor);
-	cloud_pattern += height_influence * 0.2;
-
-	// Apply density control
-	cloud_pattern = smoothstep(0.4 - cloud_density * 0.2, 0.7 + cloud_density * 0.2, cloud_pattern);
-
-	// Cloud lighting - brighter on sun side
-	vec3 cloud_light_dir = normalize(sun_direction);
-	float cloud_lighting = dot(normalize(dir), cloud_light_dir);
-	cloud_lighting = smoothstep(-0.2, 0.6, cloud_lighting);
-
-	// Cloud colors - white to grey with sun influence (toned down)
-	vec3 cloud_bright = vec3(0.85, 0.85, 0.85);
-	vec3 cloud_dark = vec3(0.4, 0.45, 0.5);
-	vec3 cloud_color = mix(cloud_dark, cloud_bright, cloud_lighting);
-
-	// Add subtle color variation
-	cloud_color += vec3(0.03, 0.05, 0.06) * clouds_3;
-
-	// Sun illumination on clouds (reduced)
-	float sun_highlight = pow(max(dot(normalize(dir), cloud_light_dir), 0.0), 8.0);
-	cloud_color += vec3(1.0, 0.9, 0.7) * sun_highlight * 0.15;
-
-	return vec4(cloud_color, cloud_pattern);
-}
-
-// === Main Sky Function ===
 
 void sky() {
+	// Get sky direction
 	vec3 dir = EYEDIR;
 
-	// Sky gradient base
-	float height = dir.y;
-	float height_factor = clamp(height, 0.0, 1.0);
+	// Create swirling pattern
+	vec2 uv = vec2(
+		atan(dir.x, dir.z) / (3.14159 * 2.0) + 0.5,
+		acos(dir.y) / 3.14159
+	);
 
-	// Atmospheric colors (toned down to prevent blinding)
-	vec3 zenith_color = vec3(0.15, 0.25, 0.45);  // Darker deep blue
-	vec3 horizon_color = vec3(0.4, 0.5, 0.65);  // Softer light blue
+	// Add spiral distortion
+	vec2 center = vec2(0.5, 0.5);
+	vec2 toCenter = uv - center;
+	float dist = length(toCenter);
+	float angle = atan(toCenter.y, toCenter.x);
+	angle += time * 0.3 + dist * 2.0;
+	uv = center + rotate(toCenter, angle * 0.2);
 
-	// Base sky gradient
-	vec3 sky_color = mix(horizon_color, zenith_color, pow(height_factor, 0.7));
+	// Multiple layers of animated fractal noise
+	float n1 = fbm(uv * 3.0 + vec2(time * 0.15, -time * 0.1));
+	float n2 = fbm(uv * 5.0 + vec2(-time * 0.2, time * 0.15));
+	float n3 = fbm(uv * 8.0 + vec2(time * 0.25, time * 0.2));
 
-	// Add atmospheric scattering
-	vec3 sun_dir = normalize(sun_direction);
-	float cos_theta = dot(dir, sun_dir);
+	// Add voronoi for cellular patterns
+	float v1 = voronoi(uv * 4.0 + time * 0.1);
+	float v2 = voronoi(uv * 7.0 - time * 0.15);
 
-	sky_color += rayleigh_scatter(cos_theta) * sun_intensity;
-	sky_color += mie_scatter(cos_theta) * sun_intensity;
+	// Color mixing based on noise - darker colors
+	vec3 color = mix(color1 * 0.5, color2 * 0.6, n1);
+	color = mix(color, color3 * 0.5, n2);
 
-	// Sun disc (reduced brightness)
-	float sun_disc = smoothstep(0.9998, 0.9999, cos_theta);
-	sky_color += vec3(1.0, 0.95, 0.85) * sun_disc * 1.2 * sun_intensity;
+	// Add voronoi influence
+	color = mix(color, color * 0.7, v1);
+	color += vec3(v2 * 0.1);
 
-	// Sun glow (reduced)
-	float sun_glow = pow(max(cos_theta, 0.0), 12.0);
-	sky_color += vec3(1.0, 0.8, 0.5) * sun_glow * 0.15 * sun_intensity;
+	// Add shimmer and detail - but keep it dark
+	color += vec3(n3 * 0.15);
 
-	// Render clouds only above horizon
-	if (height > -0.1) {
-		vec4 clouds = render_clouds(dir, height_factor);
+	// Gradient from top to bottom - very dark
+	float gradient = smoothstep(-0.3, 0.9, dir.y);
+	color = mix(color * 0.3, color * 0.7, gradient);
 
-		// Blend clouds with sky
-		sky_color = mix(sky_color, clouds.rgb, clouds.a * 0.9);
-	}
+	// Pulsing effect - subtle
+	float pulse = sin(time * 1.5) * 0.08 + 0.92;
+	color *= pulse;
 
-	// Subtle color grading for atmosphere (reduced contrast)
-	sky_color = pow(sky_color, vec3(1.02));
+	// Wave distortion for extra psychedelia
+	float wave = sin(uv.x * 10.0 + time) * sin(uv.y * 10.0 - time);
+	color += vec3(wave * 0.05);
 
-	// Add subtle ambient variation (reduced)
-	float ambient_variation = noise3D(dir * 0.5 + vec3(time * 0.05)) * 0.01;
-	sky_color += ambient_variation;
+	// Keep overall darkness
+	color *= 0.6;
 
-	COLOR = sky_color;
+	COLOR = color;
 }
 """
 
 	material.shader = shader
 
-	# Set shader parameters with reduced brightness
+	# Dark psychedelic color palette
+	var colors: Array = generate_dark_color_palette()
+	material.set_shader_parameter("color1", colors[0])
+	material.set_shader_parameter("color2", colors[1])
+	material.set_shader_parameter("color3", colors[2])
 	material.set_shader_parameter("time", 0.0)
-	material.set_shader_parameter("cloud_density", cloud_density)
-	material.set_shader_parameter("sun_intensity", sun_intensity)
-	material.set_shader_parameter("sun_direction", Vector3(0.3, 0.5, 0.2))
 
 	return material
 
-func set_cloud_density(density: float) -> void:
-	"""Adjust cloud coverage (0.0 = clear, 1.0 = overcast)"""
-	cloud_density = clamp(density, 0.0, 1.0)
-	if sky_material:
-		sky_material.set_shader_parameter("cloud_density", cloud_density)
-		print("Cloud density set to: ", cloud_density)
+func generate_dark_color_palette() -> Array:
+	"""Generate dark psychedelic color palette"""
+	var palettes: Array = [
+		# Dark Purple/Pink/Cyan
+		[Color(0.4, 0.1, 0.5), Color(0.5, 0.15, 0.35), Color(0.1, 0.4, 0.5)],
+		# Dark Orange/Red/Brown
+		[Color(0.5, 0.25, 0.0), Color(0.5, 0.05, 0.1), Color(0.4, 0.3, 0.1)],
+		# Dark Green/Teal/Blue
+		[Color(0.0, 0.4, 0.25), Color(0.2, 0.5, 0.3), Color(0.1, 0.3, 0.5)],
+		# Dark Blue/Purple/Magenta
+		[Color(0.1, 0.2, 0.5), Color(0.3, 0.1, 0.5), Color(0.5, 0.1, 0.4)],
+		# Dark Sunset
+		[Color(0.5, 0.15, 0.05), Color(0.5, 0.3, 0.15), Color(0.4, 0.1, 0.3)]
+	]
 
-func set_sun_intensity(intensity: float) -> void:
-	"""Adjust sun brightness"""
-	sun_intensity = clamp(intensity, 0.0, 2.0)
-	if sky_material:
-		sky_material.set_shader_parameter("sun_intensity", sun_intensity)
-		print("Sun intensity set to: ", sun_intensity)
+	return palettes[randi() % palettes.size()]
 
-func set_sun_direction(direction: Vector3) -> void:
-	"""Set sun position/direction"""
+func randomize_colors() -> void:
+	"""Change to a new random color palette"""
 	if sky_material:
-		sky_material.set_shader_parameter("sun_direction", direction.normalized())
-		print("Sun direction updated")
+		var colors: Array = generate_dark_color_palette()
+		sky_material.set_shader_parameter("color1", colors[0])
+		sky_material.set_shader_parameter("color2", colors[1])
+		sky_material.set_shader_parameter("color3", colors[2])
+		print("Skybox colors randomized!")
