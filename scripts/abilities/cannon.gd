@@ -6,7 +6,7 @@ extends Ability
 
 @export var projectile_damage: int = 1  # Base damage (same as gun)
 @export var projectile_speed: float = 80.0  # Very fast for accurate shots (was 25.0)
-@export var projectile_lifetime: float = 4.0  # Slightly longer than gun's 3.0
+@export var projectile_lifetime: float = 8.0  # Long range - doubled from 4.0
 @export var fire_rate: float = 1.5  # Slower cooldown (increased from 1.0)
 @export var max_active_projectiles: int = 3  # Fewer than gun's 5 (more powerful shots)
 @onready var ability_sound: AudioStreamPlayer3D = $CannonSound
@@ -19,7 +19,8 @@ func _ready() -> void:
 	ability_name = "Cannon"
 	ability_color = Color.ORANGE_RED  # Changed from gun's cyan
 	cooldown_time = fire_rate
-	supports_charging = false  # Cannon fires instantly without charging
+	supports_charging = true  # Must support charging for input to work
+	max_charge_time = 0.01  # Instant fire - minimal charge time
 
 func find_nearest_player() -> Node3D:
 	"""Find the nearest player to lock onto (excluding self) - only targets in forward cone"""
@@ -28,7 +29,7 @@ func find_nearest_player() -> Node3D:
 
 	var nearest: Node3D = null
 	var nearest_distance: float = INF
-	var max_lock_range: float = 50.0  # Reduced auto-aim range for less accuracy
+	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
 	var max_angle_degrees: float = 60.0  # Only target within 60 degrees of forward (120 degree cone total)
 
 	# Get player's forward direction (based on camera or rotation)
@@ -96,30 +97,24 @@ func activate() -> void:
 
 	print("BOOM! (Instant fire)")
 
-	# Get firing direction from camera (shoot at crosshair position, which is 100px above center)
+	# Get firing direction from camera - always shoot straight forward horizontally (no up/down)
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
-	if camera and camera_arm:
-		# Calculate crosshair screen position (center with 100px upward offset)
-		var viewport: Viewport = camera.get_viewport()
-		if viewport:
-			var viewport_size: Vector2 = viewport.get_visible_rect().size
-			var crosshair_screen_pos: Vector2 = Vector2(viewport_size.x / 2.0, viewport_size.y / 2.0 - 100.0)
-
-			# Project ray from camera through crosshair position to get fire direction
-			fire_direction = camera.project_ray_normal(crosshair_screen_pos)
-		else:
-			# Fallback: use camera forward direction
-			fire_direction = -camera.global_transform.basis.z
+	if camera:
+		# Get camera's forward direction
+		fire_direction = -camera.global_transform.basis.z
 	elif camera_arm:
 		# Fallback to camera_arm if camera not found
 		fire_direction = -camera_arm.global_transform.basis.z
 	else:
 		# Fallback for bots: use player's facing direction (rotation.y)
-		# This is CRITICAL for bots to aim properly
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+	# Flatten direction to horizontal plane only (remove Y component, keep X and Z)
+	fire_direction.y = 0
+	fire_direction = fire_direction.normalized()
 
 	# Auto-aim: Find nearest player and adjust fire direction
 	var nearest_player = find_nearest_player()
@@ -133,8 +128,10 @@ func activate() -> void:
 			# Reduced prediction for less accuracy
 			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
 
-		# Calculate direction to target
-		fire_direction = (target_pos - player.global_position).normalized()
+		# Calculate direction to target (horizontal only)
+		fire_direction = (target_pos - player.global_position)
+		fire_direction.y = 0  # Keep horizontal
+		fire_direction = fire_direction.normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
