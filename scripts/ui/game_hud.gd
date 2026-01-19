@@ -47,6 +47,13 @@ func find_local_player() -> void:
 		await get_tree().create_timer(0.5).timeout
 		find_local_player()
 
+func reset_hud() -> void:
+	"""Reset HUD and find local player again - call this when starting a new match"""
+	print("[HUD] Resetting HUD for new match")
+	player = null
+	world = get_tree().root.get_node_or_null("World")
+	call_deferred("find_local_player")
+
 func _process(delta: float) -> void:
 	update_hud()
 	update_expansion_notification(delta)
