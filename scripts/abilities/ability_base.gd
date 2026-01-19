@@ -29,7 +29,7 @@ func _ready() -> void:
 
 		# Configure charge particles - beautiful magical energy glow
 		charge_particles.emitting = false
-		charge_particles.amount = 80  # More particles for richer effect
+		charge_particles.amount = 8  # Reduced by 90% for HTML5
 		charge_particles.lifetime = 1.0  # Longer lifetime
 		charge_particles.explosiveness = 0.0  # Continuous emission
 		charge_particles.randomness = 0.4
@@ -37,7 +37,7 @@ func _ready() -> void:
 
 		# Set up particle mesh - larger for more visibility
 		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.3, 0.3)
+		particle_mesh.size = Vector2(0.6, 0.6)  # Larger to compensate
 		charge_particles.mesh = particle_mesh
 
 		# Create material for particles with enhanced glow
@@ -48,6 +48,7 @@ func _ready() -> void:
 		particle_material.vertex_color_use_as_albedo = true
 		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		particle_material.disable_receive_shadows = true
+		particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 		charge_particles.mesh.material = particle_material
 
 		# Emission shape - ring around ability for energy focus
@@ -211,7 +212,7 @@ func update_charge_visuals() -> void:
 	# Scale particle intensity based on charge level - dramatic escalation
 	match charge_level:
 		1:  # Weak - gentle magical glow
-			charge_particles.amount = 50
+			charge_particles.amount = 5  # Reduced by 90% for HTML5
 			charge_particles.scale_amount_min = 1.5
 			charge_particles.scale_amount_max = 2.0
 			charge_particles.initial_velocity_min = 1.5
@@ -219,7 +220,7 @@ func update_charge_visuals() -> void:
 			charge_particles.emission_ring_radius = 1.0
 			charge_particles.lifetime = 0.8
 		2:  # Medium - intensifying energy pulse
-			charge_particles.amount = 100
+			charge_particles.amount = 10  # Reduced by 90% for HTML5
 			charge_particles.scale_amount_min = 2.0
 			charge_particles.scale_amount_max = 3.5
 			charge_particles.initial_velocity_min = 2.5
@@ -227,7 +228,7 @@ func update_charge_visuals() -> void:
 			charge_particles.emission_ring_radius = 1.4
 			charge_particles.lifetime = 1.0
 		3:  # Max - spectacular power surge
-			charge_particles.amount = 180
+			charge_particles.amount = 18  # Reduced by 90% for HTML5
 			charge_particles.scale_amount_min = 3.0
 			charge_particles.scale_amount_max = 5.5
 			charge_particles.initial_velocity_min = 4.0

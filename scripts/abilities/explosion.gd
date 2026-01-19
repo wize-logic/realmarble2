@@ -34,7 +34,7 @@ func _ready() -> void:
 
 	# Configure explosion particles - spectacular fireball
 	explosion_particles.emitting = false
-	explosion_particles.amount = 200  # Dense explosion cloud
+	explosion_particles.amount = 20  # Reduced by 90% for HTML5
 	explosion_particles.lifetime = 0.8  # Longer for more impact
 	explosion_particles.one_shot = true
 	explosion_particles.explosiveness = 0.98  # Slight variation
@@ -43,7 +43,7 @@ func _ready() -> void:
 
 	# Set up particle mesh - larger for more visibility
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(1.2, 1.2)
+	particle_mesh.size = Vector2(2.0, 2.0)  # Larger to compensate
 	explosion_particles.mesh = particle_mesh
 
 	# Create material for brilliant explosion effect
@@ -55,6 +55,7 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.7, 0.2, 1.0)
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	explosion_particles.mesh.material = particle_material
 
 	# Emission shape - tight sphere for initial blast
@@ -105,7 +106,7 @@ func _ready() -> void:
 
 	# Configure magma particles - molten projectiles
 	magma_particles.emitting = false
-	magma_particles.amount = 45  # More chunks base amount, will scale with level
+	magma_particles.amount = 5  # Reduced by 90% for HTML5
 	magma_particles.lifetime = 2.0  # Longer flight time
 	magma_particles.one_shot = true
 	magma_particles.explosiveness = 0.9  # Quick burst
@@ -114,7 +115,7 @@ func _ready() -> void:
 
 	# Set up particle mesh - larger glowing chunks
 	var magma_mesh: QuadMesh = QuadMesh.new()
-	magma_mesh.size = Vector2(0.6, 0.6)
+	magma_mesh.size = Vector2(1.2, 1.2)  # Larger to compensate
 	magma_particles.mesh = magma_mesh
 
 	# Create material for brilliant glowing lava
@@ -126,6 +127,7 @@ func _ready() -> void:
 	magma_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	magma_material.disable_receive_shadows = true
 	magma_material.albedo_color = Color(1.0, 0.5, 0.1, 1.0)
+	magma_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	magma_particles.mesh.material = magma_material
 
 	# Emission shape - ring for better spread
@@ -218,11 +220,11 @@ func activate() -> void:
 	# Trigger magma particles (scaled with player level)
 	var magma_particles: CPUParticles3D = get_node_or_null("MagmaParticles")
 	if magma_particles:
-		# Scale particle amount with player level (30 base, +20 per level)
+		# Scale particle amount with player level (3 base, +2 per level) - 90% reduction
 		var level_multiplier: int = 0
 		if player and "level" in player:
 			level_multiplier = player.level
-		magma_particles.amount = 30 + (level_multiplier * 20)  # Level 0: 30, Level 3: 90
+		magma_particles.amount = 3 + (level_multiplier * 2)  # Level 0: 3, Level 3: 9
 
 		# Also scale velocity slightly with level
 		magma_particles.initial_velocity_min = 6.0 + (level_multiplier * 1.5)

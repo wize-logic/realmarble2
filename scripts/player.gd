@@ -262,21 +262,21 @@ func _ready() -> void:
 		death_particles.name = "DeathParticles"
 		add_child(death_particles)
 
-		# Configure death particles - spectacular explosive burst
+		# Configure death particles - explosive burst (90% reduced for HTML5)
 		death_particles.emitting = false
-		death_particles.amount = 400  # Massive particle count for dramatic explosion
+		death_particles.amount = 40  # Reduced by 90% for HTML5
 		death_particles.lifetime = 3.0  # Longer lifetime for more impact
 		death_particles.one_shot = true
 		death_particles.explosiveness = 0.95  # Slight variation for organic feel
 		death_particles.randomness = 0.6
 		death_particles.local_coords = false
 
-		# Set up particle mesh - larger quads for more visibility
+		# Set up particle mesh with circular texture
 		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.5, 0.5)
+		particle_mesh.size = Vector2(0.8, 0.8)  # Larger to compensate for fewer particles
 		death_particles.mesh = particle_mesh
 
-		# Create material for particles with enhanced glow
+		# Create material with circular particle texture
 		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -284,6 +284,7 @@ func _ready() -> void:
 		particle_material.vertex_color_use_as_albedo = true
 		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		particle_material.disable_receive_shadows = true
+		particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 		death_particles.mesh.material = particle_material
 
 		# Emission shape - tight sphere burst
@@ -332,21 +333,21 @@ func _ready() -> void:
 		collection_particles.name = "CollectionParticles"
 		add_child(collection_particles)
 
-		# Configure collection particles - magical upward blue aura
+		# Configure collection particles - magical upward aura (90% reduced for HTML5)
 		collection_particles.emitting = false
-		collection_particles.amount = 150  # Increased for more impressive aura
+		collection_particles.amount = 15  # Reduced by 90% for HTML5
 		collection_particles.lifetime = 2.0  # Longer duration for magical effect
 		collection_particles.one_shot = true
 		collection_particles.explosiveness = 0.15  # Smooth flowing emission
 		collection_particles.randomness = 0.4
 		collection_particles.local_coords = false
 
-		# Set up particle mesh - larger for more visibility
+		# Set up particle mesh with circular texture - larger for visibility
 		var collection_particle_mesh: QuadMesh = QuadMesh.new()
-		collection_particle_mesh.size = Vector2(0.35, 0.35)
+		collection_particle_mesh.size = Vector2(0.6, 0.6)  # Larger to compensate
 		collection_particles.mesh = collection_particle_mesh
 
-		# Create material for particles with enhanced glow
+		# Create material with circular particle texture
 		var collection_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		collection_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		collection_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
@@ -354,6 +355,7 @@ func _ready() -> void:
 		collection_particle_material.vertex_color_use_as_albedo = true
 		collection_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		collection_particle_material.disable_receive_shadows = true
+		collection_particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 		collection_particles.mesh.material = collection_particle_material
 
 		# Emission shape - ring at base of player
@@ -514,12 +516,12 @@ func _ready() -> void:
 		grind_particles.randomness = 0.5
 		grind_particles.local_coords = false
 
-		# Set up particle mesh - larger sparks
+		# Set up particle mesh with circular texture for spark effect
 		var grind_particle_mesh: QuadMesh = QuadMesh.new()
-		grind_particle_mesh.size = Vector2(0.25, 0.25)
+		grind_particle_mesh.size = Vector2(0.4, 0.4)  # Larger for visibility
 		grind_particles.mesh = grind_particle_mesh
 
-		# Create material for brilliant spark particles
+		# Create material with circular particle texture for round sparks
 		var grind_particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		grind_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		grind_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for bright sparks
@@ -527,6 +529,7 @@ func _ready() -> void:
 		grind_particle_material.vertex_color_use_as_albedo = true
 		grind_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 		grind_particle_material.disable_receive_shadows = true
+		grind_particle_material.albedo_texture = load("res://textures/kenney_particle_pack/star_05.png")  # Star texture for sparks
 		grind_particles.mesh.material = grind_particle_material
 
 		# Emission shape - point below player
@@ -2194,7 +2197,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.color_ramp = jump_pad_gradient
 	death_particles.initial_velocity_min = 18.0  # More powerful burst
 	death_particles.initial_velocity_max = 32.0
-	death_particles.amount = 250  # Many particles for impressive effect
+	death_particles.amount = 25  # Reduced by 90% for HTML5
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2220,7 +2223,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.color_ramp = teleporter_gradient
 	death_particles.initial_velocity_min = 15.0  # Energetic swirling
 	death_particles.initial_velocity_max = 28.0
-	death_particles.amount = 300  # Many particles for dramatic vortex
+	death_particles.amount = 30  # Reduced by 90% for HTML5
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position

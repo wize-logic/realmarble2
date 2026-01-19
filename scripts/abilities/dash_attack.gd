@@ -54,7 +54,7 @@ func _ready() -> void:
 
 	# Configure fire particles - spectacular blazing trail
 	fire_trail.emitting = false
-	fire_trail.amount = 200  # Dense trail for dramatic effect
+	fire_trail.amount = 20  # Reduced by 90% for HTML5
 	fire_trail.lifetime = 1.5  # Longer persistence
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.4
@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Set up particle mesh - larger flames
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.7, 0.7)
+	particle_mesh.size = Vector2(1.5, 1.5)  # Larger to compensate
 	fire_trail.mesh = particle_mesh
 
 	# Create material for brilliant fire effect
@@ -74,6 +74,7 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.85, 0.4, 1.0)
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	fire_trail.mesh.material = particle_material
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH

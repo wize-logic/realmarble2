@@ -56,7 +56,7 @@ func _ready() -> void:
 
 	# Configure slash particles - beautiful energy blade arc
 	slash_particles.emitting = false
-	slash_particles.amount = 80  # More particles for denser slash trail
+	slash_particles.amount = 8  # Reduced by 90% for HTML5
 	slash_particles.lifetime = 0.5  # Longer lasting slash trail
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 0.95  # Quick burst with slight variation
@@ -65,7 +65,7 @@ func _ready() -> void:
 
 	# Set up particle mesh - wider blade slashes
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.7, 0.15)  # Wider, more visible slashes
+	particle_mesh.size = Vector2(1.5, 0.3)  # Larger to compensate
 	slash_particles.mesh = particle_mesh
 
 	# Create material for brilliant slash effect
@@ -76,6 +76,7 @@ func _ready() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED  # Orient with slash
 	particle_material.disable_receive_shadows = true
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/star_05.png")
 	slash_particles.mesh.material = particle_material
 
 	# Emission shape - arc in front

@@ -14,7 +14,7 @@ func create_poof_effect() -> void:
 	particles.name = "PoofParticles"
 	particles.emitting = false
 	particles.one_shot = true
-	particles.amount = 500  # Increased for denser, more impressive effect
+	particles.amount = 50  # Reduced by 90% for HTML5
 	particles.lifetime = 2.0  # Longer lifetime for more impact
 	particles.explosiveness = 0.95  # Slight variation for more organic feel
 	particles.randomness = 0.9
@@ -49,9 +49,9 @@ func create_poof_effect() -> void:
 	material.turbulence_influence_min = 0.3
 	material.turbulence_influence_max = 0.6
 
-	# Scale - dynamic size changes
-	material.scale_min = 1.5
-	material.scale_max = 4.5
+	# Scale - dynamic size changes (larger to compensate for fewer particles)
+	material.scale_min = 2.5
+	material.scale_max = 6.0
 	material.scale_curve = create_scale_curve()
 
 	# Rotation - add spin for more visual interest
@@ -66,10 +66,12 @@ func create_poof_effect() -> void:
 
 	particles.process_material = material
 
-	# Create mesh for particles - use sphere for puffy look
+	# Create mesh for particles - use sphere for round, puffy look
 	var sphere_mesh = SphereMesh.new()
-	sphere_mesh.radial_segments = 12  # Smoother spheres
-	sphere_mesh.rings = 6
+	sphere_mesh.radius = 0.3  # Larger radius for visibility
+	sphere_mesh.height = 0.6
+	sphere_mesh.radial_segments = 8  # Lower segments for performance
+	sphere_mesh.rings = 4
 	particles.draw_pass_1 = sphere_mesh
 
 	print("POOF particle effect created")

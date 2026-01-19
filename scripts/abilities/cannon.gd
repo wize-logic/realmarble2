@@ -309,7 +309,7 @@ func add_projectile_trail(projectile: Node3D) -> void:
 
 	# Configure trail particles - spectacular fiery smoke trail
 	trail.emitting = true
-	trail.amount = 80  # Dense trail
+	trail.amount = 8  # Reduced by 90% for HTML5
 	trail.lifetime = 0.9  # Longer for dramatic effect
 	trail.explosiveness = 0.0  # Continuous emission
 	trail.randomness = 0.4
@@ -317,7 +317,7 @@ func add_projectile_trail(projectile: Node3D) -> void:
 
 	# Set up particle mesh - larger billowing smoke
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.5, 0.5)
+	particle_mesh.size = Vector2(1.0, 1.0)  # Larger to compensate
 	trail.mesh = particle_mesh
 
 	# Create material for dramatic trail
@@ -328,6 +328,7 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	trail.mesh.material = particle_material
 
 	# Emission shape - point source
@@ -381,7 +382,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Configure muzzle flash - massive explosive burst
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 60  # Many particles for impressive flash
+	muzzle_flash.amount = 6  # Reduced by 90% for HTML5
 	muzzle_flash.lifetime = 0.35  # Longer for impact
 	muzzle_flash.one_shot = true
 	muzzle_flash.explosiveness = 0.98
@@ -390,7 +391,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Set up particle mesh - large billowing flash
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(1.2, 1.2)  # Massive flash
+	particle_mesh.size = Vector2(2.5, 2.5)  # Larger to compensate
 	muzzle_flash.mesh = particle_mesh
 
 	# Create material for brilliant flash
@@ -401,6 +402,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	muzzle_flash.mesh.material = particle_material
 
 	# Emission shape - large cone burst
@@ -457,7 +459,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Configure explosion - spectacular impact burst
 	explosion.emitting = true
-	explosion.amount = 100  # Dense explosion
+	explosion.amount = 10  # Reduced by 90% for HTML5
 	explosion.lifetime = 0.8  # Longer for impact
 	explosion.one_shot = true
 	explosion.explosiveness = 0.96
@@ -466,7 +468,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Set up particle mesh - large explosion particles
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(1.0, 1.0)
+	particle_mesh.size = Vector2(2.0, 2.0)  # Larger to compensate
 	explosion.mesh = particle_mesh
 
 	# Create material for brilliant explosion
@@ -477,6 +479,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
+	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
 	explosion.mesh.material = particle_material
 
 	# Emission shape - tight sphere for powerful blast
