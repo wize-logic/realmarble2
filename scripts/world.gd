@@ -968,9 +968,9 @@ func show_main_menu() -> void:
 	if main_menu:
 		main_menu.visible = true
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview
+	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
 	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A")
+	await generate_procedural_level("A", false)
 
 	# Recreate marble preview after level regeneration
 	print("[CAMERA] Recreating marble preview for main menu")
@@ -1150,9 +1150,13 @@ func return_to_main_menu() -> void:
 		# Re-enable practice button now that we're back in menu
 		_set_practice_button_disabled(false)
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview
+	# Hide blur effect
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
 	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A")
+	await generate_procedural_level("A", false)
 
 	# Recreate marble preview after level regeneration
 	print("[CAMERA] Recreating marble preview for main menu")
@@ -1975,10 +1979,11 @@ func play_countdown_beep() -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(level_type: String = "A") -> void:
+func generate_procedural_level(level_type: String = "A", spawn_collectibles: bool = true) -> void:
 	"""Generate a procedural level with skybox
 	Args:
 		level_type: "A" for original generator, "B" for Quake 3 arena style
+		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 	"""
 	if OS.is_debug_build():
 		print("Generating procedural arena (Type %s)..." % level_type)
@@ -2021,14 +2026,15 @@ func generate_procedural_level(level_type: String = "A") -> void:
 	# Update player spawn points from generated level
 	update_player_spawns()
 
-	# Respawn all orbs and abilities on the new level
-	var orb_spawner: Node = get_node_or_null("OrbSpawner")
-	if orb_spawner and orb_spawner.has_method("respawn_all"):
-		orb_spawner.respawn_all()
+	# Respawn all orbs and abilities on the new level (only if spawn_collectibles is true)
+	if spawn_collectibles:
+		var orb_spawner: Node = get_node_or_null("OrbSpawner")
+		if orb_spawner and orb_spawner.has_method("respawn_all"):
+			orb_spawner.respawn_all()
 
-	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
-	if ability_spawner and ability_spawner.has_method("respawn_all"):
-		ability_spawner.respawn_all()
+		var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+		if ability_spawner and ability_spawner.has_method("respawn_all"):
+			ability_spawner.respawn_all()
 
 	# Create skybox
 	skybox_generator = Node3D.new()
