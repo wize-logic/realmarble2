@@ -4,9 +4,9 @@ extends Ability
 ## Performs a powerful forward dash that damages enemies on contact
 ## Like Kirby's dash attack!
 
-@export var dash_force: float = 80.0
-@export var dash_duration: float = 0.5
-@export var damage: int = 1
+@export var dash_force: float = 200.0  # Increased from 80.0 (2.5x more powerful)
+@export var dash_duration: float = 0.6  # Increased from 0.5s for more impact
+@export var damage: int = 1  # Damage unchanged
 @onready var ability_sound: AudioStreamPlayer3D = $DashSound
 
 var is_dashing: bool = false
@@ -37,7 +37,7 @@ func _ready() -> void:
 
 	var collision_shape: CollisionShape3D = CollisionShape3D.new()
 	var sphere_shape: SphereShape3D = SphereShape3D.new()
-	sphere_shape.radius = 1.2  # Slightly larger than player for good hit detection
+	sphere_shape.radius = 1.5  # Increased from 1.2 for easier hits with powerful dash
 	collision_shape.shape = sphere_shape
 	hitbox.add_child(collision_shape)
 
@@ -52,10 +52,10 @@ func _ready() -> void:
 	fire_trail.name = "FireTrail"
 	add_child(fire_trail)
 
-	# Configure fire particles - Trail effect
+	# Configure fire particles - Trail effect (enhanced for more powerful dash)
 	fire_trail.emitting = false
-	fire_trail.amount = 120  # More particles for better trail visibility
-	fire_trail.lifetime = 1.2  # Longer lifetime so trail persists
+	fire_trail.amount = 180  # Increased from 120 for more intense trail
+	fire_trail.lifetime = 1.4  # Increased from 1.2s for longer lasting trail
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.3
 	fire_trail.local_coords = false  # World space - particles stay where emitted
@@ -89,9 +89,9 @@ func _ready() -> void:
 	fire_trail.initial_velocity_min = 0.3  # Very slow - particles stay in place
 	fire_trail.initial_velocity_max = 1.2
 
-	# Size over lifetime - start big, shrink gradually
-	fire_trail.scale_amount_min = 2.5
-	fire_trail.scale_amount_max = 4.0
+	# Size over lifetime - start big, shrink gradually (enhanced for powerful dash)
+	fire_trail.scale_amount_min = 3.5  # Increased from 2.5
+	fire_trail.scale_amount_max = 5.5  # Increased from 4.0
 	fire_trail.scale_amount_curve = Curve.new()
 	fire_trail.scale_amount_curve.add_point(Vector2(0, 1.0))
 	fire_trail.scale_amount_curve.add_point(Vector2(0.4, 0.8))
@@ -124,11 +124,11 @@ func activate() -> void:
 	if not player:
 		return
 
-	# Get charge multiplier for scaled damage/force
+	# Get charge multiplier for scaled force/knockback (damage stays constant at 1)
 	var charge_multiplier: float = get_charge_multiplier()
-	var charged_damage: int = int(damage * charge_multiplier)
+	var charged_damage: int = damage  # Always 1, no charge scaling on damage
 	var charged_dash_force: float = dash_force * charge_multiplier
-	var charged_knockback: float = 40.0 * charge_multiplier
+	var charged_knockback: float = 100.0 * charge_multiplier  # Increased from 40.0 (2.5x)
 
 	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
@@ -196,12 +196,12 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 
 	# Check if it's another player
 	if body is RigidBody3D and body.has_method("receive_damage_from"):
-		# Get charge multiplier and player level multiplier for damage/knockback scaling
+		# Get charge multiplier and player level multiplier for knockback scaling (damage always 1)
 		var charge_multiplier: float = get_charge_multiplier()
 		var player_level: int = player.level if player and "level" in player else 0
 		var level_mult: float = 1.0 + (player_level * 0.2)
-		var charged_damage: int = int(damage * charge_multiplier)
-		var charged_knockback: float = 40.0 * charge_multiplier * level_mult
+		var charged_damage: int = damage  # Always 1, no charge scaling
+		var charged_knockback: float = 100.0 * charge_multiplier * level_mult  # Increased from 40.0 (2.5x)
 
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1
