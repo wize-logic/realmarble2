@@ -490,7 +490,8 @@ func _ready() -> void:
 
 		# Configure grind particles - sparks flying backward
 		grind_particles.emitting = false
-		grind_particles.amount = 30
+		# HTML5 optimization: Reduce particle count for better performance in browsers
+		grind_particles.amount = 8 if OS.has_feature("web") else 30
 		grind_particles.lifetime = 0.6
 		grind_particles.one_shot = false  # Continuous emission while grinding
 		grind_particles.explosiveness = 0.1
