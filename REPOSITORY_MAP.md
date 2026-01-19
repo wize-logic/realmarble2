@@ -86,7 +86,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 ├── scripts/                        # All GDScript files
 │   ├── abilities/
 │   │   ├── ability_base.gd        # Base ability class
-│   │   ├── cannon.gd              # Cannon ability (explosive projectiles)
+│   │   ├── cannon.gd              # Cannon ability (instant-fire explosive projectiles, forward-facing only)
 │   │   ├── dash_attack.gd
 │   │   ├── explosion.gd
 │   │   └── sword.gd
@@ -227,17 +227,18 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 
 | Ability | Type | Damage | Special |
 |---------|------|--------|---------|
-| **Cannon** | Ranged | 3 | Explosive projectiles, slow fire rate |
+| **Cannon** | Ranged | 1 | Instant-fire explosive projectiles, forward-facing only, 1.5s cooldown |
 | **Dash Attack** | Melee | 1-3 | Forward dash with damage scaling |
 | **Explosion** | AoE | 2-4 | Radius scales with charge |
 | **Gun** | Ranged | 1-3 | Fast projectiles, rapid fire |
 | **Sword** | Melee | 1-3 | Swing attack with AoE at max charge |
 
 **Charging System:**
-- Hold **E** to charge (3 levels: weak, medium, max)
+- Hold **E** to charge (3 levels: weak, medium, max) - for abilities that support charging
 - Visual: Particle effects grow with charge
-- Release **E** to fire
+- Release **E** to fire (or tap **E** for instant-fire abilities like Cannon)
 - Press **O** to drop ability
+- **Note:** Cannon fires instantly without charging
 
 **Behavior:**
 - Can only hold one ability at a time
@@ -356,7 +357,7 @@ WANDER → CHASE → ATTACK
 - Dash: 5-10 units
 - Gun: 10-20 units
 - Explosion: 3-8 units
-- Cannon: 8-15 units
+- Cannon: 8-15 units (forward-facing only, 120° cone)
 
 ### 10. Menu System
 
@@ -830,7 +831,7 @@ Clients (Peer 2-16)
 
 ---
 
-**Last Updated:** 2026-01-18
+**Last Updated:** 2026-01-19
 **Godot Version:** 4.5.1 (GL Compatibility)
 **Primary Platform:** HTML5/Web (CrazyGames)
 
