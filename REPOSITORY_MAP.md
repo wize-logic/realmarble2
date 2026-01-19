@@ -97,7 +97,9 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── shaders/
 │   │   ├── blur.gdshader
 │   │   ├── card_glow.gdshader
-│   │   └── plasma_glow.gdshader
+│   │   ├── marble_shader.gdshader       # Marble visual shader (swirls, bubbles, fresnel)
+│   │   ├── plasma_glow.gdshader
+│   │   └── procedural_surface.gdshader  # Procedural level geometry shader
 │   │
 │   ├── ui/
 │   │   ├── menu/
@@ -121,6 +123,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── ability_pickup.gd          # Ability pickup logic
 │   ├── ability_spawner.gd
 │   ├── audio_metadata_parser.gd
+│   ├── beam_spawn_effect.gd       # Star Trek-style transporter beam spawn effect
 │   ├── bot_ai.gd                  # Advanced bot AI (1,043 lines)
 │   ├── camera_occlusion.gd
 │   ├── collectible_orb.gd         # Collectible orb logic
@@ -132,11 +135,13 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── level_generator.gd         # Type A arena generator
 │   ├── level_generator_q3.gd      # Type B arena generator
 │   ├── lobby_ui.gd
+│   ├── marble_material_manager.gd # Creates unique marble materials (27 color schemes)
 │   ├── multiplayer_manager.gd
 │   ├── music_playlist.gd
 │   ├── orb_spawner.gd
 │   ├── orbit_camera.gd            # Orbiting camera for menus
 │   ├── player.gd                  # Player controller (1,695 lines)
+│   ├── procedural_material_manager.gd  # Context-aware level geometry materials
 │   ├── poof_particle_effect.gd    # Particle effect system
 │   ├── profile_manager.gd
 │   ├── scoreboard.gd
@@ -173,6 +178,9 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 ├── default_bus_layout.tres         # Audio bus configuration
 ├── world.tres                      # World configuration resource
 ├── icon.svg                        # Project icon
+├── LICENSE                         # Project license
+├── .gitignore                      # Git ignore rules
+├── .gitattributes                  # Git configuration
 └── project.godot                   # Main project config
 ```
 
@@ -230,7 +238,6 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 | **Cannon** | Ranged | 1 | Instant-fire explosive projectiles, forward-facing only, 1.5s cooldown |
 | **Dash Attack** | Melee | 1-3 | Forward dash with damage scaling |
 | **Explosion** | AoE | 2-4 | Radius scales with charge |
-| **Gun** | Ranged | 1-3 | Fast projectiles, rapid fire |
 | **Sword** | Melee | 1-3 | Swing attack with AoE at max charge |
 
 **Charging System:**
@@ -353,10 +360,9 @@ WANDER → CHASE → ATTACK
 - **Personality variety:** Randomized aggression and reaction times
 
 **Optimal Combat Ranges:**
-- Sword: 2-5 units
-- Dash: 5-10 units
-- Gun: 10-20 units
-- Explosion: 3-8 units
+- Sword: 2-5 units (melee)
+- Dash: 5-10 units (melee dash)
+- Explosion: 3-8 units (AoE)
 - Cannon: 8-15 units (forward-facing only, 120° cone)
 
 ### 10. Menu System
@@ -415,6 +421,74 @@ WANDER → CHASE → ATTACK
 - Bot spawning/removal
 - Force respawn
 - Toggle with backtick (`)
+
+### 14. Visual Systems
+
+#### Marble Material Manager (`marble_material_manager.gd`)
+
+**Purpose:** Creates unique, beautiful marble materials for each player
+
+**Features:**
+- 27 predefined color schemes (Ruby Red, Sapphire Blue, Emerald Green, etc.)
+- Procedural marble patterns using custom shader
+- Automatic color distribution to avoid duplicates
+- Hue-based material generation
+- Randomized properties (glossiness, swirl scale, bubble density)
+
+**Color Schemes Include:**
+- Vibrant primaries (red, blue, green, purple, orange, pink, cyan, yellow)
+- Pure colors (blood red, deep blue, poison green)
+- Dark tones (midnight black, navy blue, chocolate brown)
+- Pastels and uniques (salmon pink, jade green, lavender, mint green)
+- Metallics (bright gold, chrome silver)
+- Electric colors (magenta, lime, teal, indigo)
+
+**Usage:** `create_marble_material(index)` or `get_random_marble_material()`
+
+#### Procedural Material Manager (`procedural_material_manager.gd`)
+
+**Purpose:** Applies context-aware procedural materials to level geometry
+
+**Material Presets:**
+- **Floor:** Cool gray, industrial look
+- **Wall:** Warm concrete texture
+- **Platform:** Blue-gray metallic
+- **Ramp:** Rust/copper finish
+- **Pillar:** Dark stone texture
+- **Cover:** Military gray-brown
+- **Room Floor:** Cool industrial (for Type B rooms)
+- **Room Wall:** Tech facility look
+- **Corridor:** Neutral industrial
+
+**Shader Properties:**
+- Triplanar mapping for seamless textures
+- Fractal Brownian Motion (FBM) for complex patterns
+- Voronoi cellular patterns
+- Wear/weathering effects
+- Dynamic roughness and metallic properties
+- Normal map detail
+
+**Usage:** `apply_material_by_name(mesh)` or `apply_materials_to_level(generator)`
+
+#### Beam Spawn Effect (`beam_spawn_effect.gd`)
+
+**Purpose:** Star Trek-style transporter beam effect for player spawning
+
+**Features:**
+- Rising column of light particles
+- Secondary glow particles for enhanced effect
+- Additive blending for bright appearance
+- HTML5-optimized (reduced particle counts)
+- Auto-cleanup after effect completes
+- Blue-white color scheme
+
+**Properties:**
+- Main beam: 50 particles, 1.0s lifetime
+- Glow particles: 25 particles, 1.0s lifetime
+- Upward velocity with convergence
+- Scale curves for smooth fade in/out
+
+**Usage:** `play_at_position(pos)` - plays beam at position and auto-destroys
 
 ---
 
@@ -521,18 +595,21 @@ Sword (Node3D) [scripts/abilities/sword.gd]
 |--------|---------|
 | `ability_pickup.gd` | Ability pickup logic (bobbing, respawn) |
 | `ability_spawner.gd` | Manages ability pickup spawning |
-| `collectible_orb.gd` | Orb pickup logic |
-| `orb_spawner.gd` | Manages orb spawning |
 | `audio_metadata_parser.gd` | Audio file metadata extraction |
+| `beam_spawn_effect.gd` | Star Trek-style transporter beam spawn effect |
 | `camera_occlusion.gd` | Camera anti-clipping |
+| `collectible_orb.gd` | Orb pickup logic |
 | `crazygames_sdk.gd` | CrazyGames SDK bridge |
 | `debug_menu.gd` | Debug menu with cheats |
 | `friends_manager.gd` | Friends system manager |
 | `grind_rail.gd` | Rail grinding mechanics |
 | `lobby_ui.gd` | Multiplayer lobby interface |
+| `marble_material_manager.gd` | Creates unique marble materials (27 schemes) |
 | `music_playlist.gd` | Music playlist system |
 | `orbit_camera.gd` | Orbiting camera for menus |
+| `orb_spawner.gd` | Manages orb spawning |
 | `poof_particle_effect.gd` | Particle effect system |
+| `procedural_material_manager.gd` | Context-aware level geometry materials |
 | `profile_manager.gd` | User profile management |
 | `scoreboard.gd` | Scoreboard display |
 | `skybox_generator.gd` | Procedural skybox generation |
@@ -617,16 +694,17 @@ All sound effects use web-compatible formats (WAV, OGG, MP3).
 
 **Key Files:**
 - Jump: `jump.mp3`, `nr_name26.dsp.wav`, `nr_name2c.dsp.wav`
-- Spin: `017.Synth_MLT_se_ch_sn_Spindash Charge with Ancient Light *.wav`
+- Spin: `017.Synth_MLT_se_ch_sn_Spindash Charge with Ancient Light Begin.wav`, `017.Synth_MLT_se_ch_sn_Spindash Charge with Ancient Light Loop.wav`, `revup.mp3`
 - Bounce: `SonicBOUNCE.wav`, `bouncehard2.wav`
 - Hit: `hitmarker_2.mp3`, `011.Synth_MLT_se_ch_kn_punch.wav`
 - Death: `KO'ed.wav`
 - Spawn: `spawn.wav`
 - Orb: `Ring.wav`, `ChaosDrive.wav`
 - Ability pickup: (various)
-- Gun: `Fox - Laser Gun.wav`, `Raygun.wav`, `Shooting.wav`
+- Projectile: `Fox - Laser Gun.wav`, `Raygun.wav`, `Shooting.wav`
 - Sword: `Small Sword Hit.wav`, `Moderate Sword Hit.wav`, `Strong Sword Smack.wav`
 - Explosion: `Explosion.wav`, `017.Synth_MLT_se_ac_bf_metallic explode.wav`
+- UI/Effects: `645317__darkshroom__m9_noisegate-1780.ogg`
 
 #### Music (`audio/`, `music/`)
 
@@ -645,6 +723,8 @@ All shaders are WebGL2/GLES3 compatible:
 - `plasma_glow.gdshader` - Animated plasma glow (menu logo)
 - `card_glow.gdshader` - Button glow effect
 - `blur.gdshader` - Blur effect
+- `marble_shader.gdshader` - Marble visual shader with swirls, bubbles, fresnel effects, and emission
+- `procedural_surface.gdshader` - Procedural level geometry shader with triplanar mapping, FBM noise, and voronoi patterns
 
 ---
 
@@ -733,6 +813,9 @@ Clients (Peer 2-16)
 | CrazyGames | `crazygames_sdk.gd` |
 | Profile | `profile_manager.gd` |
 | Music | `music_playlist.gd` |
+| Marble materials | `marble_material_manager.gd` |
+| Level materials | `procedural_material_manager.gd` |
+| Spawn effects | `beam_spawn_effect.gd` |
 
 ### Common Tasks
 
