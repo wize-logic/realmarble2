@@ -5,7 +5,7 @@ extends Node3D
 
 @export var animation_speed: float = 0.02  # Slow, realistic cloud movement
 @export var cloud_density: float = 0.5  # 0.0 = clear, 1.0 = overcast
-@export var sun_intensity: float = 1.0
+@export var sun_intensity: float = 0.6  # Reduced to prevent blinding
 @export var time_of_day: float = 0.4  # 0.0 = sunrise, 0.5 = noon, 1.0 = sunset
 
 var sky_material: ShaderMaterial
@@ -48,18 +48,18 @@ func generate_skybox() -> void:
 
 	# Enhanced environment settings for beautiful visuals
 	environment.glow_enabled = true
-	environment.glow_intensity = 0.4
-	environment.glow_strength = 1.0
-	environment.glow_bloom = 0.15
+	environment.glow_intensity = 0.2
+	environment.glow_strength = 0.8
+	environment.glow_bloom = 0.1
 	environment.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 
-	# Add subtle ambient light from sky
+	# Add very subtle ambient light from sky (reduced to prevent blinding brightness)
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.8
+	environment.ambient_light_energy = 0.15
 
 	# Subtle tone mapping for realistic look
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.tonemap_exposure = 1.0
+	environment.tonemap_exposure = 0.85
 	environment.tonemap_white = 1.0
 
 	print("Beautiful skybox with HD clouds generated!")
@@ -151,19 +151,19 @@ float worley(vec3 p) {
 // === Atmospheric Scattering ===
 
 vec3 rayleigh_scatter(float cos_theta) {
-	// Blue sky scattering
+	// Blue sky scattering (reduced intensity)
 	float phase = 0.75 * (1.0 + cos_theta * cos_theta);
-	return vec3(0.058, 0.135, 0.331) * phase;
+	return vec3(0.03, 0.07, 0.17) * phase;
 }
 
 vec3 mie_scatter(float cos_theta) {
-	// Sun glow scattering
+	// Sun glow scattering (reduced intensity)
 	float g = 0.76;
 	float gg = g * g;
 	float phase = (1.5 * (1.0 - gg)) / (2.0 + gg) *
 				  (1.0 + cos_theta * cos_theta) /
 				  pow(1.0 + gg - 2.0 * g * cos_theta, 1.5);
-	return vec3(1.0, 0.98, 0.95) * phase * 0.1;
+	return vec3(1.0, 0.98, 0.95) * phase * 0.05;
 }
 
 // === Cloud Rendering ===
@@ -203,17 +203,17 @@ vec4 render_clouds(vec3 dir, float height_factor) {
 	float cloud_lighting = dot(normalize(dir), cloud_light_dir);
 	cloud_lighting = smoothstep(-0.2, 0.6, cloud_lighting);
 
-	// Cloud colors - white to grey with sun influence
-	vec3 cloud_bright = vec3(1.0, 1.0, 1.0);
-	vec3 cloud_dark = vec3(0.5, 0.55, 0.6);
+	// Cloud colors - white to grey with sun influence (toned down)
+	vec3 cloud_bright = vec3(0.85, 0.85, 0.85);
+	vec3 cloud_dark = vec3(0.4, 0.45, 0.5);
 	vec3 cloud_color = mix(cloud_dark, cloud_bright, cloud_lighting);
 
 	// Add subtle color variation
-	cloud_color += vec3(0.05, 0.08, 0.1) * clouds_3;
+	cloud_color += vec3(0.03, 0.05, 0.06) * clouds_3;
 
-	// Sun illumination on clouds
+	// Sun illumination on clouds (reduced)
 	float sun_highlight = pow(max(dot(normalize(dir), cloud_light_dir), 0.0), 8.0);
-	cloud_color += vec3(1.0, 0.9, 0.7) * sun_highlight * 0.3;
+	cloud_color += vec3(1.0, 0.9, 0.7) * sun_highlight * 0.15;
 
 	return vec4(cloud_color, cloud_pattern);
 }
@@ -227,9 +227,9 @@ void sky() {
 	float height = dir.y;
 	float height_factor = clamp(height, 0.0, 1.0);
 
-	// Atmospheric colors
-	vec3 zenith_color = vec3(0.1, 0.3, 0.65);  // Deep blue
-	vec3 horizon_color = vec3(0.6, 0.75, 0.9);  // Light blue/white
+	// Atmospheric colors (toned down to prevent blinding)
+	vec3 zenith_color = vec3(0.15, 0.25, 0.45);  // Darker deep blue
+	vec3 horizon_color = vec3(0.4, 0.5, 0.65);  // Softer light blue
 
 	// Base sky gradient
 	vec3 sky_color = mix(horizon_color, zenith_color, pow(height_factor, 0.7));
@@ -241,27 +241,27 @@ void sky() {
 	sky_color += rayleigh_scatter(cos_theta) * sun_intensity;
 	sky_color += mie_scatter(cos_theta) * sun_intensity;
 
-	// Sun disc
+	// Sun disc (reduced brightness)
 	float sun_disc = smoothstep(0.9998, 0.9999, cos_theta);
-	sky_color += vec3(1.0, 0.95, 0.85) * sun_disc * 2.0 * sun_intensity;
+	sky_color += vec3(1.0, 0.95, 0.85) * sun_disc * 1.2 * sun_intensity;
 
-	// Sun glow
+	// Sun glow (reduced)
 	float sun_glow = pow(max(cos_theta, 0.0), 12.0);
-	sky_color += vec3(1.0, 0.8, 0.5) * sun_glow * 0.3 * sun_intensity;
+	sky_color += vec3(1.0, 0.8, 0.5) * sun_glow * 0.15 * sun_intensity;
 
 	// Render clouds only above horizon
 	if (height > -0.1) {
 		vec4 clouds = render_clouds(dir, height_factor);
 
 		// Blend clouds with sky
-		sky_color = mix(sky_color, clouds.rgb, clouds.a * 0.95);
+		sky_color = mix(sky_color, clouds.rgb, clouds.a * 0.9);
 	}
 
-	// Subtle color grading for atmosphere
-	sky_color = pow(sky_color, vec3(1.05));  // Slight contrast boost
+	// Subtle color grading for atmosphere (reduced contrast)
+	sky_color = pow(sky_color, vec3(1.02));
 
-	// Add subtle ambient variation
-	float ambient_variation = noise3D(dir * 0.5 + vec3(time * 0.05)) * 0.02;
+	// Add subtle ambient variation (reduced)
+	float ambient_variation = noise3D(dir * 0.5 + vec3(time * 0.05)) * 0.01;
 	sky_color += ambient_variation;
 
 	COLOR = sky_color;
@@ -270,7 +270,7 @@ void sky() {
 
 	material.shader = shader
 
-	# Set shader parameters
+	# Set shader parameters with reduced brightness
 	material.set_shader_parameter("time", 0.0)
 	material.set_shader_parameter("cloud_density", cloud_density)
 	material.set_shader_parameter("sun_intensity", sun_intensity)
