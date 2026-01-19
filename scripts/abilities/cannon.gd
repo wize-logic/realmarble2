@@ -5,7 +5,7 @@ extends Ability
 ## Slower fire rate but much more impactful than a gun!
 
 @export var projectile_damage: int = 3  # Increased from gun's 1
-@export var projectile_speed: float = 25.0  # Slower than gun's 40.0 for arc trajectory
+@export var projectile_speed: float = 80.0  # Very fast for accurate shots (was 25.0)
 @export var projectile_lifetime: float = 4.0  # Slightly longer than gun's 3.0
 @export var fire_rate: float = 1.0  # Slower cooldown (gun was 0.5)
 @export var min_charge_time: float = 0.4  # Slightly longer minimum charge
@@ -87,20 +87,21 @@ func activate() -> void:
 	# Auto-aim: Find nearest player and adjust fire direction
 	var nearest_player = find_nearest_player()
 	if nearest_player:
-		# Aim at the nearest player's position (with slight prediction)
+		# Aim at the nearest player's position (with aggressive prediction)
 		var target_pos = nearest_player.global_position
-		# Predict where the player will be based on their velocity
+		# Predict where the player will be based on their velocity (aggressive 100% prediction)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
 			var time_to_hit = distance / charged_speed
-			target_pos += nearest_player.linear_velocity * time_to_hit * 0.5  # 50% prediction
+			# Full prediction with iterative refinement for accuracy
+			target_pos += nearest_player.linear_velocity * time_to_hit
+			# Second iteration for even more accuracy
+			var refined_distance = player.global_position.distance_to(target_pos)
+			var refined_time = refined_distance / charged_speed
+			target_pos = nearest_player.global_position + nearest_player.linear_velocity * refined_time
 
-		# Calculate direction to target
+		# Calculate direction to target - no upward angle, pure accuracy
 		fire_direction = (target_pos - player.global_position).normalized()
-
-	# Add upward angle to make aiming easier (shoot slightly upward, not straight)
-	fire_direction.y += 0.15  # Reduced from 0.25 for lower angle
-	fire_direction = fire_direction.normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
@@ -257,9 +258,9 @@ func create_projectile() -> Node3D:
 	var projectile: RigidBody3D = RigidBody3D.new()
 	projectile.name = "Cannonball"
 
-	# Physics setup - heavier and with gravity for arc
+	# Physics setup - heavier but no gravity for straight shots
 	projectile.mass = 0.5  # Much heavier than gun (was 0.1)
-	projectile.gravity_scale = 0.3  # Add gravity for realistic arc (gun was 0.0)
+	projectile.gravity_scale = 0.0  # No gravity for laser-straight accuracy
 	projectile.continuous_cd = true
 	projectile.collision_layer = 4  # Projectile layer
 	projectile.collision_mask = 3   # Hit players (layer 2) and world (layer 1)
