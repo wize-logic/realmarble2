@@ -163,7 +163,7 @@ func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
 	var rail_count: int = 8  # Number of rails around the arena
 	# Position around the arena perimeter
-	var rail_distance: float = arena_size * 0.47  # ~56 units at default size
+	var rail_distance: float = arena_size * 0.60  # Farther from stage - ~72 units at default size
 
 	for i in range(rail_count):
 		var angle_start: float = (float(i) / rail_count) * TAU
@@ -231,7 +231,7 @@ func generate_vertical_rails() -> void:
 
 	for i in range(vertical_rail_count):
 		var angle: float = (float(i) / vertical_rail_count) * TAU + (TAU / vertical_rail_count * 0.5)
-		var distance: float = arena_size * 0.47  # Same as horizontal rails
+		var distance: float = arena_size * 0.60  # Farther from stage - same as horizontal rails
 
 		# Create vertical rail
 		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
@@ -545,7 +545,7 @@ func generate_secondary_ramps(offset: Vector3) -> void:
 func generate_secondary_rails(offset: Vector3) -> void:
 	"""Generate rails for secondary map"""
 	var rail_count: int = 8
-	var rail_distance: float = arena_size * 0.47
+	var rail_distance: float = arena_size * 0.60
 
 	for i in range(rail_count):
 		var angle_start: float = (float(i) / rail_count) * TAU
