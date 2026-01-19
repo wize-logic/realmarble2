@@ -274,10 +274,18 @@ func _on_options_pressed() -> void:
 
 func _on_back_pressed() -> void:
 	if options:
+		# Hide options menu
+		if options_menu:
+			options_menu.hide()
+		# Always hide blur when closing options
 		if has_node("Menu/Blur"):
 			$Menu/Blur.hide()
 		if !controller:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			# Only capture mouse if we're in-game (paused), not if we're in main menu
+			if paused or game_active:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		options = false
 
 func _on_return_to_title_pressed() -> void:
@@ -288,6 +296,10 @@ func _on_return_to_title_pressed() -> void:
 	paused = false
 	if pause_menu:
 		pause_menu.hide()
+
+	# Hide blur immediately when leaving menu
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
 	# Stop gameplay music
 	if gameplay_music and gameplay_music.has_method("stop_playlist"):
@@ -503,6 +515,21 @@ func ask_bot_count() -> int:
 
 	# Add dialog to scene
 	add_child(dialog)
+
+	# Show blur to focus attention on dialog
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+
+	# Connect close signals to handle cancellation
+	dialog.close_requested.connect(func():
+		bot_count_dialog_closed = true
+		bot_count_selected = -1  # Indicate cancellation
+		print("Dialog closed via X button or ESC")
+	)
+
+	# Ensure mouse is visible for dialog interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	dialog.popup_centered()
 	print("Dialog shown, waiting for user selection...")
 
@@ -514,6 +541,13 @@ func ask_bot_count() -> int:
 	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
+
+	# Hide blur after dialog is closed
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+	# Keep mouse visible (we're still in main menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	print("Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
@@ -671,6 +705,21 @@ func ask_level_type() -> String:
 
 	# Add dialog to scene
 	add_child(dialog)
+
+	# Show blur to focus attention on dialog
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+
+	# Connect close signals to handle cancellation
+	dialog.close_requested.connect(func():
+		level_type_dialog_closed = true
+		level_type_selected = ""  # Indicate cancellation
+		print("Dialog closed via X button or ESC")
+	)
+
+	# Ensure mouse is visible for dialog interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	dialog.popup_centered()
 	print("Level type dialog shown, waiting for user selection...")
 
@@ -680,6 +729,13 @@ func ask_level_type() -> String:
 
 	print("Level type dialog closed, cleaning up...")
 	dialog.queue_free()
+
+	# Hide blur after dialog is closed
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+	# Keep mouse visible (we're still in main menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	print("Level type selected: %s" % level_type_selected)
 	return level_type_selected
@@ -805,6 +861,9 @@ func _on_profile_pressed() -> void:
 		profile_panel.show_panel()
 	if main_menu:
 		main_menu.hide()
+	# Show blur to focus attention on the panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
 
 func _on_friends_pressed() -> void:
 	"""Show friends panel"""
@@ -812,6 +871,9 @@ func _on_friends_pressed() -> void:
 		friends_panel.show_panel()
 	if main_menu:
 		main_menu.hide()
+	# Show blur to focus attention on the panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
@@ -897,8 +959,20 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
 		if toggled_on:
 			options_menu.show()
+			options = true  # Set options flag so back button works correctly
+			# Show blur when options menu opens from main menu
+			if has_node("Menu/Blur"):
+				$Menu/Blur.show()
+			# Ensure mouse is visible when opening options from main menu
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			options_menu.hide()
+			options = false
+			# Hide blur when options menu closes
+			if has_node("Menu/Blur"):
+				$Menu/Blur.hide()
+			# Keep mouse visible when closing (still in main menu)
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
@@ -949,9 +1023,9 @@ func show_multiplayer_lobby() -> void:
 		# Hide main menu
 		if main_menu:
 			main_menu.visible = false
-		# Hide blur
+		# Show blur to focus attention on lobby
 		if has_node("Menu/Blur"):
-			$Menu/Blur.hide()
+			$Menu/Blur.show()
 		# Hide marble preview when showing lobby
 		if has_node("MarblePreview"):
 			get_node("MarblePreview").visible = false
@@ -964,17 +1038,20 @@ func hide_multiplayer_lobby() -> void:
 		lobby_ui.visible = false
 
 func show_main_menu() -> void:
-	"""Show the main menu"""
+	"""Show the main menu (without regenerating map - just shows existing preview)"""
 	if main_menu:
 		main_menu.visible = true
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview
-	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A")
+	# Hide blur when returning to main menu
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
-	# Recreate marble preview after level regeneration
-	print("[CAMERA] Recreating marble preview for main menu")
-	_create_marble_preview()
+	# Show marble preview again (it was hidden when entering lobby)
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = true
+
+	# Ensure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
@@ -1050,7 +1127,21 @@ func end_deathmatch() -> void:
 	# Despawn all bots
 	despawn_all_bots()
 
-	# Clear all abilities and orbs when match ends
+	# Clear ALL ability pickups (both spawned and dropped by players)
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+	print("Cleared %d ability pickups from world" % all_abilities.size())
+
+	# Clear ALL orbs (both spawned and dropped by players)
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+	print("Cleared %d orbs from world" % all_orbs.size())
+
+	# Also tell spawners to clear their tracking arrays
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
 	if ability_spawner and ability_spawner.has_method("clear_all"):
 		ability_spawner.clear_all()
@@ -1108,12 +1199,26 @@ func return_to_main_menu() -> void:
 	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
 		scoreboard.hide_match_end_scoreboard()
 
-	# Remove all players
+	# Remove all players (including bots)
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	for player in players:
 		player.queue_free()
 
-	# Clear all abilities and orbs
+	# Clear ALL ability pickups (both spawned and dropped by players)
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+	print("Cleared %d ability pickups from world" % all_abilities.size())
+
+	# Clear ALL orbs (both spawned and dropped by players)
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+	print("Cleared %d orbs from world" % all_orbs.size())
+
+	# Also tell spawners to clear their tracking arrays
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
 	if ability_spawner and ability_spawner.has_method("clear_all"):
 		ability_spawner.clear_all()
@@ -1150,9 +1255,16 @@ func return_to_main_menu() -> void:
 		# Re-enable practice button now that we're back in menu
 		_set_practice_button_disabled(false)
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview
+	# Hide blur effect
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+	# Wait a frame for all queue_free() calls to complete
+	await get_tree().process_frame
+
+	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
 	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A")
+	await generate_procedural_level("A", false)
 
 	# Recreate marble preview after level regeneration
 	print("[CAMERA] Recreating marble preview for main menu")
@@ -1884,6 +1996,9 @@ func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
 	if profile_panel:
 		profile_panel.hide()
+	# Hide blur when closing panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -1891,6 +2006,9 @@ func _on_friends_panel_close_pressed() -> void:
 	"""Handle friends panel close button pressed"""
 	if friends_panel:
 		friends_panel.hide()
+	# Hide blur when closing panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -1975,10 +2093,11 @@ func play_countdown_beep() -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(level_type: String = "A") -> void:
+func generate_procedural_level(level_type: String = "A", spawn_collectibles: bool = true) -> void:
 	"""Generate a procedural level with skybox
 	Args:
 		level_type: "A" for original generator, "B" for Quake 3 arena style
+		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 	"""
 	if OS.is_debug_build():
 		print("Generating procedural arena (Type %s)..." % level_type)
@@ -2021,14 +2140,15 @@ func generate_procedural_level(level_type: String = "A") -> void:
 	# Update player spawn points from generated level
 	update_player_spawns()
 
-	# Respawn all orbs and abilities on the new level
-	var orb_spawner: Node = get_node_or_null("OrbSpawner")
-	if orb_spawner and orb_spawner.has_method("respawn_all"):
-		orb_spawner.respawn_all()
+	# Respawn all orbs and abilities on the new level (only if spawn_collectibles is true)
+	if spawn_collectibles:
+		var orb_spawner: Node = get_node_or_null("OrbSpawner")
+		if orb_spawner and orb_spawner.has_method("respawn_all"):
+			orb_spawner.respawn_all()
 
-	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
-	if ability_spawner and ability_spawner.has_method("respawn_all"):
-		ability_spawner.respawn_all()
+		var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+		if ability_spawner and ability_spawner.has_method("respawn_all"):
+			ability_spawner.respawn_all()
 
 	# Create skybox
 	skybox_generator = Node3D.new()
