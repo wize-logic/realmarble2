@@ -50,6 +50,10 @@ func activate() -> void:
 		# This is CRITICAL for bots to aim properly
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
+	# Add upward angle to make aiming easier (shoot slightly upward, not straight)
+	fire_direction.y += 0.25  # Add upward component for easier aiming
+	fire_direction = fire_direction.normalized()
+
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
 	var barrel_position: Vector3 = player.global_position + Vector3.UP * 0.5 + fire_direction * barrel_offset
