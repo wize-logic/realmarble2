@@ -41,6 +41,8 @@ var nearby_players: Array[RigidBody3D] = []  # Players near rail but not attache
 class GrinderData:
 	var closest_offset: float = 0.0
 	var rope_visual: MeshInstance3D = null
+	var rope_mesh: ImmediateMesh = null  # Cache mesh to avoid recreation
+	var rope_material: StandardMaterial3D = null  # Cache material to avoid recreation
 	var attach_time: float = 0.0
 
 	# Stuck detection safeguard
@@ -177,10 +179,21 @@ func _attach(grinder: RigidBody3D, offset: float, closest_world: Vector3) -> voi
 	grinder_data[grinder] = data
 	active_grinders.append(grinder)
 
+	# Create rope visual components ONCE (cached for reuse)
 	data.rope_visual = MeshInstance3D.new()
 	data.rope_visual.name = "Rope"
 	add_child(data.rope_visual)
 	data.rope_visual.visible = false
+
+	# Create mesh once
+	data.rope_mesh = ImmediateMesh.new()
+	data.rope_visual.mesh = data.rope_mesh
+
+	# Create material once
+	data.rope_material = StandardMaterial3D.new()
+	data.rope_material.albedo_color = Color(0.95, 0.9, 0.3, 0.9)
+	data.rope_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	data.rope_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 	var dir_to_rail: Vector3 = (closest_world - grinder.global_position).normalized()
 	grinder.apply_central_impulse(dir_to_rail * 45.0)
@@ -212,13 +225,20 @@ func detach_grinder(grinder: RigidBody3D) -> Vector3:
 
 
 func _process(_delta: float) -> void:
-	for grinder in active_grinders.duplicate():
+	# Iterate backwards to avoid duplication when removing items
+	for i in range(active_grinders.size() - 1, -1, -1):
+		var grinder = active_grinders[i]
 		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 
 
 func _physics_process(delta: float) -> void:
-	for grinder: RigidBody3D in active_grinders.duplicate():
+	# Cache time value once per frame instead of multiple calls
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+
+	# Iterate backwards to avoid duplication when removing items
+	for i in range(active_grinders.size() - 1, -1, -1):
+		var grinder: RigidBody3D = active_grinders[i]
 		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 			continue
@@ -229,17 +249,16 @@ func _physics_process(delta: float) -> void:
 				data.rope_visual.visible = false
 			continue
 
-		_update_active_grinder(grinder, delta)
+		_update_active_grinder(grinder, delta, current_time)
 
 
-func _update_active_grinder(grinder: RigidBody3D, delta: float) -> void:
+func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: float) -> void:
 	var data: GrinderData = grinder_data[grinder]
 	var length: float = curve.get_baked_length()
 	if length <= 0:
 		_remove_grinder(grinder)
 		return
 
-	var current_time: float = Time.get_ticks_msec() / 1000.0
 	var time_since_attach: float = current_time - data.attach_time
 
 	var player_local: Vector3 = to_local(grinder.global_position)
@@ -256,20 +275,15 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float) -> void:
 
 	var attach_pos: Vector3 = to_global(curve.sample_baked(attach_offset))
 
-	if data.rope_visual:
+	# Update rope visual - only update vertices, reuse cached mesh and material
+	if data.rope_visual and data.rope_mesh and data.rope_material:
 		data.rope_visual.visible = true
-		var mesh := ImmediateMesh.new()
-		data.rope_visual.mesh = mesh
-
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.95, 0.9, 0.3, 0.9)
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-
-		mesh.surface_begin(Mesh.PRIMITIVE_LINES, mat)
-		mesh.surface_add_vertex(to_local(attach_pos))
-		mesh.surface_add_vertex(to_local(grinder.global_position))
-		mesh.surface_end()
+		# Clear previous surface and rebuild with cached material
+		data.rope_mesh.clear_surfaces()
+		data.rope_mesh.surface_begin(Mesh.PRIMITIVE_LINES, data.rope_material)
+		data.rope_mesh.surface_add_vertex(to_local(attach_pos))
+		data.rope_mesh.surface_add_vertex(to_local(grinder.global_position))
+		data.rope_mesh.surface_end()
 
 	# Unbreakable rope
 	var rope_vec: Vector3 = grinder.global_position - attach_pos
