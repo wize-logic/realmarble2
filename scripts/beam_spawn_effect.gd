@@ -25,10 +25,9 @@ func create_beam_effect() -> void:
 	# Create particle process material for main beam
 	var material = ParticleProcessMaterial.new()
 
-	# Emission shape - cylinder pointing upward for beam effect
-	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_CYLINDER
-	material.emission_cylinder_height = 8.0  # Tall cylinder
-	material.emission_cylinder_radius = 1.5  # Radius of beam at base
+	# Emission shape - box (tall and narrow) for beam effect
+	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	material.emission_box_extents = Vector3(1.5, 4.0, 1.5)  # Wide base, tall height
 
 	# Direction - upward with slight inward convergence
 	material.direction = Vector3(0, 1, 0)
@@ -93,10 +92,9 @@ func create_glow_particles() -> void:
 	# Create particle process material for glow
 	var material = ParticleProcessMaterial.new()
 
-	# Emission shape - same cylinder
-	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_CYLINDER
-	material.emission_cylinder_height = 8.0
-	material.emission_cylinder_radius = 1.2
+	# Emission shape - box (tall and narrow) for beam effect
+	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	material.emission_box_extents = Vector3(1.2, 4.0, 1.2)  # Slightly smaller than main beam
 
 	# Direction - upward
 	material.direction = Vector3(0, 1, 0)
