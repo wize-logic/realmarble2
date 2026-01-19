@@ -240,8 +240,8 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		var player_level: int = projectile.get_meta("player_level", 0)
 		var level_mult: float = 1.0 + (player.level * 0.2)
 
-		# Calculate knockback (base 40.0, double the gun's 20.0, scaled by level)
-		var base_knockback: float = 40.0
+		# Calculate knockback (base 200.0, 5x increase for massive impact, scaled by level)
+		var base_knockback: float = 200.0
 		var total_knockback: float = base_knockback * level_mult
 
 		# Apply knockback in projectile direction with slight upward component

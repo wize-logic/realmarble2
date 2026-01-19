@@ -122,7 +122,7 @@ func activate() -> void:
 	# Get charge multiplier for scaled damage
 	var charge_multiplier: float = get_charge_multiplier()
 	var charged_damage: int = int(slash_damage * charge_multiplier)
-	var charged_knockback: float = 30.0 * charge_multiplier
+	var charged_knockback: float = 70.0 * charge_multiplier  # Increased from 30.0 for stronger impact
 
 	print("SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier])
 
@@ -181,7 +181,7 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		var player_level: int = player.level if player and "level" in player else 0
 		var level_mult: float = 1.0 + (player_level * 0.2)
 		var charged_damage: int = int(slash_damage * charge_multiplier)
-		var charged_knockback: float = 30.0 * charge_multiplier * level_mult
+		var charged_knockback: float = 70.0 * charge_multiplier * level_mult  # Increased from 30.0 for stronger impact
 
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1

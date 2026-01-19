@@ -128,7 +128,7 @@ func activate() -> void:
 	var charge_multiplier: float = get_charge_multiplier()
 	var charged_damage: int = damage  # Always 1, no charge scaling on damage
 	var charged_dash_force: float = dash_force * charge_multiplier
-	var charged_knockback: float = 100.0 * charge_multiplier  # Increased from 40.0 (2.5x)
+	var charged_knockback: float = 180.0 * charge_multiplier  # Increased from 100.0 for stronger impact
 
 	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
@@ -201,7 +201,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		var player_level: int = player.level if player and "level" in player else 0
 		var level_mult: float = 1.0 + (player_level * 0.2)
 		var charged_damage: int = damage  # Always 1, no charge scaling
-		var charged_knockback: float = 100.0 * charge_multiplier * level_mult  # Increased from 40.0 (2.5x)
+		var charged_knockback: float = 180.0 * charge_multiplier * level_mult  # Increased from 100.0 for stronger impact
 
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1
