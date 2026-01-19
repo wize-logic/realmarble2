@@ -32,7 +32,6 @@ func generate_level() -> void:
 	generate_main_floor()
 	generate_platforms()
 	generate_ramps()
-	generate_walls()
 	generate_grind_rails()
 	generate_death_zone()
 
@@ -160,48 +159,10 @@ func generate_ramps() -> void:
 	if OS.is_debug_build():
 		print("Generated ", ramp_count, " ramps")
 
-func generate_walls() -> void:
-	"""Generate perimeter walls"""
-	var wall_distance: float = arena_size * 0.55
-	var wall_height: float = 15.0
-	var wall_thickness: float = 2.0
-
-	# Four walls
-	var wall_configs: Array = [
-		{"pos": Vector3(0, wall_height/2, wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
-		{"pos": Vector3(0, wall_height/2, -wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
-		{"pos": Vector3(wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)},
-		{"pos": Vector3(-wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)}
-	]
-
-	for i in range(wall_configs.size()):
-		var config: Dictionary = wall_configs[i]
-
-		var wall_mesh: BoxMesh = create_smooth_box_mesh(config.size)
-
-		var wall_instance: MeshInstance3D = MeshInstance3D.new()
-		wall_instance.mesh = wall_mesh
-		wall_instance.name = "Wall" + str(i)
-		wall_instance.position = config.pos
-		add_child(wall_instance)
-
-		# Add collision
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = wall_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		wall_instance.add_child(static_body)
-
-		platforms.append(wall_instance)
-
-	print("Generated perimeter walls")
-
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
 	var rail_count: int = 8  # Number of rails around the arena
-	# Position between platforms (max 0.4) and walls (0.55)
+	# Position around the arena perimeter
 	var rail_distance: float = arena_size * 0.47  # ~56 units at default size
 
 	for i in range(rail_count):
@@ -489,7 +450,6 @@ func generate_secondary_map(offset: Vector3) -> void:
 	generate_secondary_floor(offset)
 	generate_secondary_platforms(offset)
 	generate_secondary_ramps(offset)
-	generate_secondary_walls(offset)
 	generate_secondary_rails(offset)
 
 	# Restore original seed
@@ -581,40 +541,6 @@ func generate_secondary_ramps(offset: Vector3) -> void:
 		ramp_instance.add_child(static_body)
 
 		platforms.append(ramp_instance)
-
-func generate_secondary_walls(offset: Vector3) -> void:
-	"""Generate walls for secondary map"""
-	var wall_distance: float = arena_size * 0.55
-	var wall_height: float = 15.0
-	var wall_thickness: float = 2.0
-
-	var wall_configs: Array = [
-		{"pos": Vector3(0, wall_height/2, wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
-		{"pos": Vector3(0, wall_height/2, -wall_distance), "size": Vector3(arena_size, wall_height, wall_thickness)},
-		{"pos": Vector3(wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)},
-		{"pos": Vector3(-wall_distance, wall_height/2, 0), "size": Vector3(wall_thickness, wall_height, arena_size)}
-	]
-
-	for i in range(wall_configs.size()):
-		var config: Dictionary = wall_configs[i]
-
-		var wall_mesh: BoxMesh = create_smooth_box_mesh(config.size)
-
-		var wall_instance: MeshInstance3D = MeshInstance3D.new()
-		wall_instance.mesh = wall_mesh
-		wall_instance.name = "SecondaryWall" + str(i)
-		wall_instance.position = offset + config.pos
-		add_child(wall_instance)
-
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = wall_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		wall_instance.add_child(static_body)
-
-		platforms.append(wall_instance)
 
 func generate_secondary_rails(offset: Vector3) -> void:
 	"""Generate rails for secondary map"""

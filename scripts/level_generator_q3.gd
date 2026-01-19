@@ -539,7 +539,7 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
 
-	platforms.append(pad_instance)
+	# Don't add to platforms array - jump pads need to keep their custom material
 
 # ============================================================================
 # TELEPORTERS
@@ -617,7 +617,7 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
-	platforms.append(teleporter_instance)
+	# Don't add to platforms array - teleporters need to keep their custom material
 	teleporters.append({"area": teleport_area, "destination": destination})
 
 # ============================================================================
