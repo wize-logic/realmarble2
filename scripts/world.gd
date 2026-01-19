@@ -105,7 +105,11 @@ func _ready() -> void:
 
 	# Initialize lobby UI
 	lobby_ui = LobbyUI.instantiate()
-	add_child(lobby_ui)
+	# Add to Menu CanvasLayer (same as profile_panel and friends_panel) so it renders after blur
+	if has_node("Menu"):
+		get_node("Menu").add_child(lobby_ui)
+	else:
+		add_child(lobby_ui)
 	lobby_ui.visible = false  # Hidden by default
 
 	# Initialize profile panel
@@ -513,8 +517,11 @@ func ask_bot_count() -> int:
 	spacer.custom_minimum_size = Vector2(0, 15)
 	vbox.add_child(spacer)
 
-	# Add dialog to scene
-	add_child(dialog)
+	# Add dialog to Menu CanvasLayer so it renders after blur (not blurred itself)
+	if has_node("Menu"):
+		get_node("Menu").add_child(dialog)
+	else:
+		add_child(dialog)
 
 	# Show blur to focus attention on dialog
 	if has_node("Menu/Blur"):
@@ -703,8 +710,11 @@ func ask_level_type() -> String:
 	desc_b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_container.add_child(desc_b)
 
-	# Add dialog to scene
-	add_child(dialog)
+	# Add dialog to Menu CanvasLayer so it renders after blur (not blurred itself)
+	if has_node("Menu"):
+		get_node("Menu").add_child(dialog)
+	else:
+		add_child(dialog)
 
 	# Show blur to focus attention on dialog
 	if has_node("Menu/Blur"):
@@ -1036,6 +1046,9 @@ func hide_multiplayer_lobby() -> void:
 	"""Hide the multiplayer lobby UI"""
 	if lobby_ui:
 		lobby_ui.visible = false
+	# Hide blur when hiding lobby
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
 func show_main_menu() -> void:
 	"""Show the main menu (without regenerating map - just shows existing preview)"""
