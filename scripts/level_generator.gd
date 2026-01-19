@@ -10,6 +10,7 @@ extends Node3D
 
 var noise: FastNoiseLite
 var platforms: Array = []
+var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
 func _ready() -> void:
 	generate_level()
@@ -35,6 +36,9 @@ func generate_level() -> void:
 	generate_grind_rails()
 	generate_death_zone()
 
+	# Apply beautiful procedural materials
+	apply_procedural_materials()
+
 	print("Level generation complete!")
 
 func clear_level() -> void:
@@ -43,13 +47,22 @@ func clear_level() -> void:
 		child.queue_free()
 	platforms.clear()
 
+func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
+	"""Create a box mesh with smooth appearance"""
+	var mesh = BoxMesh.new()
+	mesh.size = size
+	# Increase subdivisions for smoother appearance
+	mesh.subdivide_width = 2
+	mesh.subdivide_height = 2
+	mesh.subdivide_depth = 2
+	return mesh
+
 func generate_main_floor() -> void:
 	"""Generate the main arena floor"""
 	var floor_size: float = arena_size * 0.7
 
-	# Create main platform
-	var floor_mesh: BoxMesh = BoxMesh.new()
-	floor_mesh.size = Vector3(floor_size, 2.0, floor_size)
+	# Create main platform with smooth geometry
+	var floor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(floor_size, 2.0, floor_size))
 
 	var floor_instance: MeshInstance3D = MeshInstance3D.new()
 	floor_instance.mesh = floor_mesh
@@ -90,9 +103,8 @@ func generate_platforms() -> void:
 		var depth: float = 6.0 + randf() * 6.0
 		var height: float = 1.0 + randf() * 1.0
 
-		# Create platform
-		var platform_mesh: BoxMesh = BoxMesh.new()
-		platform_mesh.size = Vector3(width, height, depth)
+		# Create platform with smooth geometry
+		var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(width, height, depth))
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
 		platform_instance.mesh = platform_mesh
@@ -124,9 +136,8 @@ func generate_ramps() -> void:
 		var z: float = sin(angle) * distance
 		var y: float = 0.0
 
-		# Create ramp
-		var ramp_mesh: BoxMesh = BoxMesh.new()
-		ramp_mesh.size = Vector3(8.0, 0.5, 12.0)
+		# Create ramp with smooth geometry
+		var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 12.0))
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 		ramp_instance.mesh = ramp_mesh
@@ -166,8 +177,7 @@ func generate_walls() -> void:
 	for i in range(wall_configs.size()):
 		var config: Dictionary = wall_configs[i]
 
-		var wall_mesh: BoxMesh = BoxMesh.new()
-		wall_mesh.size = config.size
+		var wall_mesh: BoxMesh = create_smooth_box_mesh(config.size)
 
 		var wall_instance: MeshInstance3D = MeshInstance3D.new()
 		wall_instance.mesh = wall_mesh
@@ -425,25 +435,7 @@ func _on_death_zone_entered(body: Node3D) -> void:
 
 func apply_procedural_textures() -> void:
 	"""Apply procedurally generated textures to all platforms"""
-	for platform in platforms:
-		if platform is MeshInstance3D:
-			var material: StandardMaterial3D = StandardMaterial3D.new()
-
-			# Random color scheme - use solid colors to avoid texture flashing
-			var base_color: Color = Color(
-				randf_range(0.4, 0.9),
-				randf_range(0.4, 0.9),
-				randf_range(0.4, 0.9)
-			)
-
-			material.albedo_color = base_color
-			material.metallic = 0.2
-			material.roughness = 0.8
-			material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-			platform.material_override = material
-
-	print("Applied procedural materials to ", platforms.size(), " objects")
+	material_manager.apply_materials_to_level(self)
 
 func get_spawn_points() -> PackedVector3Array:
 	"""Generate spawn points on platforms - supports up to 16 players"""
@@ -509,8 +501,7 @@ func generate_secondary_floor(offset: Vector3) -> void:
 	"""Generate floor for secondary map"""
 	var floor_size: float = arena_size * 0.7
 
-	var floor_mesh: BoxMesh = BoxMesh.new()
-	floor_mesh.size = Vector3(floor_size, 2.0, floor_size)
+	var floor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(floor_size, 2.0, floor_size))
 
 	var floor_instance: MeshInstance3D = MeshInstance3D.new()
 	floor_instance.mesh = floor_mesh
@@ -544,8 +535,7 @@ func generate_secondary_platforms(offset: Vector3) -> void:
 		var depth: float = 6.0 + randf() * 6.0
 		var height: float = 1.0 + randf() * 1.0
 
-		var platform_mesh: BoxMesh = BoxMesh.new()
-		platform_mesh.size = Vector3(width, height, depth)
+		var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(width, height, depth))
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
 		platform_instance.mesh = platform_mesh
@@ -573,8 +563,7 @@ func generate_secondary_ramps(offset: Vector3) -> void:
 		var z: float = sin(angle) * distance
 		var y: float = 0.0
 
-		var ramp_mesh: BoxMesh = BoxMesh.new()
-		ramp_mesh.size = Vector3(8.0, 0.5, 12.0)
+		var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 12.0))
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 		ramp_instance.mesh = ramp_mesh
@@ -609,8 +598,7 @@ func generate_secondary_walls(offset: Vector3) -> void:
 	for i in range(wall_configs.size()):
 		var config: Dictionary = wall_configs[i]
 
-		var wall_mesh: BoxMesh = BoxMesh.new()
-		wall_mesh.size = config.size
+		var wall_mesh: BoxMesh = create_smooth_box_mesh(config.size)
 
 		var wall_instance: MeshInstance3D = MeshInstance3D.new()
 		wall_instance.mesh = wall_mesh
