@@ -10,6 +10,9 @@ const ExplosionScene = preload("res://abilities/explosion.tscn")
 const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
 
+# Marble material manager for unique player colors
+var marble_material_manager = preload("res://scripts/marble_material_manager.gd").new()
+
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
 @onready var camera_arm: Node3D = get_node_or_null("CameraArm")
 @onready var ground_ray: RayCast3D = get_node_or_null("GroundRay")
@@ -445,27 +448,8 @@ func _ready() -> void:
 		sphere.height = 1.0
 		marble_mesh.mesh = sphere
 
-	# Apply material if not already set (works for both scene-defined and dynamically created mesh)
-	if marble_mesh and not marble_mesh.material_override:
-		# Create material with texture
-		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.albedo_color = Color(0.9, 0.9, 1.0)  # Slight blue tint
-		mat.metallic = 0.3
-		mat.roughness = 0.4
-		mat.uv1_scale = Vector3(2.0, 2.0, 2.0)  # Tile the texture
-
-		# Add a procedural texture pattern
-		var noise_tex: NoiseTexture2D = NoiseTexture2D.new()
-		var noise: FastNoiseLite = FastNoiseLite.new()
-		noise.noise_type = FastNoiseLite.TYPE_CELLULAR
-		noise.frequency = 0.05
-		noise_tex.noise = noise
-		noise_tex.width = 512
-		noise_tex.height = 512
-		mat.albedo_texture = noise_tex
-
-		marble_mesh.material_override = mat
-		print("Applied material to marble mesh for player: ", name)
+	# Apply beautiful procedural marble material
+	apply_marble_material()
 
 	# Set up aura light effect for player visibility
 	if not aura_light:
@@ -2193,3 +2177,34 @@ func spawn_teleporter_effect() -> void:
 	death_particles.restart()
 
 	print("BRIGHT PURPLE teleporter particle swirl spawned!")
+
+func apply_marble_material() -> void:
+	"""Apply a unique procedural marble material to this player"""
+	if not marble_mesh:
+		return
+
+	# Generate unique material based on player ID
+	var material: ShaderMaterial
+
+	# Try to use a consistent color for the same player
+	if name.is_valid_int():
+		var player_id = int(name)
+		material = marble_material_manager.create_marble_material(player_id % marble_material_manager.get_color_scheme_count())
+	elif str(multiplayer.get_unique_id()) != "0":
+		# Use multiplayer ID for consistent color across sessions
+		var peer_id = multiplayer.get_unique_id()
+		material = marble_material_manager.create_marble_material(peer_id % marble_material_manager.get_color_scheme_count())
+	else:
+		# Fallback to random material
+		material = marble_material_manager.get_random_marble_material()
+
+	# Apply the material
+	marble_mesh.material_override = material
+
+	# Update aura light color to match marble primary color
+	if aura_light and material:
+		var primary_color = material.get_shader_parameter("primary_color")
+		if primary_color:
+			aura_light.light_color = primary_color
+
+	print("Applied beautiful marble material to player: ", name)
