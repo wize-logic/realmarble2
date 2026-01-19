@@ -96,27 +96,15 @@ func activate() -> void:
 
 	print("BOOM! (Instant fire)")
 
-	# Get firing direction from camera - shoots in full 3D (up, down, forward)
+	# Get initial firing direction from camera
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
-	if camera:
-		# Get camera's forward direction (full 3D, including up/down)
-		fire_direction = -camera.global_transform.basis.z
-	elif camera_arm:
-		# Fallback to camera_arm if camera not found
-		fire_direction = -camera_arm.global_transform.basis.z
-	else:
-		# Fallback for bots: use player's facing direction (horizontal only for bots)
-		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-
-	fire_direction = fire_direction.normalized()
-
 	# Auto-aim: Find nearest player and adjust fire direction
 	var nearest_player = find_nearest_player()
 	if nearest_player:
-		# Aim at the nearest player's position (with reduced prediction for less accuracy)
+		# AUTO-AIM: Aim at the nearest player's position in FULL 3D (including up/down)
 		var target_pos = nearest_player.global_position
 		# Predict where the player will be based on their velocity (only 30% prediction)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
@@ -127,6 +115,21 @@ func activate() -> void:
 
 		# Calculate direction to target (full 3D - can aim up or down at targets)
 		fire_direction = (target_pos - player.global_position).normalized()
+	else:
+		# MANUAL AIM: No target found - shoot horizontally forward based on camera direction
+		if camera:
+			# Get camera's forward direction
+			fire_direction = -camera.global_transform.basis.z
+		elif camera_arm:
+			# Fallback to camera_arm if camera not found
+			fire_direction = -camera_arm.global_transform.basis.z
+		else:
+			# Fallback for bots: use player's facing direction
+			fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+		# Flatten to horizontal plane for manual aim (no up/down)
+		fire_direction.y = 0
+		fire_direction = fire_direction.normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
