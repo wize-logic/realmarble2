@@ -5,9 +5,18 @@ extends Node3D
 
 @export var animation_speed: float = 0.5
 @export var color_palette: int = 0  # Different color schemes
+@export var color_transition_duration: float = 10.0  # Time to transition between colors (seconds)
+@export var color_hold_duration: float = 15.0  # Time to hold each color palette before transitioning
 
 var sky_material: ShaderMaterial
 var time_elapsed: float = 0.0
+
+# Color transition variables
+var current_colors: Array = []
+var target_colors: Array = []
+var transition_progress: float = 0.0
+var hold_timer: float = 0.0
+var is_transitioning: bool = false
 
 func _ready() -> void:
 	generate_skybox()
@@ -17,6 +26,37 @@ func _process(delta: float) -> void:
 	if sky_material:
 		time_elapsed += delta * animation_speed
 		sky_material.set_shader_parameter("time", time_elapsed)
+
+		# Handle color transitions
+		if current_colors.size() > 0 and target_colors.size() > 0:
+			if is_transitioning:
+				# Transitioning between colors
+				transition_progress += delta / color_transition_duration
+
+				if transition_progress >= 1.0:
+					# Transition complete
+					transition_progress = 0.0
+					is_transitioning = false
+					current_colors = target_colors.duplicate()
+					target_colors = generate_color_palette()
+					hold_timer = 0.0
+				else:
+					# Smoothly interpolate between current and target colors
+					var color1 = current_colors[0].lerp(target_colors[0], transition_progress)
+					var color2 = current_colors[1].lerp(target_colors[1], transition_progress)
+					var color3 = current_colors[2].lerp(target_colors[2], transition_progress)
+
+					sky_material.set_shader_parameter("color1", color1)
+					sky_material.set_shader_parameter("color2", color2)
+					sky_material.set_shader_parameter("color3", color3)
+			else:
+				# Holding current colors
+				hold_timer += delta
+
+				if hold_timer >= color_hold_duration:
+					# Start transitioning to next palette
+					is_transitioning = true
+					transition_progress = 0.0
 
 func generate_skybox() -> void:
 	"""Generate a psychedelic procedural skybox"""
@@ -51,7 +91,14 @@ func generate_skybox() -> void:
 		environment.glow_strength = 1.2
 		environment.glow_bloom = 0.3
 
-	print("Skybox generated!")
+	# Initialize color transition system
+	current_colors = generate_color_palette()
+	target_colors = generate_color_palette()
+	is_transitioning = false
+	hold_timer = 0.0
+	transition_progress = 0.0
+
+	print("Skybox generated with gradual color transitions!")
 
 func create_psychedelic_shader() -> ShaderMaterial:
 	"""Create a shader for psychedelic sky effects"""
