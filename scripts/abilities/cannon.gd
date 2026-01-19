@@ -69,14 +69,23 @@ func activate() -> void:
 
 	print("BOOM! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
-	# Get firing direction from camera (always shoot where camera is looking)
+	# Get firing direction from camera (shoot at crosshair position, which is 100px above center)
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
 	if camera and camera_arm:
-		# Shoot in camera forward direction (use camera, not camera_arm, to include pitch)
-		fire_direction = -camera.global_transform.basis.z
+		# Calculate crosshair screen position (center with 100px upward offset)
+		var viewport: Viewport = camera.get_viewport()
+		if viewport:
+			var viewport_size: Vector2 = viewport.get_visible_rect().size
+			var crosshair_screen_pos: Vector2 = Vector2(viewport_size.x / 2.0, viewport_size.y / 2.0 - 100.0)
+
+			# Project ray from camera through crosshair position to get fire direction
+			fire_direction = camera.project_ray_normal(crosshair_screen_pos)
+		else:
+			# Fallback: use camera forward direction
+			fire_direction = -camera.global_transform.basis.z
 	elif camera_arm:
 		# Fallback to camera_arm if camera not found
 		fire_direction = -camera_arm.global_transform.basis.z
