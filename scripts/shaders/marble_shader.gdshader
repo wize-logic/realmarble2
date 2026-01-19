@@ -120,8 +120,8 @@ void fragment() {
 	ROUGHNESS = 1.0 - glossiness;
 	METALLIC = metallic_amount;
 
-	// Add subtle transparency for glass effect
-	ALPHA = 1.0 - (transparency * fresnel_amount);
+	// Add very minimal transparency for glass effect - much more opaque
+	ALPHA = 1.0 - (transparency * fresnel_amount * 0.3);
 
 	// Add normal map detail from swirl pattern
 	float normal_detail = (noise3d(world_pos * swirl_scale * 4.0) - 0.5) * 0.3;
