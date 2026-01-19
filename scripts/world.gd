@@ -1084,7 +1084,21 @@ func end_deathmatch() -> void:
 	# Despawn all bots
 	despawn_all_bots()
 
-	# Clear all abilities and orbs when match ends
+	# Clear ALL ability pickups (both spawned and dropped by players)
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+	print("Cleared %d ability pickups from world" % all_abilities.size())
+
+	# Clear ALL orbs (both spawned and dropped by players)
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+	print("Cleared %d orbs from world" % all_orbs.size())
+
+	# Also tell spawners to clear their tracking arrays
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
 	if ability_spawner and ability_spawner.has_method("clear_all"):
 		ability_spawner.clear_all()
@@ -1142,12 +1156,26 @@ func return_to_main_menu() -> void:
 	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
 		scoreboard.hide_match_end_scoreboard()
 
-	# Remove all players
+	# Remove all players (including bots)
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	for player in players:
 		player.queue_free()
 
-	# Clear all abilities and orbs
+	# Clear ALL ability pickups (both spawned and dropped by players)
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+	print("Cleared %d ability pickups from world" % all_abilities.size())
+
+	# Clear ALL orbs (both spawned and dropped by players)
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+	print("Cleared %d orbs from world" % all_orbs.size())
+
+	# Also tell spawners to clear their tracking arrays
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
 	if ability_spawner and ability_spawner.has_method("clear_all"):
 		ability_spawner.clear_all()
@@ -1187,6 +1215,9 @@ func return_to_main_menu() -> void:
 	# Hide blur effect
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+
+	# Wait a frame for all queue_free() calls to complete
+	await get_tree().process_frame
 
 	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
 	print("[MENU] Regenerating map preview with Type A")
