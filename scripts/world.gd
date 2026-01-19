@@ -105,7 +105,11 @@ func _ready() -> void:
 
 	# Initialize lobby UI
 	lobby_ui = LobbyUI.instantiate()
-	add_child(lobby_ui)
+	# Add to Menu CanvasLayer (same as profile_panel and friends_panel) so it renders after blur
+	if has_node("Menu"):
+		get_node("Menu").add_child(lobby_ui)
+	else:
+		add_child(lobby_ui)
 	lobby_ui.visible = false  # Hidden by default
 
 	# Initialize profile panel
@@ -513,8 +517,11 @@ func ask_bot_count() -> int:
 	spacer.custom_minimum_size = Vector2(0, 15)
 	vbox.add_child(spacer)
 
-	# Add dialog to scene
-	add_child(dialog)
+	# Add dialog to Menu CanvasLayer so it renders after blur (not blurred itself)
+	if has_node("Menu"):
+		get_node("Menu").add_child(dialog)
+	else:
+		add_child(dialog)
 
 	# Show blur to focus attention on dialog
 	if has_node("Menu/Blur"):
@@ -703,8 +710,11 @@ func ask_level_type() -> String:
 	desc_b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desc_container.add_child(desc_b)
 
-	# Add dialog to scene
-	add_child(dialog)
+	# Add dialog to Menu CanvasLayer so it renders after blur (not blurred itself)
+	if has_node("Menu"):
+		get_node("Menu").add_child(dialog)
+	else:
+		add_child(dialog)
 
 	# Show blur to focus attention on dialog
 	if has_node("Menu/Blur"):
@@ -1009,12 +1019,15 @@ func remove_player(peer_id: int) -> void:
 func _on_multiplayer_player_connected(peer_id: int, player_info: Dictionary) -> void:
 	"""Called when a player connects via multiplayer manager"""
 	print("Multiplayer player connected: ", peer_id, " - ", player_info)
-	add_player(peer_id)
+	# DON'T spawn player here - they're just joining the lobby!
+	# Players will be spawned when the game actually starts
 
 func _on_multiplayer_player_disconnected(peer_id: int) -> void:
 	"""Called when a player disconnects via multiplayer manager"""
 	print("Multiplayer player disconnected: ", peer_id)
-	remove_player(peer_id)
+	# Only remove if game is active (player exists in scene)
+	if game_active or countdown_active:
+		remove_player(peer_id)
 
 func show_multiplayer_lobby() -> void:
 	"""Show the multiplayer lobby UI"""
@@ -1026,9 +1039,15 @@ func show_multiplayer_lobby() -> void:
 		# Show blur to focus attention on lobby
 		if has_node("Menu/Blur"):
 			$Menu/Blur.show()
-		# Hide marble preview when showing lobby
+		# Hide marble preview when showing lobby and disable its processing to prevent camera errors
 		if has_node("MarblePreview"):
-			get_node("MarblePreview").visible = false
+			var marble_preview_container = get_node("MarblePreview")
+			marble_preview_container.visible = false
+			# Find the PreviewMarble and disable its processing
+			var preview_marble = marble_preview_container.get_node_or_null("PreviewMarble")
+			if preview_marble:
+				preview_marble.set_process(false)
+				preview_marble.set_physics_process(false)
 		# Show mouse cursor
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -1036,6 +1055,9 @@ func hide_multiplayer_lobby() -> void:
 	"""Hide the multiplayer lobby UI"""
 	if lobby_ui:
 		lobby_ui.visible = false
+	# Hide blur when hiding lobby
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
 func show_main_menu() -> void:
 	"""Show the main menu (without regenerating map - just shows existing preview)"""
@@ -1046,9 +1068,16 @@ func show_main_menu() -> void:
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
 
-	# Show marble preview again (it was hidden when entering lobby)
+	# Show marble preview again (it was hidden when entering lobby) and re-enable if needed
 	if has_node("MarblePreview"):
-		get_node("MarblePreview").visible = true
+		var marble_preview_container = get_node("MarblePreview")
+		marble_preview_container.visible = true
+		# Re-enable the PreviewMarble if it was disabled
+		var preview_marble = marble_preview_container.get_node_or_null("PreviewMarble")
+		if preview_marble and preview_marble.process_mode == Node.PROCESS_MODE_DISABLED:
+			# Don't re-enable processing - it should stay disabled
+			# The camera is on the preview_camera, not the marble
+			pass
 
 	# Ensure mouse is visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -1084,6 +1113,47 @@ func start_deathmatch() -> void:
 		print("WARNING: Match already active or counting down! Ignoring start_deathmatch() call.")
 		print("======================================")
 		return
+
+	# Hide lobby UI and show game
+	hide_multiplayer_lobby()
+
+	# Destroy preview camera and marble since we're starting the game
+	if preview_camera and is_instance_valid(preview_camera):
+		print("[CAMERA] Destroying preview camera for multiplayer match")
+		preview_camera.current = false
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		print("[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
+	# Hide main menu
+	if main_menu:
+		main_menu.hide()
+
+	# Stop menu music, start gameplay music
+	if menu_music:
+		menu_music.stop()
+	if gameplay_music and gameplay_music.has_method("start_playlist"):
+		gameplay_music.start_playlist()
+
+	# Regenerate level for multiplayer match (Type A for now, could be made configurable)
+	# FIXME: For multiplayer, level type should be chosen in lobby
+	current_level_type = "A"
+	print("Regenerating level for multiplayer match...")
+	await generate_procedural_level(current_level_type)
+	print("Level regeneration complete!")
+
+	# Capture mouse for gameplay
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	# Spawn all players from multiplayer manager
+	if MultiplayerManager and MultiplayerManager.players:
+		print("Spawning %d multiplayer players..." % MultiplayerManager.players.size())
+		for peer_id in MultiplayerManager.players.keys():
+			add_player(peer_id)
 
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
@@ -1920,6 +1990,7 @@ func _create_marble_preview() -> void:
 	# Disable physics and input for preview (it's just for display)
 	if marble is RigidBody3D:
 		marble.freeze = true  # Freeze physics
+		marble.process_mode = Node.PROCESS_MODE_DISABLED  # Completely disable processing
 		marble.set_process(false)  # Disable processing
 		marble.set_physics_process(false)  # Disable physics processing
 		marble.set_process_input(false)  # Disable input
