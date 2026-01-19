@@ -23,7 +23,7 @@ var fire_trail: CPUParticles3D = null
 func _ready() -> void:
 	super._ready()
 	ability_name = "Dash Attack"
-	ability_color = Color.ORANGE_RED
+	ability_color = Color.MAGENTA
 	cooldown_time = 1.5
 	supports_charging = true  # Dash attack supports charging for more speed/damage
 	max_charge_time = 2.0  # 2 seconds for max charge
@@ -97,12 +97,12 @@ func _ready() -> void:
 	fire_trail.scale_amount_curve.add_point(Vector2(0.4, 0.8))
 	fire_trail.scale_amount_curve.add_point(Vector2(1, 0.1))
 
-	# Color - fire gradient (yellow -> orange -> red -> black)
+	# Color - magenta gradient (bright magenta -> pink -> purple -> dark)
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.5, 1.0))  # Bright yellow
-	gradient.add_point(0.3, Color(1.0, 0.6, 0.2, 1.0))  # Orange
-	gradient.add_point(0.6, Color(1.0, 0.2, 0.1, 0.8))  # Red
-	gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 1.0))  # Bright magenta
+	gradient.add_point(0.3, Color(1.0, 0.2, 0.8, 1.0))  # Hot pink
+	gradient.add_point(0.6, Color(0.8, 0.1, 0.6, 0.8))  # Deep magenta
+	gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
 	fire_trail.color_ramp = gradient
 
 func _process(delta: float) -> void:

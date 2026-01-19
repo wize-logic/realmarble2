@@ -26,6 +26,11 @@ var respawn_timer: float = 0.0
 # Visual effects
 var glow_material: StandardMaterial3D
 
+# Spawn animation
+var spawn_animation_time: float = 0.5  # Duration of spawn animation
+var spawn_timer: float = 0.0
+var is_spawning: bool = true
+
 func _ready() -> void:
 	# Add to ability pickups group for bot AI
 	add_to_group("ability_pickups")
@@ -38,15 +43,43 @@ func _ready() -> void:
 
 	# Set up visual appearance
 	if mesh_instance and mesh_instance.mesh:
-		# Create glowing material based on ability color
+		# Create material based on ability color (no emission/glow)
 		glow_material = StandardMaterial3D.new()
 		glow_material.albedo_color = ability_color
-		glow_material.emission_enabled = true
-		glow_material.emission = ability_color * 0.3  # Darker emission to preserve color
-		glow_material.emission_energy_multiplier = 0.2
 		glow_material.metallic = 0.3
 		glow_material.roughness = 0.3
 		mesh_instance.material_override = glow_material
+
+	# Customize animation based on ability type for variety
+	match ability_name:
+		"Dash Attack":
+			# Fast, energetic bobbing and spinning
+			bob_speed = 4.0
+			bob_amount = 0.35
+			rotation_speed = 5.0
+			spawn_animation_time = 0.3  # Quick spawn
+		"Explosion":
+			# Slow, heavy bobbing
+			bob_speed = 1.5
+			bob_amount = 0.15
+			rotation_speed = 2.0
+			spawn_animation_time = 0.7  # Slow spawn
+		"Cannon":
+			# Medium, steady bobbing
+			bob_speed = 2.0
+			bob_amount = 0.3
+			rotation_speed = 3.5
+			spawn_animation_time = 0.4  # Medium spawn
+		"Sword":
+			# Sharp, precise bobbing
+			bob_speed = 3.0
+			bob_amount = 0.2
+			rotation_speed = 4.5
+			spawn_animation_time = 0.35  # Quick spawn
+
+	# Start with scale 0 for spawn animation
+	if mesh_instance:
+		mesh_instance.scale = Vector3.ZERO
 
 	# Randomize starting animation phase
 	time = randf() * TAU
@@ -62,6 +95,38 @@ func _process(delta: float) -> void:
 				respawn_pickup()
 		return
 
+	# Handle spawn animation
+	if is_spawning:
+		spawn_timer += delta
+		var spawn_progress: float = min(spawn_timer / spawn_animation_time, 1.0)
+
+		if mesh_instance:
+			# Different spawn animations per ability type
+			match ability_name:
+				"Dash Attack":
+					# Fast pop-in with overshoot
+					var scale_curve: float = ease(spawn_progress, -2.0)  # Overshoot
+					mesh_instance.scale = Vector3.ONE * scale_curve
+				"Explosion":
+					# Slow expand from center
+					var scale_curve: float = ease(spawn_progress, 0.5)
+					mesh_instance.scale = Vector3.ONE * scale_curve
+				"Cannon":
+					# Smooth fade-in scale
+					var scale_curve: float = ease(spawn_progress, 1.0)
+					mesh_instance.scale = Vector3.ONE * scale_curve
+				"Sword":
+					# Sharp linear scale-in
+					mesh_instance.scale = Vector3.ONE * spawn_progress
+				_:
+					# Default smooth scale
+					mesh_instance.scale = Vector3.ONE * ease(spawn_progress, 1.0)
+
+		if spawn_timer >= spawn_animation_time:
+			is_spawning = false
+			if mesh_instance:
+				mesh_instance.scale = Vector3.ONE
+
 	# Update animation time
 	time += delta
 
@@ -74,11 +139,6 @@ func _process(delta: float) -> void:
 	if mesh_instance:
 		mesh_instance.rotation.y += rotation_speed * delta
 		mesh_instance.rotation.x = sin(time * 1.5) * 0.2  # Slight tilt
-
-		# Pulse emission
-		if glow_material:
-			var pulse: float = 0.2 + sin(time * 4.0) * 0.1
-			glow_material.emission_energy_multiplier = pulse
 
 func _on_body_entered(body: Node3D) -> void:
 	# Check if it's a player and not already collected
@@ -122,6 +182,12 @@ func respawn_pickup() -> void:
 		mesh_instance.visible = true
 	if collision_shape:
 		collision_shape.set_deferred("disabled", false)
+
+	# Reset spawn animation
+	is_spawning = true
+	spawn_timer = 0.0
+	if mesh_instance:
+		mesh_instance.scale = Vector3.ZERO
 
 	# Reset animation phase slightly for variety
 	time += randf() * 2.0
