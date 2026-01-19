@@ -507,6 +507,11 @@ func ask_bot_count() -> int:
 
 	# Add dialog to scene
 	add_child(dialog)
+
+	# Show blur to focus attention on dialog
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+
 	dialog.popup_centered()
 	print("Dialog shown, waiting for user selection...")
 
@@ -518,6 +523,10 @@ func ask_bot_count() -> int:
 	print("Dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
+
+	# Hide blur after dialog is closed
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
 	print("Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
@@ -675,6 +684,11 @@ func ask_level_type() -> String:
 
 	# Add dialog to scene
 	add_child(dialog)
+
+	# Show blur to focus attention on dialog
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+
 	dialog.popup_centered()
 	print("Level type dialog shown, waiting for user selection...")
 
@@ -684,6 +698,10 @@ func ask_level_type() -> String:
 
 	print("Level type dialog closed, cleaning up...")
 	dialog.queue_free()
+
+	# Hide blur after dialog is closed
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
 	print("Level type selected: %s" % level_type_selected)
 	return level_type_selected
@@ -907,8 +925,14 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
 		if toggled_on:
 			options_menu.show()
+			# Show blur when options menu opens from main menu
+			if has_node("Menu/Blur"):
+				$Menu/Blur.show()
 		else:
 			options_menu.hide()
+			# Hide blur when options menu closes
+			if has_node("Menu/Blur"):
+				$Menu/Blur.hide()
 
 func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
