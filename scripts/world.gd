@@ -289,6 +289,10 @@ func _on_return_to_title_pressed() -> void:
 	if pause_menu:
 		pause_menu.hide()
 
+	# Hide blur immediately when leaving menu
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
 	# Stop gameplay music
 	if gameplay_music and gameplay_music.has_method("stop_playlist"):
 		gameplay_music.stop_playlist()
@@ -805,6 +809,9 @@ func _on_profile_pressed() -> void:
 		profile_panel.show_panel()
 	if main_menu:
 		main_menu.hide()
+	# Show blur to focus attention on the panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
 
 func _on_friends_pressed() -> void:
 	"""Show friends panel"""
@@ -812,6 +819,9 @@ func _on_friends_pressed() -> void:
 		friends_panel.show_panel()
 	if main_menu:
 		main_menu.hide()
+	# Show blur to focus attention on the panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
 
 func _on_host_button_pressed() -> void:
 	if main_menu:
@@ -1888,6 +1898,9 @@ func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
 	if profile_panel:
 		profile_panel.hide()
+	# Hide blur when closing panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -1895,6 +1908,9 @@ func _on_friends_panel_close_pressed() -> void:
 	"""Handle friends panel close button pressed"""
 	if friends_panel:
 		friends_panel.hide()
+	# Hide blur when closing panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 	if main_menu:
 		main_menu.show()
 
