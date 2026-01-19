@@ -4,8 +4,8 @@ extends Ability
 ## Shoots powerful explosive projectiles that deal heavy damage
 ## Slower fire rate but much more impactful than a gun!
 
-@export var projectile_damage: int = 3  # Increased from gun's 1
-@export var projectile_speed: float = 25.0  # Slower than gun's 40.0 for arc trajectory
+@export var projectile_damage: int = 1  # Base damage (same as gun)
+@export var projectile_speed: float = 80.0  # Very fast for accurate shots (was 25.0)
 @export var projectile_lifetime: float = 4.0  # Slightly longer than gun's 3.0
 @export var fire_rate: float = 1.0  # Slower cooldown (gun was 0.5)
 @export var min_charge_time: float = 0.4  # Slightly longer minimum charge
@@ -23,13 +23,48 @@ func _ready() -> void:
 	supports_charging = true  # Cannon supports charging for devastating shots
 	max_charge_time = 2.5  # Longer max charge than gun (2.0)
 
+func find_nearest_player() -> Node3D:
+	"""Find the nearest player to lock onto (excluding self)"""
+	if not player or not player.get_parent():
+		return null
+
+	var nearest: Node3D = null
+	var nearest_distance: float = INF
+	var max_lock_range: float = 50.0  # Reduced auto-aim range for less accuracy
+
+	# Get all nodes in the Players container
+	var players_container = player.get_parent()
+	for potential_target in players_container.get_children():
+		# Skip if it's ourselves
+		if potential_target == player:
+			continue
+
+		# Check if it's a valid player (has health, not dead)
+		if not potential_target.has_method('receive_damage_from'):
+			continue
+
+		# Check if player is alive (has health > 0)
+		if "health" in potential_target and potential_target.health <= 0:
+			continue
+
+		# Calculate distance
+		var distance = player.global_position.distance_to(potential_target.global_position)
+
+		# Check if within lock range and closer than current nearest
+		if distance < max_lock_range and distance < nearest_distance:
+			nearest = potential_target
+			nearest_distance = distance
+
+	return nearest
+
 func activate() -> void:
 	if not player:
 		return
 
 	# Get charge multiplier for scaled damage/speed
 	var charge_multiplier: float = get_charge_multiplier()
-	var charged_damage: int = int(projectile_damage * charge_multiplier)
+	# Damage: 1 base, 2 when fully charged (charge_level 3)
+	var charged_damage: int = projectile_damage + (1 if charge_level >= 3 else 0)
 	var charged_speed: float = projectile_speed * charge_multiplier
 
 	print("BOOM! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
@@ -50,9 +85,20 @@ func activate() -> void:
 		# This is CRITICAL for bots to aim properly
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
-	# Add upward angle to make aiming easier (shoot slightly upward, not straight)
-	fire_direction.y += 0.25  # Add upward component for easier aiming
-	fire_direction = fire_direction.normalized()
+	# Auto-aim: Find nearest player and adjust fire direction
+	var nearest_player = find_nearest_player()
+	if nearest_player:
+		# Aim at the nearest player's position (with reduced prediction for less accuracy)
+		var target_pos = nearest_player.global_position
+		# Predict where the player will be based on their velocity (only 30% prediction)
+		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
+			var distance = player.global_position.distance_to(target_pos)
+			var time_to_hit = distance / charged_speed
+			# Reduced prediction for less accuracy
+			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
+
+		# Calculate direction to target
+		fire_direction = (target_pos - player.global_position).normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
@@ -148,7 +194,7 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	var projectile_velocity: Vector3 = projectile.linear_velocity
 
 	# Get projectile metadata
-	var damage: int = projectile.get_meta("damage", 3)
+	var damage: int = projectile.get_meta("damage", 1)
 	var owner_id: int = projectile.get_meta("owner_id", -1)
 
 	# Don't hit the owner
@@ -209,9 +255,9 @@ func create_projectile() -> Node3D:
 	var projectile: RigidBody3D = RigidBody3D.new()
 	projectile.name = "Cannonball"
 
-	# Physics setup - heavier and with gravity for arc
+	# Physics setup - heavier but no gravity for straight shots
 	projectile.mass = 0.5  # Much heavier than gun (was 0.1)
-	projectile.gravity_scale = 0.3  # Add gravity for realistic arc (gun was 0.0)
+	projectile.gravity_scale = 0.0  # No gravity for laser-straight accuracy
 	projectile.continuous_cd = true
 	projectile.collision_layer = 4  # Projectile layer
 	projectile.collision_mask = 3   # Hit players (layer 2) and world (layer 1)
@@ -242,7 +288,7 @@ func create_projectile() -> Node3D:
 	projectile.add_child(collision)
 
 	# Store projectile data as metadata (no dynamic script needed)
-	projectile.set_meta("damage", 3)
+	projectile.set_meta("damage", 1)
 	projectile.set_meta("owner_id", -1)
 	projectile.set_meta("lifetime", projectile_lifetime)
 
