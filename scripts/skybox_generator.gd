@@ -34,7 +34,12 @@ func _process(delta: float) -> void:
 				transition_progress += delta / color_transition_duration
 
 				if transition_progress >= 1.0:
-					# Transition complete
+					# Transition complete - update shader with final target colors first
+					sky_material.set_shader_parameter("color1", target_colors[0])
+					sky_material.set_shader_parameter("color2", target_colors[1])
+					sky_material.set_shader_parameter("color3", target_colors[2])
+
+					# Now update the color variables
 					transition_progress = 0.0
 					is_transitioning = false
 					current_colors = target_colors.duplicate()
@@ -245,4 +250,12 @@ func randomize_colors() -> void:
 		sky_material.set_shader_parameter("color1", colors[0])
 		sky_material.set_shader_parameter("color2", colors[1])
 		sky_material.set_shader_parameter("color3", colors[2])
+
+		# Update transition system to stay in sync
+		current_colors = colors.duplicate()
+		target_colors = generate_color_palette()
+		is_transitioning = false
+		hold_timer = 0.0
+		transition_progress = 0.0
+
 		print("Skybox colors randomized!")
