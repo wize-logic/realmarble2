@@ -32,22 +32,21 @@ func find_nearest_player() -> Node3D:
 	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
 	var max_angle_degrees: float = 60.0  # Only target within 60 degrees of forward (120 degree cone total)
 
-	# Get player's forward direction (based on camera or rotation)
+	# Get player's forward direction (based on camera or rotation) - full 3D
 	var forward_direction: Vector3
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 
 	if camera:
-		# Use camera's forward direction
+		# Use camera's forward direction (full 3D)
 		forward_direction = -camera.global_transform.basis.z
 	elif camera_arm:
 		# Fallback to camera_arm
 		forward_direction = -camera_arm.global_transform.basis.z
 	else:
-		# Fallback for bots: use player's facing direction
+		# Fallback for bots: use player's facing direction (horizontal for bots)
 		forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
-	# Normalize to ensure it's a unit vector
 	forward_direction = forward_direction.normalized()
 
 	# Get all nodes in the Players container
@@ -97,23 +96,21 @@ func activate() -> void:
 
 	print("BOOM! (Instant fire)")
 
-	# Get firing direction from camera - always shoot straight forward horizontally (no up/down)
+	# Get firing direction from camera - shoots in full 3D (up, down, forward)
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 	var fire_direction: Vector3 = Vector3.FORWARD
 
 	if camera:
-		# Get camera's forward direction
+		# Get camera's forward direction (full 3D, including up/down)
 		fire_direction = -camera.global_transform.basis.z
 	elif camera_arm:
 		# Fallback to camera_arm if camera not found
 		fire_direction = -camera_arm.global_transform.basis.z
 	else:
-		# Fallback for bots: use player's facing direction (rotation.y)
+		# Fallback for bots: use player's facing direction (horizontal only for bots)
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
-	# Flatten direction to horizontal plane only (remove Y component, keep X and Z)
-	fire_direction.y = 0
 	fire_direction = fire_direction.normalized()
 
 	# Auto-aim: Find nearest player and adjust fire direction
@@ -128,10 +125,8 @@ func activate() -> void:
 			# Reduced prediction for less accuracy
 			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
 
-		# Calculate direction to target (horizontal only)
-		fire_direction = (target_pos - player.global_position)
-		fire_direction.y = 0  # Keep horizontal
-		fire_direction = fire_direction.normalized()
+		# Calculate direction to target (full 3D - can aim up or down at targets)
+		fire_direction = (target_pos - player.global_position).normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
 	var barrel_offset: float = 1.5  # Increased from gun's 1.0
