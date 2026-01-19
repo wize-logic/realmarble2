@@ -23,7 +23,7 @@ var fire_trail: CPUParticles3D = null
 func _ready() -> void:
 	super._ready()
 	ability_name = "Dash Attack"
-	ability_color = Color.ORANGE_RED
+	ability_color = Color.MAGENTA
 	cooldown_time = 1.5
 	supports_charging = true  # Dash attack supports charging for more speed/damage
 	max_charge_time = 2.0  # 2 seconds for max charge
@@ -97,12 +97,12 @@ func _ready() -> void:
 	fire_trail.scale_amount_curve.add_point(Vector2(0.4, 0.8))
 	fire_trail.scale_amount_curve.add_point(Vector2(1, 0.1))
 
-	# Color - fire gradient (yellow -> orange -> red -> black)
+	# Color - magenta gradient (bright magenta -> pink -> purple -> dark)
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.5, 1.0))  # Bright yellow
-	gradient.add_point(0.3, Color(1.0, 0.6, 0.2, 1.0))  # Orange
-	gradient.add_point(0.6, Color(1.0, 0.2, 0.1, 0.8))  # Red
-	gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 1.0))  # Bright magenta
+	gradient.add_point(0.3, Color(1.0, 0.2, 0.8, 1.0))  # Hot pink
+	gradient.add_point(0.6, Color(0.8, 0.1, 0.6, 0.8))  # Deep magenta
+	gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
 	fire_trail.color_ramp = gradient
 
 func _process(delta: float) -> void:
@@ -128,7 +128,7 @@ func activate() -> void:
 	var charge_multiplier: float = get_charge_multiplier()
 	var charged_damage: int = damage  # Always 1, no charge scaling on damage
 	var charged_dash_force: float = dash_force * charge_multiplier
-	var charged_knockback: float = 100.0 * charge_multiplier  # Increased from 40.0 (2.5x)
+	var charged_knockback: float = 180.0 * charge_multiplier  # Increased from 100.0 for stronger impact
 
 	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
@@ -201,7 +201,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		var player_level: int = player.level if player and "level" in player else 0
 		var level_mult: float = 1.0 + (player_level * 0.2)
 		var charged_damage: int = damage  # Always 1, no charge scaling
-		var charged_knockback: float = 100.0 * charge_multiplier * level_mult  # Increased from 40.0 (2.5x)
+		var charged_knockback: float = 180.0 * charge_multiplier * level_mult  # Increased from 100.0 for stronger impact
 
 		# Deal damage
 		var attacker_id: int = player.name.to_int() if player else -1

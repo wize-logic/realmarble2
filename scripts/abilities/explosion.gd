@@ -7,7 +7,7 @@ extends Ability
 @export var explosion_damage: int = 2
 @export var explosion_radius: float = 5.0
 @export var upward_launch_force: float = 100.0
-@export var knockback_force: float = 60.0
+@export var knockback_force: float = 120.0  # Doubled from 60.0 for stronger impact
 @onready var ability_sound: AudioStreamPlayer3D = $ExplosionSound
 
 var is_exploding: bool = false

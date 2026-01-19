@@ -17,7 +17,7 @@ var active_projectiles: Array[Node3D] = []
 func _ready() -> void:
 	super._ready()
 	ability_name = "Cannon"
-	ability_color = Color.ORANGE_RED  # Changed from gun's cyan
+	ability_color = Color(0.5, 1.0, 0.0)  # Lime green for high visibility
 	cooldown_time = fire_rate
 	supports_charging = true  # Must support charging for input to work
 	max_charge_time = 0.01  # Instant fire - minimal charge time
@@ -240,8 +240,8 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		var player_level: int = projectile.get_meta("player_level", 0)
 		var level_mult: float = 1.0 + (player.level * 0.2)
 
-		# Calculate knockback (base 40.0, double the gun's 20.0, scaled by level)
-		var base_knockback: float = 40.0
+		# Calculate knockback (base 200.0, 5x increase for massive impact, scaled by level)
+		var base_knockback: float = 200.0
 		var total_knockback: float = base_knockback * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
@@ -288,12 +288,11 @@ func create_projectile() -> Node3D:
 	sphere.height = 0.8
 	mesh_instance.mesh = sphere
 
-	# Create glowing material - fiery orange/red
+	# Create material - lime green for visibility
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color.ORANGE_RED
-	mat.emission_enabled = true
-	mat.emission = Color.ORANGE * 0.5  # Brighter emission
-	mat.emission_energy_multiplier = 0.5  # Stronger glow
+	mat.albedo_color = Color(0.5, 1.0, 0.0)  # Lime green
+	mat.metallic = 0.3
+	mat.roughness = 0.3
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
 
@@ -366,12 +365,12 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	trail.scale_amount_curve.add_point(Vector2(0.7, 0.8))
 	trail.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - fiery orange to dark smoke trail
+	# Color - lime green to dark trail
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
-	gradient.add_point(0.3, Color(1.0, 0.5, 0.2, 0.8))  # Orange
-	gradient.add_point(0.6, Color(0.6, 0.3, 0.2, 0.5))  # Dark orange/smoke
-	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 1.0))  # Bright lime green
+	gradient.add_point(0.3, Color(0.5, 1.0, 0.2, 0.8))  # Green
+	gradient.add_point(0.6, Color(0.3, 0.6, 0.2, 0.5))  # Dark green
+	gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))  # Dark/transparent
 	trail.color_ramp = gradient
 
 func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
@@ -428,12 +427,12 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	muzzle_flash.scale_amount_curve.add_point(Vector2(0.3, 1.2))
 	muzzle_flash.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - bright orange/red flash (not yellow like gun)
+	# Color - bright lime green flash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.9, 0.7, 1.0))  # Bright white-orange
-	gradient.add_point(0.3, Color(1.0, 0.6, 0.3, 0.9))  # Orange
-	gradient.add_point(0.6, Color(0.9, 0.4, 0.2, 0.6))  # Dark orange
-	gradient.add_point(1.0, Color(0.3, 0.1, 0.1, 0.0))  # Dark/transparent
+	gradient.add_point(0.0, Color(0.9, 1.0, 0.7, 1.0))  # Bright white-green
+	gradient.add_point(0.3, Color(0.6, 1.0, 0.3, 0.9))  # Lime green
+	gradient.add_point(0.6, Color(0.4, 0.9, 0.2, 0.6))  # Green
+	gradient.add_point(1.0, Color(0.1, 0.3, 0.1, 0.0))  # Dark/transparent
 	muzzle_flash.color_ramp = gradient
 
 	# Auto-delete after lifetime
@@ -494,13 +493,13 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	explosion.scale_amount_curve.add_point(Vector2(0.6, 1.0))
 	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - fiery explosion
+	# Color - lime green explosion
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.9, 1.0))  # Bright white center
-	gradient.add_point(0.2, Color(1.0, 0.7, 0.3, 1.0))  # Bright orange
-	gradient.add_point(0.5, Color(0.9, 0.4, 0.2, 0.7))  # Orange/red
-	gradient.add_point(0.8, Color(0.4, 0.2, 0.2, 0.3))  # Dark smoke
-	gradient.add_point(1.0, Color(0.2, 0.1, 0.1, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.9, 1.0, 0.9, 1.0))  # Bright white-green center
+	gradient.add_point(0.2, Color(0.7, 1.0, 0.3, 1.0))  # Bright lime green
+	gradient.add_point(0.5, Color(0.4, 0.9, 0.2, 0.7))  # Green
+	gradient.add_point(0.8, Color(0.2, 0.4, 0.2, 0.3))  # Dark green smoke
+	gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))  # Transparent
 	explosion.color_ramp = gradient
 
 	# Auto-delete after lifetime
