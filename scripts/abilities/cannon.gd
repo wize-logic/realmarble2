@@ -90,9 +90,9 @@ func activate() -> void:
 	if not player:
 		return
 
-	# Cannon fires instantly without charging
-	var charged_damage: int = projectile_damage
-	var charged_speed: float = projectile_speed
+	# Cannon always does exactly 1 damage (no charge scaling)
+	var damage: int = 1  # Fixed damage, never modified
+	var speed: float = projectile_speed
 
 	print("BOOM! (Instant fire)")
 
@@ -109,7 +109,7 @@ func activate() -> void:
 		# Predict where the player will be based on their velocity (only 30% prediction)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
-			var time_to_hit = distance / charged_speed
+			var time_to_hit = distance / speed
 			# Reduced prediction for less accuracy
 			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
 
@@ -174,15 +174,15 @@ func activate() -> void:
 		if player and "level" in player:
 			level_multiplier = 1.0 + (player.level * 0.25)
 
-		# Projectile velocity = player velocity + fire direction * charged speed
-		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * charged_speed * level_multiplier)
+		# Projectile velocity = player velocity + fire direction * speed
+		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * speed * level_multiplier)
 		if projectile is RigidBody3D:
 			projectile.linear_velocity = projectile_velocity
 
-		# Set damage, owner, and player level via metadata
+		# Set damage, owner, and player level via metadata (damage is always 1)
 		var owner_id: int = player.name.to_int() if player else -1
 		var player_level: int = player.level if player and "level" in player else 0
-		projectile.set_meta("damage", charged_damage)
+		projectile.set_meta("damage", damage)
 		projectile.set_meta("owner_id", owner_id)
 		projectile.set_meta("player_level", player_level)
 
