@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+render_mode blend_mix, depth_draw_always, depth_prepass_alpha, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Marble appearance parameters
 uniform vec3 primary_color : source_color = vec3(0.8, 0.2, 0.2);
@@ -120,8 +120,8 @@ void fragment() {
 	ROUGHNESS = 1.0 - glossiness;
 	METALLIC = metallic_amount;
 
-	// Add subtle transparency for glass effect
-	ALPHA = 1.0 - (transparency * fresnel_amount);
+	// Set to fully opaque for proper shadow casting and receiving
+	ALPHA = 1.0;
 
 	// Add normal map detail from swirl pattern
 	float normal_detail = (noise3d(world_pos * swirl_scale * 4.0) - 0.5) * 0.3;

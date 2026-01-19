@@ -2201,6 +2201,9 @@ func apply_marble_material() -> void:
 	# Apply the material
 	marble_mesh.material_override = material
 
+	# Ensure shadow casting is enabled for proper lighting
+	marble_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
 	# Update aura light color to match marble primary color
 	if aura_light and material:
 		var primary_color = material.get_shader_parameter("primary_color")
