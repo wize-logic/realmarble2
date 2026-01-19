@@ -1023,9 +1023,9 @@ func show_multiplayer_lobby() -> void:
 		# Hide main menu
 		if main_menu:
 			main_menu.visible = false
-		# Hide blur
+		# Show blur to focus attention on lobby
 		if has_node("Menu/Blur"):
-			$Menu/Blur.hide()
+			$Menu/Blur.show()
 		# Hide marble preview when showing lobby
 		if has_node("MarblePreview"):
 			get_node("MarblePreview").visible = false
@@ -1038,17 +1038,20 @@ func hide_multiplayer_lobby() -> void:
 		lobby_ui.visible = false
 
 func show_main_menu() -> void:
-	"""Show the main menu"""
+	"""Show the main menu (without regenerating map - just shows existing preview)"""
 	if main_menu:
 		main_menu.visible = true
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
-	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A", false)
+	# Hide blur when returning to main menu
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
 
-	# Recreate marble preview after level regeneration
-	print("[CAMERA] Recreating marble preview for main menu")
-	_create_marble_preview()
+	# Show marble preview again (it was hidden when entering lobby)
+	if has_node("MarblePreview"):
+		get_node("MarblePreview").visible = true
+
+	# Ensure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
