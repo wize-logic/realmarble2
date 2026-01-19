@@ -18,7 +18,24 @@ const COLOR_SCHEMES = [
 	{"name": "Bright Cyan", "primary": Color(0.0, 0.9, 1.0), "secondary": Color(0.3, 1.0, 1.0), "swirl": Color(0.6, 1.0, 1.0)},
 	{"name": "Sunny Yellow", "primary": Color(1.0, 0.9, 0.0), "secondary": Color(1.0, 1.0, 0.3), "swirl": Color(1.0, 1.0, 0.6)},
 
-	# Distinct special colors
+	# Pure primary colors (maximum saturation)
+	{"name": "Blood Red", "primary": Color(0.8, 0.0, 0.0), "secondary": Color(0.9, 0.1, 0.1), "swirl": Color(1.0, 0.3, 0.3)},
+	{"name": "Deep Blue", "primary": Color(0.0, 0.0, 1.0), "secondary": Color(0.1, 0.1, 1.0), "swirl": Color(0.3, 0.3, 1.0)},
+	{"name": "Poison Green", "primary": Color(0.6, 1.0, 0.0), "secondary": Color(0.75, 1.0, 0.2), "swirl": Color(0.85, 1.0, 0.4)},
+	{"name": "Pure Yellow", "primary": Color(1.0, 1.0, 0.0), "secondary": Color(1.0, 1.0, 0.15), "swirl": Color(1.0, 1.0, 0.4)},
+
+	# Distinct darks (high contrast)
+	{"name": "Midnight Black", "primary": Color(0.05, 0.05, 0.08), "secondary": Color(0.1, 0.1, 0.15), "swirl": Color(0.2, 0.2, 0.25)},
+	{"name": "Navy Blue", "primary": Color(0.0, 0.0, 0.5), "secondary": Color(0.1, 0.1, 0.65), "swirl": Color(0.2, 0.2, 0.8)},
+	{"name": "Chocolate Brown", "primary": Color(0.5, 0.25, 0.1), "secondary": Color(0.65, 0.35, 0.2), "swirl": Color(0.8, 0.5, 0.35)},
+
+	# Unique tones (distinct pastels and vivids)
+	{"name": "Salmon Pink", "primary": Color(1.0, 0.55, 0.45), "secondary": Color(1.0, 0.7, 0.6), "swirl": Color(1.0, 0.85, 0.8)},
+	{"name": "Jade Green", "primary": Color(0.0, 0.65, 0.5), "secondary": Color(0.2, 0.8, 0.65), "swirl": Color(0.4, 0.95, 0.8)},
+	{"name": "Lavender", "primary": Color(0.7, 0.5, 1.0), "secondary": Color(0.8, 0.65, 1.0), "swirl": Color(0.9, 0.8, 1.0)},
+	{"name": "Mint Green", "primary": Color(0.4, 1.0, 0.7), "secondary": Color(0.55, 1.0, 0.8), "swirl": Color(0.7, 1.0, 0.9)},
+
+	# Additional special colors
 	{"name": "Deep Black", "primary": Color(0.1, 0.1, 0.15), "secondary": Color(0.2, 0.2, 0.3), "swirl": Color(0.35, 0.35, 0.45)},
 	{"name": "Pure White", "primary": Color(1.0, 1.0, 1.0), "secondary": Color(0.95, 0.95, 1.0), "swirl": Color(0.85, 0.85, 0.95)},
 	{"name": "Bright Gold", "primary": Color(1.0, 0.75, 0.0), "secondary": Color(1.0, 0.85, 0.2), "swirl": Color(1.0, 0.95, 0.5)},
@@ -26,7 +43,7 @@ const COLOR_SCHEMES = [
 
 	# Bold unique colors
 	{"name": "Electric Magenta", "primary": Color(1.0, 0.0, 0.8), "secondary": Color(1.0, 0.2, 0.9), "swirl": Color(1.0, 0.5, 1.0)},
-	{"name": "Neon Lime", "primary": Color(0.5, 1.0, 0.0), "secondary": Color(0.7, 1.0, 0.3), "swirl": Color(0.8, 1.0, 0.6)},
+	{"name": "Electric Lime", "primary": Color(0.5, 1.0, 0.0), "secondary": Color(0.7, 1.0, 0.3), "swirl": Color(0.8, 1.0, 0.6)},
 	{"name": "Teal", "primary": Color(0.0, 0.7, 0.65), "secondary": Color(0.2, 0.85, 0.8), "swirl": Color(0.5, 1.0, 0.95)},
 	{"name": "Deep Indigo", "primary": Color(0.2, 0.0, 0.6), "secondary": Color(0.35, 0.2, 0.75), "swirl": Color(0.5, 0.4, 0.9)},
 ]
@@ -68,7 +85,7 @@ func create_marble_material(color_index: int = -1) -> ShaderMaterial:
 	# Set material properties with slight randomization
 	material.set_shader_parameter("glossiness", randf_range(0.8, 0.95))
 	material.set_shader_parameter("metallic_amount", randf_range(0.2, 0.4))
-	material.set_shader_parameter("transparency", randf_range(0.0, 0.03))  # Much less translucent
+	material.set_shader_parameter("transparency", 0.02)  # Fixed low transparency for opaque marbles
 
 	# Randomize pattern properties for uniqueness
 	material.set_shader_parameter("swirl_scale", randf_range(1.5, 2.5))

@@ -9,7 +9,7 @@ uniform vec3 swirl_color : source_color = vec3(1.0, 0.8, 0.8);
 // Material properties
 uniform float glossiness : hint_range(0.0, 1.0) = 0.85;
 uniform float metallic_amount : hint_range(0.0, 1.0) = 0.3;
-uniform float transparency : hint_range(0.0, 1.0) = 0.15;
+uniform float transparency : hint_range(0.0, 1.0) = 0.02;
 
 // Pattern controls
 uniform float swirl_scale : hint_range(0.1, 5.0) = 2.0;
