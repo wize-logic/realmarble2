@@ -1695,7 +1695,7 @@ func create_charge_meter_ui() -> void:
 	print("Charge meter UI created")
 
 func create_rail_reticle_ui() -> void:
-	"""Create the rail targeting reticle UI"""
+	"""Create the rail targeting prompt UI (text only, no visual reticle)"""
 	# Create container
 	rail_reticle_ui = Control.new()
 	rail_reticle_ui.name = "RailReticleUI"
@@ -1704,53 +1704,15 @@ func create_rail_reticle_ui() -> void:
 	rail_reticle_ui.anchor_right = 0.5
 	rail_reticle_ui.anchor_top = 0.5
 	rail_reticle_ui.anchor_bottom = 0.5
-	rail_reticle_ui.offset_left = -60
-	rail_reticle_ui.offset_right = 60
-	rail_reticle_ui.offset_top = -60
-	rail_reticle_ui.offset_bottom = 60
+	rail_reticle_ui.offset_left = -100
+	rail_reticle_ui.offset_right = 100
+	rail_reticle_ui.offset_top = -15
+	rail_reticle_ui.offset_bottom = 15
 	rail_reticle_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rail_reticle_ui.visible = false
 	add_child(rail_reticle_ui)
 
-	# Create reticle graphic using ColorRect for the ring
-	var reticle_size: int = 80
-	var reticle_thickness: int = 3
-
-	# Outer circle (using 4 arcs to form a circle)
-	for i in range(4):
-		var arc: ColorRect = ColorRect.new()
-		arc.name = "ReticleArc" + str(i)
-		arc.color = Color(0.2, 1.0, 0.4, 0.9)  # Bright green
-		arc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		# Position arcs to form a circle
-		var angle_offset: float = (PI / 2.0) * i
-		var arc_length: float = 25.0
-		arc.size = Vector2(arc_length, reticle_thickness)
-
-		# Rotate and position to form circle
-		match i:
-			0:  # Top arc
-				arc.position = Vector2(60 - arc_length/2, 35)
-			1:  # Right arc
-				arc.position = Vector2(85, 60 - arc_length/2)
-			2:  # Bottom arc
-				arc.position = Vector2(60 - arc_length/2, 85)
-			3:  # Left arc
-				arc.position = Vector2(35, 60 - arc_length/2)
-
-		rail_reticle_ui.add_child(arc)
-
-	# Create center dot
-	var center_dot: ColorRect = ColorRect.new()
-	center_dot.name = "CenterDot"
-	center_dot.color = Color(0.2, 1.0, 0.4, 0.9)
-	center_dot.size = Vector2(4, 4)
-	center_dot.position = Vector2(58, 58)
-	center_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rail_reticle_ui.add_child(center_dot)
-
-	# Create label
+	# Create label only (no visual reticle elements)
 	var label: Label = Label.new()
 	label.name = "AttachLabel"
 	label.text = "[E] ATTACH TO RAIL"
@@ -1759,12 +1721,12 @@ func create_rail_reticle_ui() -> void:
 	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
 	label.add_theme_color_override("font_outline_color", Color.BLACK)
 	label.add_theme_constant_override("outline_size", 4)
-	label.position = Vector2(-40, 95)
+	label.position = Vector2(0, 0)
 	label.size = Vector2(200, 30)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rail_reticle_ui.add_child(label)
 
-	print("Rail reticle UI created")
+	print("Rail attachment prompt UI created (text only)")
 
 func create_rail_raycast() -> void:
 	"""Create the raycast for detecting rails"""
@@ -1866,38 +1828,17 @@ func update_rail_targeting() -> void:
 						found_rail = rail
 						closest_distance = projection
 
-	# Update targeted rail and reticle visibility
+	# Update targeted rail and prompt visibility
 	targeted_rail = found_rail
 
 	if targeted_rail:
 		rail_reticle_ui.visible = true
 
-		# Always show green reticle when targeting a rail
-		var reticle_color: Color = Color(0.2, 1.0, 0.4, 0.9)  # Bright green
-
-		# Update all arc colors
-		for i in range(4):
-			var arc: Control = rail_reticle_ui.get_node_or_null("ReticleArc" + str(i))
-			if arc is ColorRect:
-				(arc as ColorRect).color = reticle_color
-
-		# Update center dot color
-		var center_dot: Control = rail_reticle_ui.get_node_or_null("CenterDot")
-		if center_dot is ColorRect:
-			(center_dot as ColorRect).color = reticle_color
-
-		# Update label text and color (always show attach prompt)
+		# Update label text and color (show attach prompt only)
 		var label: Control = rail_reticle_ui.get_node_or_null("AttachLabel")
 		if label is Label:
 			(label as Label).text = "[E] ATTACH TO RAIL"
 			(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
-
-		# Debug: Commented out distance-based UI changes
-		# var can_actually_attach: bool = false
-		# if targeted_rail.has_method("can_attach"):
-		#	can_actually_attach = targeted_rail.can_attach(self)
-		# if not can_actually_attach:
-		#	(label as Label).text = "TOO FAR - GET CLOSER"
 	else:
 		rail_reticle_ui.visible = false
 
