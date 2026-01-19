@@ -10,6 +10,9 @@ const ExplosionScene = preload("res://abilities/explosion.tscn")
 const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
 
+# Beam spawn effect
+const BeamSpawnEffect = preload("res://scripts/beam_spawn_effect.gd")
+
 # Marble material manager for unique player colors
 var marble_material_manager = preload("res://scripts/marble_material_manager.gd").new()
 
@@ -556,6 +559,11 @@ func _ready() -> void:
 	# Reset velocity on spawn
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+
+	# Spawn beam effect on initial spawn
+	# Delay slightly to ensure the player is fully set up
+	await get_tree().create_timer(0.1).timeout
+	spawn_beam_effect()
 
 	# CRITICAL HTML5 FIX: Set camera immediately and use deferred call for persistence
 	if camera and camera_arm:
@@ -1269,6 +1277,9 @@ func respawn() -> void:
 	if spawn_sound:
 		play_spawn_sound.rpc()
 
+	# Spawn beam effect
+	spawn_beam_effect()
+
 func fall_death() -> void:
 	"""Called when player falls off the map"""
 	var player_id: int = str(name).to_int()
@@ -1563,6 +1574,27 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	jump_bounce_particles.restart()
 
 	print("Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
+
+func spawn_beam_effect() -> void:
+	"""Spawn Star Trek-style beam effect at player spawn position"""
+	# Get the world node (parent) to add the effect to
+	var world: Node = get_parent()
+	if not world:
+		print("ERROR: No parent node to spawn beam effect into!")
+		return
+
+	# Create the beam effect instance
+	var beam_effect = BeamSpawnEffect.new()
+	world.add_child(beam_effect)
+
+	# Position the effect at the player's spawn position
+	# Offset down so the beam rises up from below
+	beam_effect.global_position = global_position + Vector3(0, -4, 0)
+
+	# Play the beam effect
+	beam_effect.play_beam()
+
+	print("Beam spawn effect created for %s at position %s" % [name, beam_effect.global_position])
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
