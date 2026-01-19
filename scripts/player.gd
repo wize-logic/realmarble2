@@ -1789,9 +1789,16 @@ func update_rail_targeting() -> void:
 			cached_rails = find_all_rails(world)
 			rails_cache_timer = 0.0
 
+	# Clean up invalid rails from cache
+	cached_rails = cached_rails.filter(func(r): return r and is_instance_valid(r) and r.is_inside_tree())
+
 	var all_rails: Array[GrindRail] = cached_rails
 
 	for rail in all_rails:
+		# Validate rail is still valid and in the scene
+		if not rail or not is_instance_valid(rail) or not rail.is_inside_tree():
+			continue
+
 		# Get closest point on rail path to camera ray
 		var rail_curve: Curve3D = rail.curve
 		if not rail_curve or rail_curve.get_baked_length() <= 0:
