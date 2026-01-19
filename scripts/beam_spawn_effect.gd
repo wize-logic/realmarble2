@@ -10,14 +10,14 @@ func _ready() -> void:
 	create_beam_effect()
 
 func create_beam_effect() -> void:
-	"""Create a smooth Star Trek-style beam spawn effect"""
+	"""Create a smooth Star Trek-style beam spawn effect (HTML5-optimized)"""
 	# Main beam particles - rising column of light
 	beam_particles = GPUParticles3D.new()
 	beam_particles.name = "BeamParticles"
 	beam_particles.emitting = false
 	beam_particles.one_shot = true
-	beam_particles.amount = 150
-	beam_particles.lifetime = 1.2
+	beam_particles.amount = 50  # Reduced from 150 for HTML5 performance
+	beam_particles.lifetime = 1.0  # Reduced from 1.2 for faster cleanup
 	beam_particles.explosiveness = 0.0  # Continuous emission over time
 	beam_particles.randomness = 0.3
 	add_child(beam_particles)
@@ -78,13 +78,13 @@ func create_beam_effect() -> void:
 	print("Beam spawn effect created")
 
 func create_glow_particles() -> void:
-	"""Create additional glow particles for enhanced beam effect"""
+	"""Create additional glow particles for enhanced beam effect (HTML5-optimized)"""
 	glow_particles = GPUParticles3D.new()
 	glow_particles.name = "GlowParticles"
 	glow_particles.emitting = false
 	glow_particles.one_shot = true
-	glow_particles.amount = 80
-	glow_particles.lifetime = 1.2
+	glow_particles.amount = 25  # Reduced from 80 for HTML5 performance
+	glow_particles.lifetime = 1.0  # Reduced from 1.2 for faster cleanup
 	glow_particles.explosiveness = 0.0
 	glow_particles.randomness = 0.4
 	add_child(glow_particles)
@@ -140,45 +140,39 @@ func create_glow_particles() -> void:
 	glow_particles.draw_pass_1 = quad_mesh
 
 func create_scale_curve() -> Curve:
-	"""Create a curve for particle scale over lifetime"""
+	"""Create a curve for particle scale over lifetime (simplified for HTML5)"""
 	var curve = Curve.new()
 	curve.add_point(Vector2(0.0, 0.5))  # Start small
-	curve.add_point(Vector2(0.3, 1.0))  # Grow quickly
-	curve.add_point(Vector2(0.7, 0.8))  # Stay visible
+	curve.add_point(Vector2(0.4, 1.0))  # Grow quickly
 	curve.add_point(Vector2(1.0, 0.0))  # Fade to nothing
 	return curve
 
 func create_glow_scale_curve() -> Curve:
-	"""Create a curve for glow particle scale"""
+	"""Create a curve for glow particle scale (simplified for HTML5)"""
 	var curve = Curve.new()
 	curve.add_point(Vector2(0.0, 0.3))  # Start small
-	curve.add_point(Vector2(0.2, 1.0))  # Grow fast
-	curve.add_point(Vector2(0.6, 0.9))  # Stay large
+	curve.add_point(Vector2(0.3, 1.0))  # Grow fast
 	curve.add_point(Vector2(1.0, 0.0))  # Fade out
 	return curve
 
 func create_color_ramp() -> Gradient:
-	"""Create a color gradient for beam particles"""
+	"""Create a color gradient for beam particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
 	# Start with transparent blue
 	gradient.set_color(0, Color(0.6, 0.8, 1.0, 0.0))
-	# Fade in to bright blue
-	gradient.set_color(0.2, Color(0.6, 0.8, 1.0, 0.9))
-	# Stay bright
-	gradient.set_color(0.7, Color(0.7, 0.9, 1.0, 0.8))
-	# Fade to transparent white
+	# Peak brightness
+	gradient.set_color(0.5, Color(0.7, 0.9, 1.0, 0.9))
+	# Fade to transparent
 	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
 	return gradient
 
 func create_glow_color_ramp() -> Gradient:
-	"""Create a color gradient for glow particles"""
+	"""Create a color gradient for glow particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
 	# Start transparent
 	gradient.set_color(0, Color(0.8, 0.9, 1.0, 0.0))
-	# Fade in to bright white-blue
-	gradient.set_color(0.15, Color(0.9, 0.95, 1.0, 0.7))
 	# Peak brightness
-	gradient.set_color(0.5, Color(1.0, 1.0, 1.0, 0.6))
+	gradient.set_color(0.4, Color(1.0, 1.0, 1.0, 0.7))
 	# Fade to transparent
 	gradient.set_color(1, Color(0.8, 0.9, 1.0, 0.0))
 	return gradient
