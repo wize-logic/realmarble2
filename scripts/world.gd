@@ -281,7 +281,11 @@ func _on_back_pressed() -> void:
 		if has_node("Menu/Blur"):
 			$Menu/Blur.hide()
 		if !controller:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			# Only capture mouse if we're in-game (paused), not if we're in main menu
+			if paused or game_active:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		options = false
 
 func _on_return_to_title_pressed() -> void:
@@ -523,6 +527,9 @@ func ask_bot_count() -> int:
 		print("Dialog closed via X button or ESC")
 	)
 
+	# Ensure mouse is visible for dialog interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	dialog.popup_centered()
 	print("Dialog shown, waiting for user selection...")
 
@@ -538,6 +545,9 @@ func ask_bot_count() -> int:
 	# Hide blur after dialog is closed
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+
+	# Keep mouse visible (we're still in main menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	print("Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
@@ -707,6 +717,9 @@ func ask_level_type() -> String:
 		print("Dialog closed via X button or ESC")
 	)
 
+	# Ensure mouse is visible for dialog interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	dialog.popup_centered()
 	print("Level type dialog shown, waiting for user selection...")
 
@@ -720,6 +733,9 @@ func ask_level_type() -> String:
 	# Hide blur after dialog is closed
 	if has_node("Menu/Blur"):
 		$Menu/Blur.hide()
+
+	# Keep mouse visible (we're still in main menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	print("Level type selected: %s" % level_type_selected)
 	return level_type_selected
@@ -947,12 +963,16 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 			# Show blur when options menu opens from main menu
 			if has_node("Menu/Blur"):
 				$Menu/Blur.show()
+			# Ensure mouse is visible when opening options from main menu
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			options_menu.hide()
 			options = false
 			# Hide blur when options menu closes
 			if has_node("Menu/Blur"):
 				$Menu/Blur.hide()
+			# Keep mouse visible when closing (still in main menu)
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
