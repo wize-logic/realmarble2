@@ -58,7 +58,7 @@ func create_psychedelic_shader() -> ShaderMaterial:
 	var material: ShaderMaterial = ShaderMaterial.new()
 	var shader: Shader = Shader.new()
 
-	# Psychedelic sky shader with animated fractals
+	# Smooth psychedelic sky shader with anti-aliasing
 	shader.code = """
 shader_type sky;
 
@@ -67,16 +67,20 @@ uniform vec3 color1 = vec3(1.0, 0.2, 0.8);
 uniform vec3 color2 = vec3(0.2, 0.8, 1.0);
 uniform vec3 color3 = vec3(0.8, 1.0, 0.2);
 
-// Hash function for noise
+// Improved hash function for smoother noise
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	vec3 p3 = fract(vec3(p.xyx) * 0.13);
+	p3 += dot(p3, p3.yzx + 3.333);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
-// Smooth noise
+// Super smooth noise using quintic hermite interpolation
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
+
+	// Quintic hermite curve for ultra-smooth interpolation (removes jagged edges)
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 
 	float a = hash(i);
 	float b = hash(i + vec2(1.0, 0.0));
@@ -86,13 +90,14 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// Fractal Brownian Motion
+// High-quality Fractal Brownian Motion with more octaves for smoothness
 float fbm(vec2 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
 
-	for (int i = 0; i < 5; i++) {
+	// Increased to 8 octaves for ultra-smooth transitions
+	for (int i = 0; i < 8; i++) {
 		value += amplitude * noise(p * frequency);
 		frequency *= 2.0;
 		amplitude *= 0.5;
@@ -101,35 +106,58 @@ float fbm(vec2 p) {
 	return value;
 }
 
+// Smooth color blending function
+vec3 smooth_color_mix(vec3 a, vec3 b, float t) {
+	// Use smoothstep for even smoother color transitions
+	t = smoothstep(0.0, 1.0, t);
+	return mix(a, b, t);
+}
+
 void sky() {
 	// Get sky direction
-	vec3 dir = EYEDIR;
+	vec3 dir = normalize(EYEDIR);
 
-	// Create swirling pattern
+	// Anti-aliased UV mapping with pole smoothing
+	float phi = atan(dir.x, dir.z);
+	float theta = acos(clamp(dir.y, -1.0, 1.0));
+
 	vec2 uv = vec2(
-		atan(dir.x, dir.z) / (3.14159 * 2.0) + 0.5,
-		acos(dir.y) / 3.14159
+		phi / (3.14159265 * 2.0) + 0.5,
+		theta / 3.14159265
 	);
 
-	// Animated fractal noise
-	float n1 = fbm(uv * 3.0 + time * 0.1);
-	float n2 = fbm(uv * 5.0 - time * 0.15);
-	float n3 = fbm(uv * 7.0 + time * 0.2);
+	// Add slight offset to prevent seam artifacts
+	uv.x = fract(uv.x);
 
-	// Color mixing based on noise
-	vec3 color = mix(color1, color2, n1);
-	color = mix(color, color3, n2);
+	// Multiple layers of smooth animated fractal noise
+	float n1 = fbm(uv * 3.0 + vec2(time * 0.1, -time * 0.08));
+	float n2 = fbm(uv * 5.0 + vec2(-time * 0.15, time * 0.12));
+	float n3 = fbm(uv * 7.0 + vec2(time * 0.2, time * 0.18));
 
-	// Add some shimmer
-	color += vec3(n3 * 0.3);
+	// Additional high-frequency layer for detail without jaggedness
+	float n4 = fbm(uv * 10.0 + time * 0.25) * 0.5 + 0.5;
 
-	// Gradient from top to bottom
-	float gradient = smoothstep(-0.2, 0.8, dir.y);
+	// Smooth color mixing with gradual transitions
+	vec3 color = smooth_color_mix(color1, color2, n1);
+	color = smooth_color_mix(color, color3, n2);
+
+	// Add shimmer with smooth blending
+	color += vec3(n3 * 0.2);
+	color = mix(color, color * 1.2, n4 * 0.15);
+
+	// Ultra-smooth gradient from top to bottom with wider transition
+	float gradient = smoothstep(-0.3, 0.9, dir.y);
 	color = mix(color * 0.5, color, gradient);
 
-	// Pulsing effect
-	float pulse = sin(time * 2.0) * 0.1 + 0.9;
+	// Smooth pulsing effect
+	float pulse = sin(time * 2.0) * 0.08 + 0.92;
 	color *= pulse;
+
+	// Apply gamma correction for smoother visual appearance
+	color = pow(color, vec3(1.0 / 1.1));
+
+	// Clamp to avoid any overflow artifacts
+	color = clamp(color, 0.0, 1.0);
 
 	COLOR = color;
 }
