@@ -434,16 +434,6 @@ func ask_bot_count() -> int:
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_label)
 
-	# Add HTML5 warning if on web
-	if OS.has_feature("web"):
-		var warning_label = Label.new()
-		warning_label.text = "⚠ Web build recommended max: 8 bots"
-		warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		warning_label.add_theme_font_size_override("font_size", 14)
-		warning_label.add_theme_color_override("font_color", Color(1, 0.8, 0.2, 1))  # Orange warning color
-		warning_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vbox.add_child(warning_label)
-
 	# Add separator for visual separation
 	var separator = HSeparator.new()
 	separator.add_theme_constant_override("separation", 2)

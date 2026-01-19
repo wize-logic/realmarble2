@@ -1,23 +1,21 @@
-[gd_scene load_steps=21 format=3 uid="uid://b57uspbprxc8"]
+[gd_scene load_steps=27 format=3 uid="uid://b57uspbprxc8"]
 
 [ext_resource type="Script" uid="uid://bd81ysdlqd6oy" path="res://scripts/world.gd" id="1_ho7yh"]
 [ext_resource type="Script" uid="uid://chl816vkrpda8" path="res://scripts/ui/fps_counter.gd" id="4_2328u"]
-[ext_resource type="Script" uid="uid://0f8ss4ubnuwj" path="res://scripts/ui/menu/host_button.gd" id="4_nuahp"]
 [ext_resource type="Shader" uid="uid://b6ayymrhkylhq" path="res://scripts/shaders/blur.gdshader" id="4_p7mxg"]
-[ext_resource type="AudioStream" uid="uid://p6uvqtljqic7" path="res://audio/661248__magmadiverrr__video-game-menu-music.ogg" id="4_taatn"]
+[ext_resource type="AudioStream" uid="uid://bsu17fnqpfelw" path="res://audio/661248__magmadiverrr__video-game-menu-music.ogg" id="4_taatn"]
 [ext_resource type="Script" uid="uid://dcoocqnfhag40" path="res://scripts/ui/menu/options/fullscreen.gd" id="5_abwkb"]
 [ext_resource type="Script" uid="uid://b8g8fngpp1cld" path="res://scripts/ui/menu/options/mouse_sensitivity.gd" id="6_00vww"]
 [ext_resource type="Script" uid="uid://co76seoupgayb" path="res://scripts/ui/menu/options/back.gd" id="6_2hany"]
-[ext_resource type="Script" uid="uid://dfglxfci03w2h" path="res://scripts/ui/menu/options_button.gd" id="6_7g7sm"]
 [ext_resource type="Script" uid="uid://du5qtfmm8p5du" path="res://scripts/ui/menu/pause/resume.gd" id="7_5cdyw"]
 [ext_resource type="Script" uid="uid://bmy1ha2maxmwg" path="res://scripts/ui/menu/options/controller_sensitivity.gd" id="7_jhf7u"]
+[ext_resource type="Script" uid="uid://duvylx3p5trwi" path="res://scripts/orb_spawner.gd" id="7_orbspawner"]
+[ext_resource type="Script" uid="uid://e0sl2qrky7s1" path="res://scripts/ability_spawner.gd" id="8_abilityspawner"]
 [ext_resource type="Script" uid="uid://o3k14mw74n81" path="res://scripts/ui/menu/pause/quit.gd" id="9_ucmny"]
-[ext_resource type="Script" path="res://scripts/orb_spawner.gd" id="7_orbspawner"]
-[ext_resource type="Script" path="res://scripts/ability_spawner.gd" id="8_abilityspawner"]
-[ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
-[ext_resource type="Script" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
-[ext_resource type="Script" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
-[ext_resource type="PackedScene" uid="uid://rl_main_menu" path="res://rl_main_menu.tscn" id="19_rlmenu"]
+[ext_resource type="Script" uid="uid://15mer25iggtb" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
+[ext_resource type="Script" uid="uid://d2abcv1lw0rfe" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
+[ext_resource type="Script" uid="uid://1asabpkd504j" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
+[ext_resource type="PackedScene" path="res://rl_main_menu.tscn" id="19_rlmenu"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
 energy_multiplier = 1.25
@@ -30,7 +28,6 @@ background_mode = 2
 sky = SubResource("Sky_78err")
 tonemap_mode = 2
 tonemap_white = 6.0
-ssao_enabled = false
 glow_enabled = true
 glow_intensity = 0.2
 glow_strength = 0.4
@@ -44,12 +41,6 @@ fog_aerial_perspective = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_nou27"]
-shader = ExtResource("4_p7mxg")
-shader_parameter/blur_amount = 2.0
-shader_parameter/mix_amount = 0.0
-shader_parameter/color_over = Color(0, 0, 0, 1)
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_music_notification"]
 bg_color = Color(0, 0, 0, 0.7)
 corner_radius_top_left = 8
@@ -57,55 +48,59 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_nou27"]
+shader = ExtResource("4_p7mxg")
+shader_parameter/blur_amount = 2.0
+shader_parameter/mix_amount = 0.0
+shader_parameter/color_over = Color(0, 0, 0, 1)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_options_panel"]
 bg_color = Color(0, 0, 0, 0.85)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
 border_color = Color(0.3, 0.7, 1, 0.6)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
 bg_color = Color(0.15, 0.15, 0.2, 0.8)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.3, 0.7, 1, 0.4)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
-bg_color = Color(0.2, 0.3, 0.4, 0.9)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.3, 0.7, 1, 0.8)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_pressed"]
 bg_color = Color(0.3, 0.5, 0.7, 1)
-corner_radius_top_left = 8
-corner_radius_top_right = 8
-corner_radius_bottom_right = 8
-corner_radius_bottom_left = 8
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.4, 0.8, 1, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
-[sub_resource type="Theme" id="Theme_utqnk"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_hover"]
+bg_color = Color(0.2, 0.3, 0.4, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.7, 1, 0.8)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
 
 [node name="World" type="Node"]
 script = ExtResource("1_ho7yh")
@@ -120,9 +115,7 @@ light_color = Color(0.988235, 0.929412, 0.87451, 1)
 light_energy = 0.8
 shadow_enabled = true
 shadow_bias = 0.05
-shadow_blur = 1.0
 directional_shadow_mode = 1
-directional_shadow_max_distance = 100.0
 
 [node name="FpsCounter" type="Label" parent="."]
 offset_right = 40.0
@@ -143,7 +136,6 @@ script = ExtResource("15_gamehud")
 
 [node name="MarginContainer" type="MarginContainer" parent="GameHUD/HUD"]
 layout_mode = 1
-anchors_preset = 0
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 400.0
@@ -164,7 +156,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 28
 text = "Time: 05:00"
-horizontal_alignment = 0
 
 [node name="ScoreLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -173,7 +164,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 22
 text = "Kills: 0"
-horizontal_alignment = 0
 
 [node name="LevelLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -182,7 +172,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 22
 text = "Level: 0/3"
-horizontal_alignment = 0
 
 [node name="AbilityLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -191,7 +180,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 20
 text = "Ability: None"
-horizontal_alignment = 0
 
 [node name="HealthLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
@@ -200,7 +188,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
 theme_override_font_sizes/font_size = 20
 text = "Health: 3"
-horizontal_alignment = 0
 
 [node name="OrbSpawner" type="Node3D" parent="."]
 script = ExtResource("7_orbspawner")
@@ -250,9 +237,9 @@ layout_mode = 2
 theme_override_constants/separation = 5
 
 [node name="AlbumArt" type="TextureRect" parent="MusicNotification/NotificationUI/Panel/MarginContainer/VBoxContainer"]
+texture_filter = 1
 custom_minimum_size = Vector2(80, 80)
 layout_mode = 2
-texture_filter = 1
 expand_mode = 1
 stretch_mode = 5
 
@@ -347,9 +334,9 @@ text = "FPS counter"
 
 [node name="Ping" type="CheckButton" parent="Menu/Options/MarginContainer/VBoxContainer"]
 layout_mode = 2
+tooltip_text = "Shows connection trip time to host (in milliseconds)"
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 18
-tooltip_text = "Shows connection trip time to host (in milliseconds)"
 text = "View Ping"
 
 [node name="HSeparator2" type="HSeparator" parent="Menu/Options/MarginContainer/VBoxContainer"]
@@ -413,12 +400,12 @@ layout_mode = 2
 [node name="Back" type="Button" parent="Menu/Options/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 20
 theme_override_styles/normal = SubResource("StyleBoxFlat_button_normal")
-theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_button_pressed")
+theme_override_styles/hover = SubResource("StyleBoxFlat_button_hover")
 text = "BACK"
 script = ExtResource("6_2hany")
 
@@ -474,18 +461,16 @@ script = ExtResource("9_ucmny")
 [node name="MainMenu" parent="Menu" instance=ExtResource("19_rlmenu")]
 
 [node name="MusicDirectoryDialog" type="FileDialog" parent="Menu"]
-title = "Select Music Directory"
+title = "Open a Directory"
 initial_position = 2
 size = Vector2i(800, 600)
 ok_button_text = "Select Folder"
 file_mode = 2
 access = 2
-root_subfolder = ""
-current_dir = "/"
 show_hidden_files = true
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://marble_player.tscn")
+_spawnable_scenes = PackedStringArray("uid://b2qhxdrnviyqf")
 spawn_path = NodePath("..")
 
 [connection signal="toggled" from="Menu/Options/MarginContainer/VBoxContainer/FpsCounter" to="FpsCounter" method="_on_fps_counter_toggled"]
@@ -497,12 +482,12 @@ spawn_path = NodePath("..")
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Resume" to="." method="_on_resume_pressed"]
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/Options" to="." method="_on_options_pressed"]
 [connection signal="pressed" from="Menu/PauseMenu/MarginContainer/VBoxContainer/ReturnToTitle" to="." method="_on_return_to_title_pressed"]
-[connection signal="practice_pressed" from="Menu/MainMenu" to="." method="_on_play_pressed"]
-[connection signal="multiplayer_pressed" from="Menu/MainMenu" to="." method="_on_multiplayer_button_pressed"]
-[connection signal="item_shop_pressed" from="Menu/MainMenu" to="." method="_on_item_shop_pressed"]
-[connection signal="garage_pressed" from="Menu/MainMenu" to="." method="_on_garage_pressed"]
-[connection signal="profile_pressed" from="Menu/MainMenu" to="." method="_on_profile_pressed"]
 [connection signal="friends_pressed" from="Menu/MainMenu" to="." method="_on_friends_pressed"]
+[connection signal="garage_pressed" from="Menu/MainMenu" to="." method="_on_garage_pressed"]
+[connection signal="item_shop_pressed" from="Menu/MainMenu" to="." method="_on_item_shop_pressed"]
+[connection signal="multiplayer_pressed" from="Menu/MainMenu" to="." method="_on_multiplayer_button_pressed"]
 [connection signal="options_pressed" from="Menu/MainMenu" to="." method="_on_settings_pressed"]
+[connection signal="practice_pressed" from="Menu/MainMenu" to="." method="_on_play_pressed"]
+[connection signal="profile_pressed" from="Menu/MainMenu" to="." method="_on_profile_pressed"]
 [connection signal="quit_pressed" from="Menu/MainMenu" to="." method="_on_quit_pressed"]
 [connection signal="dir_selected" from="Menu/MusicDirectoryDialog" to="." method="_on_music_directory_selected"]
