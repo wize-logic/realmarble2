@@ -183,6 +183,9 @@ func _process(delta: float) -> void:
 			# Show HUD when game starts
 			if game_hud:
 				game_hud.visible = true
+				# CRITICAL FIX: Reset HUD to find new player for this match
+				if game_hud.has_method("reset_hud"):
+					game_hud.reset_hud()
 			print("GO! Match started! game_active is now: ", game_active)
 
 			# Spawn pending bots now that match is active
@@ -965,16 +968,13 @@ func show_main_menu() -> void:
 	if main_menu:
 		main_menu.visible = true
 
-	# CRITICAL FIX: Recreate marble preview if it was destroyed
-	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
-		print("[CAMERA] Recreating marble preview for main menu")
-		_create_marble_preview()
-	else:
-		# Show existing marble preview and make camera current
-		if has_node("MarblePreview"):
-			get_node("MarblePreview").visible = true
-		if preview_camera:
-			preview_camera.make_current()
+	# CRITICAL FIX: Regenerate map with Type A for menu preview
+	print("[MENU] Regenerating map preview with Type A")
+	await generate_procedural_level("A")
+
+	# Recreate marble preview after level regeneration
+	print("[CAMERA] Recreating marble preview for main menu")
+	_create_marble_preview()
 
 func upnp_setup() -> void:
 	var upnp: UPNP = UPNP.new()
@@ -1150,16 +1150,13 @@ func return_to_main_menu() -> void:
 		# Re-enable practice button now that we're back in menu
 		_set_practice_button_disabled(false)
 
-	# CRITICAL FIX: Recreate marble preview if it was destroyed during gameplay
-	if not has_node("MarblePreview") or not preview_camera or not is_instance_valid(preview_camera):
-		print("[CAMERA] Recreating marble preview for main menu")
-		_create_marble_preview()
-	else:
-		# Show existing marble preview and make camera current
-		if has_node("MarblePreview"):
-			get_node("MarblePreview").visible = true
-		if preview_camera:
-			preview_camera.make_current()
+	# CRITICAL FIX: Regenerate map with Type A for menu preview
+	print("[MENU] Regenerating map preview with Type A")
+	await generate_procedural_level("A")
+
+	# Recreate marble preview after level regeneration
+	print("[CAMERA] Recreating marble preview for main menu")
+	_create_marble_preview()
 
 	# Start menu music
 	if menu_music:
