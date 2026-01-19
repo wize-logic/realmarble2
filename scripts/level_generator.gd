@@ -37,7 +37,7 @@ func generate_level() -> void:
 	generate_death_zone()
 
 	# Apply beautiful procedural materials
-	apply_procedural_materials()
+	apply_procedural_textures()
 
 	print("Level generation complete!")
 
