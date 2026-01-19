@@ -23,6 +23,40 @@ func _ready() -> void:
 	supports_charging = true  # Cannon supports charging for devastating shots
 	max_charge_time = 2.5  # Longer max charge than gun (2.0)
 
+func find_nearest_player() -> Node3D:
+	"""Find the nearest player to lock onto (excluding self)"""
+	if not player or not player.get_parent():
+		return null
+
+	var nearest: Node3D = null
+	var nearest_distance: float = INF
+	var max_lock_range: float = 100.0  # Maximum auto-aim range
+
+	# Get all nodes in the Players container
+	var players_container = player.get_parent()
+	for potential_target in players_container.get_children():
+		# Skip if it's ourselves
+		if potential_target == player:
+			continue
+
+		# Check if it's a valid player (has health, not dead)
+		if not potential_target.has_method('receive_damage_from'):
+			continue
+
+		# Check if player is alive (has health > 0)
+		if "health" in potential_target and potential_target.health <= 0:
+			continue
+
+		# Calculate distance
+		var distance = player.global_position.distance_to(potential_target.global_position)
+
+		# Check if within lock range and closer than current nearest
+		if distance < max_lock_range and distance < nearest_distance:
+			nearest = potential_target
+			nearest_distance = distance
+
+	return nearest
+
 func activate() -> void:
 	if not player:
 		return
@@ -50,8 +84,22 @@ func activate() -> void:
 		# This is CRITICAL for bots to aim properly
 		fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
+	# Auto-aim: Find nearest player and adjust fire direction
+	var nearest_player = find_nearest_player()
+	if nearest_player:
+		# Aim at the nearest player's position (with slight prediction)
+		var target_pos = nearest_player.global_position
+		# Predict where the player will be based on their velocity
+		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
+			var distance = player.global_position.distance_to(target_pos)
+			var time_to_hit = distance / charged_speed
+			target_pos += nearest_player.linear_velocity * time_to_hit * 0.5  # 50% prediction
+
+		# Calculate direction to target
+		fire_direction = (target_pos - player.global_position).normalized()
+
 	# Add upward angle to make aiming easier (shoot slightly upward, not straight)
-	fire_direction.y += 0.25  # Add upward component for easier aiming
+	fire_direction.y += 0.15  # Reduced from 0.25 for lower angle
 	fire_direction = fire_direction.normalized()
 
 	# Calculate cannon barrel position (offset further in front for larger weapon)
