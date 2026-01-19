@@ -274,6 +274,10 @@ func _on_options_pressed() -> void:
 
 func _on_back_pressed() -> void:
 	if options:
+		# Hide options menu
+		if options_menu:
+			options_menu.hide()
+		# Always hide blur when closing options
 		if has_node("Menu/Blur"):
 			$Menu/Blur.hide()
 		if !controller:
@@ -512,6 +516,13 @@ func ask_bot_count() -> int:
 	if has_node("Menu/Blur"):
 		$Menu/Blur.show()
 
+	# Connect close signals to handle cancellation
+	dialog.close_requested.connect(func():
+		bot_count_dialog_closed = true
+		bot_count_selected = -1  # Indicate cancellation
+		print("Dialog closed via X button or ESC")
+	)
+
 	dialog.popup_centered()
 	print("Dialog shown, waiting for user selection...")
 
@@ -688,6 +699,13 @@ func ask_level_type() -> String:
 	# Show blur to focus attention on dialog
 	if has_node("Menu/Blur"):
 		$Menu/Blur.show()
+
+	# Connect close signals to handle cancellation
+	dialog.close_requested.connect(func():
+		level_type_dialog_closed = true
+		level_type_selected = ""  # Indicate cancellation
+		print("Dialog closed via X button or ESC")
+	)
 
 	dialog.popup_centered()
 	print("Level type dialog shown, waiting for user selection...")
@@ -925,11 +943,13 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
 		if toggled_on:
 			options_menu.show()
+			options = true  # Set options flag so back button works correctly
 			# Show blur when options menu opens from main menu
 			if has_node("Menu/Blur"):
 				$Menu/Blur.show()
 		else:
 			options_menu.hide()
+			options = false
 			# Hide blur when options menu closes
 			if has_node("Menu/Blur"):
 				$Menu/Blur.hide()
