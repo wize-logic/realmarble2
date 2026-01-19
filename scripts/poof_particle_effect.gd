@@ -90,16 +90,13 @@ func create_color_ramp() -> Gradient:
 	# Start bright white with full opacity
 	gradient.set_color(0, Color(1.0, 1.0, 1.0, 1.0))
 	# Shift to pale cyan shimmer
-	gradient.add_point(0.3)
-	gradient.set_color(1, Color(0.85, 0.95, 1.0, 0.9))
+	gradient.add_point(0.3, Color(0.85, 0.95, 1.0, 0.9))
 	# Warm golden glow in middle
-	gradient.add_point(0.6)
-	gradient.set_color(2, Color(1.0, 0.95, 0.85, 0.7))
+	gradient.add_point(0.6, Color(1.0, 0.95, 0.85, 0.7))
 	# Fade to soft blue-white
-	gradient.add_point(0.85)
-	gradient.set_color(3, Color(0.9, 0.95, 1.0, 0.3))
+	gradient.add_point(0.85, Color(0.9, 0.95, 1.0, 0.3))
 	# Finally transparent
-	gradient.set_color(4, Color(1.0, 1.0, 1.0, 0.0))
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
 	return gradient
 
 func play_poof() -> void:
