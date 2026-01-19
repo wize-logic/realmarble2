@@ -32,7 +32,7 @@ func generate_level() -> void:
 	generate_main_floor()
 	generate_platforms()
 	generate_ramps()
-	generate_walls()
+	# generate_walls()  # Removed: No outer boundary walls
 	generate_grind_rails()
 	generate_death_zone()
 
@@ -489,7 +489,7 @@ func generate_secondary_map(offset: Vector3) -> void:
 	generate_secondary_floor(offset)
 	generate_secondary_platforms(offset)
 	generate_secondary_ramps(offset)
-	generate_secondary_walls(offset)
+	# generate_secondary_walls(offset)  # Removed: No outer boundary walls
 	generate_secondary_rails(offset)
 
 	# Restore original seed
