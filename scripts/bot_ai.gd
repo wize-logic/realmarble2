@@ -49,11 +49,15 @@ var slope_check_timer: float = 0.0
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
-const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds of no progress
+const TARGET_STUCK_TIMEOUT: float = 2.5  # Abandon target after 2.5 seconds (reduced from 5.0)
 
 # Line of sight tracking for targets
 var target_blocked_timer: float = 0.0
-const TARGET_BLOCKED_TIMEOUT: float = 3.0  # Abandon target after 3 seconds behind wall
+const TARGET_BLOCKED_TIMEOUT: float = 1.5  # Abandon target after 1.5 seconds (reduced from 3.0)
+
+# State transition cooldown to prevent analysis paralysis
+var state_transition_cooldown: float = 0.0
+const STATE_TRANSITION_DELAY: float = 0.3  # Only check state transitions every 0.3 seconds
 
 # Ability preferences based on situation and hitbox awareness
 const CANNON_OPTIMAL_RANGE: float = 20.0
@@ -114,6 +118,7 @@ func _physics_process(delta: float) -> void:
 	stuck_print_timer -= delta
 	slope_check_timer -= delta
 	target_blocked_timer += delta  # Increment when checking
+	state_transition_cooldown -= delta
 
 	# Check ground normal and slope status periodically
 	if slope_check_timer <= 0.0:
@@ -165,8 +170,10 @@ func _physics_process(delta: float) -> void:
 		"COLLECT_ORB":
 			do_collect_orb(delta)
 
-	# Check state transitions
-	update_state()
+	# Check state transitions (throttled to prevent analysis paralysis)
+	if state_transition_cooldown <= 0.0:
+		update_state()
+		state_transition_cooldown = STATE_TRANSITION_DELAY
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
@@ -1049,52 +1056,30 @@ func do_collect_ability(delta: float) -> void:
 		state = "WANDER"
 		return
 
-	# Check if target is behind a wall/unreachable
-	if not has_line_of_sight(target_ability.global_position, 0.5):
-		# Target is blocked - increment timer
-		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT:
-			print("Bot %s abandoning ability behind wall after %0.1fs" % [bot.name, target_blocked_timer])
-			target_ability = null
-			target_blocked_timer = 0.0
-			state = "WANDER"
-			return
-	else:
-		# Target is visible - reset timer
+	var distance: float = bot.global_position.distance_to(target_ability.global_position)
+
+	# Quick abandon if too far or blocked
+	if distance > 70.0 or (not has_line_of_sight(target_ability.global_position, 0.5) and target_blocked_timer > 1.5):
+		target_ability = null
 		target_blocked_timer = 0.0
+		state = "WANDER"
+		return
 
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
-	# Move towards ability with urgency
-	move_towards(target_ability.global_position, delta, 1.0)
+	# CRITICAL: Slow down when approaching to avoid overshooting
+	var speed_mult: float = 1.0
+	if distance < 6.0:
+		speed_mult = 0.3  # Very slow for precision
+	elif distance < 12.0:
+		speed_mult = 0.6  # Moderate speed
 
-	# Jump more aggressively if ability is on higher ground, on slopes, or moving slowly
-	if action_timer <= 0.0:
-		var should_jump: bool = false
-		var jump_cooldown: float = randf_range(0.3, 0.7)  # Reduced for better navigation
+	move_towards(target_ability.global_position, delta, speed_mult)
 
-		if height_diff > 1.0:
-			# Ability is significantly higher - jump frequently
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.4)  # Reduced for better accuracy
-		elif height_diff > 0.5:
-			# Ability is slightly higher
-			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.5)  # Reduced for better accuracy
-		elif is_on_slope and randf() < 0.8:  # Increased probability
-			# On slope - jump to maintain momentum toward ability
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
-		elif bot.linear_velocity.length() < 2.5 and randf() < 0.7:  # Increased probability
-			# Moving slowly - might be stuck, jump to clear obstacle
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
-		elif randf() < 0.5:  # Increased probability
-			# Random jump
-			should_jump = true
-
-		if should_jump:
-			bot_jump()
-			action_timer = jump_cooldown
+	# Simplified jump logic
+	if action_timer <= 0.0 and (height_diff > 0.8 or is_on_slope or bot.linear_velocity.length() < 2.0):
+		bot_jump()
+		action_timer = 0.5
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
@@ -1143,52 +1128,30 @@ func do_collect_orb(delta: float) -> void:
 		state = "WANDER"
 		return
 
-	# Check if target is behind a wall/unreachable
-	if not has_line_of_sight(target_orb.global_position, 0.5):
-		# Target is blocked - increment timer
-		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT:
-			print("Bot %s abandoning orb behind wall after %0.1fs" % [bot.name, target_blocked_timer])
-			target_orb = null
-			target_blocked_timer = 0.0
-			state = "WANDER"
-			return
-	else:
-		# Target is visible - reset timer
+	var distance: float = bot.global_position.distance_to(target_orb.global_position)
+
+	# Quick abandon if too far or blocked
+	if distance > 60.0 or (not has_line_of_sight(target_orb.global_position, 0.5) and target_blocked_timer > 1.5):
+		target_orb = null
 		target_blocked_timer = 0.0
+		state = "WANDER"
+		return
 
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
-	# Move towards orb with high priority
-	move_towards(target_orb.global_position, delta, 1.0)
+	# CRITICAL: Slow down when approaching to avoid overshooting
+	var speed_mult: float = 1.0
+	if distance < 6.0:
+		speed_mult = 0.3  # Very slow for precision
+	elif distance < 12.0:
+		speed_mult = 0.6  # Moderate speed
 
-	# Jump more aggressively if orb is on higher ground, on slopes, or moving slowly
-	if action_timer <= 0.0:
-		var should_jump: bool = false
-		var jump_cooldown: float = randf_range(0.3, 0.7)  # Reduced for better navigation
+	move_towards(target_orb.global_position, delta, speed_mult)
 
-		if height_diff > 1.0:
-			# Orb is significantly higher - jump frequently
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.4)  # Reduced for better accuracy
-		elif height_diff > 0.5:
-			# Orb is slightly higher
-			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.5)  # Reduced for better accuracy
-		elif is_on_slope and randf() < 0.8:  # Increased probability
-			# On slope - jump to maintain momentum toward orb
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
-		elif bot.linear_velocity.length() < 2.5 and randf() < 0.7:  # Increased probability
-			# Moving slowly - might be stuck, jump to clear obstacle
-			should_jump = true
-			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
-		elif randf() < 0.5:  # Increased probability
-			# Random jump
-			should_jump = true
-
-		if should_jump:
-			bot_jump()
-			action_timer = jump_cooldown
+	# Simplified jump logic
+	if action_timer <= 0.0 and (height_diff > 0.8 or is_on_slope or bot.linear_velocity.length() < 2.0):
+		bot_jump()
+		action_timer = 0.5
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
