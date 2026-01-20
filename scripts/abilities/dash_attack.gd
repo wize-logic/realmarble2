@@ -151,8 +151,18 @@ func _process(delta: float) -> void:
 				target_direction.y = 0
 				target_direction = target_direction.normalized()
 			else:
-				# Fallback for bots: use player's facing direction
-				target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				# For bots: aim directly at their current target for accurate dashes
+				var bot_ai: Node = player.get_node_or_null("BotAI")
+				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+					# Point toward bot's target
+					target_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+					target_direction.y = 0
+					if target_direction.length() < 0.1:
+						# Target too close, use rotation fallback
+						target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				else:
+					# Fallback: use player's facing direction
+					target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in dash direction
 			# Use raycasting to find ground below the indicator position
@@ -217,8 +227,18 @@ func activate() -> void:
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
 	else:
-		# Fallback for bots: use player's facing direction (rotation.y)
-		dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+		# For bots: aim directly at their current target for accurate dashes
+		var bot_ai: Node = player.get_node_or_null("BotAI")
+		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+			# Dash toward bot's target
+			dash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+			dash_direction.y = 0
+			if dash_direction.length() < 0.1:
+				# Target too close, use rotation fallback
+				dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+		else:
+			# Fallback: use player's facing direction (rotation.y)
+			dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Apply initial dash impulse
 	if player is RigidBody3D:
