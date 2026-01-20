@@ -10,7 +10,7 @@ const OrbScene = preload("res://collectible_orb.tscn")
 @export var num_orbs: int = 12  # Number of orbs to spawn (reduced by half)
 
 # Respawn settings
-@export var respawn_interval: float = 10.0  # Respawn every 10 seconds
+@export var respawn_interval: float = 7.0  # Respawn every 7 seconds (reduced from 10)
 @export var respawn_at_random_location: bool = true
 
 var spawned_orbs: Array[Area3D] = []
@@ -49,18 +49,18 @@ func spawn_orbs() -> void:
 		print("ORB SPAWNER: Game is not active, skipping spawn")
 		return
 
-	# Scale orb count based on number of players (3 orbs per player)
+	# Scale orb count based on number of players (5 orbs per player)
 	# Type B arenas get more orbs due to larger vertical space and rooms
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var orbs_per_player: float = 3.0
+	var orbs_per_player: float = 5.0  # Increased from 3.0
 
 	# Check if Type B arena (more orbs needed for larger, multi-tier arenas)
 	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
-			orbs_per_player = 4.5  # 50% more orbs for Type B
+			orbs_per_player = 7.0  # Increased from 4.5
 
-	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 12, 48)  # Increased max for Type B
+	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 25, 80)  # Increased from 12-48
 
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
 	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
