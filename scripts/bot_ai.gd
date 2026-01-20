@@ -664,7 +664,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 				should_use = randf() < (0.5 + aggression_level * 0.3)
 				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.4 + aggression_level * 0.2)
 		"Explosion":
-			if distance_to_target < 10.0:
+			# Use explosion only at close range (was 10.0, now 8.0 for proper close-range AoE usage)
+			if distance_to_target < 8.0:
 				should_use = randf() < (0.5 + aggression_level * 0.4)
 				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + aggression_level * 0.2)
 		_:
@@ -1381,7 +1382,8 @@ func handle_unstuck_movement(delta: float) -> void:
 	if unstuck_timer <= 0.0:
 		is_stuck = false
 		unstuck_timer = 0.0
-		consecutive_stuck_checks = 0
+		# DON'T reset consecutive_stuck_checks here - let it accumulate to trigger teleport
+		# Only reset when bot actually moves (in check_if_stuck)
 
 		if state in ["CHASE", "ATTACK"]:
 			var escape_angle: float = randf() * TAU

@@ -26,6 +26,7 @@ var kill_notification_duration: float = 2.0
 var killstreak_notification_label: Label = null
 var killstreak_notification_timer: float = 0.0
 var killstreak_notification_duration: float = 3.0
+var killstreak_sound: AudioStreamPlayer = null
 
 func _ready() -> void:
 	# Find world and player references
@@ -39,6 +40,9 @@ func _ready() -> void:
 
 	# Create killstreak notification label
 	create_killstreak_notification()
+
+	# Create killstreak sound player
+	create_killstreak_sound()
 
 	# Try to find the local player
 	call_deferred("find_local_player")
@@ -284,6 +288,14 @@ func create_killstreak_notification() -> void:
 	add_child(killstreak_notification_label)
 	print("Killstreak notification added to game HUD")
 
+func create_killstreak_sound() -> void:
+	"""Create the audio player for killstreak sounds"""
+	killstreak_sound = AudioStreamPlayer.new()
+	killstreak_sound.name = "KillstreakSound"
+	killstreak_sound.volume_db = -3.0
+	add_child(killstreak_sound)
+	print("Killstreak sound player created")
+
 func update_killstreak_notification(delta: float) -> void:
 	"""Update the killstreak notification with pulse effect"""
 	if not killstreak_notification_label or not killstreak_notification_label.visible:
@@ -329,3 +341,49 @@ func show_killstreak_notification(streak: int) -> void:
 	killstreak_notification_label.visible = true
 	killstreak_notification_timer = killstreak_notification_duration
 	print("Showing killstreak notification: ", message)
+
+	# Play procedural killstreak sound
+	play_killstreak_sound(streak)
+
+func play_killstreak_sound(streak: int) -> void:
+	"""Play a procedural sound for killstreak notifications"""
+	if not killstreak_sound:
+		return
+
+	# Generate procedural fanfare sound
+	var audio_stream = AudioStreamGenerator.new()
+	audio_stream.mix_rate = 22050.0
+	audio_stream.buffer_length = 0.3  # 300ms buffer
+
+	killstreak_sound.stream = audio_stream
+	killstreak_sound.volume_db = -3.0
+	killstreak_sound.pitch_scale = 1.0
+
+	killstreak_sound.play()
+
+	# Generate ascending fanfare tones
+	var playback: AudioStreamGeneratorPlayback = killstreak_sound.get_stream_playback()
+	if playback:
+		var sample_hz = audio_stream.mix_rate
+		var samples_to_fill = int(sample_hz * 0.5)  # 500ms of audio
+
+		for i in range(samples_to_fill):
+			var t = float(i) / sample_hz
+			# Three-note ascending fanfare
+			var frequency = 400.0
+			if t < 0.15:
+				frequency = 400.0  # First note
+			elif t < 0.3:
+				frequency = 500.0  # Second note
+			else:
+				frequency = 650.0  # Third note (higher for 10+ streaks)
+
+			var phase = t * frequency * TAU
+			var amplitude = 0.4 * (1.0 - min(t / 0.5, 1.0))  # Fade out over duration
+			var value = sin(phase) * amplitude
+
+			# Add some harmonics for richness
+			value += sin(phase * 2.0) * amplitude * 0.3
+			value += sin(phase * 3.0) * amplitude * 0.15
+
+			playback.push_frame(Vector2(value, value))
