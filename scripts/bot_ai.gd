@@ -9,21 +9,21 @@ extends Node
 ## 3. Added ability charging validation (Cannon doesn't support charging)
 ## 4. Fixed teleport to use world.spawns instead of bot.spawns
 ## 5. Added bounce attack support for vertical combat/mobility
-## 6. Added rail grinding support (GRIND state)
-## 7. Improved state transitions with better threat assessment
-## 8. Better obstacle avoidance and pathfinding
-## 9. Fixed stuck detection thresholds
-## 10. Performance optimizations for HTML5
+## 6. Improved state transitions with better threat assessment
+## 7. Better obstacle avoidance and pathfinding
+## 8. Fixed stuck detection thresholds
+## 9. Performance optimizations for HTML5
 ##
 ## IMPROVEMENTS (v2.0):
-## 11. Comprehensive property validation for all mechanics
-## 12. Cache filtering for invalid nodes
-## 13. Rail curve handling (Path3D/Curve3D)
-## 14. Lead prediction for Cannon projectiles
-## 15. Dynamic player avoidance in movement
-## 16. Better state priority (combat over grind)
-## 17. Visibility checks for collection targets
-## 18. Dead code cleanup (unused variables)
+## 10. Comprehensive property validation for all mechanics
+## 11. Cache filtering for invalid nodes
+## 12. Lead prediction for Cannon projectiles
+## 13. Dynamic player avoidance in movement
+## 14. Better state priority for combat
+## 15. Visibility checks for collection targets
+## 16. Dead code cleanup (unused variables)
+## 17. Removed all rail grinding logic (bots no longer use rails)
+## 18. Improved slope detection to prevent getting stuck under slopes
 
 @export var target_player: Node = null
 @export var wander_radius: float = 30.0
@@ -31,7 +31,7 @@ extends Node
 @export var attack_range: float = 12.0
 
 var bot: Node = null
-var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT, GRIND
+var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT
 var wander_target: Vector3 = Vector3.ZERO
 var wander_timer: float = 0.0
 var action_timer: float = 0.0
@@ -65,13 +65,6 @@ var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
 const TARGET_STUCK_TIMEOUT: float = 4.0
 
-# NEW: Rail grinding support
-var target_rail: Node = null
-var rail_check_timer: float = 0.0
-var grinding_timer: float = 0.0
-const RAIL_SEARCH_INTERVAL: float = 1.5
-const MAX_GRIND_TIME: float = 3.0
-
 # NEW: Bounce attack support
 var bounce_cooldown_timer: float = 0.0
 const BOUNCE_COOLDOWN: float = 0.5
@@ -86,7 +79,6 @@ const EXPLOSION_OPTIMAL_RANGE: float = 6.0
 var cached_players: Array[Node] = []
 var cached_abilities: Array[Node] = []
 var cached_orbs: Array[Node] = []
-var cached_rails: Array[Node] = []
 var cache_refresh_timer: float = 0.0
 const CACHE_REFRESH_INTERVAL: float = 0.5
 
@@ -129,7 +121,6 @@ func _physics_process(delta: float) -> void:
 	action_timer -= delta
 	ability_check_timer -= delta
 	orb_check_timer -= delta
-	rail_check_timer -= delta
 	strafe_timer -= delta
 	retreat_timer -= delta
 	ability_charge_timer -= delta
@@ -138,7 +129,6 @@ func _physics_process(delta: float) -> void:
 	obstacle_jump_timer -= delta
 	bounce_cooldown_timer -= delta
 	player_search_timer -= delta
-	grinding_timer += delta
 	cache_refresh_timer -= delta
 	player_avoidance_timer -= delta
 	edge_check_timer -= delta
@@ -181,11 +171,6 @@ func _physics_process(delta: float) -> void:
 		find_nearest_orb()
 		orb_check_timer = 1.0
 
-	# Check for rails periodically
-	if rail_check_timer <= 0.0:
-		find_nearest_rail()
-		rail_check_timer = RAIL_SEARCH_INTERVAL
-
 	# State machine
 	match state:
 		"WANDER":
@@ -200,8 +185,6 @@ func _physics_process(delta: float) -> void:
 			do_collect_ability(delta)
 		"COLLECT_ORB":
 			do_collect_orb(delta)
-		"GRIND":
-			do_grind(delta)
 
 	# Check state transitions
 	update_state()
@@ -218,19 +201,9 @@ func refresh_cached_groups() -> void:
 	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
 	)
-	cached_rails = get_tree().get_nodes_in_group("rails").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
 
 func update_state() -> void:
-	"""IMPROVED: Better state prioritization with grind hysteresis"""
-
-	# Priority 0: Exit grind if we've been on rail too long
-	if state == "GRIND" and grinding_timer > MAX_GRIND_TIME:
-		state = "WANDER"
-		grinding_timer = 0.0
-		exit_grind_safely()
-		return
+	"""IMPROVED: Better state prioritization"""
 
 	# Check if we have a valid combat target
 	var has_combat_target: bool = target_player and is_instance_valid(target_player)
@@ -243,12 +216,6 @@ func update_state() -> void:
 		if distance_to_target < aggro_range * 0.8:
 			state = "RETREAT"
 			retreat_timer = randf_range(2.5, 4.5)
-			# IMPROVED: Use grind for escape if rail nearby
-			if target_rail and is_instance_valid(target_rail):
-				var dist_to_rail: float = bot.global_position.distance_to(get_rail_closest_point(target_rail))
-				if dist_to_rail < 10.0:
-					state = "GRIND"
-					grinding_timer = 0.0
 			return
 
 	# Priority 1: CRITICAL - Get an ability if we don't have one
@@ -279,32 +246,12 @@ func update_state() -> void:
 				state = "COLLECT_ORB"
 				return
 
-	# Priority 4: Chase if enemy in aggro range (BEATS GRIND)
+	# Priority 4: Chase if enemy in aggro range
 	if bot.current_ability and has_combat_target and distance_to_target < aggro_range:
 		state = "CHASE"
 		return
 
-	# Priority 5: GRIND ONLY when safe (no combat, for mobility)
-	# IMPROVED: Use grind for vertical traversal when height diff large
-	if target_rail and is_instance_valid(target_rail) and state != "GRIND":
-		var rail_point: Vector3 = get_rail_closest_point(target_rail)
-		var distance_to_rail: float = bot.global_position.distance_to(rail_point)
-		var height_diff: float = rail_point.y - bot.global_position.y
-
-		# Use rails when: not in combat OR enemy far + height advantage
-		var should_grind: bool = false
-		if not has_combat_target:
-			should_grind = distance_to_rail < 15.0
-		elif distance_to_target > aggro_range * 0.8 and height_diff > 5.0:
-			# Use rail for vertical positioning advantage
-			should_grind = distance_to_rail < 12.0
-
-		if should_grind:
-			state = "GRIND"
-			grinding_timer = 0.0
-			return
-
-	# Priority 6: Combat if we HAVE an ability but enemy far
+	# Priority 5: Combat if we HAVE an ability but enemy far
 	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.2:
 			state = "ATTACK"
@@ -495,34 +442,6 @@ func do_collect_orb(delta: float) -> void:
 			bot_jump()
 			action_timer = randf_range(0.3, 0.5)
 		elif height_diff > 0.7 or randf() < 0.35:
-			bot_jump()
-			action_timer = randf_range(0.4, 0.8)
-
-func do_grind(delta: float) -> void:
-	"""IMPROVED: Rail grinding with proper curve handling"""
-	if not target_rail or not is_instance_valid(target_rail):
-		state = "WANDER"
-		grinding_timer = 0.0
-		return
-
-	# IMPROVED: Get closest point on rail curve
-	var rail_point: Vector3 = get_rail_closest_point(target_rail)
-	var distance_to_rail: float = bot.global_position.distance_to(rail_point)
-
-	# If we're on the rail, let player.gd handle grinding
-	if distance_to_rail < 3.0:
-		# Bot is grinding, check if we should exit
-		if grinding_timer > MAX_GRIND_TIME or randf() < 0.02:
-			state = "WANDER"
-			grinding_timer = 0.0
-			exit_grind_safely()
-			return
-	else:
-		# Move towards rail to start grinding
-		move_towards(rail_point, 0.8)
-
-		# Jump to reach rail if needed
-		if action_timer <= 0.0 and randf() < 0.5:
 			bot_jump()
 			action_timer = randf_range(0.4, 0.8)
 
@@ -753,8 +672,24 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction, 2.5)
 
 		if obstacle_info.has_obstacle:
-			# Handle slopes/platforms - jump onto them
-			if obstacle_info.is_slope or obstacle_info.is_platform:
+			# IMPROVED: Avoid overhead slopes that could trap the bot
+			if "is_overhead_slope" in obstacle_info and obstacle_info.is_overhead_slope:
+				# Dangerous overhead slope - find safe direction
+				var safe_dir: Vector3 = find_safe_direction_from_edge(direction)
+				if safe_dir != Vector3.ZERO:
+					direction = safe_dir
+					speed_mult *= 0.4  # Move slowly when avoiding overhead slopes
+				else:
+					# No safe direction - reverse and brake
+					if "linear_velocity" in bot:
+						var braking_force: Vector3 = -bot.linear_velocity * 1.5
+						braking_force.y = 0
+						bot.apply_central_force(braking_force)
+					bot.apply_central_force(-direction * bot.current_roll_force * 1.0)
+					return
+
+			# Handle slopes/platforms - jump onto them (only if NOT overhead)
+			elif obstacle_info.is_slope or obstacle_info.is_platform:
 				if obstacle_jump_timer <= 0.0:
 					bot_jump()
 					obstacle_jump_timer = 0.3
@@ -765,7 +700,7 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 					return
 
 			# Handle walls - back up or jump
-			if "is_wall" in obstacle_info and obstacle_info.is_wall:
+			elif "is_wall" in obstacle_info and obstacle_info.is_wall:
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
 					obstacle_jump_timer = 0.5
@@ -924,14 +859,6 @@ func initiate_spin_dash() -> void:
 				bot.execute_spin_dash()
 	)
 
-func exit_grind_safely() -> void:
-	"""IMPROVED: Safe grind exit with validation"""
-	if not bot:
-		return
-
-	if bot.has_method("exit_grind"):
-		bot.exit_grind()
-
 func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	"""Physics-safe rotation for RigidBody3D using angular velocity"""
 	if not bot:
@@ -961,21 +888,6 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	target_angular_velocity = clamp(target_angular_velocity, -12.0, 12.0)
 
 	bot.angular_velocity.y = target_angular_velocity
-
-func get_rail_closest_point(rail: Node) -> Vector3:
-	"""IMPROVED: Get closest point on rail curve (Path3D/Curve3D)"""
-	if not rail or not is_instance_valid(rail):
-		return bot.global_position if bot else Vector3.ZERO
-
-	# Check if rail is Path3D with curve
-	if rail is Path3D and rail.curve:
-		var local_pos: Vector3 = rail.to_local(bot.global_position)
-		var closest_offset: float = rail.curve.get_closest_offset(local_pos)
-		var closest_point_local: Vector3 = rail.curve.sample_baked(closest_offset)
-		return rail.to_global(closest_point_local)
-
-	# Fallback to rail position
-	return rail.global_position
 
 func is_target_visible(target_pos: Vector3) -> bool:
 	"""NEW: Check if target is visible (raycast line-of-sight)"""
@@ -1055,23 +967,6 @@ func find_nearest_orb() -> void:
 
 	target_orb = closest_orb
 
-func find_nearest_rail() -> void:
-	"""IMPROVED: Find nearest rail with curve-aware distance"""
-	var closest_rail: Node = null
-	var closest_distance: float = INF
-
-	for rail in cached_rails:
-		if not is_instance_valid(rail):
-			continue
-
-		var rail_point: Vector3 = get_rail_closest_point(rail)
-		var distance: float = bot.global_position.distance_to(rail_point)
-		if distance < closest_distance and distance < 20.0:
-			closest_distance = distance
-			closest_rail = rail
-
-	target_rail = closest_rail
-
 ## ============================================================================
 ## OBSTACLE DETECTION AND AVOIDANCE
 ## ============================================================================
@@ -1143,19 +1038,20 @@ func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
-	"""Check for obstacle using multiple raycasts"""
+	"""IMPROVED: Check for obstacle with overhead slope detection"""
 	if not bot:
-		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false}
+		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Optimized for HTML5: 4 raycasts instead of 6
-	var check_heights: Array = [0.2, 0.5, 1.0, 1.8]
+	# Check at multiple heights including overhead
+	var check_heights: Array = [0.2, 0.5, 1.0, 1.8, 2.2]
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
 	var lowest_obstacle_height: float = INF
 	var highest_obstacle_height: float = -INF
 	var hit_count: int = 0
+	var overhead_hit: bool = false
 
 	for height in check_heights:
 		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
@@ -1173,6 +1069,10 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			var hit_point: Vector3 = result.position
 			var obstacle_height: float = hit_point.y - bot.global_position.y
 
+			# Track overhead hits (above bot's center)
+			if height > 1.5:
+				overhead_hit = true
+
 			if obstacle_height < lowest_obstacle_height:
 				lowest_obstacle_height = obstacle_height
 				closest_hit = hit_point
@@ -1183,20 +1083,26 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 		var is_slope: bool = false
 		var is_platform: bool = false
 		var is_wall: bool = false
+		var is_overhead_slope: bool = false
 
 		# Detect obstacle type
 		var height_diff: float = highest_obstacle_height - lowest_obstacle_height
 		if height_diff > 0.4:
 			is_slope = true
+			# IMPROVED: Detect dangerous overhead slopes
+			if overhead_hit and lowest_obstacle_height < 1.5:
+				is_overhead_slope = true
 		if lowest_obstacle_height > 0.3 and lowest_obstacle_height < 2.5:
 			is_platform = true
-		if hit_count >= check_heights.size() - 1:
+		if hit_count >= check_heights.size() - 2:
 			is_wall = true
 
-		# Determine if bot can jump over
+		# Determine if bot can jump over (but NOT if overhead slope - dangerous!)
 		var can_jump: bool = false
 
-		if is_slope or is_platform:
+		if is_overhead_slope:
+			can_jump = false  # Never try to go under overhead slopes
+		elif is_slope or is_platform:
 			can_jump = lowest_obstacle_height < 4.0 and lowest_obstacle_height > -0.5
 		elif is_wall:
 			can_jump = lowest_obstacle_height < 2.0 and lowest_obstacle_height > -0.5
@@ -1209,11 +1115,12 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			"is_slope": is_slope,
 			"is_platform": is_platform,
 			"is_wall": is_wall,
+			"is_overhead_slope": is_overhead_slope,
 			"hit_point": closest_hit,
 			"obstacle_height": lowest_obstacle_height
 		}
 
-	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false}
+	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
 func check_target_timeout(delta: float) -> void:
 	"""Check if bot is stuck trying to reach target"""
@@ -1253,7 +1160,7 @@ func check_if_stuck() -> void:
 	var current_pos: Vector3 = bot.global_position
 	var distance_moved: float = current_pos.distance_to(last_position)
 
-	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB", "GRIND"]
+	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB"]
 
 	if distance_moved < 0.25 and is_trying_to_move:
 		consecutive_stuck_checks += 1
@@ -1287,22 +1194,42 @@ func check_if_stuck() -> void:
 	last_position = current_pos
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if stuck under terrain/slope"""
+	"""IMPROVED: Check if stuck under terrain/slope with better detection"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	var ray_start: Vector3 = bot.global_position + Vector3.UP * 0.5
-	var ray_end: Vector3 = bot.global_position + Vector3.UP * 2.5
+	# Check multiple points above the bot for comprehensive detection
+	var check_points: Array = [
+		Vector3.ZERO,           # Center
+		Vector3(0.5, 0, 0),     # Right
+		Vector3(-0.5, 0, 0),    # Left
+		Vector3(0, 0, 0.5),     # Forward
+		Vector3(0, 0, -0.5)     # Back
+	]
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-	query.exclude = [bot]
-	query.collision_mask = 1
+	var overhead_hits: int = 0
+	var lowest_overhead_height: float = INF
 
-	var result: Dictionary = space_state.intersect_ray(query)
+	for offset in check_points:
+		var ray_start: Vector3 = bot.global_position + offset + Vector3.UP * 0.5
+		var ray_end: Vector3 = bot.global_position + offset + Vector3.UP * 3.0
 
-	return result.size() > 0
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.exclude = [bot]
+		query.collision_mask = 1
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result.size() > 0:
+			overhead_hits += 1
+			var hit_height: float = result.position.y - bot.global_position.y
+			if hit_height < lowest_overhead_height:
+				lowest_overhead_height = hit_height
+
+	# Stuck if: multiple overhead hits OR very low overhead clearance
+	return overhead_hits >= 3 or (overhead_hits > 0 and lowest_overhead_height < 1.8)
 
 func teleport_to_safe_position() -> void:
 	"""Teleport using world.spawns instead of bot.spawns"""
@@ -1334,49 +1261,57 @@ func teleport_to_safe_position() -> void:
 		print("[BotAI] Emergency teleport for ", bot.name, " to ", spawn_pos)
 
 func handle_unstuck_movement(delta: float) -> void:
-	"""Handle movement when stuck"""
+	"""IMPROVED: Handle movement when stuck with better terrain escape"""
 	if not bot:
 		return
 
 	var under_terrain: bool = is_stuck_under_terrain()
 
-	# Apply unstuck force
-	var force: float = bot.current_roll_force * 1.5
-	bot.apply_central_force(obstacle_avoid_direction * force)
+	# IMPROVED: More aggressive force when stuck under terrain
+	var force_multiplier: float = 2.0 if under_terrain else 1.5
+	var force: float = bot.current_roll_force * force_multiplier
+
+	# IMPROVED: When under terrain, prioritize moving backward/sideways
+	if under_terrain:
+		# Move perpendicular to current direction more often
+		if randf() < 0.4:
+			var perpendicular: Vector3 = Vector3(-obstacle_avoid_direction.z, 0, obstacle_avoid_direction.x)
+			if randf() < 0.5:
+				perpendicular = -perpendicular
+			obstacle_avoid_direction = perpendicular
+
+		# Apply strong backward force
+		bot.apply_central_force(obstacle_avoid_direction * force)
+
+		# Also apply downward force to try to get "unstuck" from geometry
+		if "linear_velocity" in bot and bot.linear_velocity.y > 0:
+			bot.apply_central_force(Vector3.DOWN * bot.current_roll_force * 0.5)
+	else:
+		bot.apply_central_force(obstacle_avoid_direction * force)
 
 	# Jump frequently (more aggressive if under terrain)
-	var jump_chance: float = 0.75 if under_terrain else 0.55
+	var jump_chance: float = 0.85 if under_terrain else 0.55
 	if "jump_count" in bot and "max_jumps" in bot:
 		if bot.jump_count < bot.max_jumps and randf() < jump_chance:
 			bot_jump()
 
-	# Use spin dash to break free
+	# Use spin dash to break free (more often when under terrain)
+	var spin_chance: float = 0.35 if under_terrain else 0.2
 	if unstuck_timer > 0.4 and validate_spin_dash_properties():
-		if not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.2:
+		if not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < spin_chance:
 			initiate_spin_dash()
 
-	# IMPROVED: Try grind if stuck near rail
-	if target_rail and is_instance_valid(target_rail) and randf() < 0.15:
-		var rail_point: Vector3 = get_rail_closest_point(target_rail)
-		var dist_to_rail: float = bot.global_position.distance_to(rail_point)
-		if dist_to_rail < 8.0:
-			# Try grinding to escape
-			state = "GRIND"
-			grinding_timer = 0.0
-			is_stuck = false
-			unstuck_timer = 0.0
-			consecutive_stuck_checks = 0
-			return
-
-	# Change direction periodically
+	# Change direction periodically (more often when under terrain)
+	var direction_change_interval: int = 2 if under_terrain else 4
 	var time_slot: int = int(unstuck_timer * 10)
-	if time_slot % 4 == 0 and time_slot != int((unstuck_timer + delta) * 10) % 4:
+	if time_slot % direction_change_interval == 0 and time_slot != int((unstuck_timer + delta) * 10) % direction_change_interval:
 		var new_angle: float = randf() * TAU
 		obstacle_avoid_direction = Vector3(cos(new_angle), 0, sin(new_angle))
 
-	# Try moving backward
-	if randf() < 0.12:
-		bot.apply_central_force(-obstacle_avoid_direction * force * 0.5)
+	# Try moving backward (more often when under terrain)
+	var backward_chance: float = 0.25 if under_terrain else 0.12
+	if randf() < backward_chance:
+		bot.apply_central_force(-obstacle_avoid_direction * force * 0.7)
 
 	# Exit unstuck mode
 	if unstuck_timer <= 0.0:
