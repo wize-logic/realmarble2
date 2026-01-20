@@ -176,7 +176,7 @@ func _physics_process(delta: float) -> void:
 		state_transition_cooldown = STATE_TRANSITION_DELAY
 
 func update_state() -> void:
-	"""Update AI state based on conditions"""
+	## Update AI state based on conditions
 	# PRIORITY 0 (HIGHEST): Get an ability if we don't have one - can't do anything without it!
 	if not bot.current_ability:
 		# CRITICAL: Clear player target in combat states only (prevents stalking/strafing)
@@ -282,7 +282,7 @@ func update_state() -> void:
 		state = "WANDER"
 
 func do_wander(delta: float) -> void:
-	"""Wander around randomly while actively searching for targets"""
+	## Wander around randomly while actively searching for targets
 	# Pick new wander target periodically
 	if wander_timer <= 0.0:
 		var angle: float = randf() * TAU
@@ -317,7 +317,7 @@ func do_wander(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func do_chase(delta: float) -> void:
-	"""Chase the target player with tactical movement"""
+	## Chase the target player with tactical movement
 	# CRITICAL: Absolutely no chasing without an ability!
 	# Exit immediately before any movement or logic
 	if not bot.current_ability:
@@ -394,7 +394,7 @@ func do_chase(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func do_attack(delta: float) -> void:
-	"""Attack the target player with smart ability usage"""
+	## Attack the target player with smart ability usage
 	# CRITICAL: Absolutely no attacking without an ability!
 	# Exit immediately before any movement or logic
 	if not bot.current_ability:
@@ -525,7 +525,7 @@ func do_attack(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func do_retreat(delta: float) -> void:
-	"""Retreat from danger when low health while keeping aim"""
+	## Retreat from danger when low health while keeping aim
 	if not target_player or retreat_timer <= 0.0:
 		state = "WANDER"
 		return
@@ -563,7 +563,7 @@ func do_retreat(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func strafe_around_target(delta: float, preferred_distance: float) -> void:
-	"""Strafe around target while maintaining distance and keeping aim"""
+	## Strafe around target while maintaining distance and keeping aim
 	if not target_player:
 		return
 
@@ -598,7 +598,7 @@ func strafe_around_target(delta: float, preferred_distance: float) -> void:
 		bot.apply_central_force(movement * force)
 
 func move_away_from(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
-	"""Move the bot away from a target position while maintaining aim"""
+	## Move the bot away from a target position while maintaining aim
 	if not bot:
 		return
 
@@ -614,7 +614,7 @@ func move_away_from(target_pos: Vector3, delta: float, speed_mult: float = 1.0) 
 		bot.apply_central_force(direction * force)
 
 func get_optimal_combat_distance() -> float:
-	"""Get the optimal combat distance based on current ability and target distance"""
+	## Get the optimal combat distance based on current ability and target distance
 	if not bot.current_ability:
 		return DASH_ATTACK_OPTIMAL_RANGE  # Default to medium range
 
@@ -655,11 +655,9 @@ func get_optimal_combat_distance() -> float:
 			return preferred_combat_distance
 
 func is_facing_target(target_position: Vector3, required_angle_degrees: float = 30.0) -> bool:
-	"""
-	Check if bot is facing the target within a given angle tolerance
-	Required for forward-facing abilities like Cannon and Dash Attack
-	Returns true if target is within the required cone angle
-	"""
+	## Check if bot is facing the target within a given angle tolerance
+	## Required for forward-facing abilities like Cannon and Dash Attack
+	## Returns true if target is within the required cone angle
 	if not bot or not target_position:
 		return false
 
@@ -680,7 +678,7 @@ func is_facing_target(target_position: Vector3, required_angle_degrees: float = 
 	return angle_degrees <= required_angle_degrees
 
 func use_ability_smart(distance_to_target: float) -> void:
-	"""Use ability with smart timing and charging"""
+	## Use ability with smart timing and charging
 	if not bot.current_ability or not bot.current_ability.is_ready():
 		is_charging_ability = false
 		return
@@ -808,7 +806,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 		action_timer = randf_range(0.3, 1.0)  # Reduced for less hesitation
 
 func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
-	"""Move the bot towards a target position with obstacle detection"""
+	## Move the bot towards a target position with obstacle detection
 	if not bot:
 		return
 
@@ -926,7 +924,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 		bot.apply_central_force(direction * force)
 
 func bot_jump() -> void:
-	"""Make the bot jump"""
+	## Make the bot jump
 	if not bot:
 		return
 
@@ -942,7 +940,7 @@ func bot_jump() -> void:
 		bot.jump_count += 1
 
 func look_at_target(target_position: Vector3, use_prediction: bool = true) -> void:
-	"""Rotate bot to face target for aiming with optional predictive targeting"""
+	## Rotate bot to face target for aiming with optional predictive targeting
 	if not bot:
 		return
 
@@ -982,14 +980,14 @@ func look_at_target(target_position: Vector3, use_prediction: bool = true) -> vo
 		bot.rotation.y = desired_rotation
 
 func release_spin_dash() -> void:
-	"""Release spin dash"""
+	## Release spin dash
 	if bot and bot.is_charging_spin:
 		bot.is_charging_spin = false
 		if bot.has_method("execute_spin_dash"):
 			bot.execute_spin_dash()
 
 func find_target() -> void:
-	"""Find the nearest player to target with preference for visible targets"""
+	## Find the nearest player to target with preference for visible targets
 	# CRITICAL: Don't target players if we don't have an ability
 	# This prevents stalking behavior where bots follow players around without weapons
 	if not bot.current_ability:
@@ -1028,7 +1026,7 @@ func find_target() -> void:
 		target_player = closest_player
 
 func find_nearest_ability() -> void:
-	"""Find the nearest ability pickup with line of sight"""
+	## Find the nearest ability pickup with line of sight
 	var abilities: Array = get_tree().get_nodes_in_group("ability_pickups")
 	var closest_ability: Node = null
 	var closest_distance: float = INF
@@ -1049,7 +1047,7 @@ func find_nearest_ability() -> void:
 	target_ability = closest_ability
 
 func do_collect_ability(delta: float) -> void:
-	"""Move towards and collect an ability"""
+	## Move towards and collect an ability
 	if not target_ability or not is_instance_valid(target_ability):
 		target_ability = null
 		target_blocked_timer = 0.0
@@ -1090,7 +1088,7 @@ func do_collect_ability(delta: float) -> void:
 		target_ability = null
 
 func find_nearest_orb() -> void:
-	"""Find the nearest collectible orb with line of sight"""
+	## Find the nearest collectible orb with line of sight
 	var orbs: Array = get_tree().get_nodes_in_group("orbs")
 	var closest_orb: Node = null
 	var closest_distance: float = INF
@@ -1114,7 +1112,7 @@ func find_nearest_orb() -> void:
 	target_orb = closest_orb
 
 func do_collect_orb(delta: float) -> void:
-	"""Move towards and collect an orb"""
+	## Move towards and collect an orb
 	if not target_orb or not is_instance_valid(target_orb):
 		target_orb = null
 		target_blocked_timer = 0.0
@@ -1166,10 +1164,8 @@ func do_collect_orb(delta: float) -> void:
 ## ============================================================================
 
 func has_line_of_sight(target_position: Vector3, check_height: float = 1.0) -> bool:
-	"""
-	Check if there's a clear line of sight to the target position
-	Returns true if we can see the target, false if blocked by walls/obstacles
-	"""
+	## Check if there's a clear line of sight to the target position
+	## Returns true if we can see the target, false if blocked by walls/obstacles
 	if not bot:
 		return false
 
@@ -1191,10 +1187,8 @@ func has_line_of_sight(target_position: Vector3, check_height: float = 1.0) -> b
 	return not result
 
 func detect_platform_ahead(direction: Vector3, scan_distance: float = 5.0) -> Dictionary:
-	"""
-	Detect if there's a platform ahead that the bot can jump onto
-	Returns dictionary with: {has_platform: bool, platform_height: float, distance: float}
-	"""
+	## Detect if there's a platform ahead that the bot can jump onto
+	## Returns dictionary with: {has_platform: bool, platform_height: float, distance: float}
 	if not bot:
 		return {"has_platform": false, "platform_height": 0.0, "distance": 0.0}
 
@@ -1237,7 +1231,7 @@ func detect_platform_ahead(direction: Vector3, scan_distance: float = 5.0) -> Di
 	}
 
 func check_ground_status() -> void:
-	"""Check the ground beneath the bot to detect slopes and update ground normal"""
+	## Check the ground beneath the bot to detect slopes and update ground normal
 	if not bot:
 		return
 
@@ -1268,10 +1262,8 @@ func check_ground_status() -> void:
 		is_on_slope = false
 
 func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
-	"""
-	Check if there's a dangerous edge/drop-off in the given direction
-	Returns true if there's an edge that the bot should avoid
-	"""
+	## Check if there's a dangerous edge/drop-off in the given direction
+	## Returns true if there's an edge that the bot should avoid
 	if not bot:
 		return false
 
@@ -1321,10 +1313,8 @@ func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 	return ground_drop > 2.5 or bot_to_ground_ahead > 5.0
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
-	"""
-	Find a safe direction to move when the desired direction leads to an edge
-	Tries angles perpendicular and away from the edge
-	"""
+	## Find a safe direction to move when the desired direction leads to an edge
+	## Tries angles perpendicular and away from the edge
 	if not bot:
 		return Vector3.ZERO
 
@@ -1344,10 +1334,8 @@ func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0) -> Dictionary:
-	"""
-	Check if there's an obstacle in the given direction using multiple raycasts
-	Returns a dictionary with: {has_obstacle: bool, can_jump: bool, is_slope: bool, hit_point: Vector3}
-	"""
+	## Check if there's an obstacle in the given direction using multiple raycasts
+	## Returns a dictionary with: {has_obstacle: bool, can_jump: bool, is_slope: bool, hit_point: Vector3}
 	if not bot:
 		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "hit_point": Vector3.ZERO}
 
@@ -1439,10 +1427,8 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0
 	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "hit_point": Vector3.ZERO}
 
 func find_clear_direction(desired_direction: Vector3) -> Vector3:
-	"""
-	Find a clear direction to move when the desired path is blocked
-	Tries multiple angles to find the best path around obstacles
-	"""
+	## Find a clear direction to move when the desired path is blocked
+	## Tries multiple angles to find the best path around obstacles
 	if not bot:
 		return Vector3.ZERO
 
@@ -1462,7 +1448,7 @@ func find_clear_direction(desired_direction: Vector3) -> Vector3:
 	return -desired_direction.rotated(Vector3.UP, retreat_angle) * 0.6
 
 func check_target_timeout(delta: float) -> void:
-	"""Check if bot is stuck trying to reach a collectible target for too long"""
+	## Check if bot is stuck trying to reach a collectible target for too long
 	if not bot:
 		return
 
@@ -1499,7 +1485,7 @@ func check_target_timeout(delta: float) -> void:
 		target_stuck_position = bot.global_position
 
 func check_if_stuck() -> void:
-	"""Check if the bot hasn't moved much and might be stuck on an obstacle"""
+	## Check if the bot hasn't moved much and might be stuck on an obstacle
 	if not bot:
 		return
 
@@ -1557,7 +1543,7 @@ func check_if_stuck() -> void:
 	last_position = current_pos
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if bot is stuck underneath terrain/slope"""
+	## Check if bot is stuck underneath terrain/slope
 	if not bot:
 		return false
 
@@ -1577,7 +1563,7 @@ func is_stuck_under_terrain() -> bool:
 	return result.size() > 0
 
 func teleport_to_safe_position() -> void:
-	"""Teleport bot to a safe spawn position when extremely stuck"""
+	## Teleport bot to a safe spawn position when extremely stuck
 	if not bot or not is_instance_valid(bot):
 		return
 
@@ -1599,7 +1585,7 @@ func teleport_to_safe_position() -> void:
 		print("Bot %s teleported to spawn %d: %s" % [bot.name, spawn_index, spawn_pos])
 
 func handle_unstuck_movement(delta: float) -> void:
-	"""Handle movement when bot is stuck - try to get unstuck"""
+	## Handle movement when bot is stuck - try to get unstuck
 	if not bot:
 		return
 
