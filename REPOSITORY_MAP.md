@@ -16,7 +16,7 @@
 - ❌ **NO threading** (not supported in HTML5)
 - ❌ **NO direct file I/O** (use JavaScriptBridge or user://)
 - ❌ **NO ENet for web** (WebSocket only)
-- ⚠️ **Bot limit:** Max 7 bots total
+- ⚠️ **Bot limit:** Max 7 bots (8 total with player)
 - ⚠️ **Shaders:** WebGL2/GLES3 compatible only
 
 **Always check `OS.has_feature("web")` before using platform-specific features!**
@@ -50,7 +50,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 - **Kirby-style abilities** (pickup one at a time, drop on death)
 - **Level-up system** (collect orbs for stat boosts, 3 levels max)
 - **Deathmatch mode** (5-minute matches, K/D tracking)
-- **Multiplayer** (up to 7 players, room code-based matchmaking)
+- **Multiplayer** (up to 8 players total: you + 7 others, room code-based matchmaking)
 - **Advanced Bot AI** (state machine, combat tactics, obstacle avoidance)
 - **Dual arena types**
   - **Type A:** Sonic-style with grind rails and floating platforms
@@ -282,7 +282,7 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 - 12 ramps
 - 12 grind rails (8 curved perimeter + 4 vertical/spiral)
 - 4 perimeter walls
-- 16 spawn points (for up to 7 players)
+- 16 spawn points (for up to 8 players)
 
 #### Type B: Quake 3 Arena (`level_generator_q3.gd`)
 
@@ -294,7 +294,7 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 - **5 jump pads** (green, boost force 300.0)
 - **4 teleporters** (blue/purple, 2 bidirectional pairs)
 - Taller perimeter walls (25 units)
-- 16+ spawn points (for up to 7 players)
+- 16+ spawn points (for up to 8 players)
 
 **Arena Selection:** Players choose type in pre-game menu via `scripts/world.gd:current_level_type`
 
@@ -334,7 +334,7 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 **Features:**
 - Room codes (6-character alphanumeric, e.g., "A3X9K2")
 - Lobby system (create, join, quick play)
-- Up to 7 players per match
+- Up to 8 players per match (you + 7 bots/others)
 - Ready system (all players must ready before start)
 - Host controls (add bots, start game)
 - Host migration support
@@ -897,7 +897,7 @@ Clients (Peer 2-16)
 
 **Joining:** Client enters code → Server validates → Client joins lobby
 
-**Quick Play:** Find available room (<7 players) or create new
+**Quick Play:** Find available room (<8 players) or create new
 
 ### Lobby Flow
 

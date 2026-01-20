@@ -360,10 +360,10 @@ func build_page_2() -> void:
 
 func _on_spawn_bot_pressed() -> void:
 	"""Spawn a bot player"""
-	# Check if we're already at max capacity (7 players/bots total)
+	# Check if we're already at max capacity (8 total: 1 player + 7 bots)
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
-	if players.size() >= 7:
-		print("Cannot spawn bot - max 7 players/bots reached!")
+	if players.size() >= 8:
+		print("Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
 		return
 
 	print("Spawning bot...")

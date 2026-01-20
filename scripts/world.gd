@@ -443,7 +443,7 @@ func ask_bot_count() -> int:
 	bot_count_dialog_closed = false
 	bot_count_selected = 3  # Default
 
-	# Bot count options - cap at 7 to prevent physics overload
+	# Bot count options - cap at 7 bots (8 total with player) to prevent physics overload
 	var bot_counts = [1, 3, 5, 7]
 
 	# Create centered grid container for buttons (3 columns for better layout)
@@ -1558,10 +1558,10 @@ func spawn_bot() -> void:
 	print("Bot counter before: ", bot_counter)
 	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
 
-	# Check if we're already at max capacity (7 players/bots total)
+	# Check if we're already at max capacity (8 total: 1 player + 7 bots)
 	var current_player_count: int = get_tree().get_nodes_in_group("players").size()
-	if current_player_count >= 7:
-		print("Cannot spawn bot - max 7 players/bots reached!")
+	if current_player_count >= 8:
+		print("Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
 		return
 
 	bot_counter += 1

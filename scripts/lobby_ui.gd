@@ -197,10 +197,10 @@ func _on_add_bot_pressed() -> void:
 	if not multiplayer_manager or not multiplayer_manager.is_host():
 		return
 
-	# Check if lobby is already at max capacity (7 players/bots)
+	# Check if lobby is already at max capacity (8 total: 1 player + 7 bots/others)
 	var player_count: int = multiplayer_manager.get_player_count()
-	if player_count >= 7:
-		status_label.text = "Cannot add bot - max 7 players/bots reached!"
+	if player_count >= 8:
+		status_label.text = "Cannot add bot - max 8 total (you + 7 bots) reached!"
 		return
 
 	# Add bot to the multiplayer manager

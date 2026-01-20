@@ -8,7 +8,7 @@ This game uses a **WebSocket-based multiplayer system** optimized for browser de
 - Quick play auto-matchmaking
 - Player ready system
 - Host migration support
-- Up to 7 players per game
+- Up to 8 players per game (you + 7 bots/others)
 
 ## Architecture
 
@@ -40,7 +40,7 @@ The game supports two networking modes:
 **Pros:**
 - Very low cost (tiny signaling server)
 - Minimal setup required
-- Good for 2-7 players
+- Good for 2-8 players
 
 **Cons:**
 - Host leaving ends the game (unless host migration works)
@@ -352,7 +352,7 @@ For larger scale, implement a proper matchmaking server:
 2. **LAN Test**: 2 PCs, same network
 3. **Internet Test**: 2 different networks
 4. **Browser Test**: HTML5 build, 2 browsers
-5. **Load Test**: 7 players simultaneously
+5. **Load Test**: 8 players simultaneously
 6. **Stress Test**: Multiple concurrent games
 
 ## Common Issues & Solutions

@@ -16,7 +16,7 @@ signal player_list_changed()
 enum NetworkMode { OFFLINE, HOST, CLIENT }
 var network_mode: NetworkMode = NetworkMode.OFFLINE
 var room_code: String = ""
-var max_players: int = 7
+var max_players: int = 8  # 1 player + up to 7 bots/other players
 
 # Player info
 var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}

@@ -28,7 +28,7 @@
 - **Ready System**: All players must ready up before starting
 
 ### In-Game
-- Up to 7 players per match
+- Up to 8 players per match (you + 7 bots/others)
 - 5-minute deathmatch
 - Procedurally generated arenas
 - Bot AI support
@@ -69,7 +69,7 @@ World
 ```gdscript
 var use_websocket: bool = false        # Use WebSocket (true for browsers)
 var relay_server_url: String = "..."  # Your relay server
-var max_players: int = 7               # Max players per game
+var max_players: int = 8               # Max players per game (you + 7 bots/others)
 ```
 
 ### For Local Testing
