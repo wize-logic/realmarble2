@@ -55,11 +55,17 @@ const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds of no 
 var target_blocked_timer: float = 0.0
 const TARGET_BLOCKED_TIMEOUT: float = 3.0  # Abandon target after 3 seconds behind wall
 
-# Ability preferences based on situation
+# Ability preferences based on situation and hitbox awareness
 const CANNON_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
+
+# Ability hitbox sizes at different charge levels (for accurate positioning)
+# Format: [charge_1, charge_2, charge_3]
+const EXPLOSION_RADII: Array[float] = [5.0, 7.5, 10.0]  # +50% per charge level
+const SWORD_RANGES: Array[float] = [3.0, 3.6, 4.2]  # +20% per charge level
+const DASH_HITBOX_RADII: Array[float] = [1.5, 1.95, 2.4]  # +30% per charge level
 
 func _ready() -> void:
 	bot = get_parent()
@@ -410,9 +416,18 @@ func do_attack(delta: float) -> void:
 		# For AoE/melee, just check rough facing
 		is_aimed_at_target = is_facing_target(target_player.global_position, 60.0)
 
-	# Calculate distance buffer based on optimal range (proportional to ability range)
+	# Calculate distance buffer based on optimal range and ability hitbox
 	# Short-range weapons need tighter buffers, long-range can have larger buffers
+	# For explosion, use larger buffer to account for AoE radius
 	var distance_buffer: float = max(1.0, optimal_distance * 0.3)  # 30% of optimal, minimum 1.0
+	if ability_name == "Explosion":
+		# Use the explosion radius as the buffer instead
+		if distance_to_target > 7.5:
+			distance_buffer = 2.5  # Buffer for level 3 explosion (10.0 radius)
+		elif distance_to_target > 5.0:
+			distance_buffer = 2.0  # Buffer for level 2 explosion (7.5 radius)
+		else:
+			distance_buffer = 1.5  # Buffer for level 1 explosion (5.0 radius)
 
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + distance_buffer:
@@ -566,12 +581,34 @@ func move_away_from(target_pos: Vector3, delta: float, speed_mult: float = 1.0) 
 		bot.apply_central_force(direction * force)
 
 func get_optimal_combat_distance() -> float:
-	"""Get the optimal combat distance based on current ability"""
+	"""Get the optimal combat distance based on current ability and target distance"""
 	if not bot.current_ability:
 		return DASH_ATTACK_OPTIMAL_RANGE  # Default to medium range
 
 	var ability_name: String = bot.current_ability.ability_name if "ability_name" in bot.current_ability else ""
 
+	# For distance-based abilities, calculate optimal range based on intended charge level
+	if target_player and is_instance_valid(target_player):
+		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+
+		match ability_name:
+			"Explosion":
+				# Position based on intended charge level for optimal coverage
+				# If target is far, position for charged explosion (larger radius)
+				if distance_to_target > 7.5:
+					return 8.0  # Position for level 3 charge (10.0 radius)
+				elif distance_to_target > 5.0:
+					return 6.0  # Position for level 2 charge (7.5 radius)
+				else:
+					return 4.5  # Position for level 1 (5.0 radius)
+			"Sword":
+				# Position based on sword range and charge
+				if distance_to_target > 3.6:
+					return 3.8  # Position for charged sword (4.2 range)
+				else:
+					return 3.2  # Position for uncharged sword (3.0 range)
+
+	# Default optimal ranges for other abilities
 	match ability_name:
 		"Cannon":
 			return CANNON_OPTIMAL_RANGE
@@ -644,19 +681,41 @@ func use_ability_smart(distance_to_target: float) -> void:
 				should_charge = distance_to_target > 10.0 and randf() < 0.7  # Increased from 0.5
 		"Sword":
 			# Sword needs to be facing target but has wider arc
-			if distance_to_target < 8.0 and is_aimed:
+			# Smart charging based on distance (hitbox: 3.0, 3.6, 4.2)
+			if distance_to_target < 6.0 and is_aimed:
 				should_use = true
-				should_charge = distance_to_target > 4.0 and randf() < 0.6  # Increased from 0.3
+				# Charge more at medium range where extra reach helps
+				# - Close (< 3.0): Rarely charge (base range is enough)
+				# - Medium (3.0-3.6): Sometimes charge for extra reach
+				# - Far (3.6-4.2): Usually charge to extend range
+				if distance_to_target < 3.0:
+					should_charge = randf() < 0.3  # Rarely charge at close range
+				elif distance_to_target < 3.6:
+					should_charge = randf() < 0.6  # Sometimes charge
+				else:
+					should_charge = randf() < 0.85  # Usually charge at far range
 		"Dash Attack":
 			# CRITICAL: Dash attack is forward-facing - MUST be aimed!
+			# Always charge for maximum dash distance and impact
 			if distance_to_target > 3.0 and distance_to_target < 20.0 and is_aimed:
 				should_use = true
-				should_charge = true  # Always charge (was conditional)
+				should_charge = true  # Always charge for maximum power
 		"Explosion":
 			# Explosion is AoE, doesn't need precise aiming
-			if distance_to_target < 12.0:
+			# Charge strategically based on distance to maximize hitbox coverage
+			if distance_to_target < 15.0:
 				should_use = true
-				should_charge = distance_to_target < 8.0 and randf() < 0.7  # Increased from 0.5
+				# Smart charging based on distance:
+				# - Close range (< 5.0): No charge (base 5.0 radius is enough)
+				# - Medium range (5.0-7.5): Charge to level 2 (7.5 radius)
+				# - Far range (7.5-10.0): Charge to level 3 (10.0 radius)
+				# - Very far (10.0+): Charge to level 3 for maximum coverage
+				if distance_to_target < 5.0:
+					should_charge = randf() < 0.2  # Rarely charge at close range
+				elif distance_to_target < 7.5:
+					should_charge = randf() < 0.7  # Usually charge to hit at medium range
+				else:
+					should_charge = randf() < 0.9  # Almost always charge at far range
 		_:
 			# Default: use when in reasonable range and aimed
 			if distance_to_target < 25.0 and is_aimed:
@@ -671,9 +730,25 @@ func use_ability_smart(distance_to_target: float) -> void:
 		# Start charging
 		if bot.current_ability.has_method("start_charging"):
 			is_charging_ability = true
-			# Charge longer for dash attack to get maximum power
+			# Charge duration based on ability and intended charge level
 			if ability_name == "Dash Attack":
 				ability_charge_timer = randf_range(0.8, 1.3)  # Longer charge for dash
+			elif ability_name == "Explosion":
+				# Charge based on distance for optimal explosion radius
+				if distance_to_target > 7.5:
+					ability_charge_timer = randf_range(1.0, 1.5)  # Long charge for level 3
+				elif distance_to_target > 5.0:
+					ability_charge_timer = randf_range(0.6, 1.0)  # Medium charge for level 2
+				else:
+					ability_charge_timer = randf_range(0.3, 0.6)  # Short charge for level 1
+			elif ability_name == "Sword":
+				# Charge based on distance for optimal sword reach
+				if distance_to_target > 3.6:
+					ability_charge_timer = randf_range(0.8, 1.2)  # Long charge for extra reach
+				elif distance_to_target > 3.0:
+					ability_charge_timer = randf_range(0.5, 0.9)  # Medium charge
+				else:
+					ability_charge_timer = randf_range(0.3, 0.6)  # Short charge
 			else:
 				ability_charge_timer = randf_range(0.5, 1.2)
 			bot.current_ability.start_charging()
