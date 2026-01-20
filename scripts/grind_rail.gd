@@ -36,9 +36,10 @@ class_name GrindRail
 @export var boost_cooldown: float = 1.5  # Time between boost attempts
 
 # Shift speed boost settings
-@export var shift_boost_acceleration: float = 800.0  # How quickly boost builds up per second
-@export var shift_boost_max: float = 1200.0  # Maximum additional boost force
-@export var shift_boost_decay_rate: float = 1200.0  # How quickly boost decays when shift released
+@export var shift_boost_acceleration: float = 3000.0  # How quickly boost builds up per second
+@export var shift_boost_max: float = 5000.0  # Maximum additional boost force
+@export var shift_boost_decay_rate: float = 2500.0  # How quickly boost decays when shift released
+@export var shift_boost_spin_multiplier: float = 15.0  # How much to spin the marble when boosting
 
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
@@ -357,6 +358,11 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 	if data.shift_boost_amount > 0.0:
 		grinder.apply_central_force(tangent * rail_direction * data.shift_boost_amount * grinder.mass * delta)
 
+		# Add spinning visual effect - spin faster as boost increases
+		var boost_percentage: float = data.shift_boost_amount / shift_boost_max
+		var spin_axis: Vector3 = tangent * rail_direction  # Spin in the direction of movement
+		grinder.angular_velocity = spin_axis * shift_boost_spin_multiplier * boost_percentage
+
 	# Strong slope acceleration (use player's desired direction)
 	var look_ahead_off: float = clamp(attach_offset + rail_direction * 3.0, 0, length)
 	var ahead_pos: Vector3 = to_global(curve.sample_baked(look_ahead_off))
@@ -438,5 +444,7 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		_remove_grinder(grinder)
 		return
 
-	grinder.angular_velocity *= 0.15
+	# Only dampen angular velocity when not boosting (preserve the cool spin effect)
+	if data.shift_boost_amount <= 0.0:
+		grinder.angular_velocity *= 0.15
 	data.closest_offset = closest_offset
