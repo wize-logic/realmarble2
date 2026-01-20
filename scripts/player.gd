@@ -105,6 +105,7 @@ var targeted_rail: GrindRail = null  # The rail currently being looked at
 var rail_lock_raycast: RayCast3D = null  # Raycast for detecting rails
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
+var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
 
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
@@ -990,16 +991,10 @@ func _physics_process(delta: float) -> void:
 	if world and not world.get("game_active"):
 		return  # Don't process movement until game is active
 
-	# Don't allow player input while grinding - rail physics handles everything
-	if is_grinding:
-		return
-
-	# Get input direction relative to camera
+	# Get input direction relative to camera (calculate even while grinding for rail control)
 	var input_dir := Input.get_vector("left", "right", "up", "down")
 
 	if input_dir != Vector2.ZERO:
-		var move_direction: Vector3
-
 		if camera_arm:
 			# Get camera's forward direction (ignore Y to keep movement horizontal)
 			var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
@@ -1012,11 +1007,21 @@ func _physics_process(delta: float) -> void:
 
 			# Calculate movement direction relative to camera
 			# Negate input_dir.y because Input.get_vector returns negative when pressing "up"
-			move_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
+			movement_input_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
 		else:
 			# Fallback: use global directions if no camera
-			move_direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
+			movement_input_direction = Vector3(input_dir.x, 0, input_dir.y).normalized()
+	else:
+		# No input - clear the direction
+		movement_input_direction = Vector3.ZERO
 
+	# Don't apply movement force while grinding - rail physics handles everything
+	# But we still calculated movement_input_direction above for the rail to use
+	if is_grinding:
+		return
+
+	# Apply movement force if there's input
+	if input_dir != Vector2.ZERO:
 		# Get current horizontal speed
 		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
 		var current_speed: float = horizontal_velocity.length()
@@ -1028,7 +1033,7 @@ func _physics_process(delta: float) -> void:
 		# Only apply force if below max speed (or allow air control regardless)
 		if current_speed < max_speed or not is_grounded:
 			# Apply central force for movement (no torque to prevent spinning)
-			apply_central_force(move_direction * force_to_apply)
+			apply_central_force(movement_input_direction * force_to_apply)
 
 func check_ground() -> void:
 	# Use RayCast3D node for ground detection

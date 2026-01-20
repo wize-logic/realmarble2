@@ -5,6 +5,7 @@ class_name GrindRail
 ## Now attaches from a LARGE AREA BELOW the rail
 ## STUCK SAFEGUARD: Detects when player can't make progress and applies boosts or safe detachment
 ## MANUAL ATTACHMENT: Players must press E while looking at the rail to attach
+## DIRECTIONAL CONTROL: Press movement keys to control which direction you move along the rail
 
 @export var detection_radius: float = 18.0
 @export var manual_attachment_only: bool = true  # Require E key press to attach
@@ -312,14 +313,26 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		force = force.limit_length(max_rope_force)
 		grinder.apply_central_force(force)
 
-	# Aggressive forward acceleration
-	grinder.apply_central_force(tangent * constant_forward_push * grinder.mass * delta)
+	# Determine direction along rail based on player input
+	var rail_direction: float = 1.0  # Default: forward along tangent
 
-	# Strong slope acceleration
-	var look_ahead_off: float = clamp(attach_offset + sign(vel_along) * 3.0, 0, length)
+	# Check if grinder has movement input direction (player controller)
+	if "movement_input_direction" in grinder:
+		var input_dir: Vector3 = grinder.movement_input_direction
+		if input_dir.length_squared() > 0.01:  # Player is pressing movement keys
+			# Project input direction onto rail tangent to determine desired direction
+			var dot_product: float = input_dir.dot(tangent)
+			# Use the sign of the dot product to determine direction
+			rail_direction = sign(dot_product) if abs(dot_product) > 0.1 else rail_direction
+
+	# Apply acceleration in the player's desired direction along the rail
+	grinder.apply_central_force(tangent * rail_direction * constant_forward_push * grinder.mass * delta)
+
+	# Strong slope acceleration (use player's desired direction)
+	var look_ahead_off: float = clamp(attach_offset + rail_direction * 3.0, 0, length)
 	var ahead_pos: Vector3 = to_global(curve.sample_baked(look_ahead_off))
 	var dy: float = ahead_pos.y - attach_pos.y
-	var slope_f: Vector3 = tangent * (-dy * gravity_multiplier * 120.0)
+	var slope_f: Vector3 = tangent * rail_direction * (-dy * gravity_multiplier * 120.0)
 	grinder.apply_central_force(slope_f)
 
 	# STUCK DETECTION SAFEGUARD
@@ -334,17 +347,36 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 			if data.stuck_time >= stuck_threshold_time:
 				# Player is stuck! Try to help them
 				if data.boost_attempts < max_boost_attempts and current_time - data.last_boost_time >= boost_cooldown:
-					# Apply emergency boost in the direction of nearest end
-					var to_start: float = attach_offset
-					var to_end: float = length - attach_offset
-					var boost_direction: Vector3 = tangent if to_end < to_start else -tangent
+					# Determine boost direction based on player input
+					var boost_direction: Vector3
+					var boost_desc: String
+
+					# Check if player has input direction preference
+					if "movement_input_direction" in grinder:
+						var input_dir: Vector3 = grinder.movement_input_direction
+						if input_dir.length_squared() > 0.01:
+							# Use player's desired direction
+							var dot_product: float = input_dir.dot(tangent)
+							boost_direction = tangent if dot_product > 0 else -tangent
+							boost_desc = "player input direction"
+						else:
+							# No input - boost toward nearest end
+							var to_start: float = attach_offset
+							var to_end: float = length - attach_offset
+							boost_direction = tangent if to_end < to_start else -tangent
+							boost_desc = ("end" if to_end < to_start else "start")
+					else:
+						# No player input system - boost toward nearest end
+						var to_start: float = attach_offset
+						var to_end: float = length - attach_offset
+						boost_direction = tangent if to_end < to_start else -tangent
+						boost_desc = ("end" if to_end < to_start else "start")
 
 					grinder.apply_central_impulse(boost_direction * emergency_boost_force)
 					data.boost_attempts += 1
 					data.last_boost_time = current_time
 
-					print("[", name, "] STUCK SAFEGUARD: Applied boost #", data.boost_attempts, " toward ",
-						("end" if to_end < to_start else "start"))
+					print("[", name, "] STUCK SAFEGUARD: Applied boost #", data.boost_attempts, " toward ", boost_desc)
 
 				elif data.boost_attempts >= max_boost_attempts:
 					# Tried multiple boosts, still stuck - detach player safely
