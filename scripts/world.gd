@@ -1129,12 +1129,16 @@ func start_deathmatch() -> void:
 	if gameplay_music and gameplay_music.has_method("start_playlist"):
 		gameplay_music.start_playlist()
 
-	# Regenerate level for multiplayer match (Type A for now, could be made configurable)
+	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
 	# FIXME: For multiplayer, level type should be chosen in lobby
-	current_level_type = "A"
-	print("Regenerating level for multiplayer match...")
-	await generate_procedural_level(current_level_type)
-	print("Level regeneration complete!")
+	if multiplayer.has_multiplayer_peer():
+		# Use current_level_type (don't hardcode, respect what was set)
+		# Default to "A" if somehow not set
+		if current_level_type == "":
+			current_level_type = "A"
+		print("Regenerating level for multiplayer match (Type %s)..." % current_level_type)
+		await generate_procedural_level(current_level_type)
+		print("Level regeneration complete!")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
