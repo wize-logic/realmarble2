@@ -49,11 +49,16 @@ var slope_check_timer: float = 0.0
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
-const TARGET_STUCK_TIMEOUT: float = 2.5  # Abandon target after 2.5 seconds (reduced from 5.0)
+const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds (more proactive)
 
 # Line of sight tracking for targets
 var target_blocked_timer: float = 0.0
-const TARGET_BLOCKED_TIMEOUT: float = 1.5  # Abandon target after 1.5 seconds (reduced from 3.0)
+const TARGET_BLOCKED_TIMEOUT: float = 5.0  # Abandon target after 5 seconds (more proactive)
+
+# Combat effectiveness tracking - abandon if not making progress
+var combat_stuck_timer: float = 0.0
+var last_attack_time: float = 0.0
+const COMBAT_STUCK_TIMEOUT: float = 5.0  # Abandon combat target after 5 seconds without attacking
 
 # State transition cooldown to prevent analysis paralysis
 var state_transition_cooldown: float = 0.0
@@ -481,7 +486,12 @@ func do_attack(delta: float) -> void:
 
 	# Use ability intelligently (function handles its own aiming)
 	if bot.current_ability and bot.current_ability.has_method("use"):
+		# Track if we're about to attack
+		var was_ready_before: bool = bot.current_ability.is_ready()
 		use_ability_smart(distance_to_target)
+		# If ability was used (no longer ready), reset combat timer
+		if was_ready_before and not bot.current_ability.is_ready():
+			combat_stuck_timer = 0.0  # Successfully attacked, reset timeout
 	# Spin dash as last resort or for mobility
 	elif action_timer <= 0.0:
 		if randf() < 0.15 and bot.spin_cooldown <= 0.0 and not bot.is_spin_dashing and not bot.is_charging_spin:
@@ -748,6 +758,30 @@ func determine_optimal_charge_level(ability_name: String, distance_to_target: fl
 		_:
 			return 1  # Default to no charge
 
+func can_ability_hit_target(ability_name: String, distance_to_target: float, is_aimed: bool) -> bool:
+	## Verify that an ability will actually hit the target before using it
+	## Returns true only if: in range, aimed properly, and has required charge level
+
+	# Step 1: Check if we need precise aim for this ability
+	var needs_aim: bool = ability_name in ["Cannon", "Dash Attack", "Sword"]
+	if needs_aim and not is_aimed:
+		return false  # Not aimed properly
+
+	# Step 2: Determine what charge level we'd need
+	var required_charge: int = determine_optimal_charge_level(ability_name, distance_to_target)
+	if required_charge == 0:
+		return false  # Out of range even with full charge
+
+	# Step 3: For uncharged shots, verify we can hit with level 1
+	# For charged shots, we'll charge to required level
+	if not is_charging_ability:
+		# Planning to use instantly - can we hit with level 1?
+		return will_hitbox_reach_target(ability_name, 1, distance_to_target)
+	else:
+		# Currently charging - will we hit with current/intended charge level?
+		var intended_charge: int = max(1, required_charge)
+		return will_hitbox_reach_target(ability_name, intended_charge, distance_to_target)
+
 func use_ability_smart(distance_to_target: float) -> void:
 	## Use ability with smart timing and charging
 	if not bot.current_ability or not bot.current_ability.is_ready():
@@ -773,6 +807,12 @@ func use_ability_smart(distance_to_target: float) -> void:
 				is_aimed = true  # AoE doesn't need precise aiming
 			_:
 				is_aimed = is_facing_target(target_player.global_position, 35.0)  # Default 35° cone
+
+	# VERIFICATION: Check if we can actually hit before proceeding
+	if not can_ability_hit_target(ability_name, distance_to_target, is_aimed):
+		# Can't hit - don't use ability, don't charge
+		is_charging_ability = false
+		return
 
 	# IMPROVED LOGIC: Use helper functions to accurately determine if we can hit
 	# Step 1: Determine what charge level we need to reach the target
@@ -1141,7 +1181,7 @@ func do_collect_ability(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 
 	# Quick abandon if too far or blocked
-	if distance > 70.0 or (not has_line_of_sight(target_ability.global_position, 0.5) and target_blocked_timer > 1.5):
+	if distance > 70.0 or (not has_line_of_sight(target_ability.global_position, 0.5) and target_blocked_timer > TARGET_BLOCKED_TIMEOUT):
 		target_ability = null
 		target_blocked_timer = 0.0
 		state = "WANDER"
@@ -1213,7 +1253,7 @@ func do_collect_orb(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 
 	# Quick abandon if too far or blocked
-	if distance > 60.0 or (not has_line_of_sight(target_orb.global_position, 0.5) and target_blocked_timer > 1.5):
+	if distance > 60.0 or (not has_line_of_sight(target_orb.global_position, 0.5) and target_blocked_timer > TARGET_BLOCKED_TIMEOUT):
 		target_orb = null
 		target_blocked_timer = 0.0
 		state = "WANDER"
@@ -1532,11 +1572,11 @@ func find_clear_direction(desired_direction: Vector3) -> Vector3:
 	return -desired_direction.rotated(Vector3.UP, retreat_angle) * 0.6
 
 func check_target_timeout(delta: float) -> void:
-	## Check if bot is stuck trying to reach a collectible target for too long
+	## Check if bot is stuck trying to reach a target or engage in combat for too long
 	if not bot:
 		return
 
-	# Only check when trying to collect abilities or orbs
+	# Check collection states (abilities/orbs)
 	if state in ["COLLECT_ABILITY", "COLLECT_ORB"]:
 		var current_pos: Vector3 = bot.global_position
 		var distance_moved: float = current_pos.distance_to(target_stuck_position)
@@ -1547,7 +1587,7 @@ func check_target_timeout(delta: float) -> void:
 
 			# After timeout, abandon the target
 			if target_stuck_timer >= TARGET_STUCK_TIMEOUT:
-				print("Bot %s abandoning unreachable target after %0.1f seconds" % [bot.name, target_stuck_timer])
+				print("Bot %s abandoning unreachable collectible after %.1f seconds" % [bot.name, target_stuck_timer])
 
 				# Clear the current target
 				if state == "COLLECT_ABILITY":
@@ -1563,9 +1603,27 @@ func check_target_timeout(delta: float) -> void:
 			# Bot is making progress, reset timer
 			target_stuck_timer = 0.0
 			target_stuck_position = current_pos
+
+	# Check combat states (chase/attack) - abandon if not attacking successfully
+	elif state in ["CHASE", "ATTACK"]:
+		combat_stuck_timer += delta
+
+		# If we haven't attacked in too long, abandon this target
+		if combat_stuck_timer >= COMBAT_STUCK_TIMEOUT:
+			print("Bot %s abandoning unproductive combat after %.1f seconds" % [bot.name, combat_stuck_timer])
+
+			# Clear combat target
+			target_player = null
+			combat_stuck_timer = 0.0
+			target_stuck_timer = 0.0
+
+			# Try to collect items or find new target
+			state = "WANDER"
+			find_target()
 	else:
-		# Not collecting, reset timer
+		# Not in tracked states, reset timers
 		target_stuck_timer = 0.0
+		combat_stuck_timer = 0.0
 		target_stuck_position = bot.global_position
 
 func check_if_stuck() -> void:
