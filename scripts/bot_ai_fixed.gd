@@ -1,11 +1,11 @@
 extends Node
 
-## Bot AI Controller - PRODUCTION VERSION v2.0
-## Final polish with comprehensive validation and advanced mechanics
+## Bot AI Controller - FULLY REVISED VERSION
+## Fixed all critical bugs and added missing mechanics for HTML5 compatibility
 ##
-## FIXES APPLIED (v1.0):
-## 1. Removed ALL await statements that freeze bots
-## 2. Fixed RigidBody3D rotation using angular_velocity
+## FIXES APPLIED:
+## 1. Removed ALL await statements that freeze bots (lines 619, 676, 291, 1015)
+## 2. Fixed RigidBody3D rotation using angular_velocity (line 546)
 ## 3. Added ability charging validation (Cannon doesn't support charging)
 ## 4. Fixed teleport to use world.spawns instead of bot.spawns
 ## 5. Added bounce attack support for vertical combat/mobility
@@ -14,16 +14,6 @@ extends Node
 ## 8. Better obstacle avoidance and pathfinding
 ## 9. Fixed stuck detection thresholds
 ## 10. Performance optimizations for HTML5
-##
-## IMPROVEMENTS (v2.0):
-## 11. Comprehensive property validation for all mechanics
-## 12. Cache filtering for invalid nodes
-## 13. Rail curve handling (Path3D/Curve3D)
-## 14. Lead prediction for Cannon projectiles
-## 15. Dynamic player avoidance in movement
-## 16. Better state priority (combat over grind)
-## 17. Visibility checks for collection targets
-## 18. Dead code cleanup (unused variables)
 
 @export var target_player: Node = null
 @export var wander_radius: float = 30.0
@@ -39,64 +29,58 @@ var target_ability: Node = null
 var target_orb: Node = null
 var ability_check_timer: float = 0.0
 var orb_check_timer: float = 0.0
-var player_search_timer: float = 0.0
+var player_search_timer: float = 0.0  # NEW: Cache player searches
 
 # Advanced AI variables
-var strafe_direction: float = 1.0
+var strafe_direction: float = 1.0  # 1 for right, -1 for left
 var strafe_timer: float = 0.0
 var retreat_timer: float = 0.0
 var ability_charge_timer: float = 0.0
 var is_charging_ability: bool = false
-var aggression_level: float = 0.7  # Used for ability usage probability
+var aggression_level: float = 0.7  # 0-1, how aggressive the bot is
+var reaction_delay: float = 0.8  # Delay for human-like reactions
 
 # Obstacle detection variables
 var stuck_timer: float = 0.0
 var last_position: Vector3 = Vector3.ZERO
-var stuck_check_interval: float = 0.3
+var stuck_check_interval: float = 0.3  # FIXED: Less sensitive (was 0.2)
 var is_stuck: bool = false
 var unstuck_timer: float = 0.0
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0
 var consecutive_stuck_checks: int = 0
-const MAX_STUCK_ATTEMPTS: int = 10
+const MAX_STUCK_ATTEMPTS: int = 10  # FIXED: Faster teleport (was 15)
 
 # Target timeout variables
 var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
-const TARGET_STUCK_TIMEOUT: float = 4.0
+const TARGET_STUCK_TIMEOUT: float = 4.0  # FIXED: Shorter timeout (was 5.0)
 
 # NEW: Rail grinding support
 var target_rail: Node = null
 var rail_check_timer: float = 0.0
 var grinding_timer: float = 0.0
 const RAIL_SEARCH_INTERVAL: float = 1.5
-const MAX_GRIND_TIME: float = 3.0
+const MAX_GRIND_TIME: float = 3.0  # Don't grind forever
 
 # NEW: Bounce attack support
 var bounce_cooldown_timer: float = 0.0
 const BOUNCE_COOLDOWN: float = 0.5
+var last_bounce_time: float = 0.0
 
-# Ability optimal ranges
-const CANNON_OPTIMAL_RANGE: float = 15.0
-const SWORD_OPTIMAL_RANGE: float = 3.5
+# Ability optimal ranges (FIXED: Updated for better combat)
+const CANNON_OPTIMAL_RANGE: float = 15.0  # FIXED: Reduced from 20.0 (forward-facing, 120° cone)
+const SWORD_OPTIMAL_RANGE: float = 3.5  # FIXED: Tighter range (was 4.0)
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
 
-# IMPROVED: Cached group queries with filtering
+# NEW: Cached group queries for performance (HTML5 optimization)
 var cached_players: Array[Node] = []
 var cached_abilities: Array[Node] = []
 var cached_orbs: Array[Node] = []
 var cached_rails: Array[Node] = []
 var cache_refresh_timer: float = 0.0
-const CACHE_REFRESH_INTERVAL: float = 0.5
-
-# NEW: Player avoidance
-var player_avoidance_timer: float = 0.0
-const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
-
-# NEW: Proactive edge avoidance
-var edge_check_timer: float = 0.0
-const EDGE_CHECK_INTERVAL: float = 0.3
+const CACHE_REFRESH_INTERVAL: float = 0.5  # Refresh cache every 0.5s
 
 func _ready() -> void:
 	bot = get_parent()
@@ -108,8 +92,9 @@ func _ready() -> void:
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
 
-	# Randomize aggression for personality variety
+	# Randomize aggression and reaction time for personality variety
 	aggression_level = randf_range(0.5, 0.9)
+	reaction_delay = randf_range(0.5, 1.2)  # Human-like reaction delay
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -140,15 +125,13 @@ func _physics_process(delta: float) -> void:
 	player_search_timer -= delta
 	grinding_timer += delta
 	cache_refresh_timer -= delta
-	player_avoidance_timer -= delta
-	edge_check_timer -= delta
 
-	# IMPROVED: Refresh cached groups with filtering
+	# NEW: Refresh cached groups periodically for performance
 	if cache_refresh_timer <= 0.0:
 		refresh_cached_groups()
 		cache_refresh_timer = CACHE_REFRESH_INTERVAL
 
-	# Check if bot is stuck on obstacles
+	# Check if bot is stuck on obstacles (FIXED: Better threshold)
 	if stuck_timer >= stuck_check_interval:
 		check_if_stuck()
 		stuck_timer = 0.0
@@ -156,12 +139,7 @@ func _physics_process(delta: float) -> void:
 	# Handle unstuck behavior
 	if is_stuck and unstuck_timer > 0.0:
 		handle_unstuck_movement(delta)
-		return
-
-	# NEW: Proactive edge avoidance check
-	if edge_check_timer <= 0.0:
-		check_nearby_edges()
-		edge_check_timer = EDGE_CHECK_INTERVAL
+		return  # Skip normal AI while unstucking
 
 	# Check if bot is stuck trying to reach a target
 	check_target_timeout(delta)
@@ -169,19 +147,19 @@ func _physics_process(delta: float) -> void:
 	# Find nearest player with caching
 	if not target_player or not is_instance_valid(target_player) or player_search_timer <= 0.0:
 		find_target()
-		player_search_timer = 0.8
+		player_search_timer = 0.8  # Cache for 0.8s
 
 	# Check for abilities periodically
 	if ability_check_timer <= 0.0:
 		find_nearest_ability()
-		ability_check_timer = 1.2
+		ability_check_timer = 1.2  # FIXED: Less frequent (was 1.0)
 
 	# Check for orbs periodically
 	if orb_check_timer <= 0.0:
 		find_nearest_orb()
-		orb_check_timer = 1.0
+		orb_check_timer = 1.0  # FIXED: Less frequent (was 0.8)
 
-	# Check for rails periodically
+	# NEW: Check for rails periodically
 	if rail_check_timer <= 0.0:
 		find_nearest_rail()
 		rail_check_timer = RAIL_SEARCH_INTERVAL
@@ -200,36 +178,28 @@ func _physics_process(delta: float) -> void:
 			do_collect_ability(delta)
 		"COLLECT_ORB":
 			do_collect_orb(delta)
-		"GRIND":
+		"GRIND":  # NEW: Rail grinding state
 			do_grind(delta)
 
 	# Check state transitions
 	update_state()
 
 func refresh_cached_groups() -> void:
-	"""IMPROVED: Cache group queries with validity filtering"""
-	# Filter out invalid nodes immediately
-	cached_players = get_tree().get_nodes_in_group("players").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
-	cached_abilities = get_tree().get_nodes_in_group("ability_pickups").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
-	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
-	)
-	cached_rails = get_tree().get_nodes_in_group("rails").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
+	"""NEW: Cache group queries for HTML5 performance"""
+	cached_players = get_tree().get_nodes_in_group("players")
+	cached_abilities = get_tree().get_nodes_in_group("ability_pickups")
+	cached_orbs = get_tree().get_nodes_in_group("orbs")
+	cached_rails = get_tree().get_nodes_in_group("rails")
 
 func update_state() -> void:
-	"""IMPROVED: Better state prioritization with grind hysteresis"""
+	"""IMPROVED: Better state prioritization with threat assessment"""
 
 	# Priority 0: Exit grind if we've been on rail too long
 	if state == "GRIND" and grinding_timer > MAX_GRIND_TIME:
 		state = "WANDER"
 		grinding_timer = 0.0
-		exit_grind_safely()
+		if bot.has_method("exit_grind"):
+			bot.exit_grind()
 		return
 
 	# Check if we have a valid combat target
@@ -238,81 +208,58 @@ func update_state() -> void:
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# IMPROVED: Retreat at health <= 2, earlier escape
+	# IMPROVED: Retreat at health <= 2 (was <= 1), earlier retreat
 	if bot.health <= 2 and has_combat_target:
-		if distance_to_target < aggro_range * 0.8:
+		if distance_to_target < aggro_range * 0.8:  # FIXED: Larger retreat zone
 			state = "RETREAT"
-			retreat_timer = randf_range(2.5, 4.5)
-			# IMPROVED: Use grind for escape if rail nearby
-			if target_rail and is_instance_valid(target_rail):
-				var dist_to_rail: float = bot.global_position.distance_to(get_rail_closest_point(target_rail))
-				if dist_to_rail < 10.0:
-					state = "GRIND"
-					grinding_timer = 0.0
+			retreat_timer = randf_range(2.5, 4.5)  # Longer retreat
 			return
 
 	# Priority 1: CRITICAL - Get an ability if we don't have one
 	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
 		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Don't suicide for abilities when enemy is very close
+		# IMPROVED: Don't suicide for abilities when enemy is very close
 		if distance_to_ability < 60.0 and (not has_combat_target or distance_to_target > attack_range * 2.0):
-			# IMPROVED: Visibility check
-			if is_target_visible(target_ability.global_position):
-				state = "COLLECT_ABILITY"
-				return
+			state = "COLLECT_ABILITY"
+			return
 
-	# Priority 2: COMBAT ALWAYS BEATS GRIND - Immediate combat if in attack range
+	# Priority 2: Immediate combat if we HAVE an ability and enemy is in attack range
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.2:
 		state = "ATTACK"
 		return
 
-	# Priority 3: Collect orbs if safe
+	# Priority 3: Collect orbs if not max level and safe to do so
 	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
-		var orb_priority_range: float = 40.0
+		# IMPROVED: Better safety check for orb collection
+		var orb_priority_range: float = 40.0  # FIXED: More conservative (was 50.0)
 		if not has_combat_target or distance_to_target > aggro_range * 0.6:
 			orb_priority_range = 50.0
 		# Don't collect if enemy is attacking
 		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 2.5):
-			# IMPROVED: Visibility check
-			if is_target_visible(target_orb.global_position):
-				state = "COLLECT_ORB"
-				return
+			state = "COLLECT_ORB"
+			return
 
-	# Priority 4: Chase if enemy in aggro range (BEATS GRIND)
-	if bot.current_ability and has_combat_target and distance_to_target < aggro_range:
-		state = "CHASE"
-		return
-
-	# Priority 5: GRIND ONLY when safe (no combat, for mobility)
-	# IMPROVED: Use grind for vertical traversal when height diff large
+	# NEW: Priority 4: Use rails for mobility when available (Type A arenas)
 	if target_rail and is_instance_valid(target_rail) and state != "GRIND":
-		var rail_point: Vector3 = get_rail_closest_point(target_rail)
-		var distance_to_rail: float = bot.global_position.distance_to(rail_point)
-		var height_diff: float = rail_point.y - bot.global_position.y
-
-		# Use rails when: not in combat OR enemy far + height advantage
-		var should_grind: bool = false
-		if not has_combat_target:
-			should_grind = distance_to_rail < 15.0
-		elif distance_to_target > aggro_range * 0.8 and height_diff > 5.0:
-			# Use rail for vertical positioning advantage
-			should_grind = distance_to_rail < 12.0
-
-		if should_grind:
+		var distance_to_rail: float = bot.global_position.distance_to(target_rail.global_position)
+		# Use rails when not in immediate combat
+		if distance_to_rail < 15.0 and (not has_combat_target or distance_to_target > attack_range * 2.0):
 			state = "GRIND"
 			grinding_timer = 0.0
 			return
 
-	# Priority 6: Combat if we HAVE an ability but enemy far
+	# Priority 5: Combat if we HAVE an ability
 	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.2:
 			state = "ATTACK"
 		elif distance_to_target < aggro_range:
 			state = "CHASE"
 		else:
+			# Target too far, wander or collect
 			state = "WANDER"
 	else:
+		# No ability or no target, wander
 		state = "WANDER"
 
 func do_wander(delta: float) -> void:
@@ -340,10 +287,10 @@ func do_chase(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
-	# Physics-safe rotation
+	# FIXED: Use physics-safe rotation for RigidBody3D
 	look_at_target_smooth(target_player.global_position, delta)
 
-	# Determine optimal distance
+	# Determine optimal distance based on current ability
 	var optimal_distance: float = get_optimal_combat_distance()
 
 	# Movement logic
@@ -368,7 +315,7 @@ func do_chase(delta: float) -> void:
 			bot_jump()
 			action_timer = randf_range(0.6, 1.5)
 
-	# NEW: Use bounce attack for vertical pursuit
+	# NEW: Use bounce attack for vertical pursuit if target is higher
 	if height_diff < -2.0 and bounce_cooldown_timer <= 0.0 and randf() < 0.3:
 		use_bounce_attack()
 
@@ -381,7 +328,7 @@ func do_attack(delta: float) -> void:
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
 
-	# Physics-safe rotation
+	# FIXED: Physics-safe rotation
 	look_at_target_smooth(target_player.global_position, delta)
 
 	# Tactical positioning
@@ -395,11 +342,12 @@ func do_attack(delta: float) -> void:
 	# Use ability intelligently
 	if bot.current_ability and bot.current_ability.has_method("use"):
 		use_ability_smart(distance_to_target)
-	# Spin dash as mobility option
-	elif action_timer <= 0.0 and validate_spin_dash_properties():
-		if randf() < 0.12 * aggression_level and bot.spin_cooldown <= 0.0 and not bot.is_spin_dashing:
-			initiate_spin_dash()
-			action_timer = randf_range(2.5, 4.0)
+	# Spin dash as mobility option (FIXED: No await in callback)
+	elif action_timer <= 0.0 and bot.has_method("execute_spin_dash"):
+		if randf() < 0.12 and bot.spin_cooldown <= 0.0 and not bot.is_spin_dashing:
+			if bot.has_method("start_spin_charge"):  # NEW: Validate method
+				initiate_spin_dash()
+				action_timer = randf_range(2.5, 4.0)
 
 	# Jump for height advantage
 	if action_timer <= 0.0:
@@ -414,7 +362,7 @@ func do_attack(delta: float) -> void:
 			action_timer = randf_range(0.5, 1.2)
 
 	# NEW: Use bounce attack for aerial combat
-	if height_diff > 1.5 and bounce_cooldown_timer <= 0.0 and randf() < 0.25 * aggression_level:
+	if height_diff > 1.5 and bounce_cooldown_timer <= 0.0 and randf() < 0.25:
 		use_bounce_attack()
 
 func do_retreat(delta: float) -> void:
@@ -431,13 +379,13 @@ func do_retreat(delta: float) -> void:
 		bot_jump()
 		action_timer = randf_range(0.3, 0.7)
 
-	# NEW: Use bounce attack for escape
+	# NEW: Use bounce attack for escape if enemy above
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	if height_diff < -2.0 and bounce_cooldown_timer <= 0.0 and randf() < 0.4:
 		use_bounce_attack()
 
 func do_collect_ability(delta: float) -> void:
-	"""Move towards ability without await statements"""
+	"""FIXED: Move towards ability without await statements"""
 	if not target_ability or not is_instance_valid(target_ability):
 		target_ability = null
 		state = "WANDER"
@@ -446,10 +394,12 @@ func do_collect_ability(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
-	# Clear target by distance
+	# FIXED: Clear target by distance instead of await timer
 	if distance < 2.5:
+		# Close enough, collection happens via Area3D automatically
+		# Don't clear immediately, give time for pickup
 		if distance < 1.5:
-			target_ability = null
+			target_ability = null  # Likely collected
 		return
 
 	# Move towards ability urgently
@@ -465,7 +415,7 @@ func do_collect_ability(delta: float) -> void:
 			action_timer = randf_range(0.4, 0.8)
 
 func do_collect_orb(delta: float) -> void:
-	"""Move towards orb without await statements"""
+	"""FIXED: Move towards orb without await statements"""
 	if not target_orb or not is_instance_valid(target_orb):
 		target_orb = null
 		state = "WANDER"
@@ -480,10 +430,10 @@ func do_collect_orb(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
-	# Clear target by distance
+	# FIXED: Clear target by distance instead of await timer
 	if distance < 2.5:
 		if distance < 1.5:
-			target_orb = null
+			target_orb = null  # Likely collected
 		return
 
 	# Move towards orb
@@ -499,27 +449,26 @@ func do_collect_orb(delta: float) -> void:
 			action_timer = randf_range(0.4, 0.8)
 
 func do_grind(delta: float) -> void:
-	"""IMPROVED: Rail grinding with proper curve handling"""
+	"""NEW: Rail grinding behavior for mobility (Type A arenas)"""
 	if not target_rail or not is_instance_valid(target_rail):
 		state = "WANDER"
 		grinding_timer = 0.0
 		return
 
-	# IMPROVED: Get closest point on rail curve
-	var rail_point: Vector3 = get_rail_closest_point(target_rail)
-	var distance_to_rail: float = bot.global_position.distance_to(rail_point)
+	var distance_to_rail: float = bot.global_position.distance_to(target_rail.global_position)
 
 	# If we're on the rail, let player.gd handle grinding
 	if distance_to_rail < 3.0:
 		# Bot is grinding, check if we should exit
-		if grinding_timer > MAX_GRIND_TIME or randf() < 0.02:
+		if grinding_timer > MAX_GRIND_TIME or randf() < 0.02:  # Random exit chance
 			state = "WANDER"
 			grinding_timer = 0.0
-			exit_grind_safely()
+			if bot.has_method("exit_grind"):
+				bot.exit_grind()
 			return
 	else:
 		# Move towards rail to start grinding
-		move_towards(rail_point, 0.8)
+		move_towards(target_rail.global_position, 0.8)
 
 		# Jump to reach rail if needed
 		if action_timer <= 0.0 and randf() < 0.5:
@@ -534,7 +483,7 @@ func strafe_around_target(preferred_distance: float) -> void:
 	# Change strafe direction periodically
 	if strafe_timer <= 0.0:
 		strafe_direction *= -1
-		strafe_timer = randf_range(1.2, 2.8)
+		strafe_timer = randf_range(1.2, 2.8)  # FIXED: More varied (was 1.0-2.5)
 
 	# Calculate strafe direction
 	var to_target: Vector3 = (target_player.global_position - bot.global_position).normalized()
@@ -555,18 +504,6 @@ func strafe_around_target(preferred_distance: float) -> void:
 	# Apply combined movement
 	var movement: Vector3 = (strafe_vec * 0.7 + distance_adjustment).normalized()
 	if movement.length() > 0.1:
-		# EDGE DETECTION FIX: Check for edges before strafing
-		if check_for_edge(movement, 4.0):
-			# Edge detected! Reverse strafe direction and apply braking
-			strafe_direction *= -1
-			movement = -movement  # Move away from edge
-			# Apply braking force to reduce momentum
-			if "linear_velocity" in bot:
-				var braking_force: Vector3 = -bot.linear_velocity * 0.8
-				braking_force.y = 0
-				bot.apply_central_force(braking_force)
-			return
-
 		var force: float = bot.current_roll_force * 0.75
 		bot.apply_central_force(movement * force)
 
@@ -579,21 +516,6 @@ func move_away_from(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	direction.y = 0
 
 	if direction.length() > 0.1:
-		# EDGE DETECTION FIX: Check for edges when retreating
-		if check_for_edge(direction, 4.0):
-			# Edge detected while retreating! Find safe direction
-			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
-			if safe_direction != Vector3.ZERO:
-				direction = safe_direction
-				speed_mult *= 0.5  # Slow down near edges
-			else:
-				# No safe direction, stop and apply braking
-				if "linear_velocity" in bot:
-					var braking_force: Vector3 = -bot.linear_velocity * 1.2
-					braking_force.y = 0
-					bot.apply_central_force(braking_force)
-				return
-
 		var force: float = bot.current_roll_force * speed_mult
 		bot.apply_central_force(direction * force)
 
@@ -602,6 +524,7 @@ func get_optimal_combat_distance() -> float:
 	if not bot.current_ability:
 		return DASH_ATTACK_OPTIMAL_RANGE
 
+	# FIXED: Use ability_name property safely
 	if not "ability_name" in bot.current_ability:
 		return 12.0
 
@@ -609,18 +532,18 @@ func get_optimal_combat_distance() -> float:
 
 	match ability_name:
 		"Cannon":
-			return CANNON_OPTIMAL_RANGE
+			return CANNON_OPTIMAL_RANGE  # 15.0 - forward-facing
 		"Sword":
-			return SWORD_OPTIMAL_RANGE
+			return SWORD_OPTIMAL_RANGE  # 3.5 - melee
 		"Dash Attack":
-			return DASH_ATTACK_OPTIMAL_RANGE
+			return DASH_ATTACK_OPTIMAL_RANGE  # 8.0
 		"Explosion":
-			return EXPLOSION_OPTIMAL_RANGE
+			return EXPLOSION_OPTIMAL_RANGE  # 6.0
 		_:
 			return 12.0
 
 func use_ability_smart(distance_to_target: float) -> void:
-	"""IMPROVED: Smart ability usage with lead prediction for Cannon"""
+	"""FIXED: Smart ability usage with proper charging validation"""
 	if not bot.current_ability or not bot.current_ability.has_method("is_ready"):
 		is_charging_ability = false
 		return
@@ -629,6 +552,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 		is_charging_ability = false
 		return
 
+	# FIXED: Validate ability_name property exists
 	if not "ability_name" in bot.current_ability:
 		return
 
@@ -636,46 +560,42 @@ func use_ability_smart(distance_to_target: float) -> void:
 	var should_use: bool = false
 	var should_charge: bool = false
 
-	# Check if ability supports charging
+	# FIXED: Check if ability supports charging
 	var can_charge: bool = false
 	if "supports_charging" in bot.current_ability:
 		can_charge = bot.current_ability.supports_charging and bot.current_ability.max_charge_time > 0.1
 	elif bot.current_ability.has_method("start_charge"):
-		can_charge = true
+		can_charge = true  # Fallback: assume charging if method exists
 
-	# IMPROVED: Ability-specific logic with lead prediction
+	# Ability-specific logic
 	match ability_name:
 		"Cannon":
-			# IMPROVED: Lead prediction for moving targets
-			if target_player and is_instance_valid(target_player):
-				var predicted_distance: float = calculate_lead_distance()
-				if predicted_distance > 4.0 and predicted_distance < 40.0:
-					should_use = randf() < (0.7 + aggression_level * 0.3)  # Use aggression
-					should_charge = false  # Never charge cannon
-			elif distance_to_target > 4.0 and distance_to_target < 40.0:
-				should_use = randf() < 0.6
-				should_charge = false
+			# FIXED: Cannon is instant-fire, NO charging
+			if distance_to_target > 4.0 and distance_to_target < 40.0:
+				should_use = true
+				should_charge = false  # Never charge cannon
 		"Sword":
 			if distance_to_target < 6.0:
-				should_use = randf() < (0.6 + aggression_level * 0.4)
-				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.3 + aggression_level * 0.2)
+				should_use = true
+				should_charge = can_charge and distance_to_target > 3.0 and randf() < 0.35
 		"Dash Attack":
 			if distance_to_target > 4.0 and distance_to_target < 18.0:
-				should_use = randf() < (0.5 + aggression_level * 0.3)
-				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.4 + aggression_level * 0.2)
+				should_use = true
+				should_charge = can_charge and distance_to_target > 8.0 and randf() < 0.45
 		"Explosion":
 			if distance_to_target < 10.0:
-				should_use = randf() < (0.5 + aggression_level * 0.4)
-				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + aggression_level * 0.2)
+				should_use = true
+				should_charge = can_charge and distance_to_target < 7.0 and randf() < 0.5
 		_:
 			if distance_to_target < 20.0:
 				should_use = randf() < 0.5
 
 	# Charging logic
 	if should_use and should_charge and can_charge and not is_charging_ability:
+		# Start charging only if ability supports it
 		if bot.current_ability.has_method("start_charge"):
 			is_charging_ability = true
-			ability_charge_timer = randf_range(0.6, 1.3)
+			ability_charge_timer = randf_range(0.6, 1.3)  # Variable charge time
 			bot.current_ability.start_charge()
 
 	# Release charged ability or use instantly
@@ -687,35 +607,12 @@ func use_ability_smart(distance_to_target: float) -> void:
 			bot.current_ability.use()
 		action_timer = randf_range(0.4, 1.2)
 	elif should_use and not should_charge and not is_charging_ability:
+		# Use immediately without charging
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
 
-func calculate_lead_distance() -> float:
-	"""NEW: Calculate distance for lead prediction (Cannon projectiles)"""
-	if not target_player or not is_instance_valid(target_player):
-		return INF
-
-	# Get target velocity
-	var target_velocity: Vector3 = Vector3.ZERO
-	if "linear_velocity" in target_player:
-		target_velocity = target_player.linear_velocity
-
-	# Skip lead if target not moving much
-	if target_velocity.length() < 2.0:
-		return bot.global_position.distance_to(target_player.global_position)
-
-	# Simple lead prediction: assume projectile speed ~80 (Cannon speed)
-	var projectile_speed: float = 80.0
-	var current_distance: float = bot.global_position.distance_to(target_player.global_position)
-	var time_to_hit: float = current_distance / projectile_speed
-
-	# Predict target position
-	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.5  # 50% prediction
-
-	return bot.global_position.distance_to(predicted_pos)
-
 func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
-	"""IMPROVED: Move bot towards target with obstacle and player avoidance"""
+	"""Move bot towards target with obstacle detection"""
 	if not bot:
 		return
 
@@ -725,27 +622,15 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	var height_diff: float = target_pos.y - bot.global_position.y
 
 	if direction.length() > 0.1:
-		# NEW: Player avoidance - check for nearby players
-		if player_avoidance_timer <= 0.0:
-			var avoidance_force: Vector3 = get_player_avoidance_force()
-			if avoidance_force.length() > 0.1:
-				direction = (direction * 0.7 + avoidance_force * 0.3).normalized()
-			player_avoidance_timer = PLAYER_AVOIDANCE_CHECK_INTERVAL
-
-		# Check for dangerous edges (IMPROVED: increased distance and better braking)
-		if check_for_edge(direction, 4.0):
+		# Check for dangerous edges (FIXED: Better distance)
+		if check_for_edge(direction, 3.0):
 			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
 			if safe_direction != Vector3.ZERO:
 				direction = safe_direction
-				speed_mult *= 0.5  # Slow down more near edges
+				speed_mult *= 0.6
 			else:
-				# No safe direction found - apply emergency braking!
-				if "linear_velocity" in bot:
-					var braking_force: Vector3 = -bot.linear_velocity * 1.5
-					braking_force.y = 0
-					bot.apply_central_force(braking_force)
-				# Also apply backward force
-				bot.apply_central_force(-direction * bot.current_roll_force * 1.2)
+				# No safe direction, back up
+				bot.apply_central_force(-direction * bot.current_roll_force * 0.7)
 				return
 
 		# Check for obstacles
@@ -769,9 +654,11 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 					bot_jump()
 					obstacle_jump_timer = 0.5
 				else:
+					# Back up from wall
 					direction = -direction
 					speed_mult *= 0.5
 			else:
+				# Other obstacle
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
 					obstacle_jump_timer = 0.4
@@ -787,74 +674,6 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
 		bot.apply_central_force(direction * force)
-
-func get_player_avoidance_force() -> Vector3:
-	"""NEW: Calculate avoidance force to prevent player clumping"""
-	var avoidance: Vector3 = Vector3.ZERO
-	var avoidance_radius: float = 3.0  # Meters to avoid
-
-	for player in cached_players:
-		if player == bot or not is_instance_valid(player):
-			continue
-
-		var to_player: Vector3 = player.global_position - bot.global_position
-		var distance: float = to_player.length()
-
-		if distance < avoidance_radius and distance > 0.1:
-			# Repel from player (inverse square)
-			var repel_strength: float = (avoidance_radius - distance) / avoidance_radius
-			avoidance += -to_player.normalized() * repel_strength
-
-	return avoidance.normalized()
-
-func check_nearby_edges() -> void:
-	"""NEW: Proactively check for nearby edges and apply corrective force"""
-	if not bot or not "linear_velocity" in bot:
-		return
-
-	# Check in all cardinal directions for nearby edges
-	var directions_to_check: Array = [
-		Vector3.FORWARD,
-		Vector3.BACK,
-		Vector3.LEFT,
-		Vector3.RIGHT
-	]
-
-	var safe_direction: Vector3 = Vector3.ZERO
-	var closest_edge_distance: float = INF
-
-	for dir in directions_to_check:
-		# Rotate direction based on bot's facing
-		var world_dir: Vector3 = dir.rotated(Vector3.UP, bot.rotation.y)
-		world_dir.y = 0
-
-		# Check if there's an edge in this direction
-		if check_for_edge(world_dir, 3.5):
-			# Edge detected in this direction
-			var edge_distance: float = 3.5  # Approximate distance
-
-			if edge_distance < closest_edge_distance:
-				closest_edge_distance = edge_distance
-				# Safe direction is opposite to the edge
-				safe_direction = -world_dir
-
-	# If we found an edge nearby and bot is moving, apply corrective force
-	if safe_direction != Vector3.ZERO and bot.linear_velocity.length() > 1.0:
-		var horizontal_velocity: Vector3 = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z)
-
-		# Check if bot is moving toward the edge
-		var velocity_dir: Vector3 = horizontal_velocity.normalized()
-		var dot_to_edge: float = velocity_dir.dot(-safe_direction)
-
-		if dot_to_edge > 0.3:  # Moving toward edge
-			# Apply corrective force away from edge
-			var corrective_force: Vector3 = safe_direction * bot.current_roll_force * 0.4
-			bot.apply_central_force(corrective_force)
-
-			# Also apply braking if moving fast toward edge
-			if horizontal_velocity.length() > 5.0:
-				var braking_force: Vector3 = -horizontal_velocity * 0.5
-				bot.apply_central_force(braking_force)
 
 func bot_jump() -> void:
 	"""Make bot jump"""
@@ -873,49 +692,35 @@ func bot_jump() -> void:
 		bot.jump_count += 1
 
 func use_bounce_attack() -> void:
-	"""IMPROVED: Use bounce attack with comprehensive validation"""
+	"""NEW: Use bounce attack for vertical combat/mobility"""
 	if not bot or bounce_cooldown_timer > 0.0:
 		return
 
-	# Comprehensive validation
+	# Check if bot has bounce capability
 	if not bot.has_method("bounce_attack"):
-		return
-
-	# IMPROVED: Check required properties exist
-	if not ("linear_velocity" in bot and "jump_count" in bot):
 		return
 
 	# Trigger bounce attack
 	bot.bounce_attack()
 	bounce_cooldown_timer = BOUNCE_COOLDOWN
-
-func validate_spin_dash_properties() -> bool:
-	"""IMPROVED: Comprehensive spin dash validation"""
-	if not bot or not bot.has_method("execute_spin_dash"):
-		return false
-
-	# Check all required properties exist
-	var required_props: Array = ["is_charging_spin", "spin_cooldown", "is_spin_dashing", "spin_charge", "max_spin_charge"]
-	for prop in required_props:
-		if not prop in bot:
-			return false
-
-	return true
+	last_bounce_time = Time.get_ticks_msec() / 1000.0
 
 func initiate_spin_dash() -> void:
-	"""Initiate spin dash without await in callback"""
-	if not validate_spin_dash_properties():
+	"""FIXED: Initiate spin dash without await in callback"""
+	if not bot or not bot.has_method("execute_spin_dash"):
 		return
 
 	# Start charging
-	bot.is_charging_spin = true
-	bot.spin_charge = randf_range(0.4, bot.max_spin_charge * 0.7)
+	if "is_charging_spin" in bot:
+		bot.is_charging_spin = true
+	if "spin_charge" in bot and "max_spin_charge" in bot:
+		bot.spin_charge = randf_range(0.4, bot.max_spin_charge * 0.7)
 
-	# Schedule release WITHOUT await
+	# Schedule release WITHOUT await (use create_timer with connect)
 	var release_time: float = randf_range(0.25, 0.6)
 	var timer: SceneTreeTimer = get_tree().create_timer(release_time)
 
-	# Use lambda without await
+	# FIXED: Use lambda without await
 	timer.timeout.connect(func():
 		if bot and is_instance_valid(bot) and "is_charging_spin" in bot:
 			bot.is_charging_spin = false
@@ -923,28 +728,23 @@ func initiate_spin_dash() -> void:
 				bot.execute_spin_dash()
 	)
 
-func exit_grind_safely() -> void:
-	"""IMPROVED: Safe grind exit with validation"""
-	if not bot:
-		return
-
-	if bot.has_method("exit_grind"):
-		bot.exit_grind()
-
 func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
-	"""Physics-safe rotation for RigidBody3D using angular velocity"""
+	"""FIXED: Physics-safe rotation for RigidBody3D using angular velocity"""
 	if not bot:
 		return
 
+	# Calculate direction to target (horizontal only)
 	var target_dir: Vector3 = target_position - bot.global_position
 	target_dir.y = 0
 
 	if target_dir.length() < 0.1:
 		return
 
+	# Calculate desired angle
 	var desired_angle: float = atan2(target_dir.x, target_dir.z)
 	var current_angle: float = bot.rotation.y
 
+	# Calculate angular difference
 	var angle_diff: float = desired_angle - current_angle
 
 	# Normalize angle to [-PI, PI]
@@ -953,52 +753,16 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	while angle_diff < -PI:
 		angle_diff += TAU
 
-	# Use angular_velocity for physics-safe rotation
-	var rotation_speed: float = 8.0
+	# FIXED: Use angular_velocity for physics-safe rotation (RigidBody3D)
+	# Scale angular velocity based on angle difference for smooth rotation
+	var rotation_speed: float = 8.0  # Adjust for responsiveness
 	var target_angular_velocity: float = angle_diff * rotation_speed
 
+	# Clamp to reasonable rotation speed
 	target_angular_velocity = clamp(target_angular_velocity, -12.0, 12.0)
 
+	# Apply to bot's angular velocity (Y axis for horizontal rotation)
 	bot.angular_velocity.y = target_angular_velocity
-
-func get_rail_closest_point(rail: Node) -> Vector3:
-	"""IMPROVED: Get closest point on rail curve (Path3D/Curve3D)"""
-	if not rail or not is_instance_valid(rail):
-		return bot.global_position if bot else Vector3.ZERO
-
-	# Check if rail is Path3D with curve
-	if rail is Path3D and rail.curve:
-		var local_pos: Vector3 = rail.to_local(bot.global_position)
-		var closest_offset: float = rail.curve.get_closest_offset(local_pos)
-		var closest_point_local: Vector3 = rail.curve.sample_baked(closest_offset)
-		return rail.to_global(closest_point_local)
-
-	# Fallback to rail position
-	return rail.global_position
-
-func is_target_visible(target_pos: Vector3) -> bool:
-	"""NEW: Check if target is visible (raycast line-of-sight)"""
-	if not bot:
-		return false
-
-	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
-	var start: Vector3 = bot.global_position + Vector3.UP * 0.5
-	var end: Vector3 = target_pos
-
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start, end)
-	query.exclude = [bot]
-	query.collision_mask = 1  # Only world geometry blocks
-
-	var result: Dictionary = space_state.intersect_ray(query)
-
-	# Visible if no hit or hit is very close to target (within pickup range)
-	if not result:
-		return true
-
-	var hit_distance: float = start.distance_to(result.position)
-	var target_distance: float = start.distance_to(target_pos)
-
-	return hit_distance >= target_distance - 1.0
 
 func find_target() -> void:
 	"""Find nearest player using cached groups"""
@@ -1017,7 +781,7 @@ func find_target() -> void:
 	target_player = closest_player
 
 func find_nearest_ability() -> void:
-	"""IMPROVED: Find nearest visible ability"""
+	"""Find nearest ability using cached groups"""
 	var closest_ability: Node = null
 	var closest_distance: float = INF
 
@@ -1027,15 +791,13 @@ func find_nearest_ability() -> void:
 
 		var distance: float = bot.global_position.distance_to(ability.global_position)
 		if distance < closest_distance:
-			# Prefer visible abilities
-			if is_target_visible(ability.global_position) or distance < 20.0:
-				closest_distance = distance
-				closest_ability = ability
+			closest_distance = distance
+			closest_ability = ability
 
 	target_ability = closest_ability
 
 func find_nearest_orb() -> void:
-	"""IMPROVED: Find nearest visible orb"""
+	"""Find nearest orb using cached groups"""
 	var closest_orb: Node = null
 	var closest_distance: float = INF
 
@@ -1047,15 +809,13 @@ func find_nearest_orb() -> void:
 
 		var distance: float = bot.global_position.distance_to(orb.global_position)
 		if distance < closest_distance:
-			# Prefer visible orbs
-			if is_target_visible(orb.global_position) or distance < 15.0:
-				closest_distance = distance
-				closest_orb = orb
+			closest_distance = distance
+			closest_orb = orb
 
 	target_orb = closest_orb
 
 func find_nearest_rail() -> void:
-	"""IMPROVED: Find nearest rail with curve-aware distance"""
+	"""NEW: Find nearest rail for grinding"""
 	var closest_rail: Node = null
 	var closest_distance: float = INF
 
@@ -1063,9 +823,8 @@ func find_nearest_rail() -> void:
 		if not is_instance_valid(rail):
 			continue
 
-		var rail_point: Vector3 = get_rail_closest_point(rail)
-		var distance: float = bot.global_position.distance_to(rail_point)
-		if distance < closest_distance and distance < 20.0:
+		var distance: float = bot.global_position.distance_to(rail.global_position)
+		if distance < closest_distance and distance < 20.0:  # Only consider nearby rails
 			closest_distance = distance
 			closest_rail = rail
 
@@ -1075,8 +834,8 @@ func find_nearest_rail() -> void:
 ## OBSTACLE DETECTION AND AVOIDANCE
 ## ============================================================================
 
-func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
-	"""IMPROVED: Check for dangerous edge/drop-off with momentum compensation"""
+func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
+	"""Check for dangerous edge/drop-off"""
 	if not bot:
 		return false
 
@@ -1097,16 +856,8 @@ func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
 
 	var current_ground_y: float = current_result.position.y
 
-	# IMPROVED: Increase check distance based on bot's velocity (momentum compensation)
-	var velocity_multiplier: float = 1.0
-	if "linear_velocity" in bot:
-		var horizontal_speed: float = Vector2(bot.linear_velocity.x, bot.linear_velocity.z).length()
-		velocity_multiplier = 1.0 + min(horizontal_speed / 20.0, 1.5)  # Up to 2.5x for fast bots
-
-	var adjusted_check_distance: float = check_distance * velocity_multiplier
-
 	# Check ahead for edges
-	var forward_point: Vector3 = bot.global_position + direction.normalized() * adjusted_check_distance
+	var forward_point: Vector3 = bot.global_position + direction.normalized() * check_distance
 	var ray_start: Vector3 = forward_point + Vector3.UP * 0.5
 	var ray_end: Vector3 = forward_point + Vector3.DOWN * 10.0
 
@@ -1119,11 +870,11 @@ func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
 	if not result:
 		return true
 
+	# Check drop height (FIXED: Better threshold)
 	var ahead_ground_y: float = result.position.y
 	var ground_drop: float = current_ground_y - ahead_ground_y
 
-	# IMPROVED: Lower threshold from 4.5 to 3.0 for more sensitive edge detection
-	return ground_drop > 3.0
+	return ground_drop > 4.5  # Significant drop
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""Find safe direction away from edge"""
@@ -1148,7 +899,7 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Optimized for HTML5: 4 raycasts instead of 6
+	# FIXED: Reduced raycast count for HTML5 performance (was 6, now 4)
 	var check_heights: Array = [0.2, 0.5, 1.0, 1.8]
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
@@ -1193,6 +944,7 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			is_wall = true
 
 		# Determine if bot can jump over
+		var distance_to_obstacle: float = bot.global_position.distance_to(closest_hit)
 		var can_jump: bool = false
 
 		if is_slope or is_platform:
@@ -1219,10 +971,12 @@ func check_target_timeout(delta: float) -> void:
 	if not bot:
 		return
 
+	# FIXED: Also check CHASE and ATTACK states (was only collect states)
 	if state in ["COLLECT_ABILITY", "COLLECT_ORB", "CHASE", "ATTACK"]:
 		var current_pos: Vector3 = bot.global_position
 		var distance_moved: float = current_pos.distance_to(target_stuck_position)
 
+		# FIXED: Better threshold (was 0.5)
 		if distance_moved < 0.8:
 			target_stuck_timer += delta
 
@@ -1233,6 +987,7 @@ func check_target_timeout(delta: float) -> void:
 				elif state == "COLLECT_ORB":
 					target_orb = null
 				elif state in ["CHASE", "ATTACK"]:
+					# Find different target
 					find_target()
 
 				target_stuck_timer = 0.0
@@ -1245,7 +1000,7 @@ func check_target_timeout(delta: float) -> void:
 		target_stuck_position = bot.global_position
 
 func check_if_stuck() -> void:
-	"""Better stuck detection with improved thresholds"""
+	"""FIXED: Better stuck detection with improved thresholds"""
 	if not bot:
 		return
 
@@ -1254,6 +1009,7 @@ func check_if_stuck() -> void:
 
 	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB", "GRIND"]
 
+	# FIXED: Better threshold (was 0.15)
 	if distance_moved < 0.25 and is_trying_to_move:
 		consecutive_stuck_checks += 1
 
@@ -1264,7 +1020,7 @@ func check_if_stuck() -> void:
 			is_stuck = false
 			return
 
-		# Trigger stuck state after 3 checks
+		# Trigger stuck state (FIXED: After 3 checks instead of 2)
 		if consecutive_stuck_checks >= 3 and not is_stuck:
 			is_stuck = true
 			unstuck_timer = randf_range(1.2, 2.2)
@@ -1279,6 +1035,7 @@ func check_if_stuck() -> void:
 			else:
 				obstacle_avoid_direction = opposite_dir
 	else:
+		# Reset if moved well (FIXED: Better threshold, was 0.3)
 		if distance_moved > 0.5:
 			consecutive_stuck_checks = 0
 			is_stuck = false
@@ -1304,10 +1061,11 @@ func is_stuck_under_terrain() -> bool:
 	return result.size() > 0
 
 func teleport_to_safe_position() -> void:
-	"""Teleport using world.spawns instead of bot.spawns"""
+	"""FIXED: Teleport using world.spawns instead of bot.spawns"""
 	if not bot or not is_instance_valid(bot):
 		return
 
+	# FIXED: Get spawns from world.gd (procedural spawn points)
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if not world:
 		return
@@ -1319,13 +1077,14 @@ func teleport_to_safe_position() -> void:
 		spawns = level_gen.spawn_points
 	elif "spawns" in world:
 		spawns = world.spawns
-	elif "spawns" in bot:
+	elif "spawns" in bot:  # Fallback to bot's spawns
 		spawns = bot.spawns
 
 	if spawns.size() > 0:
 		var spawn_index: int = randi() % spawns.size()
 		var spawn_pos: Vector3 = spawns[spawn_index]
 
+		# Teleport
 		bot.global_position = spawn_pos
 		bot.linear_velocity = Vector3.ZERO
 		bot.angular_velocity = Vector3.ZERO
@@ -1349,23 +1108,11 @@ func handle_unstuck_movement(delta: float) -> void:
 		if bot.jump_count < bot.max_jumps and randf() < jump_chance:
 			bot_jump()
 
-	# Use spin dash to break free
-	if unstuck_timer > 0.4 and validate_spin_dash_properties():
-		if not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.2:
-			initiate_spin_dash()
-
-	# IMPROVED: Try grind if stuck near rail
-	if target_rail and is_instance_valid(target_rail) and randf() < 0.15:
-		var rail_point: Vector3 = get_rail_closest_point(target_rail)
-		var dist_to_rail: float = bot.global_position.distance_to(rail_point)
-		if dist_to_rail < 8.0:
-			# Try grinding to escape
-			state = "GRIND"
-			grinding_timer = 0.0
-			is_stuck = false
-			unstuck_timer = 0.0
-			consecutive_stuck_checks = 0
-			return
+	# Use spin dash to break free (FIXED: No await in callback)
+	if unstuck_timer > 0.4 and bot.has_method("execute_spin_dash"):
+		if "is_charging_spin" in bot and "spin_cooldown" in bot:
+			if not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.2:
+				initiate_spin_dash()
 
 	# Change direction periodically
 	var time_slot: int = int(unstuck_timer * 10)
@@ -1383,6 +1130,7 @@ func handle_unstuck_movement(delta: float) -> void:
 		unstuck_timer = 0.0
 		consecutive_stuck_checks = 0
 
+		# Escape to new area
 		if state in ["CHASE", "ATTACK"]:
 			var escape_angle: float = randf() * TAU
 			var escape_distance: float = randf_range(12.0, 22.0)
