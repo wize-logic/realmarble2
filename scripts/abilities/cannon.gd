@@ -73,8 +73,14 @@ func find_nearest_player() -> Node3D:
 		# Fallback to camera_arm
 		forward_direction = -camera_arm.global_transform.basis.z
 	else:
-		# Fallback for bots: use player's facing direction (horizontal for bots)
-		forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+		# For bots: try to get direction from BotAI target, else use rotation
+		var bot_ai: Node = player.get_node_or_null("BotAI")
+		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+			# Use direction to bot's current target
+			forward_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+		else:
+			# Final fallback: use player's facing direction (horizontal for bots)
+			forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	forward_direction = forward_direction.normalized()
 
@@ -153,8 +159,14 @@ func activate() -> void:
 			# Fallback to camera_arm if camera not found
 			fire_direction = -camera_arm.global_transform.basis.z
 		else:
-			# Fallback for bots: use player's facing direction
-			fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+			# For bots: try to aim at their current target even if not in auto-aim cone
+			var bot_ai: Node = player.get_node_or_null("BotAI")
+			if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+				# Aim at bot's target (full 3D)
+				fire_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+			else:
+				# Final fallback: use player's facing direction
+				fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 		# Flatten to horizontal plane for manual aim (no up/down)
 		fire_direction.y = 0
