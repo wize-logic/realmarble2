@@ -867,10 +867,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if Input.is_action_just_pressed("use_ability"):
 		# Check if we're targeting a rail and can attach
 		if targeted_rail and not is_grinding:
+			print("[RAIL] E pressed - attempting to attach to ", targeted_rail.name)
 			if targeted_rail.has_method("try_attach_player"):
 				if targeted_rail.try_attach_player(self):
-					print("Attached to rail via E key!")
+					print("[RAIL] Successfully attached to rail via E key!")
 					return  # Don't use ability
+				else:
+					print("[RAIL] Failed to attach to rail")
+			else:
+				print("[RAIL] Rail doesn't have try_attach_player method")
 
 		# Otherwise, start charging the ability
 		if current_ability and current_ability.has_method("start_charge"):
@@ -1891,7 +1896,12 @@ func update_rail_targeting() -> void:
 			world = get_parent()
 
 		if world:
+			var prev_count: int = cached_rails.size()
 			cached_rails = find_all_rails(world)
+			if prev_count == 0 and cached_rails.size() > 0:
+				print("[RAIL] Found ", cached_rails.size(), " rails in scene")
+			elif cached_rails.size() == 0:
+				print("[RAIL] WARNING: No rails found in scene!")
 			rails_cache_timer = 0.0
 
 	# Clean up invalid rails from cache
@@ -1941,7 +1951,11 @@ func update_rail_targeting() -> void:
 						closest_distance = projection
 
 	# Update targeted rail and prompt visibility
+	var prev_targeted: GrindRail = targeted_rail
 	targeted_rail = found_rail
+
+	if targeted_rail and not prev_targeted:
+		print("[RAIL] Targeting rail: ", targeted_rail.name)
 
 	if targeted_rail:
 		rail_reticle_ui.visible = true

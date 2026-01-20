@@ -346,10 +346,17 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		# For local player, use Input singleton
 		is_shift_held = Input.is_action_pressed("spin_dash")
 
+	# Debug logging for shift boost
+	if is_shift_held and data.shift_boost_amount == 0.0:
+		print("[RAIL] Shift held - starting boost buildup")
+
 	# Update shift boost amount
 	if is_shift_held:
 		# Gradually increase boost when shift is held
+		var prev_boost: float = data.shift_boost_amount
 		data.shift_boost_amount = min(data.shift_boost_amount + shift_boost_acceleration * delta, shift_boost_max)
+		if int(prev_boost / 1000.0) != int(data.shift_boost_amount / 1000.0):  # Log every 1000 units
+			print("[RAIL] Boost building: ", snapped(data.shift_boost_amount, 100), " / ", shift_boost_max)
 	else:
 		# Gradually decay boost when shift is released
 		data.shift_boost_amount = max(data.shift_boost_amount - shift_boost_decay_rate * delta, 0.0)
