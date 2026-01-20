@@ -2288,16 +2288,14 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 	print("[NOTIFY_KILL] Victim name: ", victim_name)
 
 	# Find the HUD and show kill notification
-	var ui_layer: CanvasLayer = world.get_node_or_null("UI")
-	print("[NOTIFY_KILL] UI layer found: ", ui_layer != null)
-	if ui_layer:
-		var game_hud = ui_layer.get_node_or_null("GameHUD")
-		print("[NOTIFY_KILL] GameHUD found: ", game_hud != null)
-		if game_hud and game_hud.has_method("show_kill_notification"):
-			print("[NOTIFY_KILL] Calling show_kill_notification for: ", victim_name)
-			game_hud.show_kill_notification(victim_name)
-		else:
-			print("[NOTIFY_KILL] ERROR: GameHUD or method not found!")
+	# HUD is at GameHUD/HUD path (see world.gd line 11)
+	var game_hud = world.get_node_or_null("GameHUD/HUD")
+	print("[NOTIFY_KILL] GameHUD found: ", game_hud != null)
+	if game_hud and game_hud.has_method("show_kill_notification"):
+		print("[NOTIFY_KILL] Calling show_kill_notification for: ", victim_name)
+		game_hud.show_kill_notification(victim_name)
+	else:
+		print("[NOTIFY_KILL] ERROR: GameHUD or method not found!")
 
 func notify_killstreak(player_id: int, streak: int) -> void:
 	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
@@ -2310,9 +2308,8 @@ func notify_killstreak(player_id: int, streak: int) -> void:
 		return
 
 	# Find the HUD and show killstreak notification
-	var ui_layer: CanvasLayer = world.get_node_or_null("UI")
-	if ui_layer:
-		var game_hud = ui_layer.get_node_or_null("GameHUD")
-		if game_hud and game_hud.has_method("show_killstreak_notification"):
-			print("Calling show_killstreak_notification for streak: ", streak)
-			game_hud.show_killstreak_notification(streak)
+	# HUD is at GameHUD/HUD path (see world.gd line 11)
+	var game_hud = world.get_node_or_null("GameHUD/HUD")
+	if game_hud and game_hud.has_method("show_killstreak_notification"):
+		print("Calling show_killstreak_notification for streak: ", streak)
+		game_hud.show_killstreak_notification(streak)
