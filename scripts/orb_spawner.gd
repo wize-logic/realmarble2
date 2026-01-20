@@ -13,6 +13,9 @@ const OrbScene = preload("res://collectible_orb.tscn")
 @export var respawn_interval: float = 7.0  # Respawn every 7 seconds (reduced from 10)
 @export var respawn_at_random_location: bool = true
 
+# Spawn spacing
+const MIN_SPAWN_DISTANCE: float = 8.0  # Minimum distance between spawned items
+
 var spawned_orbs: Array[Area3D] = []
 var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -73,37 +76,72 @@ func spawn_orbs() -> void:
 
 	print("=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
 
+func is_position_too_close_to_existing(pos: Vector3) -> bool:
+	"""Check if a position is too close to existing orbs or ability pickups"""
+	# Check distance to all existing orbs
+	for orb in spawned_orbs:
+		if orb and is_instance_valid(orb):
+			var distance: float = pos.distance_to(orb.global_position)
+			if distance < MIN_SPAWN_DISTANCE:
+				return true
+
+	# Also check distance to abilities to prevent overlap
+	var abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in abilities:
+		if ability and is_instance_valid(ability):
+			var distance: float = pos.distance_to(ability.global_position)
+			if distance < MIN_SPAWN_DISTANCE:
+				return true
+
+	return false
+
 func get_random_spawn_position() -> Vector3:
-	"""Generate a random position on top of the ground"""
+	"""Generate a random position on top of the ground with spacing from other items"""
 	const DEATH_ZONE_Y: float = -50.0  # Death zone position
 	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
+	const MAX_ATTEMPTS: int = 30  # Maximum attempts to find a valid position
 
-	# Generate random X and Z within bounds
-	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
-	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
+	var attempts: int = 0
+	var spawn_pos: Vector3 = Vector3.ZERO
 
-	# Raycast from high up to find the ground
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
-	var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
+	while attempts < MAX_ATTEMPTS:
+		# Generate random X and Z within bounds
+		var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
+		var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
-	query.collision_mask = 1  # Only check world geometry (layer 1)
-	query.collide_with_areas = false
-	query.collide_with_bodies = true
+		# Raycast from high up to find the ground
+		var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+		var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
+		var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
 
-	var result: Dictionary = space_state.intersect_ray(query)
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+		query.collision_mask = 1  # Only check world geometry (layer 1)
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
 
-	if result:
-		# Found ground - check if it's in death zone
-		var spawn_y: float = result.position.y + 1.0
-		if spawn_y < MIN_SAFE_Y:
-			# Too close to death zone - use safe fallback position
-			return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
-		return result.position + Vector3.UP * 1.0
-	else:
-		# No ground found - use middle Y as fallback
-		return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result:
+			# Found ground - check if it's in death zone
+			var spawn_y: float = result.position.y + 1.0
+			if spawn_y < MIN_SAFE_Y:
+				# Too close to death zone - try again
+				attempts += 1
+				continue
+			spawn_pos = result.position + Vector3.UP * 1.0
+		else:
+			# No ground found - use middle Y as fallback
+			spawn_pos = Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
+
+		# Check if this position is far enough from existing items
+		if not is_position_too_close_to_existing(spawn_pos):
+			return spawn_pos
+
+		attempts += 1
+
+	# If we couldn't find a valid position after max attempts, return the last position anyway
+	# This prevents infinite loops while still trying to space items out
+	return spawn_pos
 
 func spawn_orb_at_position(pos: Vector3) -> void:
 	"""Spawn a single orb at the given position"""
