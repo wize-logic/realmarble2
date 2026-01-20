@@ -918,7 +918,7 @@ func check_if_stuck() -> void:
 
 		# EMERGENCY: Teleport bot if stuck for too long (prevents infinite stuck loops)
 		if consecutive_stuck_checks >= MAX_STUCK_ATTEMPTS:
-				teleport_to_safe_position()
+			teleport_to_safe_position()
 			consecutive_stuck_checks = 0
 			is_stuck = false
 			return
