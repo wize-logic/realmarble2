@@ -222,12 +222,11 @@ func activate() -> void:
 		slash_direction.y = 0
 		slash_direction = slash_direction.normalized()
 	else:
-		# For bots: aim directly at their current target for accurate hits
+		# For bots: aim directly at their current target for accurate hits (full 3D aiming)
 		var bot_ai: Node = player.get_node_or_null("BotAI")
 		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Aim at bot's target
+			# Aim at bot's target in full 3D (no y-flattening for near-perfect vertical aim)
 			slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			slash_direction.y = 0
 			if slash_direction.length() < 0.1:
 				# Target too close, use rotation fallback
 				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))

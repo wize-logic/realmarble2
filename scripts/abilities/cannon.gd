@@ -141,12 +141,12 @@ func activate() -> void:
 	if nearest_player:
 		# AUTO-AIM: Aim at the nearest player's position in FULL 3D (including up/down)
 		var target_pos = nearest_player.global_position
-		# Predict where the player will be based on their velocity (50% prediction for improved accuracy)
+		# Predict where the player will be based on their velocity (95% prediction for near-perfect accuracy)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
 			var time_to_hit = distance / speed
-			# Increased prediction for better accuracy
-			target_pos += nearest_player.linear_velocity * time_to_hit * 0.5
+			# Increased prediction for near-perfect accuracy
+			target_pos += nearest_player.linear_velocity * time_to_hit * 0.95
 
 		# Calculate direction to target (full 3D - can aim up or down at targets)
 		fire_direction = (target_pos - player.global_position).normalized()

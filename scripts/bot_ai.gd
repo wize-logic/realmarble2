@@ -108,8 +108,8 @@ func _ready() -> void:
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
 
-	# Randomize aggression for personality variety
-	aggression_level = randf_range(0.5, 0.9)
+	# Randomize aggression for personality variety (high values for near-perfect aim consistency)
+	aggression_level = randf_range(0.9, 1.0)
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -646,23 +646,23 @@ func use_ability_smart(distance_to_target: float) -> void:
 	# IMPROVED: Ability-specific logic with lead prediction
 	match ability_name:
 		"Cannon":
-			# IMPROVED: Lead prediction for moving targets
+			# IMPROVED: Lead prediction for moving targets with near-perfect usage frequency
 			if target_player and is_instance_valid(target_player):
 				var predicted_distance: float = calculate_lead_distance()
 				if predicted_distance > 4.0 and predicted_distance < 40.0:
-					should_use = randf() < (0.7 + aggression_level * 0.3)  # Use aggression
+					should_use = randf() < (0.85 + aggression_level * 0.15)  # Near-perfect usage (85-100%)
 					should_charge = false  # Never charge cannon
 			elif distance_to_target > 4.0 and distance_to_target < 40.0:
-				should_use = randf() < 0.6
+				should_use = randf() < 0.9
 				should_charge = false
 		"Sword":
 			if distance_to_target < 6.0:
-				should_use = randf() < (0.6 + aggression_level * 0.4)
-				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.3 + aggression_level * 0.2)
+				should_use = randf() < (0.8 + aggression_level * 0.2)  # Near-perfect usage (80-100%)
+				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + aggression_level * 0.3)
 		"Dash Attack":
 			if distance_to_target > 4.0 and distance_to_target < 18.0:
-				should_use = randf() < (0.5 + aggression_level * 0.3)
-				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.4 + aggression_level * 0.2)
+				should_use = randf() < (0.7 + aggression_level * 0.3)  # Near-perfect usage (70-100%)
+				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + aggression_level * 0.3)
 		"Explosion":
 			# Use explosion only at close range (was 10.0, now 8.0 for proper close-range AoE usage)
 			if distance_to_target < 8.0:
@@ -711,7 +711,7 @@ func calculate_lead_distance() -> float:
 	var time_to_hit: float = current_distance / projectile_speed
 
 	# Predict target position
-	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.5  # 50% prediction
+	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.95  # 95% prediction for near-perfect aim
 
 	return bot.global_position.distance_to(predicted_pos)
 
