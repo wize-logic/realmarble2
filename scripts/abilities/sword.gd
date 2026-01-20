@@ -20,6 +20,9 @@ var slash_hitbox: Area3D = null
 # Slash visual effect
 var slash_particles: CPUParticles3D = null
 
+# Arc indicator for sword swing range
+var arc_indicator: MeshInstance3D = null
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Sword"
@@ -105,6 +108,9 @@ func _ready() -> void:
 	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
 
+	# Create arc indicator for sword swing range
+	create_arc_indicator()
+
 func _process(delta: float) -> void:
 	super._process(delta)
 
@@ -114,6 +120,53 @@ func _process(delta: float) -> void:
 		if slash_timer <= 0.0:
 			# End slash
 			end_slash()
+
+	# Update arc indicator visibility and orientation based on charging state
+	if arc_indicator and player and is_instance_valid(player) and player.is_inside_tree():
+		if is_charging:
+			# Show indicator while charging
+			if not arc_indicator.is_inside_tree():
+				# Add indicator to world if not already added
+				if player.get_parent():
+					player.get_parent().add_child(arc_indicator)
+
+			arc_indicator.visible = true
+
+			# Get player's camera/movement direction
+			var camera_arm: Node3D = player.get_node_or_null("CameraArm")
+			var slash_direction: Vector3 = Vector3.FORWARD
+
+			if camera_arm:
+				# Arc in camera forward direction
+				slash_direction = -camera_arm.global_transform.basis.z
+				slash_direction.y = 0
+				slash_direction = slash_direction.normalized()
+			else:
+				# Fallback for bots: use player's facing direction
+				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+			# Position at player's feet, offset in slash direction
+			var indicator_position = player.global_position + slash_direction * (slash_range / 2)
+			indicator_position.y = 0.15  # Slightly above ground
+			arc_indicator.global_position = indicator_position
+
+			# Orient indicator to face slash direction
+			arc_indicator.look_at(player.global_position + slash_direction * 5.0, Vector3.UP)
+
+			# Scale based on charge level (larger arc for higher charge)
+			var scale_factor = 1.0 + (charge_level - 1) * 0.2
+			arc_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
+
+			# Pulse effect while charging
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.12
+			arc_indicator.scale *= pulse
+		else:
+			# Hide indicator when not charging
+			arc_indicator.visible = false
+	else:
+		# Player is invalid - hide indicator
+		if arc_indicator:
+			arc_indicator.visible = false
 
 func activate() -> void:
 	if not player:
@@ -238,3 +291,101 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func create_arc_indicator() -> void:
+	"""Create an arc indicator that shows the sword swing range while charging"""
+	arc_indicator = MeshInstance3D.new()
+	arc_indicator.name = "SwordArcIndicator"
+
+	# Create a partial cylinder (arc) mesh for the swing range
+	# We'll use a TorusMesh and scale it to create an arc-like appearance
+	var torus: TorusMesh = TorusMesh.new()
+	torus.inner_radius = slash_range - 0.3
+	torus.outer_radius = slash_range + 0.3
+	torus.rings = 24
+	torus.ring_segments = 8
+	arc_indicator.mesh = torus
+
+	# Create material - subtle blue, transparent with additive blending
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.7, 0.8, 1.0, 0.35)  # Light blue, 35% opacity
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	mat.disable_fog = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	arc_indicator.material_override = mat
+
+	# Rotate to be horizontal (ground plane)
+	arc_indicator.rotation_degrees = Vector3(90, 0, 0)
+
+	# Add particles along the arc for extra visual feedback
+	var arc_particles: CPUParticles3D = CPUParticles3D.new()
+	arc_particles.name = "ArcParticles"
+	arc_indicator.add_child(arc_particles)
+
+	# Configure particles - flowing along the arc
+	arc_particles.emitting = true
+	arc_particles.amount = 25
+	arc_particles.lifetime = 0.8
+	arc_particles.explosiveness = 0.0
+	arc_particles.randomness = 0.15
+	arc_particles.local_coords = true
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.15, 0.15)
+	arc_particles.mesh = particle_mesh
+
+	# Create material for particles
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	arc_particles.mesh.material = particle_material
+
+	# Emission shape - ring (arc) around the sword
+	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	arc_particles.emission_ring_axis = Vector3(0, 1, 0)
+	arc_particles.emission_ring_height = 0.1
+	arc_particles.emission_ring_radius = slash_range
+	arc_particles.emission_ring_inner_radius = slash_range - 0.5
+
+	# Movement - orbit around the arc
+	arc_particles.direction = Vector3(0, 0, 0)
+	arc_particles.spread = 0.0
+	arc_particles.gravity = Vector3.ZERO
+	arc_particles.initial_velocity_min = 0.4
+	arc_particles.initial_velocity_max = 1.0
+
+	# Size
+	arc_particles.scale_amount_min = 1.0
+	arc_particles.scale_amount_max = 1.5
+
+	# Color - blue gradient (steel blue)
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.9, 0.95, 1.0, 0.9))  # Bright white-blue
+	gradient.add_point(0.5, Color(0.7, 0.8, 1.0, 0.7))   # Light blue
+	gradient.add_point(1.0, Color(0.5, 0.6, 0.9, 0.0))   # Transparent
+	arc_particles.color_ramp = gradient
+
+	# Initially hidden (will show when charging)
+	arc_indicator.visible = false
+
+func drop() -> void:
+	"""Override drop to clean up indicator"""
+	# Call parent drop first to handle ability drop logic
+	if has_method("super"):
+		super.drop()
+	cleanup_indicator()
+
+func cleanup_indicator() -> void:
+	"""Clean up the indicator when ability is dropped or destroyed"""
+	if arc_indicator and is_instance_valid(arc_indicator):
+		if arc_indicator.is_inside_tree():
+			arc_indicator.queue_free()
+		arc_indicator = null
