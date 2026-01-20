@@ -62,8 +62,8 @@ const STATE_TRANSITION_DELAY: float = 0.3  # Only check state transitions every 
 # Ability preferences based on situation and hitbox awareness
 const CANNON_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
-const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
-const EXPLOSION_OPTIMAL_RANGE: float = 6.0
+const DASH_ATTACK_OPTIMAL_RANGE: float = 10.0  # Can attack from ~9.5 units with level 1
+const EXPLOSION_OPTIMAL_RANGE: float = 2.5  # Need to get CLOSE for AOE centered on self
 
 # Ability hitbox sizes at different charge levels (for accurate positioning)
 # Format: [charge_1, charge_2, charge_3]
@@ -451,16 +451,11 @@ func do_attack(delta: float) -> void:
 
 	# Calculate distance buffer based on optimal range and ability hitbox
 	# Short-range weapons need tighter buffers, long-range can have larger buffers
-	# For explosion, use larger buffer to account for AoE radius
 	var distance_buffer: float = max(1.0, optimal_distance * 0.3)  # 30% of optimal, minimum 1.0
+
+	# For explosion, use tighter buffer since we want to get very close
 	if ability_name == "Explosion":
-		# Use the explosion radius as the buffer instead
-		if distance_to_target > 7.5:
-			distance_buffer = 2.5  # Buffer for level 3 explosion (10.0 radius)
-		elif distance_to_target > 5.0:
-			distance_buffer = 2.0  # Buffer for level 2 explosion (7.5 radius)
-		else:
-			distance_buffer = 1.5  # Buffer for level 1 explosion (5.0 radius)
+		distance_buffer = 0.5  # Very tight buffer - get as close as possible
 
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + distance_buffer:
@@ -626,14 +621,10 @@ func get_optimal_combat_distance() -> float:
 
 		match ability_name:
 			"Explosion":
-				# Position based on intended charge level for optimal coverage
-				# If target is far, position for charged explosion (larger radius)
-				if distance_to_target > 7.5:
-					return 8.0  # Position for level 3 charge (10.0 radius)
-				elif distance_to_target > 5.0:
-					return 6.0  # Position for level 2 charge (7.5 radius)
-				else:
-					return 4.5  # Position for level 1 (5.0 radius)
+				# Explosion is AOE centered on bot - need to GET CLOSE to target!
+				# The closer we are, the more likely we hit
+				# Optimal: Get within 2-3 units for guaranteed hit at any charge level
+				return 2.5  # Get very close for explosion
 			"Sword":
 				# Position based on sword range and charge
 				if distance_to_target > 3.6:
@@ -694,9 +685,10 @@ func will_hitbox_reach_target(ability_name: String, charge_level: int, distance_
 		"Dash Attack":
 			# Dash has hitbox but also moves toward target
 			# Dash hitbox radii: [1.5, 1.95, 2.4]
-			# Plus dash travel distance based on charge (roughly 5-15 units)
+			# Dash physics: 130 base force * charge_mult (1.0, 1.5, 2.0) over 0.4s
+			# Travel distance estimates based on physics (conservative):
 			var dash_radius: float = DASH_HITBOX_RADII[charge_level - 1]
-			var dash_travel: float = 5.0 + (charge_level - 1) * 5.0  # ~5, 10, 15 units
+			var dash_travel: float = 8.0 + (charge_level - 1) * 4.0  # ~8, 12, 16 units (more accurate)
 			var effective_range: float = dash_travel + dash_radius
 			return distance_to_target <= effective_range
 		"Cannon":
@@ -734,10 +726,10 @@ func determine_optimal_charge_level(ability_name: String, distance_to_target: fl
 				return 0  # Out of range
 		"Dash Attack":
 			# Dash benefits from charging for distance and damage
-			# Always prefer charge level 2-3 for reliability
-			var dash_radius_1: float = DASH_HITBOX_RADII[0] + 5.0   # ~6.5
-			var dash_radius_2: float = DASH_HITBOX_RADII[1] + 10.0  # ~12
-			var dash_radius_3: float = DASH_HITBOX_RADII[2] + 15.0  # ~17.4
+			# Updated with more accurate travel estimates (8, 12, 16 units)
+			var dash_radius_1: float = DASH_HITBOX_RADII[0] + 8.0   # 1.5 + 8 = ~9.5
+			var dash_radius_2: float = DASH_HITBOX_RADII[1] + 12.0  # 1.95 + 12 = ~14
+			var dash_radius_3: float = DASH_HITBOX_RADII[2] + 16.0  # 2.4 + 16 = ~18.4
 
 			if distance_to_target <= dash_radius_1:
 				return 1
