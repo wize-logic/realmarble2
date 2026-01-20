@@ -172,9 +172,13 @@ func _process(delta: float) -> void:
 			end_explosion()
 
 	# Update radius indicator visibility and scale based on charging state
+	# MULTIPLAYER FIX: Only show indicator to the local player using the ability
 	if radius_indicator and player and is_instance_valid(player) and player.is_inside_tree():
-		if is_charging:
-			# Show indicator while charging
+		# Check if this player is the local player (has multiplayer authority)
+		var is_local_player: bool = player.is_multiplayer_authority()
+
+		if is_charging and is_local_player:
+			# Show indicator while charging (only to local player)
 			if not radius_indicator.is_inside_tree():
 				# Add indicator to world if not already added
 				if player.get_parent():
@@ -217,7 +221,7 @@ func _process(delta: float) -> void:
 			# Rotate indicator slowly for visual effect
 			radius_indicator.rotation.y += delta * 0.5
 		else:
-			# Hide indicator when not charging
+			# Hide indicator when not charging or not local player
 			radius_indicator.visible = false
 	else:
 		# Player is invalid - hide indicator
