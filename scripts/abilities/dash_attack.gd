@@ -151,8 +151,27 @@ func _process(delta: float) -> void:
 				target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in dash direction
-			var indicator_position = player.global_position + target_direction * 2.0
-			indicator_position.y = 0.15  # Slightly above ground
+			# Use raycasting to find ground below the indicator position
+			var base_position = player.global_position + target_direction * 2.0
+			var indicator_position = base_position
+
+			# Raycast downward to find ground below player
+			var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+				base_position + Vector3.UP * 50.0,  # Start well above
+				base_position + Vector3.DOWN * 100.0  # Check far below
+			)
+			query.exclude = [player]
+			query.collision_mask = 1  # Only check world geometry (layer 1)
+			var result: Dictionary = space_state.intersect_ray(query)
+
+			if result:
+				# Ground found - position indicator slightly above it
+				indicator_position = result.position + Vector3.UP * 0.15
+			else:
+				# No ground found - keep at player's Y level
+				indicator_position.y = player.global_position.y
+
 			direction_indicator.global_position = indicator_position
 
 			# Orient indicator to point in dash direction

@@ -38,10 +38,10 @@ func _ready() -> void:
 	slash_hitbox.collision_mask = 2  # Detect players (layer 2)
 	add_child(slash_hitbox)
 
-	# Create a box-shaped hitbox in front of player
+	# Create a box-shaped hitbox in front of player - flat and horizontal, no upward extension
 	var collision_shape: CollisionShape3D = CollisionShape3D.new()
 	var box_shape: BoxShape3D = BoxShape3D.new()
-	box_shape.size = Vector3(slash_range * 2, 2.0, slash_range)  # Wide horizontal slash
+	box_shape.size = Vector3(slash_range * 2, 0.3, slash_range)  # Wide horizontal slash, minimal height
 	collision_shape.shape = box_shape
 	collision_shape.position = Vector3(0, 0, -slash_range / 2)  # Position in front of player
 	slash_hitbox.add_child(collision_shape)
@@ -146,8 +146,27 @@ func _process(delta: float) -> void:
 				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in slash direction
-			var indicator_position = player.global_position + slash_direction * (slash_range / 2)
-			indicator_position.y = 0.15  # Slightly above ground
+			# Use raycasting to find ground below the indicator position
+			var base_position = player.global_position + slash_direction * (slash_range / 2)
+			var indicator_position = base_position
+
+			# Raycast downward to find ground below player
+			var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+				base_position + Vector3.UP * 50.0,  # Start well above
+				base_position + Vector3.DOWN * 100.0  # Check far below
+			)
+			query.exclude = [player]
+			query.collision_mask = 1  # Only check world geometry (layer 1)
+			var result: Dictionary = space_state.intersect_ray(query)
+
+			if result:
+				# Ground found - position indicator slightly above it
+				indicator_position = result.position + Vector3.UP * 0.15
+			else:
+				# No ground found - keep at player's Y level
+				indicator_position.y = player.global_position.y
+
 			arc_indicator.global_position = indicator_position
 
 			# Orient indicator to face slash direction
