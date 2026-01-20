@@ -31,9 +31,10 @@
 4. [Scene Hierarchy](#scene-hierarchy)
 5. [Script Reference](#script-reference)
 6. [Game Mechanics](#game-mechanics)
-7. [Asset Catalog](#asset-catalog)
-8. [Multiplayer & AI](#multiplayer--ai)
-9. [Quick Reference](#quick-reference)
+7. [GUI & HUD System](#gui--hud-system)
+8. [Asset Catalog](#asset-catalog)
+9. [Multiplayer & AI](#multiplayer--ai)
+10. [Quick Reference](#quick-reference)
 
 ---
 
@@ -681,6 +682,149 @@ up_impulse = Vector3.UP * bounce_impulse * bounce_multiplier  # Up to 3x
 - (Continues scaling)
 
 **Note:** Profile XP is separate from match level-up orbs!
+
+---
+
+## GUI & HUD System
+
+### In-Game HUD (`scripts/ui/game_hud.gd`)
+
+**Location:** GameHUD/HUD node in world scene
+**Purpose:** Real-time player information and notifications during gameplay
+
+#### Core HUD Elements
+
+| Element | Display | Update Rate |
+|---------|---------|-------------|
+| **Timer** | Match time remaining (MM:SS) | Real-time |
+| **Kills** | Player's kill count | Per kill |
+| **Level** | Current level / max level (0-3) | Per orb collected |
+| **Health** | Current health points (0-3) | Per damage taken |
+| **Ability** | Current ability + cooldown/ready status | Real-time |
+
+#### Kill Notification System
+
+**Visual:** Red text with skull symbol (💀)
+**Position:** Center of screen (anchors 0.3-0.7 horizontal, 0.4-0.45 vertical)
+**Duration:** 2 seconds with fade-out effect
+**Trigger:** Every kill (direct damage or knockoff)
+
+**Format:**
+- Bots: `💀 Bot`
+- Players: `💀 Player X`
+
+**Implementation:**
+```gdscript
+# Called from player.gd when kill is confirmed
+game_hud.show_kill_notification(victim_name)
+```
+
+**Features:**
+- Displays immediately upon kill
+- Fades out in last 0.5 seconds
+- Only visible to the player who earned the kill
+- Works in both practice and multiplayer modes
+
+#### Killstreak Notification System
+
+**Visual:** Large golden text with pulse animation
+**Position:** Top-center of screen (anchor_top: 0.25)
+**Duration:** 3 seconds with pulse + fade effects
+**Trigger:** 5 and 10 kill milestones
+
+**Messages:**
+- **5 kills:** "KILLING SPREE!"
+- **10 kills:** "UNSTOPPABLE!"
+- **Other:** "KILLSTREAK: X" (fallback)
+
+**Animation Effects:**
+- Pulse: Oscillating scale (1.0 ± 0.1) at 3 Hz
+- Fade: Linear fade in last 1 second
+
+**Implementation:**
+```gdscript
+# Called from player.gd when killstreak milestone reached
+if attacker.killstreak == 5 or attacker.killstreak == 10:
+    game_hud.show_killstreak_notification(attacker.killstreak)
+```
+
+#### Expansion Notification System
+
+**Visual:** Gold text with flash effect
+**Position:** Top-wide (anchor_top: 0.15)
+**Duration:** 5 seconds with oscillating alpha
+**Trigger:** Called by world.gd for level expansions
+
+**Text:** "NEW AREA AVAILABLE"
+
+#### Killstreak Tracking (`scripts/player.gd`)
+
+**Variables:**
+```gdscript
+var killstreak: int = 0                 # Current consecutive kills
+var last_attacker_id: int = -1         # ID of last attacker
+var last_attacker_time: float = 0.0    # Timestamp of last attack
+const ATTACKER_TIMEOUT: float = 5.0    # Knockoff credit window
+```
+
+**Features:**
+- Tracks consecutive kills without dying
+- Resets to 0 on death (respawn)
+- Increments on direct damage kills
+- Increments on knockoff kills (within 5-second window)
+
+**Knockoff Kill System:**
+- Tracks last player who damaged you
+- 5-second timeout window for knockoff credit
+- If you fall off stage within timeout, attacker gets kill credit
+- Properly resets on respawn or timeout
+
+**Example Flow:**
+1. Player A damages Player B → `last_attacker_id = A`, `last_attacker_time = current_time`
+2. Player B falls off stage 3 seconds later
+3. `fall_death()` checks: `(current_time - last_attacker_time) <= 5.0` → TRUE
+4. Player A gets kill credit and killstreak increment
+5. Kill notification shows on Player A's screen
+
+### HUD Path Structure
+
+**IMPORTANT:** The HUD is accessed via `"GameHUD/HUD"` path (defined in world.gd line 11)
+
+**Correct Usage:**
+```gdscript
+var world = get_parent()
+var game_hud = world.get_node_or_null("GameHUD/HUD")
+if game_hud:
+    game_hud.show_kill_notification(victim_name)
+```
+
+**Incorrect Usage:**
+```gdscript
+# ❌ WRONG - UI/GameHUD doesn't exist
+var ui_layer = world.get_node_or_null("UI")
+var game_hud = ui_layer.get_node_or_null("GameHUD")
+```
+
+### HUD Visibility States
+
+| Game State | HUD Visible | Elements Shown |
+|------------|-------------|----------------|
+| Menu | Hidden | None |
+| Match Active | Visible | All core elements + notifications |
+| Paused | Visible | Background only (pause menu overlays) |
+| Match End | Hidden | Scoreboard replaces HUD |
+
+### Debug Output
+
+All HUD notifications include debug prints for troubleshooting:
+```
+[KILL] Looking for attacker node: 1 - Found: true
+[KILL] Attacker killstreak is now: 1
+[NOTIFY_KILL] Called with killer_id: 1, victim_id: 9009
+[NOTIFY_KILL] GameHUD found: true
+[HUD] show_kill_notification called with: Bot
+[HUD] Kill notification shown - visible: true, text: 💀 Bot
+```
 
 ---
 
