@@ -9,6 +9,9 @@ const OrbScene = preload("res://collectible_orb.tscn")
 @export var spawn_bounds_max: Vector3 = Vector3(40, 60, 40)   # Max X, Y, Z (doubled Y from 30)
 @export var num_orbs: int = 12  # Number of orbs to spawn (reduced by half)
 
+# Minimum distance between spawned items to prevent overlap
+const MIN_SPAWN_SEPARATION: float = 3.0  # Minimum distance between abilities/orbs
+
 # Respawn settings
 @export var respawn_interval: float = 7.0  # Respawn every 7 seconds (reduced from 10)
 @export var respawn_at_random_location: bool = true
@@ -74,36 +77,80 @@ func spawn_orbs() -> void:
 	print("=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
 
 func get_random_spawn_position() -> Vector3:
-	"""Generate a random position on top of the ground"""
+	"""Generate a random position on top of the ground, avoiding overlap with existing items"""
 	const DEATH_ZONE_Y: float = -50.0  # Death zone position
 	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
+	const MAX_ATTEMPTS: int = 30  # Maximum attempts to find a non-overlapping position
 
-	# Generate random X and Z within bounds
-	var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
-	var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
+	var attempts: int = 0
+	while attempts < MAX_ATTEMPTS:
+		attempts += 1
 
-	# Raycast from high up to find the ground
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
-	var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
+		# Generate random X and Z within bounds
+		var x: float = rng.randf_range(spawn_bounds_min.x, spawn_bounds_max.x)
+		var z: float = rng.randf_range(spawn_bounds_min.z, spawn_bounds_max.z)
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
-	query.collision_mask = 1  # Only check world geometry (layer 1)
-	query.collide_with_areas = false
-	query.collide_with_bodies = true
+		# Raycast from high up to find the ground
+		var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+		var start_pos: Vector3 = Vector3(x, spawn_bounds_max.y, z)
+		var end_pos: Vector3 = Vector3(x, spawn_bounds_min.y - 10, z)
 
-	var result: Dictionary = space_state.intersect_ray(query)
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+		query.collision_mask = 1  # Only check world geometry (layer 1)
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
 
-	if result:
-		# Found ground - check if it's in death zone
-		var spawn_y: float = result.position.y + 1.0
-		if spawn_y < MIN_SAFE_Y:
-			# Too close to death zone - use safe fallback position
-			return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
-		return result.position + Vector3.UP * 1.0
-	else:
-		# No ground found - use middle Y as fallback
-		return Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		var candidate_pos: Vector3
+		if result:
+			# Found ground - check if it's in death zone
+			var spawn_y: float = result.position.y + 1.0
+			if spawn_y < MIN_SAFE_Y:
+				# Too close to death zone - try again
+				continue
+			candidate_pos = result.position + Vector3.UP * 1.0
+		else:
+			# No ground found - use middle Y as fallback
+			candidate_pos = Vector3(x, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, z)
+
+		# Check if this position is too close to existing orbs or abilities
+		if is_position_too_close_to_existing(candidate_pos):
+			continue  # Try again
+
+		# Position is valid - return it
+		return candidate_pos
+
+	# If we exhausted all attempts, return a fallback position (center of map)
+	print("Warning: Could not find non-overlapping position after %d attempts, using fallback" % MAX_ATTEMPTS)
+	return Vector3(0, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, 0)
+
+func is_position_too_close_to_existing(pos: Vector3) -> bool:
+	"""Check if a position is too close to any existing orbs or abilities"""
+	# Check against existing orbs
+	for orb in spawned_orbs:
+		if orb and orb.global_position.distance_to(pos) < MIN_SPAWN_SEPARATION:
+			return true
+
+	# Check against existing abilities from AbilitySpawner
+	var world: Node = get_parent()
+	if world:
+		var ability_spawner: Node = world.get_node_or_null("AbilitySpawner")
+		if ability_spawner and ability_spawner.has_method("get_all_ability_positions"):
+			var ability_positions: Array = ability_spawner.get_all_ability_positions()
+			for ability_pos in ability_positions:
+				if ability_pos.distance_to(pos) < MIN_SPAWN_SEPARATION:
+					return true
+
+	return false
+
+func get_all_orb_positions() -> Array:
+	"""Return positions of all spawned orbs (used by AbilitySpawner to avoid overlap)"""
+	var positions: Array = []
+	for orb in spawned_orbs:
+		if orb:
+			positions.append(orb.global_position)
+	return positions
 
 func spawn_orb_at_position(pos: Vector3) -> void:
 	"""Spawn a single orb at the given position"""
