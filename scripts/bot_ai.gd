@@ -395,6 +395,22 @@ func do_attack(delta: float) -> void:
 		state = "WANDER"
 		return
 
+	# CRITICAL: Can't attack if ability is on cooldown
+	# Exit ATTACK state and do something else useful
+	if not bot.current_ability.is_ready():
+		# Ability is recharging - transition to different behavior
+		if bot.level < bot.MAX_LEVEL:
+			# Try to collect orbs while waiting for cooldown
+			find_nearest_orb()
+			if target_orb and is_instance_valid(target_orb):
+				var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
+				if distance_to_orb < 40.0:
+					state = "COLLECT_ORB"
+					return
+		# Otherwise, maintain distance (chase state)
+		state = "CHASE"
+		return
+
 	if not target_player:
 		return
 
