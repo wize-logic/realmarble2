@@ -538,9 +538,9 @@ func create_reticle() -> void:
 	torus.ring_segments = 16
 	reticle.mesh = torus
 
-	# Create material - subtle lime green, transparent, with additive blending
+	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
+	mat.albedo_color = Color(0.7, 0.9, 0.7, 0.15)  # Subtle neutral green, 15% opacity
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -549,14 +549,17 @@ func create_reticle() -> void:
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y  # Face camera but stay horizontal
 	reticle.material_override = mat
 
+	# Set visibility layers - only visible to local player (layer 20 for first person view)
+	reticle.layers = 1 << 19  # Layer 20 (bit 19)
+
 	# Add particle effect to reticle for extra visual feedback
 	var particles: CPUParticles3D = CPUParticles3D.new()
 	particles.name = "ReticleParticles"
 	reticle.add_child(particles)
 
-	# Configure particles - subtle rotating glow
+	# Configure particles - very subtle rotating glow
 	particles.emitting = true
-	particles.amount = 20
+	particles.amount = 12  # Reduced from 20 for subtlety
 	particles.lifetime = 0.8
 	particles.explosiveness = 0.0
 	particles.randomness = 0.2
@@ -595,11 +598,11 @@ func create_reticle() -> void:
 	particles.scale_amount_min = 1.0
 	particles.scale_amount_max = 1.5
 
-	# Color - lime green fade
+	# Color - very subtle neutral green fade
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
-	gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
-	gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.7, 0.9, 0.7, 0.4))  # Subtle neutral green
+	gradient.add_point(0.5, Color(0.6, 0.8, 0.6, 0.25))  # Very subtle
+	gradient.add_point(1.0, Color(0.5, 0.7, 0.5, 0.0))  # Transparent
 	particles.color_ramp = gradient
 
 	# Initially hidden (will show when target is locked)
@@ -609,28 +612,37 @@ func _process(delta: float) -> void:
 	super._process(delta)
 
 	# Update reticle position to follow locked target
+	# Only show reticle to the local player who has the cannon
 	if player and is_instance_valid(player) and player.is_inside_tree():
-		# Find the nearest player in the auto-aim cone
-		var target = find_nearest_player()
+		# Check if this player is the local player (has multiplayer authority)
+		var is_local_player: bool = player.is_multiplayer_authority()
 
-		if target and is_instance_valid(target):
-			# We have a lock - show reticle and update position
-			if not reticle.is_inside_tree():
-				# Add reticle to world if not already added
-				if player.get_parent():
-					player.get_parent().add_child(reticle)
+		if is_local_player:
+			# Find the nearest player in the auto-aim cone
+			var target = find_nearest_player()
 
-			reticle.visible = true
-			reticle_target = target
+			if target and is_instance_valid(target):
+				# We have a lock - show reticle and update position
+				if not reticle.is_inside_tree():
+					# Add reticle to world if not already added
+					if player.get_parent():
+						player.get_parent().add_child(reticle)
 
-			# Position reticle above target with smooth interpolation
-			var target_position = target.global_position + Vector3(0, 1.5, 0)
-			reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
+				reticle.visible = true
+				reticle_target = target
 
-			# Rotate reticle for visual effect
-			reticle.rotation.y += delta * 2.0
+				# Position reticle above target with smooth interpolation
+				var target_position = target.global_position + Vector3(0, 1.5, 0)
+				reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
+
+				# Rotate reticle for visual effect
+				reticle.rotation.y += delta * 2.0
+			else:
+				# No lock - hide reticle
+				reticle.visible = false
+				reticle_target = null
 		else:
-			# No lock - hide reticle
+			# Not local player - hide reticle
 			reticle.visible = false
 			reticle_target = null
 	else:

@@ -366,9 +366,9 @@ func create_radius_indicator() -> void:
 	cylinder.radial_segments = 32
 	radius_indicator.mesh = cylinder
 
-	# Create material - subtle orange, transparent with additive blending
+	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.5, 0.0, 0.35)  # Orange, 35% opacity
+	mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)  # Subtle warm tone, 12% opacity
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -382,9 +382,9 @@ func create_radius_indicator() -> void:
 	ring_particles.name = "RingParticles"
 	radius_indicator.add_child(ring_particles)
 
-	# Configure particles - rotating around the edge
+	# Configure particles - very subtle rotating around the edge
 	ring_particles.emitting = true
-	ring_particles.amount = 30
+	ring_particles.amount = 18  # Reduced from 30 for subtlety
 	ring_particles.lifetime = 1.0
 	ring_particles.explosiveness = 0.0
 	ring_particles.randomness = 0.1
@@ -423,11 +423,11 @@ func create_radius_indicator() -> void:
 	ring_particles.scale_amount_min = 1.0
 	ring_particles.scale_amount_max = 1.5
 
-	# Color - orange gradient
+	# Color - very subtle warm gradient
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.7, 0.3, 0.9))  # Bright orange
-	gradient.add_point(0.5, Color(1.0, 0.5, 0.2, 0.7))  # Orange
-	gradient.add_point(1.0, Color(0.8, 0.3, 0.0, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))  # Subtle warm tone
+	gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))  # Very subtle
+	gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))  # Transparent
 	ring_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)

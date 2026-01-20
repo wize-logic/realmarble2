@@ -306,9 +306,9 @@ func create_arc_indicator() -> void:
 	torus.ring_segments = 8
 	arc_indicator.mesh = torus
 
-	# Create material - subtle blue, transparent with additive blending
+	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.7, 0.8, 1.0, 0.35)  # Light blue, 35% opacity
+	mat.albedo_color = Color(0.8, 0.85, 0.9, 0.15)  # Subtle cool tone, 15% opacity
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -325,9 +325,9 @@ func create_arc_indicator() -> void:
 	arc_particles.name = "ArcParticles"
 	arc_indicator.add_child(arc_particles)
 
-	# Configure particles - flowing along the arc
+	# Configure particles - very subtle flowing along the arc
 	arc_particles.emitting = true
-	arc_particles.amount = 25
+	arc_particles.amount = 15  # Reduced from 25 for subtlety
 	arc_particles.lifetime = 0.8
 	arc_particles.explosiveness = 0.0
 	arc_particles.randomness = 0.15
@@ -366,11 +366,11 @@ func create_arc_indicator() -> void:
 	arc_particles.scale_amount_min = 1.0
 	arc_particles.scale_amount_max = 1.5
 
-	# Color - blue gradient (steel blue)
+	# Color - very subtle cool gradient
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 0.95, 1.0, 0.9))  # Bright white-blue
-	gradient.add_point(0.5, Color(0.7, 0.8, 1.0, 0.7))   # Light blue
-	gradient.add_point(1.0, Color(0.5, 0.6, 0.9, 0.0))   # Transparent
+	gradient.add_point(0.0, Color(0.85, 0.9, 0.95, 0.35))  # Subtle cool tone
+	gradient.add_point(0.5, Color(0.8, 0.85, 0.9, 0.25))   # Very subtle
+	gradient.add_point(1.0, Color(0.75, 0.8, 0.85, 0.0))   # Transparent
 	arc_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)

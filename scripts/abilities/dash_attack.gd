@@ -340,9 +340,9 @@ func create_direction_indicator() -> void:
 	# Rotate so cone points in the -Z direction (forward)
 	direction_indicator.rotation_degrees = Vector3(90, 0, 0)
 
-	# Create material - subtle magenta, transparent with additive blending
+	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.2, 1.0, 0.4)  # Magenta, 40% opacity
+	mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)  # Subtle neutral purple-pink, 15% opacity
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -356,9 +356,9 @@ func create_direction_indicator() -> void:
 	arrow_particles.name = "ArrowParticles"
 	direction_indicator.add_child(arrow_particles)
 
-	# Configure particles - flowing forward
+	# Configure particles - very subtle flowing forward
 	arrow_particles.emitting = true
-	arrow_particles.amount = 20
+	arrow_particles.amount = 12  # Reduced from 20 for subtlety
 	arrow_particles.lifetime = 0.6
 	arrow_particles.explosiveness = 0.0
 	arrow_particles.randomness = 0.2
@@ -394,11 +394,11 @@ func create_direction_indicator() -> void:
 	arrow_particles.scale_amount_min = 1.0
 	arrow_particles.scale_amount_max = 1.5
 
-	# Color - magenta gradient
+	# Color - very subtle neutral purple gradient
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 0.9))  # Bright magenta
-	gradient.add_point(0.5, Color(1.0, 0.3, 0.9, 0.7))  # Magenta
-	gradient.add_point(1.0, Color(0.8, 0.2, 0.6, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))  # Subtle neutral purple
+	gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))  # Very subtle
+	gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))  # Transparent
 	arrow_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)
