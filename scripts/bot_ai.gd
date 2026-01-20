@@ -271,8 +271,8 @@ func do_chase(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
-	# CRITICAL: Make bot face the target for aiming
-	look_at_target(target_player.global_position)
+	# CRITICAL: Make bot face the target for aiming with predictive targeting
+	look_at_target(target_player.global_position, true)
 
 	# Determine optimal distance based on current ability
 	var optimal_distance: float = get_optimal_combat_distance()
@@ -282,8 +282,10 @@ func do_chase(delta: float) -> void:
 	if distance_to_target > optimal_distance + 5.0:
 		# Close the distance
 		move_towards(target_player.global_position, delta, 0.9)
+		# Re-aim after moving
+		look_at_target(target_player.global_position, true)
 	else:
-		# Strafe while maintaining distance
+		# Strafe while maintaining distance (strafe function handles aiming)
 		strafe_around_target(delta, optimal_distance)
 
 	# Use abilities while chasing if in range
@@ -327,21 +329,25 @@ func do_attack(delta: float) -> void:
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
 
-	# CRITICAL: Make bot face the target for aiming
-	look_at_target(target_player.global_position)
+	# CRITICAL: Make bot face the target for aiming with predictive targeting
+	look_at_target(target_player.global_position, true)
 
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + 2.0:
 		# Too far, close in
 		move_towards(target_player.global_position, delta, 0.7)
+		# Re-aim after moving
+		look_at_target(target_player.global_position, true)
 	elif distance_to_target < optimal_distance - 2.0:
 		# Too close, back up while strafing
 		move_away_from(target_player.global_position, delta, 0.5)
+		# Re-aim after moving
+		look_at_target(target_player.global_position, true)
 	else:
-		# Good range, strafe to be harder to hit
+		# Good range, strafe to be harder to hit (strafe function handles aiming)
 		strafe_around_target(delta, optimal_distance)
 
-	# Use ability intelligently
+	# Use ability intelligently (function handles its own aiming)
 	if bot.current_ability and bot.current_ability.has_method("use"):
 		use_ability_smart(distance_to_target)
 	# Spin dash as last resort or for mobility
@@ -382,13 +388,22 @@ func do_attack(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func do_retreat(delta: float) -> void:
-	"""Retreat from danger when low health"""
+	"""Retreat from danger when low health while keeping aim"""
 	if not target_player or retreat_timer <= 0.0:
 		state = "WANDER"
 		return
 
-	# Move away from target
+	# Keep aiming at target even while retreating (for defensive shots)
+	look_at_target(target_player.global_position, true)
+
+	# Move away from target (function also handles aiming)
 	move_away_from(target_player.global_position, delta, 1.0)
+
+	# Can still use abilities while retreating if available
+	if bot.current_ability and bot.current_ability.has_method("use"):
+		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+		if distance_to_target < 30.0:  # Use abilities if in range
+			use_ability_smart(distance_to_target)
 
 	# Jump frequently to evade - very aggressive jumping when retreating
 	if action_timer <= 0.0:
@@ -411,9 +426,12 @@ func do_retreat(delta: float) -> void:
 			action_timer = jump_cooldown
 
 func strafe_around_target(delta: float, preferred_distance: float) -> void:
-	"""Strafe around target while maintaining distance"""
+	"""Strafe around target while maintaining distance and keeping aim"""
 	if not target_player:
 		return
+
+	# Always aim at target while strafing for accurate shots
+	look_at_target(target_player.global_position, true)
 
 	# Change strafe direction periodically
 	if strafe_timer <= 0.0:
@@ -443,9 +461,13 @@ func strafe_around_target(delta: float, preferred_distance: float) -> void:
 		bot.apply_central_force(movement * force)
 
 func move_away_from(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
-	"""Move the bot away from a target position"""
+	"""Move the bot away from a target position while maintaining aim"""
 	if not bot:
 		return
+
+	# Keep aiming at target even while retreating
+	if target_player:
+		look_at_target(target_player.global_position, true)
 
 	var direction: Vector3 = (bot.global_position - target_pos).normalized()
 	direction.y = 0  # Keep horizontal
@@ -489,42 +511,60 @@ func use_ability_smart(distance_to_target: float) -> void:
 			# Use cannon at almost any range - cannons are versatile
 			if distance_to_target > 3.0 and distance_to_target < 50.0:
 				should_use = true
-				should_charge = distance_to_target > 12.0 and randf() < 0.5
+				should_charge = distance_to_target > 10.0 and randf() < 0.7  # Increased from 0.5
 		"Sword":
 			# Use sword at close to medium range
 			if distance_to_target < 8.0:
 				should_use = true
-				should_charge = distance_to_target > 4.0 and randf() < 0.3
+				should_charge = distance_to_target > 4.0 and randf() < 0.6  # Increased from 0.3
 		"Dash Attack":
-			# Use dash attack more liberally - it's good for mobility
+			# ALWAYS charge dash attack - it's much more effective when charged
 			if distance_to_target > 3.0 and distance_to_target < 20.0:
 				should_use = true
-				should_charge = distance_to_target > 8.0 and randf() < 0.4
+				should_charge = true  # Always charge (was conditional)
 		"Explosion":
 			# Use explosion at close to medium range
 			if distance_to_target < 12.0:
 				should_use = true
-				should_charge = distance_to_target < 6.0 and randf() < 0.5
+				should_charge = distance_to_target < 8.0 and randf() < 0.7  # Increased from 0.5
 		_:
 			# Default: use when in reasonable range
 			if distance_to_target < 25.0:
 				should_use = randf() < 0.5
+				should_charge = randf() < 0.6
 
 	# Charging logic
 	if should_use and should_charge and not is_charging_ability:
+		# Aim at target before charging
+		if target_player:
+			look_at_target(target_player.global_position, true)
 		# Start charging
 		if bot.current_ability.has_method("start_charging"):
 			is_charging_ability = true
-			ability_charge_timer = randf_range(0.5, 1.2)  # Shorter charge time for faster attacks
+			# Charge longer for dash attack to get maximum power
+			if ability_name == "Dash Attack":
+				ability_charge_timer = randf_range(0.8, 1.3)  # Longer charge for dash
+			else:
+				ability_charge_timer = randf_range(0.5, 1.2)
 			bot.current_ability.start_charging()
+
+	# Keep aiming at target while charging
+	if is_charging_ability and target_player:
+		look_at_target(target_player.global_position, true)
 
 	# Release charged ability or use instantly
 	if is_charging_ability and ability_charge_timer <= 0.0:
+		# Final aim adjustment before releasing
+		if target_player:
+			look_at_target(target_player.global_position, true)
 		# Release charge
 		is_charging_ability = false
 		bot.current_ability.use()
 		action_timer = randf_range(0.3, 1.0)
 	elif should_use and not should_charge and not is_charging_ability:
+		# Aim at target before instant firing
+		if target_player:
+			look_at_target(target_player.global_position, true)
 		# Use immediately without charging
 		bot.current_ability.use()
 		action_timer = randf_range(0.5, 1.5)
@@ -644,13 +684,37 @@ func bot_jump() -> void:
 		bot.apply_central_impulse(Vector3.UP * jump_strength)
 		bot.jump_count += 1
 
-func look_at_target(target_position: Vector3) -> void:
-	"""Rotate bot to face target for aiming"""
+func look_at_target(target_position: Vector3, use_prediction: bool = true) -> void:
+	"""Rotate bot to face target for aiming with optional predictive targeting"""
 	if not bot:
 		return
 
-	# Calculate direction to target (only horizontal rotation)
-	var target_dir: Vector3 = target_position - bot.global_position
+	var aim_position: Vector3 = target_position
+
+	# Add predictive aiming if target is a player with velocity
+	if use_prediction and target_player and is_instance_valid(target_player):
+		if "linear_velocity" in target_player:
+			var target_velocity: Vector3 = target_player.linear_velocity
+			var distance_to_target: float = bot.global_position.distance_to(target_position)
+
+			# Estimate time for projectile/attack to reach target based on distance
+			# Assumes average projectile speed or dash speed
+			var time_to_impact: float = distance_to_target / 30.0  # 30 units/sec average
+
+			# Predict where target will be
+			var predicted_offset: Vector3 = target_velocity * time_to_impact
+
+			# Only use horizontal prediction (ignore Y velocity for simplicity)
+			predicted_offset.y = 0
+
+			# Limit prediction distance to avoid over-leading
+			if predicted_offset.length() > distance_to_target * 0.5:
+				predicted_offset = predicted_offset.normalized() * distance_to_target * 0.5
+
+			aim_position = target_position + predicted_offset
+
+	# Calculate direction to aim position (only horizontal rotation)
+	var target_dir: Vector3 = aim_position - bot.global_position
 	target_dir.y = 0  # Keep rotation horizontal only
 
 	if target_dir.length() > 0.1:
