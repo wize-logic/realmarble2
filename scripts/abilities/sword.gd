@@ -146,8 +146,18 @@ func _process(delta: float) -> void:
 				slash_direction.y = 0
 				slash_direction = slash_direction.normalized()
 			else:
-				# Fallback for bots: use player's facing direction
-				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				# For bots: aim directly at their current target for accurate hits
+				var bot_ai: Node = player.get_node_or_null("BotAI")
+				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+					# Aim at bot's target
+					slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+					slash_direction.y = 0
+					if slash_direction.length() < 0.1:
+						# Target too close, use rotation fallback
+						slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				else:
+					# Fallback: use player's facing direction
+					slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in slash direction
 			# Use raycasting to find ground below the indicator position
@@ -212,8 +222,18 @@ func activate() -> void:
 		slash_direction.y = 0
 		slash_direction = slash_direction.normalized()
 	else:
-		# Fallback for bots: use player's facing direction (rotation.y)
-		slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+		# For bots: aim directly at their current target for accurate hits
+		var bot_ai: Node = player.get_node_or_null("BotAI")
+		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+			# Aim at bot's target
+			slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
+			slash_direction.y = 0
+			if slash_direction.length() < 0.1:
+				# Target too close, use rotation fallback
+				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+		else:
+			# Fallback: use player's facing direction (rotation.y)
+			slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Start slash
 	is_slashing = true
