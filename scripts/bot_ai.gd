@@ -73,8 +73,8 @@ func _ready() -> void:
 	target_stuck_position = bot.global_position
 	# Randomize aggression for personality variety
 	aggression_level = randf_range(0.5, 0.9)
-	# Randomize reaction time for more human-like behavior
-	reaction_time = randf_range(0.1, 0.3)
+	# Randomize reaction time for more human-like behavior (reduced for less hesitation)
+	reaction_time = randf_range(0.05, 0.15)
 	print("BotAI initialized: aggression=%.2f, reaction_time=%.2f" % [aggression_level, reaction_time])
 	call_deferred("find_target")
 
@@ -446,7 +446,7 @@ func do_attack(delta: float) -> void:
 			bot.is_charging_spin = true
 			bot.spin_charge = randf_range(0.3, bot.max_spin_charge * 0.7)
 			get_tree().create_timer(randf_range(0.2, 0.5)).timeout.connect(func(): release_spin_dash())
-			action_timer = randf_range(2.0, 3.5)
+			action_timer = randf_range(1.5, 2.5)  # Reduced for less hesitation
 
 	# Jump tactically - more aggressive when target is higher, on slopes, or moving slowly
 	if action_timer <= 0.0:
@@ -690,14 +690,14 @@ func use_ability_smart(distance_to_target: float) -> void:
 		# Release charge
 		is_charging_ability = false
 		bot.current_ability.use()
-		action_timer = randf_range(0.3, 1.0)
+		action_timer = randf_range(0.2, 0.7)  # Reduced for less hesitation
 	elif should_use and not should_charge and not is_charging_ability:
 		# Aim at target before instant firing
 		if target_player:
 			look_at_target(target_player.global_position, true)
 		# Use immediately without charging
 		bot.current_ability.use()
-		action_timer = randf_range(0.5, 1.5)
+		action_timer = randf_range(0.3, 1.0)  # Reduced for less hesitation
 
 func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
 	"""Move the bot towards a target position with obstacle detection"""
@@ -963,25 +963,25 @@ func do_collect_ability(delta: float) -> void:
 	# Jump more aggressively if ability is on higher ground, on slopes, or moving slowly
 	if action_timer <= 0.0:
 		var should_jump: bool = false
-		var jump_cooldown: float = randf_range(0.4, 0.9)
+		var jump_cooldown: float = randf_range(0.3, 0.7)  # Reduced for better navigation
 
 		if height_diff > 1.0:
 			# Ability is significantly higher - jump frequently
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.5)
+			jump_cooldown = randf_range(0.2, 0.4)  # Reduced for better accuracy
 		elif height_diff > 0.5:
 			# Ability is slightly higher
 			should_jump = true
-			jump_cooldown = randf_range(0.4, 0.7)
-		elif is_on_slope and randf() < 0.7:
+			jump_cooldown = randf_range(0.3, 0.5)  # Reduced for better accuracy
+		elif is_on_slope and randf() < 0.8:  # Increased probability
 			# On slope - jump to maintain momentum toward ability
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.6)
-		elif bot.linear_velocity.length() < 2.5 and randf() < 0.5:
+			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
+		elif bot.linear_velocity.length() < 2.5 and randf() < 0.7:  # Increased probability
 			# Moving slowly - might be stuck, jump to clear obstacle
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.6)
-		elif randf() < 0.4:
+			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
+		elif randf() < 0.5:  # Increased probability
 			# Random jump
 			should_jump = true
 
@@ -1057,25 +1057,25 @@ func do_collect_orb(delta: float) -> void:
 	# Jump more aggressively if orb is on higher ground, on slopes, or moving slowly
 	if action_timer <= 0.0:
 		var should_jump: bool = false
-		var jump_cooldown: float = randf_range(0.4, 0.9)
+		var jump_cooldown: float = randf_range(0.3, 0.7)  # Reduced for better navigation
 
 		if height_diff > 1.0:
 			# Orb is significantly higher - jump frequently
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.5)
+			jump_cooldown = randf_range(0.2, 0.4)  # Reduced for better accuracy
 		elif height_diff > 0.5:
 			# Orb is slightly higher
 			should_jump = true
-			jump_cooldown = randf_range(0.4, 0.7)
-		elif is_on_slope and randf() < 0.7:
+			jump_cooldown = randf_range(0.3, 0.5)  # Reduced for better accuracy
+		elif is_on_slope and randf() < 0.8:  # Increased probability
 			# On slope - jump to maintain momentum toward orb
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.6)
-		elif bot.linear_velocity.length() < 2.5 and randf() < 0.5:
+			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
+		elif bot.linear_velocity.length() < 2.5 and randf() < 0.7:  # Increased probability
 			# Moving slowly - might be stuck, jump to clear obstacle
 			should_jump = true
-			jump_cooldown = randf_range(0.3, 0.6)
-		elif randf() < 0.35:
+			jump_cooldown = randf_range(0.2, 0.5)  # Reduced for better accuracy
+		elif randf() < 0.5:  # Increased probability
 			# Random jump
 			should_jump = true
 
@@ -1547,10 +1547,10 @@ func handle_unstuck_movement(delta: float) -> void:
 	if bot.jump_count < bot.max_jumps and randf() < jump_chance:
 		bot_jump()
 
-	# Use spin dash more often to break free - FULLY CHARGED for maximum power
+	# Use spin dash more often to break free - 50% charged for unstuck power
 	if unstuck_timer > 0.3 and not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.25:
 		bot.is_charging_spin = true
-		bot.spin_charge = bot.max_spin_charge  # FULL charge for unstuck power!
+		bot.spin_charge = bot.max_spin_charge * 0.5  # 50% charge for unstuck power
 		get_tree().create_timer(0.25).timeout.connect(func(): release_spin_dash())
 
 	# Change direction more frequently while stuck (every 0.3 seconds)
