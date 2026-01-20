@@ -343,8 +343,8 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 	grinder.apply_central_force(tangent * rail_direction * constant_forward_push * grinder.mass * delta)
 
 	# Shift speed boost - check if player is holding shift while grinding
-	# Use Input.is_action_pressed directly since is_charging_spin only works when grounded
-	var is_shift_held: bool = Input.is_action_pressed("spin_dash")
+	# Use raw KEY_SHIFT check instead of action, matching player.gd logic
+	var is_shift_held: bool = Input.is_key_pressed(KEY_SHIFT)
 
 	# Debug logging (throttled)
 	if should_log:
