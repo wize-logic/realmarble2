@@ -72,12 +72,12 @@ func spawn_abilities() -> void:
 
 	var total_abilities: int = clamp(int(player_count * abilities_per_player), 10, 35)  # Increased for Type B
 
-	# Distribute abilities across types (proportional to original ratios)
-	# Original ratio: Dash=2, Explosion=2, Cannon=4, Sword=2 (total=10)
-	var scaled_dash: int = max(1, int(total_abilities * 0.2))      # 20%
-	var scaled_explosion: int = max(1, int(total_abilities * 0.2))  # 20%
-	var scaled_cannon: int = max(2, int(total_abilities * 0.4))     # 40%
-	var scaled_sword: int = max(1, int(total_abilities * 0.2))      # 20%
+	# Distribute abilities equally across all types (25% each)
+	# All abilities are equally viable - none should be rare
+	var scaled_dash: int = max(1, int(total_abilities * 0.25))      # 25%
+	var scaled_explosion: int = max(1, int(total_abilities * 0.25))  # 25%
+	var scaled_cannon: int = max(1, int(total_abilities * 0.25))     # 25%
+	var scaled_sword: int = max(1, int(total_abilities * 0.25))      # 25%
 
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
 	print("Players: %d | Total abilities: %d" % [player_count, total_abilities])
