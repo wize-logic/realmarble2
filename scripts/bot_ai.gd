@@ -164,6 +164,18 @@ func _physics_process(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
+	# CRITICAL: Force bots out of combat states if they don't have an ability
+	# This prevents bots from strafing/attacking without weapons
+	if not bot.current_ability and (state == "CHASE" or state == "ATTACK"):
+		# Don't allow combat without an ability - get ability or wander
+		if target_ability and is_instance_valid(target_ability):
+			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+			if distance_to_ability < 60.0:
+				state = "COLLECT_ABILITY"
+				return
+		state = "WANDER"
+		return
+
 	# Priority 0: Retreat if low health and enemy nearby (can retreat without ability)
 	if bot.health <= 1 and target_player and is_instance_valid(target_player):
 		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
@@ -187,6 +199,7 @@ func update_state() -> void:
 			return
 
 	# Priority 2: Combat if we HAVE an ability and enemy is in immediate attack range
+	# CRITICAL: Only allow combat states if bot has an ability
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.5:
 		state = "ATTACK"
 		return
