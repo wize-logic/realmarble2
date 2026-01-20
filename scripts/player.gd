@@ -1263,12 +1263,14 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 			var attacker: Node = world.get_node_or_null(str(attacker_id))
 			if attacker and "killstreak" in attacker:
 				attacker.killstreak += 1
-				# Notify HUD of kill with victim's name
-				notify_kill(attacker_id, name.to_int())
+				# Notify HUD of kill with victim's name (call on attacker's node)
+				if attacker.has_method("notify_kill"):
+					attacker.notify_kill(attacker_id, name.to_int())
 
 				# Notify about killstreak milestones
 				if attacker.killstreak == 5 or attacker.killstreak == 10:
-					notify_killstreak(attacker_id, attacker.killstreak)
+					if attacker.has_method("notify_killstreak"):
+						attacker.notify_killstreak(attacker_id, attacker.killstreak)
 
 		# Play death effects before respawning
 		spawn_death_particles()
@@ -1353,12 +1355,14 @@ func fall_death() -> void:
 		var attacker: Node = world.get_node_or_null(str(last_attacker_id))
 		if attacker and "killstreak" in attacker:
 			attacker.killstreak += 1
-			# Notify HUD of kill with victim's name
-			notify_kill(last_attacker_id, name.to_int())
+			# Notify HUD of kill with victim's name (call on attacker's node)
+			if attacker.has_method("notify_kill"):
+				attacker.notify_kill(last_attacker_id, name.to_int())
 
 			# Notify about killstreak milestones
 			if attacker.killstreak == 5 or attacker.killstreak == 10:
-				notify_killstreak(last_attacker_id, attacker.killstreak)
+				if attacker.has_method("notify_killstreak"):
+					attacker.notify_killstreak(last_attacker_id, attacker.killstreak)
 
 	# Don't drop orbs or abilities when falling to death
 	# (Players lose their items in the void)

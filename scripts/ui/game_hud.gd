@@ -198,12 +198,12 @@ func create_kill_notification() -> void:
 	kill_notification_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	kill_notification_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 
-	# Position at center-right of screen
-	kill_notification_label.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	kill_notification_label.anchor_left = 0.65
-	kill_notification_label.anchor_right = 0.95
-	kill_notification_label.anchor_top = 0.25
-	kill_notification_label.anchor_bottom = 0.30
+	# Position at center of screen
+	kill_notification_label.set_anchors_preset(Control.PRESET_CENTER)
+	kill_notification_label.anchor_left = 0.3
+	kill_notification_label.anchor_right = 0.7
+	kill_notification_label.anchor_top = 0.4
+	kill_notification_label.anchor_bottom = 0.45
 	kill_notification_label.offset_left = 0
 	kill_notification_label.offset_right = 0
 	kill_notification_label.offset_top = 0
