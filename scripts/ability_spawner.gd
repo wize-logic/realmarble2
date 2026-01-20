@@ -65,7 +65,7 @@ func spawn_abilities() -> void:
 	var abilities_per_player: float = 2.5
 
 	# Check if Type B arena (more abilities needed for larger, multi-tier arenas)
-	var world: Node = get_parent()
+	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
 			abilities_per_player = 3.5  # 40% more abilities for Type B

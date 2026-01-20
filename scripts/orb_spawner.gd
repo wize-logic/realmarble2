@@ -55,7 +55,7 @@ func spawn_orbs() -> void:
 	var orbs_per_player: float = 3.0
 
 	# Check if Type B arena (more orbs needed for larger, multi-tier arenas)
-	var world: Node = get_parent()
+	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
 			orbs_per_player = 4.5  # 50% more orbs for Type B
