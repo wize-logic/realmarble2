@@ -35,6 +35,11 @@ class_name GrindRail
 @export var max_boost_attempts: int = 3  # Max boosts before detaching
 @export var boost_cooldown: float = 1.5  # Time between boost attempts
 
+# Shift speed boost settings
+@export var shift_boost_acceleration: float = 800.0  # How quickly boost builds up per second
+@export var shift_boost_max: float = 1200.0  # Maximum additional boost force
+@export var shift_boost_decay_rate: float = 1200.0  # How quickly boost decays when shift released
+
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
 var nearby_players: Array[RigidBody3D] = []  # Players near rail but not attached
@@ -52,6 +57,9 @@ class GrinderData:
 	var stuck_time: float = 0.0
 	var boost_attempts: int = 0
 	var last_boost_time: float = 0.0
+
+	# Shift speed boost
+	var shift_boost_amount: float = 0.0  # Current boost force from holding shift
 
 	func _init(start_offset: float):
 		closest_offset = start_offset
@@ -327,6 +335,27 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Apply acceleration in the player's desired direction along the rail
 	grinder.apply_central_force(tangent * rail_direction * constant_forward_push * grinder.mass * delta)
+
+	# Shift speed boost - check if player is holding shift while grinding
+	var is_shift_held: bool = false
+	if grinder.has_method("is_action_pressed"):
+		# For multiplayer, each player has their own input
+		is_shift_held = grinder.is_action_pressed("spin_dash")
+	else:
+		# For local player, use Input singleton
+		is_shift_held = Input.is_action_pressed("spin_dash")
+
+	# Update shift boost amount
+	if is_shift_held:
+		# Gradually increase boost when shift is held
+		data.shift_boost_amount = min(data.shift_boost_amount + shift_boost_acceleration * delta, shift_boost_max)
+	else:
+		# Gradually decay boost when shift is released
+		data.shift_boost_amount = max(data.shift_boost_amount - shift_boost_decay_rate * delta, 0.0)
+
+	# Apply shift boost force in the direction of movement
+	if data.shift_boost_amount > 0.0:
+		grinder.apply_central_force(tangent * rail_direction * data.shift_boost_amount * grinder.mass * delta)
 
 	# Strong slope acceleration (use player's desired direction)
 	var look_ahead_off: float = clamp(attach_offset + rail_direction * 3.0, 0, length)
