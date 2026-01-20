@@ -343,22 +343,12 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 	grinder.apply_central_force(tangent * rail_direction * constant_forward_push * grinder.mass * delta)
 
 	# Shift speed boost - check if player is holding shift while grinding
-	# Check the player's is_charging_spin variable instead of Input directly
-	# This avoids timing issues between _process and _physics_process
-	var is_shift_held: bool = false
-	if "is_charging_spin" in grinder:
-		is_shift_held = grinder.is_charging_spin
-	elif grinder.has_method("is_action_pressed"):
-		# Fallback for multiplayer
-		is_shift_held = grinder.is_action_pressed("spin_dash")
-	else:
-		# Last resort fallback
-		is_shift_held = Input.is_action_pressed("spin_dash")
+	# Use Input.is_action_pressed directly since is_charging_spin only works when grounded
+	var is_shift_held: bool = Input.is_action_pressed("spin_dash")
 
 	# Debug logging (throttled)
 	if should_log:
-		var has_var: bool = "is_charging_spin" in grinder
-		print("[RAIL] Update: player=", grinder.name, " has_charging_var=", has_var, " shift_held=", is_shift_held, " boost=", snapped(data.shift_boost_amount, 10))
+		print("[RAIL] Update: player=", grinder.name, " shift_held=", is_shift_held, " boost=", snapped(data.shift_boost_amount, 10))
 
 	# Debug logging for shift boost
 	if is_shift_held and data.shift_boost_amount == 0.0:
