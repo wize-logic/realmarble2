@@ -317,15 +317,19 @@ func do_chase(delta: float) -> void:
 	# Determine optimal distance based on current ability
 	var optimal_distance: float = get_optimal_combat_distance()
 
+	# Calculate chase buffer (larger than attack buffer to close distance aggressively)
+	var chase_buffer: float = max(2.0, optimal_distance * 0.5)  # 50% of optimal, minimum 2.0
+
 	# If we have a weapon and are too far, close in aggressively
 	# If we're at good range, maintain distance with strafing
-	if distance_to_target > optimal_distance + 5.0:
-		# Close the distance
-		move_towards(target_player.global_position, delta, 0.9)
+	if distance_to_target > optimal_distance + chase_buffer:
+		# Close the distance - faster for short-range abilities
+		var chase_speed: float = 1.0 if optimal_distance < 8.0 else 0.9  # Max speed for melee
+		move_towards(target_player.global_position, delta, chase_speed)
 		# Re-aim after moving
 		look_at_target(target_player.global_position, true)
 	else:
-		# Strafe while maintaining distance (strafe function handles aiming)
+		# Close enough - strafe while maintaining distance (strafe function handles aiming)
 		strafe_around_target(delta, optimal_distance)
 
 	# Use abilities while chasing if in range
@@ -406,13 +410,18 @@ func do_attack(delta: float) -> void:
 		# For AoE/melee, just check rough facing
 		is_aimed_at_target = is_facing_target(target_player.global_position, 60.0)
 
+	# Calculate distance buffer based on optimal range (proportional to ability range)
+	# Short-range weapons need tighter buffers, long-range can have larger buffers
+	var distance_buffer: float = max(1.0, optimal_distance * 0.3)  # 30% of optimal, minimum 1.0
+
 	# Tactical positioning - maintain optimal range while strafing
-	if distance_to_target > optimal_distance + 2.0:
-		# Too far, close in
-		move_towards(target_player.global_position, delta, 0.7)
+	if distance_to_target > optimal_distance + distance_buffer:
+		# Too far, close in aggressively (especially for short-range abilities)
+		var close_speed: float = 1.0 if optimal_distance < 8.0 else 0.7  # Faster for melee
+		move_towards(target_player.global_position, delta, close_speed)
 		# Re-aim after moving
 		look_at_target(target_player.global_position, true)
-	elif distance_to_target < optimal_distance - 2.0:
+	elif distance_to_target < optimal_distance - distance_buffer:
 		# Too close, back up while strafing
 		move_away_from(target_player.global_position, delta, 0.5)
 		# Re-aim after moving
