@@ -1261,11 +1261,16 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 
 			# Update attacker's killstreak and notify
 			var attacker: Node = world.get_node_or_null(str(attacker_id))
+			print("[KILL] Looking for attacker node: ", attacker_id, " - Found: ", attacker != null)
 			if attacker and "killstreak" in attacker:
 				attacker.killstreak += 1
+				print("[KILL] Attacker killstreak is now: ", attacker.killstreak)
 				# Notify HUD of kill with victim's name (call on attacker's node)
 				if attacker.has_method("notify_kill"):
+					print("[KILL] Calling notify_kill on attacker node")
 					attacker.notify_kill(attacker_id, name.to_int())
+				else:
+					print("[KILL] ERROR: Attacker doesn't have notify_kill method!")
 
 				# Notify about killstreak milestones
 				if attacker.killstreak == 5 or attacker.killstreak == 10:
@@ -2256,12 +2261,19 @@ func apply_marble_material() -> void:
 
 func notify_kill(killer_id: int, victim_id: int) -> void:
 	"""Notify the HUD about a kill - should be called on the killer's player node"""
+	print("[NOTIFY_KILL] Called with killer_id: ", killer_id, ", victim_id: ", victim_id)
+	print("[NOTIFY_KILL] This player name: ", name, ", has_multiplayer_peer: ", multiplayer.has_multiplayer_peer())
+
 	# Only show if this is the local player (has authority)
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		print("[NOTIFY_KILL] Skipping - not authority")
 		return  # Skip for non-authority players (bots, other players)
+
+	print("[NOTIFY_KILL] Passed authority check")
 
 	var world: Node = get_parent()
 	if not world:
+		print("[NOTIFY_KILL] ERROR: No world node!")
 		return
 
 	# Get the victim's name
@@ -2273,14 +2285,19 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 			victim_name = "Bot"
 		else:
 			victim_name = "Player %d" % victim_id
+	print("[NOTIFY_KILL] Victim name: ", victim_name)
 
 	# Find the HUD and show kill notification
 	var ui_layer: CanvasLayer = world.get_node_or_null("UI")
+	print("[NOTIFY_KILL] UI layer found: ", ui_layer != null)
 	if ui_layer:
 		var game_hud = ui_layer.get_node_or_null("GameHUD")
+		print("[NOTIFY_KILL] GameHUD found: ", game_hud != null)
 		if game_hud and game_hud.has_method("show_kill_notification"):
-			print("Calling show_kill_notification for: ", victim_name)
+			print("[NOTIFY_KILL] Calling show_kill_notification for: ", victim_name)
 			game_hud.show_kill_notification(victim_name)
+		else:
+			print("[NOTIFY_KILL] ERROR: GameHUD or method not found!")
 
 func notify_killstreak(player_id: int, streak: int) -> void:
 	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
