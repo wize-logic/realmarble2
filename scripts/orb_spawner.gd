@@ -50,8 +50,17 @@ func spawn_orbs() -> void:
 		return
 
 	# Scale orb count based on number of players (3 orbs per player)
+	# Type B arenas get more orbs due to larger vertical space and rooms
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var scaled_orbs: int = clamp(int(player_count * 3.0), 9, 36)  # Min 9, Max 36 orbs
+	var orbs_per_player: float = 3.0
+
+	# Check if Type B arena (more orbs needed for larger, multi-tier arenas)
+	# Reuse world variable from above
+	if world and world.has_method("get_current_level_type"):
+		if world.get_current_level_type() == "B":
+			orbs_per_player = 4.5  # 50% more orbs for Type B
+
+	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 12, 48)  # Increased max for Type B
 
 	print("=== ORB SPAWNER: Starting to spawn orbs ===")
 	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])

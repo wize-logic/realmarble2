@@ -501,12 +501,12 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
 	add_child(pad_instance)
 
-	# Material for jump pad (bright color to stand out)
+	# Material for jump pad (bright green - unshaded for GL Compatibility)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.2, 1.0, 0.3)  # Bright green
-	material.emission_enabled = true
-	material.emission = Color(0.2, 1.0, 0.3)
-	material.emission_energy = 0.5
+	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright green
+	# Use UNSHADED mode to bypass lighting issues in GL Compatibility mode
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.disable_receive_shadows = true
 	pad_instance.material_override = material
 
 	# Add collision to jump pad so players can stand on it
@@ -578,12 +578,12 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	teleporter_instance.position = Vector3(pos.x, 0.15, pos.z)
 	add_child(teleporter_instance)
 
-	# Material for teleporter (glowing blue/purple)
+	# Material for teleporter (blue/purple - unshaded for GL Compatibility)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 0.3, 1.0)  # Blue
-	material.emission_enabled = true
-	material.emission = Color(0.5, 0.3, 1.0)  # Purple glow
-	material.emission_energy = 1.0
+	material.albedo_color = Color(0.6, 0.4, 1.0)  # Blue-purple
+	# Use UNSHADED mode to bypass lighting issues in GL Compatibility mode
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.disable_receive_shadows = true
 	teleporter_instance.material_override = material
 
 	# Add collision to teleporter so players can stand on it

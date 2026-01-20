@@ -60,15 +60,24 @@ func spawn_abilities() -> void:
 		return
 
 	# Scale ability count based on number of players (2.5 abilities per player)
+	# Type B arenas get more abilities due to larger vertical space and rooms
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var total_abilities: int = clamp(int(player_count * 2.5), 8, 25)  # Min 8, Max 25 abilities
+	var abilities_per_player: float = 2.5
 
-	# Distribute abilities across types (proportional to original ratios)
-	# Original ratio: Dash=2, Explosion=2, Cannon=4, Sword=2 (total=10)
-	var scaled_dash: int = max(1, int(total_abilities * 0.2))      # 20%
-	var scaled_explosion: int = max(1, int(total_abilities * 0.2))  # 20%
-	var scaled_cannon: int = max(2, int(total_abilities * 0.4))     # 40%
-	var scaled_sword: int = max(1, int(total_abilities * 0.2))      # 20%
+	# Check if Type B arena (more abilities needed for larger, multi-tier arenas)
+	# Reuse world variable from above
+	if world and world.has_method("get_current_level_type"):
+		if world.get_current_level_type() == "B":
+			abilities_per_player = 3.5  # 40% more abilities for Type B
+
+	var total_abilities: int = clamp(int(player_count * abilities_per_player), 10, 35)  # Increased for Type B
+
+	# Distribute abilities equally across all types (25% each)
+	# All abilities are equally viable - none should be rare
+	var scaled_dash: int = max(1, int(total_abilities * 0.25))      # 25%
+	var scaled_explosion: int = max(1, int(total_abilities * 0.25))  # 25%
+	var scaled_cannon: int = max(1, int(total_abilities * 0.25))     # 25%
+	var scaled_sword: int = max(1, int(total_abilities * 0.25))      # 25%
 
 	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
 	print("Players: %d | Total abilities: %d" % [player_count, total_abilities])

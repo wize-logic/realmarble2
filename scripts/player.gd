@@ -28,6 +28,7 @@ var marble_material_manager = preload("res://scripts/marble_material_manager.gd"
 @onready var hit_sound: AudioStreamPlayer3D = get_node_or_null("HitSound")
 @onready var death_sound: AudioStreamPlayer3D = get_node_or_null("DeathSound")
 @onready var spawn_sound: AudioStreamPlayer3D = get_node_or_null("SpawnSound")
+@onready var teleport_sound: AudioStreamPlayer3D = get_node_or_null("TeleportSound")
 
 # UI Elements
 var charge_meter_ui: Control = null
@@ -2097,10 +2098,10 @@ func activate_teleporter(destination: Vector3) -> void:
 	is_bouncing = false
 	bounce_count = 0
 
-	# Play a sound effect (reuse hit sound)
-	if hit_sound and hit_sound.stream:
-		hit_sound.pitch_scale = 0.7  # Lower pitch for teleport
-		hit_sound.play()
+	# Play teleport sound effect (placeholder - needs audio file)
+	if teleport_sound and teleport_sound.stream:
+		teleport_sound.play()
+	# TODO: Add teleport sound audio file to TeleportSound node in marble_player.tscn
 
 	# Spawn BRIGHT PURPLE particle swirl effect at destination
 	spawn_teleporter_effect()
