@@ -317,8 +317,8 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 	var rail_direction: float = 1.0  # Default: forward along tangent
 
 	# Check if grinder has movement input direction (player controller)
-	if grinder.has("movement_input_direction"):
-		var input_dir: Vector3 = grinder.get("movement_input_direction")
+	if "movement_input_direction" in grinder:
+		var input_dir: Vector3 = grinder.movement_input_direction
 		if input_dir.length_squared() > 0.01:  # Player is pressing movement keys
 			# Project input direction onto rail tangent to determine desired direction
 			var dot_product: float = input_dir.dot(tangent)
@@ -352,8 +352,8 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 					var boost_desc: String
 
 					# Check if player has input direction preference
-					if grinder.has("movement_input_direction"):
-						var input_dir: Vector3 = grinder.get("movement_input_direction")
+					if "movement_input_direction" in grinder:
+						var input_dir: Vector3 = grinder.movement_input_direction
 						if input_dir.length_squared() > 0.01:
 							# Use player's desired direction
 							var dot_product: float = input_dir.dot(tangent)
