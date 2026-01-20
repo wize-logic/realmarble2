@@ -13,6 +13,14 @@ var action_timer: float = 0.0
 const AGGRO_RANGE: float = 40.0
 const ATTACK_RANGE: float = 15.0
 
+# Ability hitbox ranges (max reach for each ability)
+const ABILITY_RANGES: Dictionary = {
+	"Sword": 4.2,        # Max sword range at full charge
+	"Explosion": 10.0,   # Max explosion radius at full charge
+	"Dash Attack": 18.0, # Dash travel + hitbox
+	"Cannon": 50.0       # Long range projectile
+}
+
 func _ready() -> void:
 	bot = get_parent()
 	if not bot:
@@ -117,13 +125,23 @@ func do_attack(delta: float) -> void:
 		state = "CHASE"
 		return
 
-	# Face player
+	# ALWAYS face player before attacking
 	look_at_target(target_player.global_position)
 
-	# Use ability when ready
+	# Only attack if: ability ready, within hitbox range, and aimed at target
 	if bot.current_ability.is_ready() and action_timer <= 0.0:
-		bot.current_ability.use()
-		action_timer = 0.5  # Cooldown between actions
+		# Check if target is within ability range
+		if is_target_in_ability_range(distance):
+			# Check if we're aimed at target
+			if is_aimed_at_target(target_player.global_position):
+				bot.current_ability.use()
+				action_timer = 0.5  # Cooldown between actions
+			else:
+				# Not aimed yet, keep rotating
+				pass
+		else:
+			# Out of range, chase closer
+			state = "CHASE"
 
 func do_collect(delta: float) -> void:
 	## Collect ability or orb
@@ -225,3 +243,34 @@ func find_collectible() -> void:
 				closest_orb = orb
 
 		target_collectible = closest_orb
+
+func is_target_in_ability_range(distance_to_target: float) -> bool:
+	## Check if target is within the ability's maximum hitbox range
+	if not bot.current_ability:
+		return false
+
+	var ability_name: String = bot.current_ability.ability_name if "ability_name" in bot.current_ability else ""
+
+	# Get max range for this ability
+	var max_range: float = ABILITY_RANGES.get(ability_name, 15.0)
+
+	return distance_to_target <= max_range
+
+func is_aimed_at_target(target_pos: Vector3) -> bool:
+	## Check if bot is aimed at target within acceptable angle
+	if not bot:
+		return false
+
+	# Get bot's forward direction
+	var forward: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+
+	# Get direction to target
+	var to_target: Vector3 = (target_pos - bot.global_position).normalized()
+	to_target.y = 0
+
+	# Calculate angle between forward and target
+	var dot: float = forward.dot(to_target)
+	var angle_deg: float = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
+
+	# Allow 30 degree cone (generous for simple aiming)
+	return angle_deg <= 30.0
