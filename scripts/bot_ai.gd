@@ -94,6 +94,10 @@ const CACHE_REFRESH_INTERVAL: float = 0.5
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
 
+# NEW: Proactive edge avoidance
+var edge_check_timer: float = 0.0
+const EDGE_CHECK_INTERVAL: float = 0.3
+
 func _ready() -> void:
 	bot = get_parent()
 	if not bot:
@@ -137,6 +141,7 @@ func _physics_process(delta: float) -> void:
 	grinding_timer += delta
 	cache_refresh_timer -= delta
 	player_avoidance_timer -= delta
+	edge_check_timer -= delta
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -152,6 +157,11 @@ func _physics_process(delta: float) -> void:
 	if is_stuck and unstuck_timer > 0.0:
 		handle_unstuck_movement(delta)
 		return
+
+	# NEW: Proactive edge avoidance check
+	if edge_check_timer <= 0.0:
+		check_nearby_edges()
+		edge_check_timer = EDGE_CHECK_INTERVAL
 
 	# Check if bot is stuck trying to reach a target
 	check_target_timeout(delta)
@@ -545,6 +555,18 @@ func strafe_around_target(preferred_distance: float) -> void:
 	# Apply combined movement
 	var movement: Vector3 = (strafe_vec * 0.7 + distance_adjustment).normalized()
 	if movement.length() > 0.1:
+		# EDGE DETECTION FIX: Check for edges before strafing
+		if check_for_edge(movement, 4.0):
+			# Edge detected! Reverse strafe direction and apply braking
+			strafe_direction *= -1
+			movement = -movement  # Move away from edge
+			# Apply braking force to reduce momentum
+			if "linear_velocity" in bot:
+				var braking_force: Vector3 = -bot.linear_velocity * 0.8
+				braking_force.y = 0
+				bot.apply_central_force(braking_force)
+			return
+
 		var force: float = bot.current_roll_force * 0.75
 		bot.apply_central_force(movement * force)
 
@@ -557,6 +579,21 @@ func move_away_from(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	direction.y = 0
 
 	if direction.length() > 0.1:
+		# EDGE DETECTION FIX: Check for edges when retreating
+		if check_for_edge(direction, 4.0):
+			# Edge detected while retreating! Find safe direction
+			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
+			if safe_direction != Vector3.ZERO:
+				direction = safe_direction
+				speed_mult *= 0.5  # Slow down near edges
+			else:
+				# No safe direction, stop and apply braking
+				if "linear_velocity" in bot:
+					var braking_force: Vector3 = -bot.linear_velocity * 1.2
+					braking_force.y = 0
+					bot.apply_central_force(braking_force)
+				return
+
 		var force: float = bot.current_roll_force * speed_mult
 		bot.apply_central_force(direction * force)
 
@@ -695,14 +732,20 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 				direction = (direction * 0.7 + avoidance_force * 0.3).normalized()
 			player_avoidance_timer = PLAYER_AVOIDANCE_CHECK_INTERVAL
 
-		# Check for dangerous edges
-		if check_for_edge(direction, 3.0):
+		# Check for dangerous edges (IMPROVED: increased distance and better braking)
+		if check_for_edge(direction, 4.0):
 			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
 			if safe_direction != Vector3.ZERO:
 				direction = safe_direction
-				speed_mult *= 0.6
+				speed_mult *= 0.5  # Slow down more near edges
 			else:
-				bot.apply_central_force(-direction * bot.current_roll_force * 0.7)
+				# No safe direction found - apply emergency braking!
+				if "linear_velocity" in bot:
+					var braking_force: Vector3 = -bot.linear_velocity * 1.5
+					braking_force.y = 0
+					bot.apply_central_force(braking_force)
+				# Also apply backward force
+				bot.apply_central_force(-direction * bot.current_roll_force * 1.2)
 				return
 
 		# Check for obstacles
@@ -763,6 +806,55 @@ func get_player_avoidance_force() -> Vector3:
 			avoidance += -to_player.normalized() * repel_strength
 
 	return avoidance.normalized()
+
+func check_nearby_edges() -> void:
+	"""NEW: Proactively check for nearby edges and apply corrective force"""
+	if not bot or not "linear_velocity" in bot:
+		return
+
+	# Check in all cardinal directions for nearby edges
+	var directions_to_check: Array = [
+		Vector3.FORWARD,
+		Vector3.BACK,
+		Vector3.LEFT,
+		Vector3.RIGHT
+	]
+
+	var safe_direction: Vector3 = Vector3.ZERO
+	var closest_edge_distance: float = INF
+
+	for dir in directions_to_check:
+		# Rotate direction based on bot's facing
+		var world_dir: Vector3 = dir.rotated(Vector3.UP, bot.rotation.y)
+		world_dir.y = 0
+
+		# Check if there's an edge in this direction
+		if check_for_edge(world_dir, 3.5):
+			# Edge detected in this direction
+			var edge_distance: float = 3.5  # Approximate distance
+
+			if edge_distance < closest_edge_distance:
+				closest_edge_distance = edge_distance
+				# Safe direction is opposite to the edge
+				safe_direction = -world_dir
+
+	# If we found an edge nearby and bot is moving, apply corrective force
+	if safe_direction != Vector3.ZERO and bot.linear_velocity.length() > 1.0:
+		var horizontal_velocity: Vector3 = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z)
+
+		# Check if bot is moving toward the edge
+		var velocity_dir: Vector3 = horizontal_velocity.normalized()
+		var dot_to_edge: float = velocity_dir.dot(-safe_direction)
+
+		if dot_to_edge > 0.3:  # Moving toward edge
+			# Apply corrective force away from edge
+			var corrective_force: Vector3 = safe_direction * bot.current_roll_force * 0.4
+			bot.apply_central_force(corrective_force)
+
+			# Also apply braking if moving fast toward edge
+			if horizontal_velocity.length() > 5.0:
+				var braking_force: Vector3 = -horizontal_velocity * 0.5
+				bot.apply_central_force(braking_force)
 
 func bot_jump() -> void:
 	"""Make bot jump"""
@@ -983,8 +1075,8 @@ func find_nearest_rail() -> void:
 ## OBSTACLE DETECTION AND AVOIDANCE
 ## ============================================================================
 
-func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
-	"""Check for dangerous edge/drop-off"""
+func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
+	"""IMPROVED: Check for dangerous edge/drop-off with momentum compensation"""
 	if not bot:
 		return false
 
@@ -1005,8 +1097,16 @@ func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 
 	var current_ground_y: float = current_result.position.y
 
+	# IMPROVED: Increase check distance based on bot's velocity (momentum compensation)
+	var velocity_multiplier: float = 1.0
+	if "linear_velocity" in bot:
+		var horizontal_speed: float = Vector2(bot.linear_velocity.x, bot.linear_velocity.z).length()
+		velocity_multiplier = 1.0 + min(horizontal_speed / 20.0, 1.5)  # Up to 2.5x for fast bots
+
+	var adjusted_check_distance: float = check_distance * velocity_multiplier
+
 	# Check ahead for edges
-	var forward_point: Vector3 = bot.global_position + direction.normalized() * check_distance
+	var forward_point: Vector3 = bot.global_position + direction.normalized() * adjusted_check_distance
 	var ray_start: Vector3 = forward_point + Vector3.UP * 0.5
 	var ray_end: Vector3 = forward_point + Vector3.DOWN * 10.0
 
@@ -1022,7 +1122,8 @@ func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 	var ahead_ground_y: float = result.position.y
 	var ground_drop: float = current_ground_y - ahead_ground_y
 
-	return ground_drop > 4.5
+	# IMPROVED: Lower threshold from 4.5 to 3.0 for more sensitive edge detection
+	return ground_drop > 3.0
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""Find safe direction away from edge"""
