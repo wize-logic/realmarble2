@@ -31,15 +31,24 @@ func _ready() -> void:
 
 func drop() -> void:
 	"""Override drop to clean up reticle"""
+	cleanup_reticle()
 	super.drop()
+
+func _exit_tree() -> void:
+	"""Ensure reticle is cleaned up when ability is removed from scene"""
 	cleanup_reticle()
 
 func cleanup_reticle() -> void:
 	"""Clean up the reticle when ability is dropped or destroyed"""
 	if reticle and is_instance_valid(reticle):
+		# Remove from parent first to ensure it's detached
 		if reticle.is_inside_tree():
-			reticle.queue_free()
-		reticle = null
+			var parent = reticle.get_parent()
+			if parent:
+				parent.remove_child(reticle)
+		# Then free it
+		reticle.queue_free()
+	reticle = null
 	reticle_target = null
 
 func find_nearest_player() -> Node3D:
@@ -527,6 +536,9 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 func create_reticle() -> void:
 	"""Create a 3D reticle that follows the locked target"""
+	# Clean up any existing reticle first
+	cleanup_reticle()
+
 	reticle = MeshInstance3D.new()
 	reticle.name = "CannonReticle"
 
@@ -610,6 +622,9 @@ func _process(delta: float) -> void:
 
 	# Update reticle position to follow locked target
 	# Only show reticle to the local player who has the cannon
+	if not reticle or not is_instance_valid(reticle):
+		return  # Reticle was destroyed, skip processing
+
 	if player and is_instance_valid(player) and player.is_inside_tree():
 		# Check if this player is the local player (has multiplayer authority)
 		var is_local_player: bool = player.is_multiplayer_authority()
@@ -643,7 +658,6 @@ func _process(delta: float) -> void:
 			reticle.visible = false
 			reticle_target = null
 	else:
-		# Player is invalid - hide reticle
-		if reticle:
-			reticle.visible = false
-			reticle_target = null
+		# Player is invalid - hide reticle and clean up
+		reticle.visible = false
+		reticle_target = null
