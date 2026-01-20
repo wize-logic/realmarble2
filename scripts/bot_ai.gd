@@ -170,19 +170,28 @@ func _physics_process(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
-	# CRITICAL: Force bots out of combat states if they don't have an ability
+	# PRIORITY 0 (HIGHEST): Force bots out of combat states if they don't have an ability
 	# This prevents bots from strafing/attacking without weapons
-	if not bot.current_ability and (state == "CHASE" or state == "ATTACK"):
-		# Don't allow combat without an ability - get ability or wander
-		if target_ability and is_instance_valid(target_ability):
-			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-			if distance_to_ability < 60.0:
-				state = "COLLECT_ABILITY"
-				return
-		state = "WANDER"
-		return
+	# Check this FIRST before anything else
+	if not bot.current_ability:
+		# Immediately exit any combat state if we have no ability
+		if state == "CHASE" or state == "ATTACK":
+			# Don't allow combat without an ability - get ability immediately
+			if target_ability and is_instance_valid(target_ability):
+				var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+				if distance_to_ability < 60.0:
+					state = "COLLECT_ABILITY"
+					return
+			# No nearby ability, fall back to collecting orbs or wandering
+			if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
+				var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
+				if distance_to_orb < 50.0:
+					state = "COLLECT_ORB"
+					return
+			state = "WANDER"
+			return
 
-	# Priority 0: Retreat if low health and enemy nearby (can retreat without ability)
+	# Priority 1: Retreat if low health and enemy nearby (can retreat without ability)
 	if bot.health <= 1 and target_player and is_instance_valid(target_player):
 		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 		if distance_to_target < attack_range * 1.5:
@@ -196,7 +205,7 @@ func update_state() -> void:
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# Priority 1: CRITICAL - Get an ability if we don't have one (can't fight without it!)
+	# Priority 2: CRITICAL - Get an ability if we don't have one (can't fight without it!)
 	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
 		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
 		# Abilities are absolutely critical - prioritize above almost everything
@@ -204,13 +213,25 @@ func update_state() -> void:
 			state = "COLLECT_ABILITY"
 			return
 
-	# Priority 2: Combat if we HAVE an ability and enemy is in immediate attack range
+	# Priority 3: Collect orbs between abilities when below max level
+	# If ability is on cooldown and bot needs levels, collect orbs
+	if bot.current_ability and bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
+		var is_ability_ready: bool = bot.current_ability.has_method("is_ready") and bot.current_ability.is_ready()
+		if not is_ability_ready:  # Ability on cooldown, good time to collect orbs
+			var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
+			# Only collect if no immediate threat OR enemy is far away
+			var safe_to_collect: bool = not has_combat_target or distance_to_target > attack_range * 2.0
+			if distance_to_orb < 40.0 and safe_to_collect:
+				state = "COLLECT_ORB"
+				return
+
+	# Priority 4: Combat if we HAVE an ability and enemy is in immediate attack range
 	# CRITICAL: Only allow combat states if bot has an ability
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.5:
 		state = "ATTACK"
 		return
 
-	# Priority 3: Collect orbs if not max level and one is nearby
+	# Priority 5: Collect orbs if not max level and one is nearby
 	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 		# Collect orbs more aggressively - bots need to level up
@@ -222,7 +243,7 @@ func update_state() -> void:
 			state = "COLLECT_ORB"
 			return
 
-	# Priority 4: Combat if we HAVE an ability and player is in aggro range
+	# Priority 6: Combat if we HAVE an ability and player is in aggro range
 	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.5:
 			state = "ATTACK"
@@ -289,20 +310,14 @@ func do_wander(delta: float) -> void:
 
 func do_chase(delta: float) -> void:
 	"""Chase the target player with tactical movement"""
-	if not target_player:
+	# CRITICAL: Absolutely no chasing without an ability!
+	# Exit immediately before any movement or logic
+	if not bot.current_ability:
+		# Force state change and return - don't do any movement
+		state = "WANDER"
 		return
 
-	# CRITICAL: Don't stay in chase mode without an ability!
-	# Transition to collecting an ability or wandering instead
-	if not bot.current_ability:
-		# Prioritize getting an ability - can't fight effectively without one
-		if target_ability and is_instance_valid(target_ability):
-			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-			if distance_to_ability < 60.0:
-				state = "COLLECT_ABILITY"
-				return
-		# No nearby ability, fall back to wandering
-		state = "WANDER"
+	if not target_player:
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
@@ -372,20 +387,14 @@ func do_chase(delta: float) -> void:
 
 func do_attack(delta: float) -> void:
 	"""Attack the target player with smart ability usage"""
-	if not target_player:
+	# CRITICAL: Absolutely no attacking without an ability!
+	# Exit immediately before any movement or logic
+	if not bot.current_ability:
+		# Force state change and return - don't do any positioning or strafing
+		state = "WANDER"
 		return
 
-	# CRITICAL: Don't stay in attack mode without an ability!
-	# Transition to collecting an ability or wandering instead
-	if not bot.current_ability:
-		# Prioritize getting an ability - can't fight effectively without one
-		if target_ability and is_instance_valid(target_ability):
-			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-			if distance_to_ability < 60.0:
-				state = "COLLECT_ABILITY"
-				return
-		# No nearby ability, fall back to wandering
-		state = "WANDER"
+	if not target_player:
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
