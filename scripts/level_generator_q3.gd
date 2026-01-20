@@ -701,7 +701,7 @@ func _on_death_zone_entered(body: Node3D) -> void:
 # ============================================================================
 
 func get_spawn_points() -> PackedVector3Array:
-	"""Generate spawn points throughout the arena - supports up to 16 players"""
+	"""Generate spawn points throughout the arena - supports up to 7 players (16+ spawn points available)"""
 	var spawns: PackedVector3Array = PackedVector3Array()
 
 	# Main arena spawns

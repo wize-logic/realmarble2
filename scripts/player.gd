@@ -38,7 +38,7 @@ var rail_reticle_ui: Control = null  # Reticle for rail targeting
 
 ## Number of hits before respawn
 @export var health: int = 3
-## The xyz position of the random spawns, you can add as many as you want! (16 spawns for 16 players)
+## The xyz position of the random spawns, you can add as many as you want! (16 spawn points available for up to 7 players)
 ## Y=4 (raised from 3, originally 2) to prevent bots sinking through floor on spawn at high player density
 @export var spawns: PackedVector3Array = [
 	Vector3(0, 4, 0),      # Center

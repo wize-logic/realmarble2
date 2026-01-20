@@ -443,8 +443,8 @@ func ask_bot_count() -> int:
 	bot_count_dialog_closed = false
 	bot_count_selected = 3  # Default
 
-	# Bot count options - cap at 8 for HTML5 to prevent physics overload
-	var bot_counts = [1, 3, 5, 7, 8] if OS.has_feature("web") else [1, 3, 5, 7, 10, 15]
+	# Bot count options - cap at 7 to prevent physics overload
+	var bot_counts = [1, 3, 5, 7]
 
 	# Create centered grid container for buttons (3 columns for better layout)
 	var grid_container = CenterContainer.new()
@@ -1557,6 +1557,12 @@ func spawn_bot() -> void:
 	print("--- spawn_bot() called ---")
 	print("Bot counter before: ", bot_counter)
 	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
+
+	# Check if we're already at max capacity (7 players/bots total)
+	var current_player_count: int = get_tree().get_nodes_in_group("players").size()
+	if current_player_count >= 7:
+		print("Cannot spawn bot - max 7 players/bots reached!")
+		return
 
 	bot_counter += 1
 	var bot_id: int = 9000 + bot_counter  # Bot IDs start at 9000

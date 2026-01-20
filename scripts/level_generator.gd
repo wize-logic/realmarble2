@@ -399,10 +399,10 @@ func apply_procedural_textures() -> void:
 	material_manager.apply_materials_to_level(self)
 
 func get_spawn_points() -> PackedVector3Array:
-	"""Generate spawn points on platforms - supports up to 16 players"""
+	"""Generate spawn points on platforms - supports up to 7 players (16 spawn points available)"""
 	var spawns: PackedVector3Array = PackedVector3Array()
 
-	# Main floor spawns - 16 guaranteed spawns in a circular pattern
+	# Main floor spawns - 16 spawn points in a circular pattern
 	spawns.append(Vector3(0, 2, 0))  # Center
 	# Ring 1 - 4 spawns
 	spawns.append(Vector3(10, 2, 0))
