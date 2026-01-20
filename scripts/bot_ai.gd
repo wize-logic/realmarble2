@@ -170,31 +170,30 @@ func _physics_process(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
-	# PRIORITY 0 (HIGHEST): No player targeting or combat without an ability
-	# This prevents bots from stalking/following/strafing/attacking without weapons
-	# Check this FIRST before anything else
+	# PRIORITY 0 (HIGHEST): Get an ability if we don't have one - can't do anything without it!
 	if not bot.current_ability:
-		# CRITICAL: Clear player target completely - don't even track players without a weapon
-		# This prevents "stalking" behavior where bots follow players around
-		target_player = null
-
-		# Immediately exit any combat-related state if we have no ability
+		# CRITICAL: Clear player target in combat states only (prevents stalking/strafing)
 		if state == "CHASE" or state == "ATTACK" or state == "RETREAT":
-			# Don't allow ANY combat-related behavior without an ability
-			# Prioritize getting an ability immediately
-			if target_ability and is_instance_valid(target_ability):
-				var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-				if distance_to_ability < 60.0:
-					state = "COLLECT_ABILITY"
-					return
-			# No nearby ability, fall back to collecting orbs or wandering
-			if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
-				var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
-				if distance_to_orb < 50.0:
-					state = "COLLECT_ORB"
-					return
-			state = "WANDER"
+			target_player = null
+
+		# Actively search for abilities - this is THE top priority
+		find_nearest_ability()
+
+		# If we found an ability, go get it immediately
+		if target_ability and is_instance_valid(target_ability):
+			state = "COLLECT_ABILITY"
 			return
+
+		# No abilities available, collect orbs to level up instead
+		if bot.level < bot.MAX_LEVEL:
+			find_nearest_orb()
+			if target_orb and is_instance_valid(target_orb):
+				state = "COLLECT_ORB"
+				return
+
+		# Nothing to collect, just wander and keep searching
+		state = "WANDER"
+		return
 
 	# Priority 1: Retreat if low health and enemy nearby (only when we have an ability)
 	if bot.health <= 1 and target_player and is_instance_valid(target_player):
@@ -210,45 +209,42 @@ func update_state() -> void:
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# Priority 2: CRITICAL - Get an ability if we don't have one (can't fight without it!)
-	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Abilities are absolutely critical - prioritize above almost everything
-		if distance_to_ability < 60.0:  # Increased range when we have no ability
-			state = "COLLECT_ABILITY"
-			return
-
-	# Priority 3: Collect orbs between abilities when below max level
+	# Priority 2: Collect orbs between abilities when below max level
 	# If ability is on cooldown and bot needs levels, collect orbs
-	if bot.current_ability and bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
+	if bot.current_ability and bot.level < bot.MAX_LEVEL:
 		var is_ability_ready: bool = bot.current_ability.has_method("is_ready") and bot.current_ability.is_ready()
 		if not is_ability_ready:  # Ability on cooldown, good time to collect orbs
-			var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 			# Only collect if no immediate threat OR enemy is far away
 			var safe_to_collect: bool = not has_combat_target or distance_to_target > attack_range * 2.0
-			if distance_to_orb < 40.0 and safe_to_collect:
-				state = "COLLECT_ORB"
-				return
+			if safe_to_collect:
+				find_nearest_orb()  # Search for orbs
+				if target_orb and is_instance_valid(target_orb):
+					var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
+					if distance_to_orb < 40.0:
+						state = "COLLECT_ORB"
+						return
 
-	# Priority 4: Combat if we HAVE an ability and enemy is in immediate attack range
+	# Priority 3: Combat if we HAVE an ability and enemy is in immediate attack range
 	# CRITICAL: Only allow combat states if bot has an ability
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.5:
 		state = "ATTACK"
 		return
 
-	# Priority 5: Collect orbs if not max level and one is nearby
-	if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
-		var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
-		# Collect orbs more aggressively - bots need to level up
-		var orb_priority_range: float = 35.0
-		if not has_combat_target or distance_to_target > aggro_range * 0.5:
-			orb_priority_range = 50.0
-		# Don't collect orbs if enemy is actively attacking us (very close) and we have an ability
-		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 1.8 or not bot.current_ability):
-			state = "COLLECT_ORB"
-			return
+	# Priority 4: Collect orbs if not max level and one is nearby
+	if bot.level < bot.MAX_LEVEL:
+		find_nearest_orb()  # Search for orbs
+		if target_orb and is_instance_valid(target_orb):
+			var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
+			# Collect orbs more aggressively - bots need to level up
+			var orb_priority_range: float = 35.0
+			if not has_combat_target or distance_to_target > aggro_range * 0.5:
+				orb_priority_range = 50.0
+			# Don't collect orbs if enemy is actively attacking us (very close) and we have an ability
+			if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 1.8 or not bot.current_ability):
+				state = "COLLECT_ORB"
+				return
 
-	# Priority 6: Combat if we HAVE an ability and player is in aggro range
+	# Priority 5: Combat if we HAVE an ability and player is in aggro range
 	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.5:
 			state = "ATTACK"
