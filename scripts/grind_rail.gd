@@ -35,9 +35,16 @@ class_name GrindRail
 @export var max_boost_attempts: int = 3  # Max boosts before detaching
 @export var boost_cooldown: float = 1.5  # Time between boost attempts
 
+# Shift speed boost settings
+@export var shift_boost_acceleration: float = 3000.0  # How quickly boost builds up per second
+@export var shift_boost_max: float = 5000.0  # Maximum additional boost force
+@export var shift_boost_decay_rate: float = 2500.0  # How quickly boost decays when shift released
+@export var shift_boost_spin_multiplier: float = 15.0  # How much to spin the marble when boosting
+
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
 var nearby_players: Array[RigidBody3D] = []  # Players near rail but not attached
+var debug_frame_counter: int = 0  # For throttling debug output
 
 class GrinderData:
 	var closest_offset: float = 0.0
@@ -52,6 +59,9 @@ class GrinderData:
 	var stuck_time: float = 0.0
 	var boost_attempts: int = 0
 	var last_boost_time: float = 0.0
+
+	# Shift speed boost
+	var shift_boost_amount: float = 0.0  # Current boost force from holding shift
 
 	func _init(start_offset: float):
 		closest_offset = start_offset
@@ -262,6 +272,10 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	var time_since_attach: float = current_time - data.attach_time
 
+	# Debug logging every 30 frames (about 0.5 seconds at 60fps)
+	debug_frame_counter += 1
+	var should_log: bool = (debug_frame_counter % 30 == 0)
+
 	var player_local: Vector3 = to_local(grinder.global_position)
 	var closest_offset: float = curve.get_closest_offset(player_local)
 
@@ -327,6 +341,38 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Apply acceleration in the player's desired direction along the rail
 	grinder.apply_central_force(tangent * rail_direction * constant_forward_push * grinder.mass * delta)
+
+	# Shift speed boost - check if player is holding shift while grinding
+	# Use raw KEY_SHIFT check instead of action, matching player.gd logic
+	var is_shift_held: bool = Input.is_key_pressed(KEY_SHIFT)
+
+	# Debug logging (throttled)
+	if should_log:
+		print("[RAIL] Update: player=", grinder.name, " shift_held=", is_shift_held, " boost=", snapped(data.shift_boost_amount, 10))
+
+	# Debug logging for shift boost
+	if is_shift_held and data.shift_boost_amount == 0.0:
+		print("[RAIL] Shift held - starting boost buildup")
+
+	# Update shift boost amount
+	if is_shift_held:
+		# Gradually increase boost when shift is held
+		var prev_boost: float = data.shift_boost_amount
+		data.shift_boost_amount = min(data.shift_boost_amount + shift_boost_acceleration * delta, shift_boost_max)
+		if int(prev_boost / 1000.0) != int(data.shift_boost_amount / 1000.0):  # Log every 1000 units
+			print("[RAIL] Boost building: ", snapped(data.shift_boost_amount, 100), " / ", shift_boost_max)
+	else:
+		# Gradually decay boost when shift is released
+		data.shift_boost_amount = max(data.shift_boost_amount - shift_boost_decay_rate * delta, 0.0)
+
+	# Apply shift boost force in the direction of movement
+	if data.shift_boost_amount > 0.0:
+		grinder.apply_central_force(tangent * rail_direction * data.shift_boost_amount * grinder.mass * delta)
+
+		# Add spinning visual effect - spin faster as boost increases
+		var boost_percentage: float = data.shift_boost_amount / shift_boost_max
+		var spin_axis: Vector3 = tangent * rail_direction  # Spin in the direction of movement
+		grinder.angular_velocity = spin_axis * shift_boost_spin_multiplier * boost_percentage
 
 	# Strong slope acceleration (use player's desired direction)
 	var look_ahead_off: float = clamp(attach_offset + rail_direction * 3.0, 0, length)
@@ -409,5 +455,7 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		_remove_grinder(grinder)
 		return
 
-	grinder.angular_velocity *= 0.15
+	# Only dampen angular velocity when not boosting (preserve the cool spin effect)
+	if data.shift_boost_amount <= 0.0:
+		grinder.angular_velocity *= 0.15
 	data.closest_offset = closest_offset
