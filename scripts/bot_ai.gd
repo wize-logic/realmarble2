@@ -67,9 +67,9 @@ const EXPLOSION_OPTIMAL_RANGE: float = 6.0
 
 # Ability hitbox sizes at different charge levels (for accurate positioning)
 # Format: [charge_1, charge_2, charge_3]
-const EXPLOSION_RADII: Array[float] = [5.0, 7.5, 10.0]  # +50% per charge level
-const SWORD_RANGES: Array[float] = [3.0, 3.6, 4.2]  # +20% per charge level
-const DASH_HITBOX_RADII: Array[float] = [1.5, 1.95, 2.4]  # +30% per charge level
+const EXPLOSION_RADII: Array = [5.0, 7.5, 10.0]  # +50% per charge level
+const SWORD_RANGES: Array = [3.0, 3.6, 4.2]  # +20% per charge level
+const DASH_HITBOX_RADII: Array = [1.5, 1.95, 2.4]  # +30% per charge level
 
 func _ready() -> void:
 	bot = get_parent()
@@ -996,7 +996,7 @@ func find_target() -> void:
 		target_player = null
 		return
 
-	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var players: Array = get_tree().get_nodes_in_group("players")
 	var closest_player: Node = null
 	var closest_distance: float = INF
 	var closest_visible_player: Node = null
@@ -1029,7 +1029,7 @@ func find_target() -> void:
 
 func find_nearest_ability() -> void:
 	"""Find the nearest ability pickup with line of sight"""
-	var abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	var abilities: Array = get_tree().get_nodes_in_group("ability_pickups")
 	var closest_ability: Node = null
 	var closest_distance: float = INF
 
@@ -1091,7 +1091,7 @@ func do_collect_ability(delta: float) -> void:
 
 func find_nearest_orb() -> void:
 	"""Find the nearest collectible orb with line of sight"""
-	var orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	var orbs: Array = get_tree().get_nodes_in_group("orbs")
 	var closest_orb: Node = null
 	var closest_distance: float = INF
 
