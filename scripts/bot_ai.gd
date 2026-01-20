@@ -273,6 +273,19 @@ func do_chase(delta: float) -> void:
 	if not target_player:
 		return
 
+	# CRITICAL: Don't stay in chase mode without an ability!
+	# Transition to collecting an ability or wandering instead
+	if not bot.current_ability:
+		# Prioritize getting an ability - can't fight effectively without one
+		if target_ability and is_instance_valid(target_ability):
+			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+			if distance_to_ability < 60.0:
+				state = "COLLECT_ABILITY"
+				return
+		# No nearby ability, fall back to wandering
+		state = "WANDER"
+		return
+
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
@@ -337,6 +350,19 @@ func do_chase(delta: float) -> void:
 func do_attack(delta: float) -> void:
 	"""Attack the target player with smart ability usage"""
 	if not target_player:
+		return
+
+	# CRITICAL: Don't stay in attack mode without an ability!
+	# Transition to collecting an ability or wandering instead
+	if not bot.current_ability:
+		# Prioritize getting an ability - can't fight effectively without one
+		if target_ability and is_instance_valid(target_ability):
+			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
+			if distance_to_ability < 60.0:
+				state = "COLLECT_ABILITY"
+				return
+		# No nearby ability, fall back to wandering
+		state = "WANDER"
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
