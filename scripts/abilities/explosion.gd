@@ -19,6 +19,9 @@ var explosion_particles: CPUParticles3D = null
 var explosion_area: Area3D = null
 var hit_players: Array = []  # Track who we've hit
 
+# Ground indicator for AoE radius
+var radius_indicator: MeshInstance3D = null
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Explosion"
@@ -157,6 +160,9 @@ func _ready() -> void:
 	# Disable by default
 	explosion_area.monitoring = false
 
+	# Create radius indicator for visual feedback
+	create_radius_indicator()
+
 func _process(delta: float) -> void:
 	super._process(delta)
 
@@ -164,6 +170,41 @@ func _process(delta: float) -> void:
 		explosion_timer -= delta
 		if explosion_timer <= 0.0:
 			end_explosion()
+
+	# Update radius indicator visibility and scale based on charging state
+	if radius_indicator and player and is_instance_valid(player) and player.is_inside_tree():
+		if is_charging:
+			# Show indicator while charging
+			if not radius_indicator.is_inside_tree():
+				# Add indicator to world if not already added
+				if player.get_parent():
+					player.get_parent().add_child(radius_indicator)
+
+			radius_indicator.visible = true
+
+			# Position at player's feet
+			var ground_position = player.global_position
+			ground_position.y = 0.1  # Slightly above ground to prevent z-fighting
+			radius_indicator.global_position = ground_position
+
+			# Scale indicator based on charge level (radius increases with charge)
+			var current_radius = explosion_radius * (1.0 + (charge_level - 1) * 0.5)  # +50% per level
+			var scale_factor = current_radius / explosion_radius
+			radius_indicator.scale = Vector3(scale_factor, 1.0, scale_factor)
+
+			# Pulse effect while charging
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.005) * 0.1
+			radius_indicator.scale *= pulse
+
+			# Rotate indicator slowly for visual effect
+			radius_indicator.rotation.y += delta * 0.5
+		else:
+			# Hide indicator when not charging
+			radius_indicator.visible = false
+	else:
+		# Player is invalid - hide indicator
+		if radius_indicator:
+			radius_indicator.visible = false
 
 func activate() -> void:
 	if not player:
@@ -311,3 +352,95 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func create_radius_indicator() -> void:
+	"""Create a ground circle indicator that shows the explosion radius while charging"""
+	radius_indicator = MeshInstance3D.new()
+	radius_indicator.name = "ExplosionRadiusIndicator"
+
+	# Create a cylinder mesh for the ground circle (very flat)
+	var cylinder: CylinderMesh = CylinderMesh.new()
+	cylinder.top_radius = explosion_radius
+	cylinder.bottom_radius = explosion_radius
+	cylinder.height = 0.05  # Very flat - just a ground decal
+	cylinder.radial_segments = 32
+	radius_indicator.mesh = cylinder
+
+	# Create material - very subtle, transparent, non-distracting
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)  # Subtle warm tone, 12% opacity
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	mat.disable_fog = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	radius_indicator.material_override = mat
+
+	# Add inner ring particles for extra visual feedback
+	var ring_particles: CPUParticles3D = CPUParticles3D.new()
+	ring_particles.name = "RingParticles"
+	radius_indicator.add_child(ring_particles)
+
+	# Configure particles - very subtle rotating around the edge
+	ring_particles.emitting = true
+	ring_particles.amount = 18  # Reduced from 30 for subtlety
+	ring_particles.lifetime = 1.0
+	ring_particles.explosiveness = 0.0
+	ring_particles.randomness = 0.1
+	ring_particles.local_coords = true
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.2, 0.2)
+	ring_particles.mesh = particle_mesh
+
+	# Create material for particles
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	ring_particles.mesh.material = particle_material
+
+	# Emission shape - ring around the edge of the circle
+	ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	ring_particles.emission_ring_axis = Vector3(0, 1, 0)
+	ring_particles.emission_ring_height = 0.1
+	ring_particles.emission_ring_radius = explosion_radius
+	ring_particles.emission_ring_inner_radius = explosion_radius - 0.3
+
+	# Movement - orbit around the circle
+	ring_particles.direction = Vector3(0, 0, 0)
+	ring_particles.spread = 0.0
+	ring_particles.gravity = Vector3.ZERO
+	ring_particles.initial_velocity_min = 0.3
+	ring_particles.initial_velocity_max = 0.8
+
+	# Size
+	ring_particles.scale_amount_min = 1.0
+	ring_particles.scale_amount_max = 1.5
+
+	# Color - very subtle warm gradient
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))  # Subtle warm tone
+	gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))  # Very subtle
+	gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))  # Transparent
+	ring_particles.color_ramp = gradient
+
+	# Initially hidden (will show when charging)
+	radius_indicator.visible = false
+
+func drop() -> void:
+	"""Override drop to clean up indicator"""
+	super.drop()
+	cleanup_indicator()
+
+func cleanup_indicator() -> void:
+	"""Clean up the indicator when ability is dropped or destroyed"""
+	if radius_indicator and is_instance_valid(radius_indicator):
+		if radius_indicator.is_inside_tree():
+			radius_indicator.queue_free()
+		radius_indicator = null

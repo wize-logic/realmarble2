@@ -4,8 +4,8 @@ extends Ability
 ## Performs a powerful forward dash that damages enemies on contact
 ## Like Kirby's dash attack!
 
-@export var dash_force: float = 200.0  # Increased from 80.0 (2.5x more powerful)
-@export var dash_duration: float = 0.6  # Increased from 0.5s for more impact
+@export var dash_force: float = 130.0  # Reduced by 35% from 200.0 for better balance
+@export var dash_duration: float = 0.4  # Reduced by 35% from 0.6 for better balance
 @export var damage: int = 1  # Damage unchanged
 @onready var ability_sound: AudioStreamPlayer3D = $DashSound
 
@@ -19,6 +19,9 @@ var hitbox: Area3D = null
 
 # Fire trail particle effect
 var fire_trail: CPUParticles3D = null
+
+# Direction indicator for dash targeting
+var direction_indicator: MeshInstance3D = null
 
 func _ready() -> void:
 	super._ready()
@@ -105,6 +108,9 @@ func _ready() -> void:
 	gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
 	fire_trail.color_ramp = gradient
 
+	# Create direction indicator for dash targeting
+	create_direction_indicator()
+
 func _process(delta: float) -> void:
 	super._process(delta)
 
@@ -120,6 +126,53 @@ func _process(delta: float) -> void:
 				# Keep the dash momentum going
 				player.apply_central_force(dash_direction * dash_force * 0.5)
 
+	# Update direction indicator visibility and orientation based on charging state
+	if direction_indicator and player and is_instance_valid(player) and player.is_inside_tree():
+		if is_charging:
+			# Show indicator while charging
+			if not direction_indicator.is_inside_tree():
+				# Add indicator to world if not already added
+				if player.get_parent():
+					player.get_parent().add_child(direction_indicator)
+
+			direction_indicator.visible = true
+
+			# Get player's camera/movement direction
+			var camera_arm: Node3D = player.get_node_or_null("CameraArm")
+			var target_direction: Vector3 = Vector3.FORWARD
+
+			if camera_arm:
+				# Point in camera forward direction
+				target_direction = -camera_arm.global_transform.basis.z
+				target_direction.y = 0
+				target_direction = target_direction.normalized()
+			else:
+				# Fallback for bots: use player's facing direction
+				target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+
+			# Position at player's feet, offset in dash direction
+			var indicator_position = player.global_position + target_direction * 2.0
+			indicator_position.y = 0.15  # Slightly above ground
+			direction_indicator.global_position = indicator_position
+
+			# Orient indicator to point in dash direction
+			direction_indicator.look_at(player.global_position + target_direction * 5.0, Vector3.UP)
+
+			# Scale based on charge level (longer arrow for higher charge)
+			var scale_factor = 1.0 + (charge_level - 1) * 0.3
+			direction_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
+
+			# Pulse effect while charging
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.15
+			direction_indicator.scale *= pulse
+		else:
+			# Hide indicator when not charging
+			direction_indicator.visible = false
+	else:
+		# Player is invalid - hide indicator
+		if direction_indicator:
+			direction_indicator.visible = false
+
 func activate() -> void:
 	if not player:
 		return
@@ -128,7 +181,7 @@ func activate() -> void:
 	var charge_multiplier: float = get_charge_multiplier()
 	var charged_damage: int = damage  # Always 1, no charge scaling on damage
 	var charged_dash_force: float = dash_force * charge_multiplier
-	var charged_knockback: float = 180.0 * charge_multiplier  # Increased from 100.0 for stronger impact
+	var charged_knockback: float = 117.0 * charge_multiplier  # Reduced by 35% from 180.0 for better balance
 
 	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
@@ -270,3 +323,97 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func create_direction_indicator() -> void:
+	"""Create an arrow indicator that shows the dash direction while charging"""
+	direction_indicator = MeshInstance3D.new()
+	direction_indicator.name = "DashDirectionIndicator"
+
+	# Create a cone mesh for the arrow (pointing forward)
+	var cone: CylinderMesh = CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 0.8
+	cone.height = 1.5
+	cone.radial_segments = 16
+	direction_indicator.mesh = cone
+
+	# Rotate so cone points in the -Z direction (forward)
+	direction_indicator.rotation_degrees = Vector3(90, 0, 0)
+
+	# Create material - very subtle, transparent, non-distracting
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)  # Subtle neutral purple-pink, 15% opacity
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	mat.disable_fog = true
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	direction_indicator.material_override = mat
+
+	# Add particles for extra visual feedback
+	var arrow_particles: CPUParticles3D = CPUParticles3D.new()
+	arrow_particles.name = "ArrowParticles"
+	direction_indicator.add_child(arrow_particles)
+
+	# Configure particles - very subtle flowing forward
+	arrow_particles.emitting = true
+	arrow_particles.amount = 12  # Reduced from 20 for subtlety
+	arrow_particles.lifetime = 0.6
+	arrow_particles.explosiveness = 0.0
+	arrow_particles.randomness = 0.2
+	arrow_particles.local_coords = false
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.15, 0.15)
+	arrow_particles.mesh = particle_mesh
+
+	# Create material for particles
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	arrow_particles.mesh.material = particle_material
+
+	# Emission shape - sphere at arrow tip
+	arrow_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	arrow_particles.emission_sphere_radius = 0.3
+
+	# Movement - flow forward along the arrow
+	arrow_particles.direction = Vector3(0, 0, -1)  # Forward
+	arrow_particles.spread = 15.0
+	arrow_particles.gravity = Vector3.ZERO
+	arrow_particles.initial_velocity_min = 1.0
+	arrow_particles.initial_velocity_max = 2.0
+
+	# Size
+	arrow_particles.scale_amount_min = 1.0
+	arrow_particles.scale_amount_max = 1.5
+
+	# Color - very subtle neutral purple gradient
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))  # Subtle neutral purple
+	gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))  # Very subtle
+	gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))  # Transparent
+	arrow_particles.color_ramp = gradient
+
+	# Initially hidden (will show when charging)
+	direction_indicator.visible = false
+
+func drop() -> void:
+	"""Override drop to clean up indicator"""
+	# Call parent drop first to handle ability drop logic
+	if has_method("super"):
+		super.drop()
+	cleanup_indicator()
+
+func cleanup_indicator() -> void:
+	"""Clean up the indicator when ability is dropped or destroyed"""
+	if direction_indicator and is_instance_valid(direction_indicator):
+		if direction_indicator.is_inside_tree():
+			direction_indicator.queue_free()
+		direction_indicator = null

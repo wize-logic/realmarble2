@@ -14,6 +14,10 @@ extends Ability
 # Track active projectiles for this player
 var active_projectiles: Array[Node3D] = []
 
+# Reticle system for target lock visualization
+var reticle: MeshInstance3D = null
+var reticle_target: Node3D = null
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Cannon"
@@ -21,6 +25,22 @@ func _ready() -> void:
 	cooldown_time = fire_rate
 	supports_charging = true  # Must support charging for input to work
 	max_charge_time = 0.01  # Instant fire - minimal charge time
+
+	# Create reticle for target lock visualization
+	create_reticle()
+
+func drop() -> void:
+	"""Override drop to clean up reticle"""
+	super.drop()
+	cleanup_reticle()
+
+func cleanup_reticle() -> void:
+	"""Clean up the reticle when ability is dropped or destroyed"""
+	if reticle and is_instance_valid(reticle):
+		if reticle.is_inside_tree():
+			reticle.queue_free()
+		reticle = null
+	reticle_target = null
 
 func find_nearest_player() -> Node3D:
 	"""Find the nearest player to lock onto (excluding self) - only targets in forward cone"""
@@ -256,9 +276,9 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		hit_sound.max_distance = 30.0  # Louder than gun (was 20.0)
 		hit_sound.volume_db = 6.0  # Louder than gun (was 3.0)
 		hit_sound.pitch_scale = randf_range(0.8, 1.0)  # Deeper than gun (was 1.2-1.4)
-		hit_sound.global_position = projectile_position  # Use cached position
 		if player and player.get_parent():
 			player.get_parent().add_child(hit_sound)
+			hit_sound.global_position = projectile_position  # Set position after adding to tree
 			hit_sound.play()
 			# Sound will auto-cleanup when it finishes
 
@@ -504,3 +524,126 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Auto-delete after lifetime
 	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(explosion.queue_free)
+
+func create_reticle() -> void:
+	"""Create a 3D reticle that follows the locked target"""
+	reticle = MeshInstance3D.new()
+	reticle.name = "CannonReticle"
+
+	# Create a torus (ring) mesh for the reticle
+	var torus: TorusMesh = TorusMesh.new()
+	torus.inner_radius = 0.8
+	torus.outer_radius = 1.2
+	torus.rings = 32
+	torus.ring_segments = 16
+	reticle.mesh = torus
+
+	# Create material - subtle lime green, transparent, with additive blending
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	mat.disable_fog = true
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y  # Face camera but stay horizontal
+	reticle.material_override = mat
+
+	# Add particle effect to reticle for extra visual feedback
+	var particles: CPUParticles3D = CPUParticles3D.new()
+	particles.name = "ReticleParticles"
+	reticle.add_child(particles)
+
+	# Configure particles - subtle rotating glow
+	particles.emitting = true
+	particles.amount = 20
+	particles.lifetime = 0.8
+	particles.explosiveness = 0.0
+	particles.randomness = 0.2
+	particles.local_coords = true
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.15, 0.15)
+	particles.mesh = particle_mesh
+
+	# Create material for particles
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	particles.mesh.material = particle_material
+
+	# Emission shape - ring around reticle
+	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	particles.emission_ring_axis = Vector3(0, 1, 0)
+	particles.emission_ring_height = 0.1
+	particles.emission_ring_radius = 1.0
+	particles.emission_ring_inner_radius = 0.8
+
+	# Movement - orbit around reticle
+	particles.direction = Vector3(0, 0, 0)
+	particles.spread = 0.0
+	particles.gravity = Vector3.ZERO
+	particles.initial_velocity_min = 0.5
+	particles.initial_velocity_max = 1.0
+
+	# Size
+	particles.scale_amount_min = 1.0
+	particles.scale_amount_max = 1.5
+
+	# Color - lime green fade
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
+	gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
+	gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
+	particles.color_ramp = gradient
+
+	# Initially hidden (will show when target is locked)
+	reticle.visible = false
+
+func _process(delta: float) -> void:
+	super._process(delta)
+
+	# Update reticle position to follow locked target
+	# Only show reticle to the local player who has the cannon
+	if player and is_instance_valid(player) and player.is_inside_tree():
+		# Check if this player is the local player (has multiplayer authority)
+		var is_local_player: bool = player.is_multiplayer_authority()
+
+		if is_local_player:
+			# Find the nearest player in the auto-aim cone
+			var target = find_nearest_player()
+
+			if target and is_instance_valid(target):
+				# We have a lock - show reticle and update position
+				if not reticle.is_inside_tree():
+					# Add reticle to world if not already added
+					if player.get_parent():
+						player.get_parent().add_child(reticle)
+
+				reticle.visible = true
+				reticle_target = target
+
+				# Position reticle above target with smooth interpolation
+				var target_position = target.global_position + Vector3(0, 1.5, 0)
+				reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
+
+				# Rotate reticle for visual effect
+				reticle.rotation.y += delta * 2.0
+			else:
+				# No lock - hide reticle
+				reticle.visible = false
+				reticle_target = null
+		else:
+			# Not local player - hide reticle
+			reticle.visible = false
+			reticle_target = null
+	else:
+		# Player is invalid - hide reticle
+		if reticle:
+			reticle.visible = false
+			reticle_target = null
