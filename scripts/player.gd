@@ -136,6 +136,12 @@ const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
+# Killstreak system
+var killstreak: int = 0  # Current killstreak count
+var last_attacker_id: int = -1  # ID of last player who damaged us
+var last_attacker_time: float = 0.0  # Time when last attacked
+const ATTACKER_TIMEOUT: float = 5.0  # Seconds before last_attacker is cleared
+
 # Ground detection
 var is_grounded: bool = false
 
@@ -645,6 +651,13 @@ func _process(delta: float) -> void:
 	else:
 		if not camera:
 			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+
+	# Handle last attacker timeout
+	if last_attacker_id != -1:
+		var current_time: float = Time.get_ticks_msec() / 1000.0
+		if (current_time - last_attacker_time) > ATTACKER_TIMEOUT:
+			last_attacker_id = -1
+			last_attacker_time = 0.0
 
 	# Handle falling death state - MUST run for ALL entities (players AND bots)
 	if is_falling_to_death:
@@ -1221,6 +1234,10 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	if god_mode:
 		return  # Immune to damage
 
+	# Track last attacker for knockoff kills
+	last_attacker_id = attacker_id
+	last_attacker_time = Time.get_ticks_msec() / 1000.0
+
 	health -= damage
 	print("Received %d damage from player %d! Health: %d" % [damage, attacker_id, health])
 
@@ -1242,6 +1259,24 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 				var player_id: int = name.to_int()
 				world.add_death(player_id)
 
+			# Update attacker's killstreak and notify
+			var attacker: Node = world.get_node_or_null(str(attacker_id))
+			print("[KILL] Looking for attacker node: ", attacker_id, " - Found: ", attacker != null)
+			if attacker and "killstreak" in attacker:
+				attacker.killstreak += 1
+				print("[KILL] Attacker killstreak is now: ", attacker.killstreak)
+				# Notify HUD of kill with victim's name (call on attacker's node)
+				if attacker.has_method("notify_kill"):
+					print("[KILL] Calling notify_kill on attacker node")
+					attacker.notify_kill(attacker_id, name.to_int())
+				else:
+					print("[KILL] ERROR: Attacker doesn't have notify_kill method!")
+
+				# Notify about killstreak milestones
+				if attacker.killstreak == 5 or attacker.killstreak == 10:
+					if attacker.has_method("notify_killstreak"):
+						attacker.notify_killstreak(attacker_id, attacker.killstreak)
+
 		# Play death effects before respawning
 		spawn_death_particles()
 		play_death_sound.rpc()
@@ -1257,6 +1292,11 @@ func respawn() -> void:
 	jump_count = 0  # Reset jumps
 	bounce_count = 0  # Reset bounce streak
 	update_stats()
+
+	# Reset killstreak and last attacker on death
+	killstreak = 0
+	last_attacker_id = -1
+	last_attacker_time = 0.0
 
 	# Reset death state
 	is_falling_to_death = false
@@ -1307,6 +1347,27 @@ func fall_death() -> void:
 	var world: Node = get_parent()
 	if world and world.has_method("add_death"):
 		world.add_death(player_id)
+
+	# Check if there was a recent attacker who should get credit for the knockoff kill
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+	if last_attacker_id != -1 and (current_time - last_attacker_time) <= ATTACKER_TIMEOUT:
+		print("  Knockoff kill credited to player %d" % last_attacker_id)
+		# Give attacker credit for the kill
+		if world and world.has_method("add_score"):
+			world.add_score(last_attacker_id, 1)
+
+		# Update attacker's killstreak and notify
+		var attacker: Node = world.get_node_or_null(str(last_attacker_id))
+		if attacker and "killstreak" in attacker:
+			attacker.killstreak += 1
+			# Notify HUD of kill with victim's name (call on attacker's node)
+			if attacker.has_method("notify_kill"):
+				attacker.notify_kill(last_attacker_id, name.to_int())
+
+			# Notify about killstreak milestones
+			if attacker.killstreak == 5 or attacker.killstreak == 10:
+				if attacker.has_method("notify_killstreak"):
+					attacker.notify_killstreak(last_attacker_id, attacker.killstreak)
 
 	# Don't drop orbs or abilities when falling to death
 	# (Players lose their items in the void)
@@ -2197,3 +2258,58 @@ func apply_marble_material() -> void:
 			aura_light.light_color = primary_color
 
 	print("Applied beautiful marble material to player: ", name)
+
+func notify_kill(killer_id: int, victim_id: int) -> void:
+	"""Notify the HUD about a kill - should be called on the killer's player node"""
+	print("[NOTIFY_KILL] Called with killer_id: ", killer_id, ", victim_id: ", victim_id)
+	print("[NOTIFY_KILL] This player name: ", name, ", has_multiplayer_peer: ", multiplayer.has_multiplayer_peer())
+
+	# Only show if this is the local player (has authority)
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		print("[NOTIFY_KILL] Skipping - not authority")
+		return  # Skip for non-authority players (bots, other players)
+
+	print("[NOTIFY_KILL] Passed authority check")
+
+	var world: Node = get_parent()
+	if not world:
+		print("[NOTIFY_KILL] ERROR: No world node!")
+		return
+
+	# Get the victim's name
+	var victim: Node = world.get_node_or_null(str(victim_id))
+	var victim_name: String = "Player"
+	if victim:
+		# Check if it's a bot (ID >= 9000) or player
+		if victim_id >= 9000:
+			victim_name = "Bot"
+		else:
+			victim_name = "Player %d" % victim_id
+	print("[NOTIFY_KILL] Victim name: ", victim_name)
+
+	# Find the HUD and show kill notification
+	# HUD is at GameHUD/HUD path (see world.gd line 11)
+	var game_hud = world.get_node_or_null("GameHUD/HUD")
+	print("[NOTIFY_KILL] GameHUD found: ", game_hud != null)
+	if game_hud and game_hud.has_method("show_kill_notification"):
+		print("[NOTIFY_KILL] Calling show_kill_notification for: ", victim_name)
+		game_hud.show_kill_notification(victim_name)
+	else:
+		print("[NOTIFY_KILL] ERROR: GameHUD or method not found!")
+
+func notify_killstreak(player_id: int, streak: int) -> void:
+	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
+	# Only show if this is the local player (has authority)
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		return  # Skip for non-authority players (bots, other players)
+
+	var world: Node = get_parent()
+	if not world:
+		return
+
+	# Find the HUD and show killstreak notification
+	# HUD is at GameHUD/HUD path (see world.gd line 11)
+	var game_hud = world.get_node_or_null("GameHUD/HUD")
+	if game_hud and game_hud.has_method("show_killstreak_notification"):
+		print("Calling show_killstreak_notification for streak: ", streak)
+		game_hud.show_killstreak_notification(streak)
