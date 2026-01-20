@@ -1160,7 +1160,7 @@ func start_deathmatch() -> void:
 
 	# Start countdown
 	countdown_active = true
-	countdown_time = 3.0  # 3 seconds: "READY" (1s), "SET" (1s), "GO!" (1s)
+	countdown_time = 2.0  # 2 seconds: "READY" (1s), "GO!" (1s)
 	if countdown_label:
 		countdown_label.visible = true
 	print("Starting countdown...")
@@ -2133,32 +2133,52 @@ func update_countdown_display() -> void:
 
 	var prev_text: String = countdown_label.text
 
-	# Update text based on time remaining
-	if countdown_time > 2.0:
+	# Update text based on time remaining (removed SET - now just READY and GO)
+	if countdown_time > 1.0:
 		countdown_label.text = "READY"
 		countdown_label.add_theme_color_override("font_color", Color.YELLOW)
-	elif countdown_time > 1.0:
-		countdown_label.text = "SET"
-		countdown_label.add_theme_color_override("font_color", Color.ORANGE)
 	else:
 		countdown_label.text = "GO!"
 		countdown_label.add_theme_color_override("font_color", Color.GREEN)
 
 	# Play sound when text changes
 	if prev_text != countdown_label.text and countdown_sound:
-		play_countdown_beep()
+		play_countdown_beep(countdown_label.text)
 
-func play_countdown_beep() -> void:
-	"""Play a beep sound for countdown"""
+func play_countdown_beep(text: String) -> void:
+	"""Play a procedural beep sound for countdown"""
 	if not countdown_sound:
 		return
 
-	# Only play if a sound file is loaded
-	if countdown_sound.stream:
-		countdown_sound.pitch_scale = 1.0
-		countdown_sound.play()
-	# If no sound file is loaded, silently skip
-	# To add a countdown sound: load an audio file in the World scene and assign it to CountdownSound node
+	# Generate procedural sound
+	var audio_stream = AudioStreamGenerator.new()
+	audio_stream.mix_rate = 22050.0
+	audio_stream.buffer_length = 0.2  # 200ms buffer
+
+	countdown_sound.stream = audio_stream
+	countdown_sound.volume_db = -5.0
+
+	# Different pitches for READY vs GO
+	if text == "READY":
+		countdown_sound.pitch_scale = 0.8  # Lower pitch for READY
+	elif text == "GO!":
+		countdown_sound.pitch_scale = 1.3  # Higher pitch for GO
+
+	countdown_sound.play()
+
+	# Generate the tone
+	var playback: AudioStreamGeneratorPlayback = countdown_sound.get_stream_playback()
+	if playback:
+		var frequency = 600.0 if text == "READY" else 900.0  # Different frequencies
+		var sample_hz = audio_stream.mix_rate
+		var pulse_hz = frequency
+		var samples_to_fill = int(sample_hz * 0.15)  # 150ms of audio
+
+		for i in range(samples_to_fill):
+			var phase = float(i) / sample_hz * pulse_hz * TAU
+			var amplitude = 0.4 * (1.0 - float(i) / samples_to_fill)  # Fade out
+			var value = sin(phase) * amplitude
+			playback.push_frame(Vector2(value, value))
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
