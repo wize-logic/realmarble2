@@ -50,7 +50,7 @@ func find_nearest_player() -> Node3D:
 	var nearest: Node3D = null
 	var nearest_distance: float = INF
 	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
-	var max_angle_degrees: float = 60.0  # Only target within 60 degrees of forward (120 degree cone total)
+	var max_angle_degrees: float = 70.0  # Only target within 70 degrees of forward (140 degree cone total) - improved accuracy
 
 	# Get player's forward direction (based on camera or rotation) - full 3D
 	var forward_direction: Vector3
@@ -126,12 +126,12 @@ func activate() -> void:
 	if nearest_player:
 		# AUTO-AIM: Aim at the nearest player's position in FULL 3D (including up/down)
 		var target_pos = nearest_player.global_position
-		# Predict where the player will be based on their velocity (only 30% prediction)
+		# Predict where the player will be based on their velocity (50% prediction for improved accuracy)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
 			var time_to_hit = distance / speed
-			# Reduced prediction for less accuracy
-			target_pos += nearest_player.linear_velocity * time_to_hit * 0.3
+			# Increased prediction for better accuracy
+			target_pos += nearest_player.linear_velocity * time_to_hit * 0.5
 
 		# Calculate direction to target (full 3D - can aim up or down at targets)
 		fire_direction = (target_pos - player.global_position).normalized()
@@ -260,8 +260,8 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		var player_level: int = projectile.get_meta("player_level", 0)
 		var level_mult: float = 1.0 + (player.level * 0.2)
 
-		# Calculate knockback (base 200.0, 5x increase for massive impact, scaled by level)
-		var base_knockback: float = 200.0
+		# Calculate knockback (base 150.0, slightly nerfed for better balance, scaled by level)
+		var base_knockback: float = 150.0
 		var total_knockback: float = base_knockback * level_mult
 
 		# Apply knockback in projectile direction with slight upward component
