@@ -662,7 +662,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 		if platform_info.has_platform and obstacle_jump_timer <= 0.0:
 			# Platform detected ahead - jump proactively to get on it
 			bot_jump()
-			obstacle_jump_timer = 0.2
+			obstacle_jump_timer = 0.1  # Very short cooldown - reduced from 0.2
 			# Push forward while jumping
 			var force: float = bot.current_roll_force * speed_mult * 1.3
 			var climb_direction: Vector3 = direction + Vector3.UP * 0.25
@@ -670,7 +670,8 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 			return
 
 		# Check for obstacles in the path with improved detection
-		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
+		# Scan further ahead (4.0 instead of default 3.0) to give more time to react
+		var obstacle_info: Dictionary = check_obstacle_in_direction(direction, 4.0)
 
 		if obstacle_info.has_obstacle:
 			# Handle slopes and platforms - try to jump onto them
@@ -678,7 +679,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				# Jump onto slopes and platforms proactively - reduced cooldown
 				if obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.15  # Reduced from 0.25 for more aggressive slope climbing
+					obstacle_jump_timer = 0.1  # Very aggressive jumping - reduced from 0.15
 					# Continue moving forward while jumping to get on the slope with extra force
 					var force: float = bot.current_roll_force * speed_mult * 1.5  # Increased from 1.3
 					# Add upward component to force to help climb
@@ -698,7 +699,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				# Wall detected - try to jump over it first if it's low
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.4
+					obstacle_jump_timer = 0.2  # Reduced from 0.4 for more frequent wall jumps
 					# Push forward while jumping
 					var force: float = bot.current_roll_force * speed_mult * 0.8
 					bot.apply_central_force(direction * force)
@@ -711,7 +712,7 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				# Other obstacle - try jumping first, then go opposite if can't jump
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.3
+					obstacle_jump_timer = 0.15  # Reduced from 0.3 for more frequent jumps
 					# Push forward while jumping
 					var force: float = bot.current_roll_force * speed_mult * 0.8
 					bot.apply_central_force(direction * force)
@@ -724,6 +725,12 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 		elif height_diff > 1.0 and obstacle_jump_timer <= 0.0 and randf() < 0.7:  # Increased from 0.5
 			bot_jump()
 			obstacle_jump_timer = 0.3  # Reduced from 0.5
+
+		# CRITICAL: Jump proactively if bot is moving very slowly (likely stuck on geometry)
+		# This catches cases where obstacle detection might miss small geometry
+		if bot.linear_velocity.length() < 1.5 and obstacle_jump_timer <= 0.0 and randf() < 0.4:
+			bot_jump()
+			obstacle_jump_timer = 0.25  # Short cooldown for frequent geometry clearing
 
 		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
