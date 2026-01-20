@@ -2255,8 +2255,11 @@ func apply_marble_material() -> void:
 	print("Applied beautiful marble material to player: ", name)
 
 func notify_kill(killer_id: int, victim_id: int) -> void:
-	"""Notify the HUD about a kill"""
-	# Only notify the killer's HUD
+	"""Notify the HUD about a kill - should be called on the killer's player node"""
+	# Only show if this is the local player (has authority)
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		return  # Skip for non-authority players (bots, other players)
+
 	var world: Node = get_parent()
 	if not world:
 		return
@@ -2276,12 +2279,15 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 	if ui_layer:
 		var game_hud = ui_layer.get_node_or_null("GameHUD")
 		if game_hud and game_hud.has_method("show_kill_notification"):
-			# Only show to the killer
-			if killer_id == name.to_int() or (multiplayer.has_multiplayer_peer() and killer_id == multiplayer.get_unique_id()):
-				game_hud.show_kill_notification(victim_name)
+			print("Calling show_kill_notification for: ", victim_name)
+			game_hud.show_kill_notification(victim_name)
 
 func notify_killstreak(player_id: int, streak: int) -> void:
-	"""Notify the HUD about a killstreak milestone"""
+	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
+	# Only show if this is the local player (has authority)
+	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		return  # Skip for non-authority players (bots, other players)
+
 	var world: Node = get_parent()
 	if not world:
 		return
@@ -2291,6 +2297,5 @@ func notify_killstreak(player_id: int, streak: int) -> void:
 	if ui_layer:
 		var game_hud = ui_layer.get_node_or_null("GameHUD")
 		if game_hud and game_hud.has_method("show_killstreak_notification"):
-			# Only show to the player who got the killstreak
-			if player_id == name.to_int() or (multiplayer.has_multiplayer_peer() and player_id == multiplayer.get_unique_id()):
-				game_hud.show_killstreak_notification(streak)
+			print("Calling show_killstreak_notification for streak: ", streak)
+			game_hud.show_killstreak_notification(streak)
