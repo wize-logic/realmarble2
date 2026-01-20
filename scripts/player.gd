@@ -136,6 +136,12 @@ const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
+# Killstreak system
+var killstreak: int = 0  # Current killstreak count
+var last_attacker_id: int = -1  # ID of last player who damaged us
+var last_attacker_time: float = 0.0  # Time when last attacked
+const ATTACKER_TIMEOUT: float = 5.0  # Seconds before last_attacker is cleared
+
 # Ground detection
 var is_grounded: bool = false
 
@@ -645,6 +651,13 @@ func _process(delta: float) -> void:
 	else:
 		if not camera:
 			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+
+	# Handle last attacker timeout
+	if last_attacker_id != -1:
+		var current_time: float = Time.get_ticks_msec() / 1000.0
+		if (current_time - last_attacker_time) > ATTACKER_TIMEOUT:
+			last_attacker_id = -1
+			last_attacker_time = 0.0
 
 	# Handle falling death state - MUST run for ALL entities (players AND bots)
 	if is_falling_to_death:
@@ -1221,6 +1234,10 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	if god_mode:
 		return  # Immune to damage
 
+	# Track last attacker for knockoff kills
+	last_attacker_id = attacker_id
+	last_attacker_time = Time.get_ticks_msec() / 1000.0
+
 	health -= damage
 	print("Received %d damage from player %d! Health: %d" % [damage, attacker_id, health])
 
@@ -1242,6 +1259,17 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 				var player_id: int = name.to_int()
 				world.add_death(player_id)
 
+			# Update attacker's killstreak and notify
+			var attacker: Node = world.get_node_or_null(str(attacker_id))
+			if attacker and "killstreak" in attacker:
+				attacker.killstreak += 1
+				# Notify HUD of kill with victim's name
+				notify_kill(attacker_id, name.to_int())
+
+				# Notify about killstreak milestones
+				if attacker.killstreak == 5 or attacker.killstreak == 10:
+					notify_killstreak(attacker_id, attacker.killstreak)
+
 		# Play death effects before respawning
 		spawn_death_particles()
 		play_death_sound.rpc()
@@ -1257,6 +1285,11 @@ func respawn() -> void:
 	jump_count = 0  # Reset jumps
 	bounce_count = 0  # Reset bounce streak
 	update_stats()
+
+	# Reset killstreak and last attacker on death
+	killstreak = 0
+	last_attacker_id = -1
+	last_attacker_time = 0.0
 
 	# Reset death state
 	is_falling_to_death = false
@@ -1307,6 +1340,25 @@ func fall_death() -> void:
 	var world: Node = get_parent()
 	if world and world.has_method("add_death"):
 		world.add_death(player_id)
+
+	# Check if there was a recent attacker who should get credit for the knockoff kill
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+	if last_attacker_id != -1 and (current_time - last_attacker_time) <= ATTACKER_TIMEOUT:
+		print("  Knockoff kill credited to player %d" % last_attacker_id)
+		# Give attacker credit for the kill
+		if world and world.has_method("add_score"):
+			world.add_score(last_attacker_id, 1)
+
+		# Update attacker's killstreak and notify
+		var attacker: Node = world.get_node_or_null(str(last_attacker_id))
+		if attacker and "killstreak" in attacker:
+			attacker.killstreak += 1
+			# Notify HUD of kill with victim's name
+			notify_kill(last_attacker_id, name.to_int())
+
+			# Notify about killstreak milestones
+			if attacker.killstreak == 5 or attacker.killstreak == 10:
+				notify_killstreak(last_attacker_id, attacker.killstreak)
 
 	# Don't drop orbs or abilities when falling to death
 	# (Players lose their items in the void)
@@ -2197,3 +2249,44 @@ func apply_marble_material() -> void:
 			aura_light.light_color = primary_color
 
 	print("Applied beautiful marble material to player: ", name)
+
+func notify_kill(killer_id: int, victim_id: int) -> void:
+	"""Notify the HUD about a kill"""
+	# Only notify the killer's HUD
+	var world: Node = get_parent()
+	if not world:
+		return
+
+	# Get the victim's name
+	var victim: Node = world.get_node_or_null(str(victim_id))
+	var victim_name: String = "Player"
+	if victim:
+		# Check if it's a bot (ID >= 9000) or player
+		if victim_id >= 9000:
+			victim_name = "Bot"
+		else:
+			victim_name = "Player %d" % victim_id
+
+	# Find the HUD and show kill notification
+	var ui_layer: CanvasLayer = world.get_node_or_null("UI")
+	if ui_layer:
+		var game_hud = ui_layer.get_node_or_null("GameHUD")
+		if game_hud and game_hud.has_method("show_kill_notification"):
+			# Only show to the killer
+			if killer_id == name.to_int() or (multiplayer.has_multiplayer_peer() and killer_id == multiplayer.get_unique_id()):
+				game_hud.show_kill_notification(victim_name)
+
+func notify_killstreak(player_id: int, streak: int) -> void:
+	"""Notify the HUD about a killstreak milestone"""
+	var world: Node = get_parent()
+	if not world:
+		return
+
+	# Find the HUD and show killstreak notification
+	var ui_layer: CanvasLayer = world.get_node_or_null("UI")
+	if ui_layer:
+		var game_hud = ui_layer.get_node_or_null("GameHUD")
+		if game_hud and game_hud.has_method("show_killstreak_notification"):
+			# Only show to the player who got the killstreak
+			if player_id == name.to_int() or (multiplayer.has_multiplayer_peer() and player_id == multiplayer.get_unique_id()):
+				game_hud.show_killstreak_notification(streak)
