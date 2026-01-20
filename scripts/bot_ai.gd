@@ -1466,10 +1466,10 @@ func handle_unstuck_movement(delta: float) -> void:
 	if bot.jump_count < bot.max_jumps and randf() < jump_chance:
 		bot_jump()
 
-	# Use spin dash more often to break free
+	# Use spin dash more often to break free - FULLY CHARGED for maximum power
 	if unstuck_timer > 0.3 and not bot.is_charging_spin and bot.spin_cooldown <= 0.0 and randf() < 0.25:
 		bot.is_charging_spin = true
-		bot.spin_charge = bot.max_spin_charge * 0.7
+		bot.spin_charge = bot.max_spin_charge  # FULL charge for unstuck power!
 		get_tree().create_timer(0.25).timeout.connect(func(): release_spin_dash())
 
 	# Change direction more frequently while stuck (every 0.3 seconds)
