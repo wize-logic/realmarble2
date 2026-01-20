@@ -677,6 +677,85 @@ func is_facing_target(target_position: Vector3, required_angle_degrees: float = 
 	# Return true if target is within the required angle cone
 	return angle_degrees <= required_angle_degrees
 
+func will_hitbox_reach_target(ability_name: String, charge_level: int, distance_to_target: float) -> bool:
+	## Check if an ability's hitbox will actually reach the target at the given charge level
+	## charge_level: 1 (no charge), 2 (partial charge), 3 (full charge)
+	## Returns true if the hitbox will reach, false otherwise
+
+	match ability_name:
+		"Sword":
+			# Sword hitbox ranges: [3.0, 3.6, 4.2]
+			var sword_range: float = SWORD_RANGES[charge_level - 1]
+			return distance_to_target <= sword_range
+		"Explosion":
+			# Explosion radii: [5.0, 7.5, 10.0]
+			var explosion_radius: float = EXPLOSION_RADII[charge_level - 1]
+			return distance_to_target <= explosion_radius
+		"Dash Attack":
+			# Dash has hitbox but also moves toward target
+			# Dash hitbox radii: [1.5, 1.95, 2.4]
+			# Plus dash travel distance based on charge (roughly 5-15 units)
+			var dash_radius: float = DASH_HITBOX_RADII[charge_level - 1]
+			var dash_travel: float = 5.0 + (charge_level - 1) * 5.0  # ~5, 10, 15 units
+			var effective_range: float = dash_travel + dash_radius
+			return distance_to_target <= effective_range
+		"Cannon":
+			# Cannon is projectile-based, has very long range (50+ units)
+			# Just check if in reasonable range
+			return distance_to_target <= 50.0
+		_:
+			# Unknown ability, assume it can reach
+			return true
+
+func determine_optimal_charge_level(ability_name: String, distance_to_target: float) -> int:
+	## Determine the optimal charge level (1-3) needed to hit target at given distance
+	## Returns the minimum charge level that will reach the target
+
+	match ability_name:
+		"Sword":
+			# Find minimum charge level that reaches target
+			if distance_to_target <= SWORD_RANGES[0]:  # 3.0
+				return 1
+			elif distance_to_target <= SWORD_RANGES[1]:  # 3.6
+				return 2
+			elif distance_to_target <= SWORD_RANGES[2]:  # 4.2
+				return 3
+			else:
+				return 0  # Out of range
+		"Explosion":
+			# Find minimum charge level that reaches target
+			if distance_to_target <= EXPLOSION_RADII[0]:  # 5.0
+				return 1
+			elif distance_to_target <= EXPLOSION_RADII[1]:  # 7.5
+				return 2
+			elif distance_to_target <= EXPLOSION_RADII[2]:  # 10.0
+				return 3
+			else:
+				return 0  # Out of range
+		"Dash Attack":
+			# Dash benefits from charging for distance and damage
+			# Always prefer charge level 2-3 for reliability
+			var dash_radius_1: float = DASH_HITBOX_RADII[0] + 5.0   # ~6.5
+			var dash_radius_2: float = DASH_HITBOX_RADII[1] + 10.0  # ~12
+			var dash_radius_3: float = DASH_HITBOX_RADII[2] + 15.0  # ~17.4
+
+			if distance_to_target <= dash_radius_1:
+				return 1
+			elif distance_to_target <= dash_radius_2:
+				return 2
+			elif distance_to_target <= dash_radius_3:
+				return 3
+			else:
+				return 0  # Out of range
+		"Cannon":
+			# Cannon benefits from charging but has long range regardless
+			if distance_to_target > 20.0:
+				return 2  # Charge for long distance
+			else:
+				return 1  # Don't need charge at close range
+		_:
+			return 1  # Default to no charge
+
 func use_ability_smart(distance_to_target: float) -> void:
 	## Use ability with smart timing and charging
 	if not bot.current_ability or not bot.current_ability.is_ready():
@@ -703,55 +782,68 @@ func use_ability_smart(distance_to_target: float) -> void:
 			_:
 				is_aimed = is_facing_target(target_player.global_position, 35.0)  # Default 35° cone
 
-	# Determine if we should use ability based on distance, aiming, and ability type
-	match ability_name:
-		"Cannon":
-			# CRITICAL: Cannon is forward-facing only - MUST be aimed!
-			if distance_to_target > 3.0 and distance_to_target < 50.0 and is_aimed:
+	# IMPROVED LOGIC: Use helper functions to accurately determine if we can hit
+	# Step 1: Determine what charge level we need to reach the target
+	var required_charge_level: int = determine_optimal_charge_level(ability_name, distance_to_target)
+
+	# Step 2: If we can't reach even with full charge, don't attack
+	if required_charge_level == 0:
+		# Target is out of range
+		should_use = false
+		should_charge = false
+	else:
+		# Step 3: We can reach - decide whether to use and charge
+		# Must be aimed for directional abilities
+		match ability_name:
+			"Cannon":
+				# CRITICAL: Cannon is forward-facing only - MUST be aimed!
+				if distance_to_target > 3.0 and is_aimed:
+					should_use = true
+					# Charge based on what's needed to reach
+					should_charge = (required_charge_level >= 2)
+			"Sword":
+				# Sword needs to be facing target
+				if is_aimed:
+					should_use = true
+					# Charge based on what's needed to reach, with some randomness
+					if required_charge_level == 1:
+						# Can hit without charging, rarely charge anyway
+						should_charge = randf() < 0.2
+					elif required_charge_level == 2:
+						# Need charge level 2, charge most of the time
+						should_charge = randf() < 0.8
+					else:
+						# Need full charge to reach
+						should_charge = randf() < 0.95
+			"Dash Attack":
+				# CRITICAL: Dash attack is forward-facing - MUST be aimed!
+				if distance_to_target > 2.0 and is_aimed:
+					should_use = true
+					# Dash benefits from charging for distance and damage
+					if required_charge_level == 1:
+						# Can hit but prefer some charge for speed
+						should_charge = randf() < 0.5
+					else:
+						# Need charge to reach
+						should_charge = randf() < 0.9
+			"Explosion":
+				# Explosion is AoE, doesn't need precise aiming
 				should_use = true
-				should_charge = distance_to_target > 10.0 and randf() < 0.7  # Increased from 0.5
-		"Sword":
-			# Sword needs to be facing target but has wider arc
-			# Smart charging based on distance (hitbox: 3.0, 3.6, 4.2)
-			if distance_to_target < 6.0 and is_aimed:
-				should_use = true
-				# Charge more at medium range where extra reach helps
-				# - Close (< 3.0): Rarely charge (base range is enough)
-				# - Medium (3.0-3.6): Sometimes charge for extra reach
-				# - Far (3.6-4.2): Usually charge to extend range
-				if distance_to_target < 3.0:
-					should_charge = randf() < 0.3  # Rarely charge at close range
-				elif distance_to_target < 3.6:
-					should_charge = randf() < 0.6  # Sometimes charge
+				# Charge based on what's needed to reach the target
+				if required_charge_level == 1:
+					# Can hit without charging, rarely charge anyway
+					should_charge = randf() < 0.15
+				elif required_charge_level == 2:
+					# Need charge level 2 to reach
+					should_charge = randf() < 0.8
 				else:
-					should_charge = randf() < 0.85  # Usually charge at far range
-		"Dash Attack":
-			# CRITICAL: Dash attack is forward-facing - MUST be aimed!
-			# Always charge for maximum dash distance and impact
-			if distance_to_target > 3.0 and distance_to_target < 20.0 and is_aimed:
-				should_use = true
-				should_charge = true  # Always charge for maximum power
-		"Explosion":
-			# Explosion is AoE, doesn't need precise aiming
-			# Charge strategically based on distance to maximize hitbox coverage
-			if distance_to_target < 15.0:
-				should_use = true
-				# Smart charging based on distance:
-				# - Close range (< 5.0): No charge (base 5.0 radius is enough)
-				# - Medium range (5.0-7.5): Charge to level 2 (7.5 radius)
-				# - Far range (7.5-10.0): Charge to level 3 (10.0 radius)
-				# - Very far (10.0+): Charge to level 3 for maximum coverage
-				if distance_to_target < 5.0:
-					should_charge = randf() < 0.2  # Rarely charge at close range
-				elif distance_to_target < 7.5:
-					should_charge = randf() < 0.7  # Usually charge to hit at medium range
-				else:
-					should_charge = randf() < 0.9  # Almost always charge at far range
-		_:
-			# Default: use when in reasonable range and aimed
-			if distance_to_target < 25.0 and is_aimed:
-				should_use = randf() < 0.5
-				should_charge = randf() < 0.6
+					# Need full charge to reach
+					should_charge = randf() < 0.95
+			_:
+				# Default: use when in reasonable range and aimed
+				if distance_to_target < 25.0 and is_aimed:
+					should_use = randf() < 0.5
+					should_charge = randf() < 0.6
 
 	# Charging logic
 	if should_use and should_charge and not is_charging_ability:
