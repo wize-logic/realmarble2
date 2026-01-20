@@ -4,8 +4,8 @@ extends Ability
 ## Performs a powerful forward dash that damages enemies on contact
 ## Like Kirby's dash attack!
 
-@export var dash_force: float = 200.0  # Increased from 80.0 (2.5x more powerful)
-@export var dash_duration: float = 0.6  # Increased from 0.5s for more impact
+@export var dash_force: float = 130.0  # Reduced by 35% from 200.0 for better balance
+@export var dash_duration: float = 0.4  # Reduced by 35% from 0.6 for better balance
 @export var damage: int = 1  # Damage unchanged
 @onready var ability_sound: AudioStreamPlayer3D = $DashSound
 
@@ -181,7 +181,7 @@ func activate() -> void:
 	var charge_multiplier: float = get_charge_multiplier()
 	var charged_damage: int = damage  # Always 1, no charge scaling on damage
 	var charged_dash_force: float = dash_force * charge_multiplier
-	var charged_knockback: float = 180.0 * charge_multiplier  # Increased from 100.0 for stronger impact
+	var charged_knockback: float = 117.0 * charge_multiplier  # Reduced by 35% from 180.0 for better balance
 
 	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
 
