@@ -1080,7 +1080,7 @@ func do_collect_ability(delta: float) -> void:
 		action_timer = 0.5
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
-	var distance: float = bot.global_position.distance_to(target_ability.global_position)
+	# Note: distance already declared at top of function, just check the value
 	if distance < 2.0:
 		# Close enough, should collect automatically
 		# Wait a moment then look for new targets
@@ -1152,7 +1152,7 @@ func do_collect_orb(delta: float) -> void:
 		action_timer = 0.5
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
-	var distance: float = bot.global_position.distance_to(target_orb.global_position)
+	# Note: distance already declared at top of function, just check the value
 	if distance < 2.0:
 		# Close enough, should collect automatically
 		# Wait a moment then look for new targets
