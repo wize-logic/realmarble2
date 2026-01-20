@@ -1303,6 +1303,12 @@ func respawn() -> void:
 	fall_camera_detached = false
 	fall_death_timer = 0.0
 
+	# CRITICAL: Always clear ability on respawn (fixes bug where fall deaths keep ability)
+	if current_ability:
+		current_ability.queue_free()
+		current_ability = null
+		print("Cleared ability on respawn for %s" % name)
+
 	# Reset physics
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
