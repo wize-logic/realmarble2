@@ -1314,6 +1314,25 @@ func respawn() -> void:
 		current_ability = null
 		print("Cleared ability on respawn for %s" % name)
 
+	# CRITICAL: Reset all movement states that could get stuck
+	is_bouncing = false
+	is_grinding = false
+	current_rail = null
+	is_charging_spin = false
+	is_spin_dashing = false
+	spin_charge = 0.0
+	spin_dash_timer = 0.0
+
+	# Reset all cooldowns
+	bounce_cooldown = 0.0
+	spin_cooldown = 0.0
+	jump_pad_cooldown = 0.0
+	teleporter_cooldown = 0.0
+
+	# CRITICAL: Restore normal physics damping (fixes slowness if died while grinding)
+	linear_damp = 0.5
+	angular_damp = 0.3
+
 	# Reset physics
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
