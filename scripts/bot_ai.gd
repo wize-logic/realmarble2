@@ -9,6 +9,11 @@ var target_collectible: Node = null  # For abilities/orbs
 var wander_target: Vector3 = Vector3.ZERO
 var action_timer: float = 0.0
 
+# Stuck detection
+var last_position: Vector3 = Vector3.ZERO
+var stuck_timer: float = 0.0
+var stuck_recovery_stage: int = 0  # 0 = not stuck, 1 = spin dash, 2 = jump, 3 = respawn
+
 # Constants
 const AGGRO_RANGE: float = 40.0
 const ATTACK_RANGE: float = 15.0
@@ -29,6 +34,7 @@ func _ready() -> void:
 
 	print("BotAI ready for: ", bot.name)
 	wander_target = bot.global_position
+	last_position = bot.global_position
 
 func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
@@ -37,6 +43,9 @@ func _physics_process(delta: float) -> void:
 	# Update timers
 	if action_timer > 0.0:
 		action_timer -= delta
+
+	# Check if stuck
+	check_if_stuck(delta)
 
 	# Update state
 	update_state()
@@ -274,3 +283,87 @@ func is_aimed_at_target(target_pos: Vector3) -> bool:
 
 	# Allow 30 degree cone (generous for simple aiming)
 	return angle_deg <= 30.0
+
+func check_if_stuck(delta: float) -> void:
+	## Detect if bot is stuck and attempt recovery
+	if not bot:
+		return
+
+	var current_pos: Vector3 = bot.global_position
+	var distance_moved: float = current_pos.distance_to(last_position)
+
+	# If bot hasn't moved much (less than 0.2 units)
+	if distance_moved < 0.2:
+		stuck_timer += delta
+
+		# After 5 seconds, start recovery
+		if stuck_timer >= 5.0:
+			print("Bot %s stuck for %.1f seconds - starting recovery stage %d" % [bot.name, stuck_timer, stuck_recovery_stage])
+			attempt_unstuck_recovery()
+	else:
+		# Bot is moving, reset stuck detection
+		stuck_timer = 0.0
+		stuck_recovery_stage = 0
+		last_position = current_pos
+
+func attempt_unstuck_recovery() -> void:
+	## Try to get unstuck using 3-stage recovery
+	if not bot:
+		return
+
+	match stuck_recovery_stage:
+		0:
+			# Stage 1: Fire 70% spin dash
+			print("Bot %s attempting spin dash escape" % bot.name)
+			if not bot.is_charging_spin and bot.spin_cooldown <= 0.0:
+				bot.is_charging_spin = true
+				bot.spin_charge = bot.max_spin_charge * 0.7
+				# Release after short delay
+				get_tree().create_timer(0.3).timeout.connect(func():
+					if bot and bot.is_charging_spin:
+						bot.is_charging_spin = false
+				)
+			stuck_recovery_stage = 1
+			stuck_timer = 0.0  # Reset timer to give spin dash time to work
+
+		1:
+			# Stage 2: Jump forward aggressively
+			print("Bot %s attempting jump escape" % bot.name)
+			if bot.jump_count < bot.max_jumps:
+				# Jump
+				bot.linear_velocity.y = bot.jump_force
+				bot.jump_count += 1
+				# Apply forward force
+				var forward: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+				bot.apply_central_impulse(forward * bot.current_roll_force * 2.0)
+			stuck_recovery_stage = 2
+			stuck_timer = 0.0  # Reset timer to give jump time to work
+
+		2:
+			# Stage 3: Respawn
+			print("Bot %s failed to escape - respawning" % bot.name)
+			respawn_bot()
+			stuck_recovery_stage = 0
+			stuck_timer = 0.0
+
+func respawn_bot() -> void:
+	## Teleport bot to a random spawn position
+	if not bot:
+		return
+
+	# Find all spawn points
+	var spawn_points: Array = get_tree().get_nodes_in_group("spawn_points")
+
+	if spawn_points.size() > 0:
+		# Pick random spawn point
+		var spawn: Node = spawn_points[randi() % spawn_points.size()]
+		bot.global_position = spawn.global_position
+		bot.linear_velocity = Vector3.ZERO
+		bot.angular_velocity = Vector3.ZERO
+		print("Bot %s respawned at %s" % [bot.name, spawn.name])
+	else:
+		# No spawn points, just move up
+		bot.global_position = Vector3(bot.global_position.x, bot.global_position.y + 10.0, bot.global_position.z)
+		bot.linear_velocity = Vector3.ZERO
+		bot.angular_velocity = Vector3.ZERO
+		print("Bot %s respawned at elevated position" % bot.name)
