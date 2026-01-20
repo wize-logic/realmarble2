@@ -394,6 +394,18 @@ func do_attack(delta: float) -> void:
 	# CRITICAL: Make bot face the target for aiming with predictive targeting
 	look_at_target(target_player.global_position, true)
 
+	# Check if we're properly aimed at target (for forward-facing abilities)
+	var ability_name: String = bot.current_ability.ability_name if "ability_name" in bot.current_ability else ""
+	var is_aimed_at_target: bool = false
+	var needs_precise_aim: bool = ability_name in ["Cannon", "Dash Attack"]
+
+	if needs_precise_aim:
+		# For directional abilities, check aiming
+		is_aimed_at_target = is_facing_target(target_player.global_position, 25.0)
+	else:
+		# For AoE/melee, just check rough facing
+		is_aimed_at_target = is_facing_target(target_player.global_position, 60.0)
+
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + 2.0:
 		# Too far, close in
@@ -406,8 +418,14 @@ func do_attack(delta: float) -> void:
 		# Re-aim after moving
 		look_at_target(target_player.global_position, true)
 	else:
-		# Good range, strafe to be harder to hit (strafe function handles aiming)
-		strafe_around_target(delta, optimal_distance)
+		# Good range - prioritize aiming for forward-facing abilities
+		if needs_precise_aim and not is_aimed_at_target:
+			# Stop moving, just rotate to aim (look_at_target already called above)
+			# Reduce movement to allow rotation to complete
+			pass
+		else:
+			# Properly aimed or doesn't need precise aim - strafe to be harder to hit
+			strafe_around_target(delta, optimal_distance)
 
 	# Use ability intelligently (function handles its own aiming)
 	if bot.current_ability and bot.current_ability.has_method("use"):
@@ -557,6 +575,31 @@ func get_optimal_combat_distance() -> float:
 		_:
 			return preferred_combat_distance
 
+func is_facing_target(target_position: Vector3, required_angle_degrees: float = 30.0) -> bool:
+	"""
+	Check if bot is facing the target within a given angle tolerance
+	Required for forward-facing abilities like Cannon and Dash Attack
+	Returns true if target is within the required cone angle
+	"""
+	if not bot or not target_position:
+		return false
+
+	# Get bot's forward direction (based on rotation)
+	var forward_direction: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+
+	# Get direction to target
+	var to_target: Vector3 = (target_position - bot.global_position).normalized()
+	to_target.y = 0  # Only check horizontal angle
+	forward_direction.y = 0
+
+	# Calculate angle between forward and target direction
+	var dot_product: float = forward_direction.dot(to_target)
+	var angle_radians: float = acos(clamp(dot_product, -1.0, 1.0))
+	var angle_degrees: float = rad_to_deg(angle_radians)
+
+	# Return true if target is within the required angle cone
+	return angle_degrees <= required_angle_degrees
+
 func use_ability_smart(distance_to_target: float) -> void:
 	"""Use ability with smart timing and charging"""
 	if not bot.current_ability or not bot.current_ability.is_ready():
@@ -567,31 +610,47 @@ func use_ability_smart(distance_to_target: float) -> void:
 	var should_use: bool = false
 	var should_charge: bool = false
 
-	# Determine if we should use ability based on distance and ability type
+	# CRITICAL: Check if bot is facing target (required for directional abilities)
+	var is_aimed: bool = false
+	if target_player and is_instance_valid(target_player):
+		# Different abilities need different aiming precision
+		match ability_name:
+			"Cannon":
+				is_aimed = is_facing_target(target_player.global_position, 25.0)  # 25° cone for cannon
+			"Dash Attack":
+				is_aimed = is_facing_target(target_player.global_position, 30.0)  # 30° cone for dash
+			"Sword":
+				is_aimed = is_facing_target(target_player.global_position, 45.0)  # 45° cone for sword (melee)
+			"Explosion":
+				is_aimed = true  # AoE doesn't need precise aiming
+			_:
+				is_aimed = is_facing_target(target_player.global_position, 35.0)  # Default 35° cone
+
+	# Determine if we should use ability based on distance, aiming, and ability type
 	match ability_name:
 		"Cannon":
-			# Use cannon at almost any range - cannons are versatile
-			if distance_to_target > 3.0 and distance_to_target < 50.0:
+			# CRITICAL: Cannon is forward-facing only - MUST be aimed!
+			if distance_to_target > 3.0 and distance_to_target < 50.0 and is_aimed:
 				should_use = true
 				should_charge = distance_to_target > 10.0 and randf() < 0.7  # Increased from 0.5
 		"Sword":
-			# Use sword at close to medium range
-			if distance_to_target < 8.0:
+			# Sword needs to be facing target but has wider arc
+			if distance_to_target < 8.0 and is_aimed:
 				should_use = true
 				should_charge = distance_to_target > 4.0 and randf() < 0.6  # Increased from 0.3
 		"Dash Attack":
-			# ALWAYS charge dash attack - it's much more effective when charged
-			if distance_to_target > 3.0 and distance_to_target < 20.0:
+			# CRITICAL: Dash attack is forward-facing - MUST be aimed!
+			if distance_to_target > 3.0 and distance_to_target < 20.0 and is_aimed:
 				should_use = true
 				should_charge = true  # Always charge (was conditional)
 		"Explosion":
-			# Use explosion at close to medium range
+			# Explosion is AoE, doesn't need precise aiming
 			if distance_to_target < 12.0:
 				should_use = true
 				should_charge = distance_to_target < 8.0 and randf() < 0.7  # Increased from 0.5
 		_:
-			# Default: use when in reasonable range
-			if distance_to_target < 25.0:
+			# Default: use when in reasonable range and aimed
+			if distance_to_target < 25.0 and is_aimed:
 				should_use = randf() < 0.5
 				should_charge = randf() < 0.6
 
