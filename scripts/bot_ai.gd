@@ -41,6 +41,11 @@ var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck i
 var stuck_print_timer: float = 0.0  # Timer to throttle stuck debug prints
 const MAX_STUCK_ATTEMPTS: int = 15  # Teleport bot after this many consecutive stuck checks
 
+# Slope navigation variables
+var is_on_slope: bool = false
+var ground_normal: Vector3 = Vector3.UP
+var slope_check_timer: float = 0.0
+
 # Target timeout variables - for abandoning unreachable targets
 var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
@@ -97,6 +102,12 @@ func _physics_process(delta: float) -> void:
 	unstuck_timer -= delta
 	obstacle_jump_timer -= delta
 	stuck_print_timer -= delta
+	slope_check_timer -= delta
+
+	# Check ground normal and slope status periodically
+	if slope_check_timer <= 0.0:
+		check_ground_status()
+		slope_check_timer = 0.1  # Check frequently for responsive slope handling
 
 	# Check if bot is stuck on obstacles
 	if stuck_timer >= stuck_check_interval:
@@ -231,10 +242,26 @@ func do_wander(delta: float) -> void:
 	# Move towards wander target with moderate speed
 	move_towards(wander_target, delta, 0.5)  # Slightly increased wander speed
 
-	# Occasionally jump - more varied timing
-	if action_timer <= 0.0 and randf() < 0.15:
-		bot_jump()
-		action_timer = randf_range(1.0, 3.0)
+	# Jump more frequently - especially when on slopes or moving slowly
+	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(1.0, 3.0)
+
+		# Jump if on a slope
+		if is_on_slope and randf() < 0.5:
+			should_jump = true
+			jump_cooldown = randf_range(0.5, 1.5)
+		# Jump if moving slowly (might be stuck on something)
+		elif bot.linear_velocity.length() < 2.0 and randf() < 0.4:
+			should_jump = true
+			jump_cooldown = randf_range(0.5, 1.0)
+		# Random jumps for exploration
+		elif randf() < 0.25:
+			should_jump = true
+
+		if should_jump:
+			bot_jump()
+			action_timer = jump_cooldown
 
 func do_chase(delta: float) -> void:
 	"""Chase the target player with tactical movement"""
@@ -263,19 +290,33 @@ func do_chase(delta: float) -> void:
 	if bot.current_ability and bot.current_ability.has_method("use"):
 		use_ability_smart(distance_to_target)
 
-	# Smart jumping - more aggressive when target is on higher ground
+	# Smart jumping - more aggressive when target is on higher ground, on slopes, or moving slowly
 	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(0.5, 1.5)
+
 		if height_diff > 1.0:
 			# Target is significantly higher - jump frequently to reach them
-			bot_jump()
-			action_timer = randf_range(0.3, 0.6)
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
 		elif height_diff > 0.5 and randf() < 0.6:
 			# Target is slightly higher - jump often
+			should_jump = true
+			jump_cooldown = randf_range(0.4, 0.8)
+		elif is_on_slope and randf() < 0.7:
+			# On a slope - jump to maintain momentum
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.7)
+		elif bot.linear_velocity.length() < 3.0 and randf() < 0.5:
+			# Moving slowly - might be stuck, jump to clear obstacle
+			should_jump = true
+			jump_cooldown = randf_range(0.4, 0.8)
+		elif randf() < 0.3:  # Random jumps for unpredictability (increased from 0.25)
+			should_jump = true
+
+		if should_jump:
 			bot_jump()
-			action_timer = randf_range(0.4, 0.8)
-		elif randf() < 0.25:  # Random jumps for unpredictability
-			bot_jump()
-			action_timer = randf_range(0.5, 1.5)
+			action_timer = jump_cooldown
 
 func do_attack(delta: float) -> void:
 	"""Attack the target player with smart ability usage"""
@@ -312,19 +353,33 @@ func do_attack(delta: float) -> void:
 			get_tree().create_timer(randf_range(0.2, 0.5)).timeout.connect(func(): release_spin_dash())
 			action_timer = randf_range(2.0, 3.5)
 
-	# Jump tactically - more aggressive when target is higher
+	# Jump tactically - more aggressive when target is higher, on slopes, or moving slowly
 	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(0.4, 1.0)
+
 		if height_diff > 0.8:
 			# Target is higher - jump to reach them
-			bot_jump()
-			action_timer = randf_range(0.3, 0.7)
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.7)
 		elif height_diff > 0.3 and randf() < 0.5:
 			# Target is slightly higher - jump often
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.8)
+		elif is_on_slope and randf() < 0.6:
+			# On a slope - jump to maintain momentum and positioning
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif bot.linear_velocity.length() < 3.0 and randf() < 0.4:
+			# Moving slowly - jump to clear obstacle
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.7)
+		elif randf() < 0.25:  # Random jumps for unpredictability (increased from 0.2)
+			should_jump = true
+
+		if should_jump:
 			bot_jump()
-			action_timer = randf_range(0.3, 0.8)
-		elif randf() < 0.2:
-			bot_jump()
-			action_timer = randf_range(0.4, 1.0)
+			action_timer = jump_cooldown
 
 func do_retreat(delta: float) -> void:
 	"""Retreat from danger when low health"""
@@ -335,10 +390,25 @@ func do_retreat(delta: float) -> void:
 	# Move away from target
 	move_away_from(target_player.global_position, delta, 1.0)
 
-	# Jump frequently to evade
-	if action_timer <= 0.0 and randf() < 0.4:
-		bot_jump()
-		action_timer = randf_range(0.3, 0.8)
+	# Jump frequently to evade - very aggressive jumping when retreating
+	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(0.3, 0.8)
+
+		if is_on_slope and randf() < 0.8:
+			# On slope - jump very often to escape quickly
+			should_jump = true
+			jump_cooldown = randf_range(0.2, 0.5)
+		elif bot.linear_velocity.length() < 4.0 and randf() < 0.6:
+			# Moving slowly - jump to escape faster
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif randf() < 0.5:  # Jump often when retreating (increased from 0.4)
+			should_jump = true
+
+		if should_jump:
+			bot_jump()
+			action_timer = jump_cooldown
 
 func strafe_around_target(delta: float, preferred_distance: float) -> void:
 	"""Strafe around target while maintaining distance"""
@@ -472,18 +542,31 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 
 	if direction.length() > 0.1:
 		# Check for dangerous edges first - HIGHEST PRIORITY - EXTRA CAREFUL
-		if check_for_edge(direction, 3.5):
+		if check_for_edge(direction, 4.5):  # Increased from 3.5 to 4.5 for earlier detection
 			# There's an edge ahead - find a safe direction or stop
 			var safe_direction: Vector3 = find_safe_direction_from_edge(direction)
 			if safe_direction != Vector3.ZERO:
 				direction = safe_direction
-				speed_mult *= 0.6  # Slow down when avoiding edges
+				speed_mult *= 0.5  # Slow down more when avoiding edges (was 0.6)
 			else:
 				# No safe direction, STOP COMPLETELY and move backwards
 				var backwards: Vector3 = -direction
-				bot.apply_central_force(backwards * bot.current_roll_force * 0.8)
-				print("Bot %s: Edge detected, moving backwards!" % bot.name)
+				bot.apply_central_force(backwards * bot.current_roll_force * 1.2)  # Stronger backwards force
+				# Jump backwards to escape the edge
+				if obstacle_jump_timer <= 0.0:
+					bot_jump()
+					obstacle_jump_timer = 0.3
+				print("Bot %s: Edge detected, moving backwards and jumping!" % bot.name)
 				return
+
+		# If we're on a slope, add upward force to help climb
+		if is_on_slope:
+			var slope_assist_force: float = bot.current_roll_force * 0.4
+			bot.apply_central_force(Vector3.UP * slope_assist_force)
+			# Jump more frequently on slopes to maintain momentum
+			if obstacle_jump_timer <= 0.0 and randf() < 0.6:
+				bot_jump()
+				obstacle_jump_timer = 0.15  # Very short cooldown on slopes
 
 		# Check for obstacles in the path with improved detection
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
@@ -494,43 +577,52 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				# Jump onto slopes and platforms proactively - reduced cooldown
 				if obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.25  # Very short cooldown for slopes/platforms
+					obstacle_jump_timer = 0.15  # Reduced from 0.25 for more aggressive slope climbing
 					# Continue moving forward while jumping to get on the slope with extra force
-					var force: float = bot.current_roll_force * speed_mult * 1.3
-					bot.apply_central_force(direction * force)
+					var force: float = bot.current_roll_force * speed_mult * 1.5  # Increased from 1.3
+					# Add upward component to force to help climb
+					var climb_direction: Vector3 = direction + Vector3.UP * 0.3
+					bot.apply_central_force(climb_direction.normalized() * force)
 					return
 				else:
-					# Even if on cooldown, keep moving toward the slope
-					var force: float = bot.current_roll_force * speed_mult
-					bot.apply_central_force(direction * force)
+					# Even if on cooldown, keep moving toward the slope with upward force
+					var force: float = bot.current_roll_force * speed_mult * 1.2
+					var climb_direction: Vector3 = direction + Vector3.UP * 0.2
+					bot.apply_central_force(climb_direction.normalized() * force)
 					return
 
 			# For walls and other obstacles - MOVE OPPOSITE DIRECTION
 			# This prevents getting stuck trying to navigate around
 			if "is_wall" in obstacle_info and obstacle_info.is_wall:
-				# Wall detected - move in opposite direction
-				print("Bot %s: Wall detected, moving backwards" % bot.name)
-				direction = -direction  # Complete opposite
-				speed_mult *= 0.5  # Slow down while backing up
-
-				# Try to jump if wall is low
+				# Wall detected - try to jump over it first if it's low
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.5
+					obstacle_jump_timer = 0.4
+					# Push forward while jumping
+					var force: float = bot.current_roll_force * speed_mult * 0.8
+					bot.apply_central_force(direction * force)
+				else:
+					# Can't jump or on cooldown - move in opposite direction
+					print("Bot %s: Wall detected, moving backwards" % bot.name)
+					direction = -direction  # Complete opposite
+					speed_mult *= 0.5  # Slow down while backing up
 			else:
 				# Other obstacle - try jumping first, then go opposite if can't jump
 				if obstacle_info.can_jump and obstacle_jump_timer <= 0.0:
 					bot_jump()
-					obstacle_jump_timer = 0.4
+					obstacle_jump_timer = 0.3
+					# Push forward while jumping
+					var force: float = bot.current_roll_force * speed_mult * 0.8
+					bot.apply_central_force(direction * force)
 				else:
 					# Can't jump - move in opposite direction
 					direction = -direction
 					speed_mult *= 0.5
 
 		# If target is above us and no obstacle blocking, jump to gain height
-		elif height_diff > 1.0 and obstacle_jump_timer <= 0.0 and randf() < 0.5:
+		elif height_diff > 1.0 and obstacle_jump_timer <= 0.0 and randf() < 0.7:  # Increased from 0.5
 			bot_jump()
-			obstacle_jump_timer = 0.5
+			obstacle_jump_timer = 0.3  # Reduced from 0.5
 
 		# Apply movement force
 		var force: float = bot.current_roll_force * speed_mult
@@ -623,16 +715,34 @@ func do_collect_ability(delta: float) -> void:
 	# Move towards ability with urgency
 	move_towards(target_ability.global_position, delta, 1.0)
 
-	# Jump more aggressively if ability is on higher ground
+	# Jump more aggressively if ability is on higher ground, on slopes, or moving slowly
 	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(0.4, 0.9)
+
 		if height_diff > 1.0:
 			# Ability is significantly higher - jump frequently
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.5)
+		elif height_diff > 0.5:
+			# Ability is slightly higher
+			should_jump = true
+			jump_cooldown = randf_range(0.4, 0.7)
+		elif is_on_slope and randf() < 0.7:
+			# On slope - jump to maintain momentum toward ability
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif bot.linear_velocity.length() < 2.5 and randf() < 0.5:
+			# Moving slowly - might be stuck, jump to clear obstacle
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif randf() < 0.4:
+			# Random jump
+			should_jump = true
+
+		if should_jump:
 			bot_jump()
-			action_timer = randf_range(0.3, 0.5)
-		elif height_diff > 0.5 or randf() < 0.4:
-			# Ability is slightly higher or random jump
-			bot_jump()
-			action_timer = randf_range(0.4, 0.9)
+			action_timer = jump_cooldown
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
@@ -680,16 +790,34 @@ func do_collect_orb(delta: float) -> void:
 	# Move towards orb with high priority
 	move_towards(target_orb.global_position, delta, 1.0)
 
-	# Jump more aggressively if orb is on higher ground
+	# Jump more aggressively if orb is on higher ground, on slopes, or moving slowly
 	if action_timer <= 0.0:
+		var should_jump: bool = false
+		var jump_cooldown: float = randf_range(0.4, 0.9)
+
 		if height_diff > 1.0:
 			# Orb is significantly higher - jump frequently
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.5)
+		elif height_diff > 0.5:
+			# Orb is slightly higher
+			should_jump = true
+			jump_cooldown = randf_range(0.4, 0.7)
+		elif is_on_slope and randf() < 0.7:
+			# On slope - jump to maintain momentum toward orb
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif bot.linear_velocity.length() < 2.5 and randf() < 0.5:
+			# Moving slowly - might be stuck, jump to clear obstacle
+			should_jump = true
+			jump_cooldown = randf_range(0.3, 0.6)
+		elif randf() < 0.35:
+			# Random jump
+			should_jump = true
+
+		if should_jump:
 			bot_jump()
-			action_timer = randf_range(0.3, 0.5)
-		elif height_diff > 0.5 or randf() < 0.35:
-			# Orb is slightly higher or random jump
-			bot_jump()
-			action_timer = randf_range(0.4, 0.9)
+			action_timer = jump_cooldown
 
 	# Check if we're close enough (pickup will happen automatically via Area3D)
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
@@ -702,6 +830,37 @@ func do_collect_orb(delta: float) -> void:
 ## ============================================================================
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
+
+func check_ground_status() -> void:
+	"""Check the ground beneath the bot to detect slopes and update ground normal"""
+	if not bot:
+		return
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+
+	# Cast a ray downward to check ground
+	var ray_start: Vector3 = bot.global_position + Vector3.UP * 0.5
+	var ray_end: Vector3 = bot.global_position + Vector3.DOWN * 2.0
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [bot]
+	query.collision_mask = 1
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	if result:
+		# Get the ground normal
+		ground_normal = result.normal
+
+		# Check if we're on a slope (normal isn't pointing straight up)
+		var slope_angle: float = rad_to_deg(acos(ground_normal.dot(Vector3.UP)))
+
+		# Consider it a slope if angle is between 10 and 60 degrees
+		is_on_slope = slope_angle > 10.0 and slope_angle < 60.0
+	else:
+		# Not on ground
+		ground_normal = Vector3.UP
+		is_on_slope = false
 
 func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 	"""
@@ -748,9 +907,13 @@ func check_for_edge(direction: Vector3, check_distance: float = 3.0) -> bool:
 	var ahead_ground_y: float = result.position.y
 	var ground_drop: float = current_ground_y - ahead_ground_y
 
-	# Only consider it an edge if the drop is significant (4 units or more)
-	# This prevents false positives on normal slopes
-	return ground_drop > 4.0
+	# Consider it an edge if the drop is significant (2.5 units or more)
+	# Reduced from 4.0 to be more cautious and prevent falling off stage
+	# Also check if the ground ahead is significantly below the bot
+	var bot_to_ground_ahead: float = bot.global_position.y - ahead_ground_y
+
+	# Edge if: drop is significant OR ground ahead is far below the bot
+	return ground_drop > 2.5 or bot_to_ground_ahead > 5.0
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""
