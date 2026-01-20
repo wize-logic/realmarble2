@@ -21,7 +21,7 @@ var slash_hitbox: Area3D = null
 var slash_particles: CPUParticles3D = null
 
 # Arc indicator for sword swing range
-var arc_indicator: MeshInstance3D = null
+var arc_indicator: Node3D = null
 
 func _ready() -> void:
 	super._ready()

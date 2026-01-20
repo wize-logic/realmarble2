@@ -276,9 +276,9 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		hit_sound.max_distance = 30.0  # Louder than gun (was 20.0)
 		hit_sound.volume_db = 6.0  # Louder than gun (was 3.0)
 		hit_sound.pitch_scale = randf_range(0.8, 1.0)  # Deeper than gun (was 1.2-1.4)
-		hit_sound.global_position = projectile_position  # Use cached position
 		if player and player.get_parent():
 			player.get_parent().add_child(hit_sound)
+			hit_sound.global_position = projectile_position  # Set position after adding to tree
 			hit_sound.play()
 			# Sound will auto-cleanup when it finishes
 
