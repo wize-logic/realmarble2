@@ -20,7 +20,7 @@ const SwordScene = preload("res://abilities/sword.tscn")
 @export var num_swords: int = 2
 
 # Respawn settings
-@export var respawn_interval: float = 10.0  # Check respawn every 10 seconds
+@export var respawn_interval: float = 7.0  # Check respawn every 7 seconds (reduced from 10)
 @export var respawn_at_random_location: bool = true
 
 var spawned_pickups: Array[Area3D] = []
@@ -59,18 +59,18 @@ func spawn_abilities() -> void:
 		print("ABILITY SPAWNER: Game is not active, skipping spawn")
 		return
 
-	# Scale ability count based on number of players (2.5 abilities per player)
+	# Scale ability count based on number of players (4.0 abilities per player)
 	# Type B arenas get more abilities due to larger vertical space and rooms
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var abilities_per_player: float = 2.5
+	var abilities_per_player: float = 4.0  # Increased from 2.5
 
 	# Check if Type B arena (more abilities needed for larger, multi-tier arenas)
 	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
-			abilities_per_player = 3.5  # 40% more abilities for Type B
+			abilities_per_player = 5.5  # Increased from 3.5
 
-	var total_abilities: int = clamp(int(player_count * abilities_per_player), 10, 35)  # Increased for Type B
+	var total_abilities: int = clamp(int(player_count * abilities_per_player), 20, 60)  # Increased from 10-35
 
 	# Distribute abilities equally across all types (25% each)
 	# All abilities are equally viable - none should be rare
