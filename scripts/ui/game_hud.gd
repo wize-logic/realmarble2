@@ -244,14 +244,19 @@ func update_kill_notification(delta: float) -> void:
 
 func show_kill_notification(victim_name: String) -> void:
 	"""Show the kill notification with skull symbol and victim name"""
+	print("[HUD] show_kill_notification called with: ", victim_name)
 	if not kill_notification_label:
+		print("[HUD] ERROR: kill_notification_label is null!")
 		return
 
 	# Use skull emoji (💀) or symbol
 	kill_notification_label.text = "💀 " + victim_name
 	kill_notification_label.visible = true
 	kill_notification_timer = kill_notification_duration
-	print("Showing kill notification: ", victim_name)
+	print("[HUD] Kill notification shown - visible: ", kill_notification_label.visible,
+		", text: ", kill_notification_label.text,
+		", position: ", kill_notification_label.position,
+		", size: ", kill_notification_label.size)
 
 func create_killstreak_notification() -> void:
 	"""Create the killstreak notification label"""
