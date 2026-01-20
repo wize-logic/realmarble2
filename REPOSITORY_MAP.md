@@ -201,7 +201,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 | **Jump** | Space | Standard jump + double jump | None |
 | **Spin Dash** | Shift (hold) | Charge & release dash toward camera | 0.8s |
 | **Bounce Attack** | Ctrl | Plunge down, bounce up on impact | 0.3s |
-| **Rail Grinding** | Auto | Auto-attach to rails, gravity affects speed | None |
+| **Rail Grinding** | E | Attach to rails, gravity affects speed | None |
 
 **Physics Properties:**
 ```gdscript
