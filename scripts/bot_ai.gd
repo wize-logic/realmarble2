@@ -292,7 +292,7 @@ func check_if_stuck(delta: float) -> void:
 	var current_pos: Vector3 = bot.global_position
 	var distance_moved: float = current_pos.distance_to(last_position)
 
-	# If bot hasn't moved much (less than 0.2 units)
+	# If bot hasn't moved much (less than 0.2 units per frame)
 	if distance_moved < 0.2:
 		stuck_timer += delta
 
@@ -304,7 +304,9 @@ func check_if_stuck(delta: float) -> void:
 		# Bot is moving, reset stuck detection
 		stuck_timer = 0.0
 		stuck_recovery_stage = 0
-		last_position = current_pos
+
+	# ALWAYS update last_position to track movement frame-by-frame
+	last_position = current_pos
 
 func attempt_unstuck_recovery() -> void:
 	## Try to get unstuck using 3-stage recovery
@@ -331,7 +333,7 @@ func attempt_unstuck_recovery() -> void:
 			print("Bot %s attempting jump escape" % bot.name)
 			if bot.jump_count < bot.max_jumps:
 				# Jump
-				bot.linear_velocity.y = bot.jump_force
+				bot.linear_velocity.y = bot.current_jump_impulse
 				bot.jump_count += 1
 				# Apply forward force
 				var forward: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
