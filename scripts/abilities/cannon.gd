@@ -538,9 +538,9 @@ func create_reticle() -> void:
 	torus.ring_segments = 16
 	reticle.mesh = torus
 
-	# Create material - very subtle, transparent, non-distracting
+	# Create material - subtle lime green, transparent, with additive blending
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.7, 0.9, 0.7, 0.15)  # Subtle neutral green, 15% opacity
+	mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -549,17 +549,14 @@ func create_reticle() -> void:
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y  # Face camera but stay horizontal
 	reticle.material_override = mat
 
-	# Set visibility layers - only visible to local player (layer 20 for first person view)
-	reticle.layers = 1 << 19  # Layer 20 (bit 19)
-
 	# Add particle effect to reticle for extra visual feedback
 	var particles: CPUParticles3D = CPUParticles3D.new()
 	particles.name = "ReticleParticles"
 	reticle.add_child(particles)
 
-	# Configure particles - very subtle rotating glow
+	# Configure particles - subtle rotating glow
 	particles.emitting = true
-	particles.amount = 12  # Reduced from 20 for subtlety
+	particles.amount = 20
 	particles.lifetime = 0.8
 	particles.explosiveness = 0.0
 	particles.randomness = 0.2
@@ -598,11 +595,11 @@ func create_reticle() -> void:
 	particles.scale_amount_min = 1.0
 	particles.scale_amount_max = 1.5
 
-	# Color - very subtle neutral green fade
+	# Color - lime green fade
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.7, 0.9, 0.7, 0.4))  # Subtle neutral green
-	gradient.add_point(0.5, Color(0.6, 0.8, 0.6, 0.25))  # Very subtle
-	gradient.add_point(1.0, Color(0.5, 0.7, 0.5, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
+	gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
+	gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
 	particles.color_ramp = gradient
 
 	# Initially hidden (will show when target is locked)

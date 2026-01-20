@@ -294,17 +294,20 @@ func play_attack_hit_sound() -> void:
 
 func create_arc_indicator() -> void:
 	"""Create an arc indicator that shows the sword swing range while charging"""
-	arc_indicator = MeshInstance3D.new()
+	arc_indicator = Node3D.new()
 	arc_indicator.name = "SwordArcIndicator"
 
-	# Create a partial cylinder (arc) mesh for the swing range
-	# We'll use a TorusMesh and scale it to create an arc-like appearance
-	var torus: TorusMesh = TorusMesh.new()
-	torus.inner_radius = slash_range - 0.3
-	torus.outer_radius = slash_range + 0.3
-	torus.rings = 24
-	torus.ring_segments = 8
-	arc_indicator.mesh = torus
+	# Create a wedge/cone shape to represent the sword arc (90 degree sweep)
+	# We'll use a flat cylinder as a wedge pointing forward
+	var mesh_instance = MeshInstance3D.new()
+	var cylinder: CylinderMesh = CylinderMesh.new()
+	cylinder.top_radius = 0.0  # Point at the player
+	cylinder.bottom_radius = slash_range  # Wide arc at max range
+	cylinder.height = slash_range  # Distance from player
+	cylinder.radial_segments = 16
+	cylinder.cap_bottom = true
+	cylinder.cap_top = false
+	mesh_instance.mesh = cylinder
 
 	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -315,10 +318,16 @@ func create_arc_indicator() -> void:
 	mat.disable_receive_shadows = true
 	mat.disable_fog = true
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
-	arc_indicator.material_override = mat
+	mesh_instance.material_override = mat
 
-	# Rotate to be horizontal (ground plane)
-	arc_indicator.rotation_degrees = Vector3(90, 0, 0)
+	# Rotate to be horizontal (ground plane) and position forward
+	mesh_instance.rotation_degrees = Vector3(90, 0, 0)
+	mesh_instance.position = Vector3(0, 0, -slash_range / 2)  # Move forward so point is at origin
+
+	# Scale to make it a narrow arc (90 degrees)
+	mesh_instance.scale = Vector3(0.5, 1.0, 1.0)  # Narrow in X to create ~90 degree arc
+
+	arc_indicator.add_child(mesh_instance)
 
 	# Add particles along the arc for extra visual feedback
 	var arc_particles: CPUParticles3D = CPUParticles3D.new()
@@ -348,12 +357,9 @@ func create_arc_indicator() -> void:
 	particle_material.disable_receive_shadows = true
 	arc_particles.mesh.material = particle_material
 
-	# Emission shape - ring (arc) around the sword
-	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	arc_particles.emission_ring_axis = Vector3(0, 1, 0)
-	arc_particles.emission_ring_height = 0.1
-	arc_particles.emission_ring_radius = slash_range
-	arc_particles.emission_ring_inner_radius = slash_range - 0.5
+	# Emission shape - sphere at the arc edge
+	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	arc_particles.emission_sphere_radius = slash_range * 0.4
 
 	# Movement - orbit around the arc
 	arc_particles.direction = Vector3(0, 0, 0)
