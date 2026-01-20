@@ -36,9 +36,9 @@ class_name GrindRail
 @export var boost_cooldown: float = 1.5  # Time between boost attempts
 
 # Shift speed boost settings
-@export var shift_boost_acceleration: float = 3000.0  # How quickly boost builds up per second
-@export var shift_boost_max: float = 5000.0  # Maximum additional boost force
-@export var shift_boost_decay_rate: float = 2500.0  # How quickly boost decays when shift released
+@export var shift_boost_acceleration: float = 1500.0  # How quickly boost builds up per second
+@export var shift_boost_max: float = 2500.0  # Maximum additional boost force
+@export var shift_boost_decay_rate: float = 1250.0  # How quickly boost decays when shift released
 @export var shift_boost_spin_multiplier: float = 15.0  # How much to spin the marble when boosting
 
 var active_grinders: Array[RigidBody3D] = []
