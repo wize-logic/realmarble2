@@ -24,9 +24,6 @@ var strafe_timer: float = 0.0
 var retreat_timer: float = 0.0
 var ability_charge_timer: float = 0.0
 var is_charging_ability: bool = false
-var preferred_combat_distance: float = 15.0  # Distance bot tries to maintain in combat
-var reaction_time: float = 0.0  # Small delay to simulate human reaction
-var dodge_timer: float = 0.0
 var aggression_level: float = 0.7  # 0-1, how aggressive the bot is
 
 # Obstacle detection variables
@@ -38,7 +35,6 @@ var unstuck_timer: float = 0.0
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0  # Separate timer for obstacle jumps
 var consecutive_stuck_checks: int = 0  # Track how many times we've been stuck in a row
-var stuck_print_timer: float = 0.0  # Timer to throttle stuck debug prints
 const MAX_STUCK_ATTEMPTS: int = 15  # Teleport bot after this many consecutive stuck checks
 
 # Target timeout variables - for abandoning unreachable targets
@@ -58,24 +54,15 @@ func _ready() -> void:
 		print("ERROR: BotAI could not find parent bot!")
 		return
 
-	print("BotAI ready for bot: ", bot.name)
 	wander_target = bot.global_position
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
 	# Randomize aggression for personality variety
 	aggression_level = randf_range(0.5, 0.9)
-	# Randomize reaction time for more human-like behavior
-	reaction_time = randf_range(0.1, 0.3)
-	print("BotAI initialized: aggression=%.2f, reaction_time=%.2f" % [aggression_level, reaction_time])
 	call_deferred("find_target")
 
 func _physics_process(delta: float) -> void:
-	if not bot:
-		print("ERROR: BotAI has no bot parent in _physics_process!")
-		return
-
-	if not is_instance_valid(bot):
-		print("ERROR: BotAI bot parent is not valid!")
+	if not bot or not is_instance_valid(bot):
 		return
 
 	# Only run AI when the game is active
@@ -91,12 +78,9 @@ func _physics_process(delta: float) -> void:
 	strafe_timer -= delta
 	retreat_timer -= delta
 	ability_charge_timer -= delta
-	dodge_timer -= delta
-	reaction_time -= delta
 	stuck_timer += delta
 	unstuck_timer -= delta
 	obstacle_jump_timer -= delta
-	stuck_print_timer -= delta
 
 	# Check if bot is stuck on obstacles
 	if stuck_timer >= stuck_check_interval:
@@ -202,12 +186,7 @@ func update_state() -> void:
 					return
 			state = "WANDER"
 	else:
-		# No ability or no combat target, prioritize getting ability or collecting items
-		if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-			var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-			if distance_to_ability < 60.0:
-				state = "COLLECT_ABILITY"
-				return
+		# No ability or no combat target, prioritize collecting items
 		if bot.level < bot.MAX_LEVEL and target_orb and is_instance_valid(target_orb):
 			var distance_to_orb: float = bot.global_position.distance_to(target_orb.global_position)
 			if distance_to_orb < 50.0:
@@ -229,7 +208,7 @@ func do_wander(delta: float) -> void:
 		find_target()
 
 	# Move towards wander target with moderate speed
-	move_towards(wander_target, delta, 0.5)  # Slightly increased wander speed
+	move_towards(wander_target, 0.5)  # Slightly increased wander speed
 
 	# Occasionally jump - more varied timing
 	if action_timer <= 0.0 and randf() < 0.15:
@@ -254,10 +233,10 @@ func do_chase(delta: float) -> void:
 	# If we're at good range, maintain distance with strafing
 	if distance_to_target > optimal_distance + 5.0:
 		# Close the distance
-		move_towards(target_player.global_position, delta, 0.9)
+		move_towards(target_player.global_position, 0.9)
 	else:
 		# Strafe while maintaining distance
-		strafe_around_target(delta, optimal_distance)
+		strafe_around_target(optimal_distance)
 
 	# Use abilities while chasing if in range
 	if bot.current_ability and bot.current_ability.has_method("use"):
@@ -292,13 +271,13 @@ func do_attack(delta: float) -> void:
 	# Tactical positioning - maintain optimal range while strafing
 	if distance_to_target > optimal_distance + 2.0:
 		# Too far, close in
-		move_towards(target_player.global_position, delta, 0.7)
+		move_towards(target_player.global_position, 0.7)
 	elif distance_to_target < optimal_distance - 2.0:
 		# Too close, back up while strafing
-		move_away_from(target_player.global_position, delta, 0.5)
+		move_away_from(target_player.global_position, 0.5)
 	else:
 		# Good range, strafe to be harder to hit
-		strafe_around_target(delta, optimal_distance)
+		strafe_around_target(optimal_distance)
 
 	# Use ability intelligently
 	if bot.current_ability and bot.current_ability.has_method("use"):
@@ -333,14 +312,14 @@ func do_retreat(delta: float) -> void:
 		return
 
 	# Move away from target
-	move_away_from(target_player.global_position, delta, 1.0)
+	move_away_from(target_player.global_position, 1.0)
 
 	# Jump frequently to evade
 	if action_timer <= 0.0 and randf() < 0.4:
 		bot_jump()
 		action_timer = randf_range(0.3, 0.8)
 
-func strafe_around_target(delta: float, preferred_distance: float) -> void:
+func strafe_around_target(preferred_distance: float) -> void:
 	"""Strafe around target while maintaining distance"""
 	if not target_player:
 		return
@@ -372,7 +351,7 @@ func strafe_around_target(delta: float, preferred_distance: float) -> void:
 		var force: float = bot.current_roll_force * 0.8
 		bot.apply_central_force(movement * force)
 
-func move_away_from(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
+func move_away_from(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	"""Move the bot away from a target position"""
 	if not bot:
 		return
@@ -401,7 +380,7 @@ func get_optimal_combat_distance() -> float:
 		"Explosion":
 			return EXPLOSION_OPTIMAL_RANGE
 		_:
-			return preferred_combat_distance
+			return 15.0  # Default medium range
 
 func use_ability_smart(distance_to_target: float) -> void:
 	"""Use ability with smart timing and charging"""
@@ -459,7 +438,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 		bot.current_ability.use()
 		action_timer = randf_range(0.5, 1.5)
 
-func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) -> void:
+func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	"""Move the bot towards a target position with obstacle detection"""
 	if not bot:
 		return
@@ -482,7 +461,6 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				# No safe direction, STOP COMPLETELY and move backwards
 				var backwards: Vector3 = -direction
 				bot.apply_central_force(backwards * bot.current_roll_force * 0.8)
-				print("Bot %s: Edge detected, moving backwards!" % bot.name)
 				return
 
 		# Check for obstacles in the path with improved detection
@@ -509,7 +487,6 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 			# This prevents getting stuck trying to navigate around
 			if "is_wall" in obstacle_info and obstacle_info.is_wall:
 				# Wall detected - move in opposite direction
-				print("Bot %s: Wall detected, moving backwards" % bot.name)
 				direction = -direction  # Complete opposite
 				speed_mult *= 0.5  # Slow down while backing up
 
@@ -621,7 +598,7 @@ func do_collect_ability(delta: float) -> void:
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
 	# Move towards ability with urgency
-	move_towards(target_ability.global_position, delta, 1.0)
+	move_towards(target_ability.global_position, 1.0)
 
 	# Jump more aggressively if ability is on higher ground
 	if action_timer <= 0.0:
@@ -678,7 +655,7 @@ func do_collect_orb(delta: float) -> void:
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
 	# Move towards orb with high priority
-	move_towards(target_orb.global_position, delta, 1.0)
+	move_towards(target_orb.global_position, 1.0)
 
 	# Jump more aggressively if orb is on higher ground
 	if action_timer <= 0.0:
@@ -904,8 +881,7 @@ func check_target_timeout(delta: float) -> void:
 
 			# After timeout, abandon the target
 			if target_stuck_timer >= TARGET_STUCK_TIMEOUT:
-				print("Bot %s abandoning unreachable target after %0.1f seconds" % [bot.name, target_stuck_timer])
-
+	
 				# Clear the current target
 				if state == "COLLECT_ABILITY":
 					target_ability = null
@@ -942,8 +918,7 @@ func check_if_stuck() -> void:
 
 		# EMERGENCY: Teleport bot if stuck for too long (prevents infinite stuck loops)
 		if consecutive_stuck_checks >= MAX_STUCK_ATTEMPTS:
-			print("Bot %s EXTREMELY STUCK (%d attempts)! Emergency teleport to spawn" % [bot.name, consecutive_stuck_checks])
-			teleport_to_safe_position()
+				teleport_to_safe_position()
 			consecutive_stuck_checks = 0
 			is_stuck = false
 			return
@@ -964,17 +939,9 @@ func check_if_stuck() -> void:
 				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
 				# Mix perpendicular with backwards movement
 				obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
-				# Throttle print to once every 3 seconds
-				if stuck_print_timer <= 0:
-					print("Bot %s is stuck UNDER terrain! Moving backwards and sideways" % bot.name)
-					stuck_print_timer = 3.0
 			else:
 				# Normal stuck - just go BACKWARDS (opposite direction)
 				obstacle_avoid_direction = opposite_dir
-				# Throttle print to once every 3 seconds
-				if stuck_print_timer <= 0:
-					print("Bot %s is stuck! Moving in OPPOSITE direction (moved only %0.2f units)" % [bot.name, distance_moved])
-					stuck_print_timer = 3.0
 	else:
 		# Reset stuck counter if we've moved well
 		if distance_moved > 0.3:
@@ -1010,7 +977,6 @@ func teleport_to_safe_position() -> void:
 
 	# Check if bot has spawns property
 	if not "spawns" in bot:
-		print("Bot %s has no spawns property!" % bot.name)
 		return
 
 	# Get a random spawn point
@@ -1022,8 +988,6 @@ func teleport_to_safe_position() -> void:
 		bot.global_position = spawn_pos
 		bot.linear_velocity = Vector3.ZERO
 		bot.angular_velocity = Vector3.ZERO
-
-		print("Bot %s teleported to spawn %d: %s" % [bot.name, spawn_index, spawn_pos])
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Handle movement when bot is stuck - try to get unstuck"""
@@ -1067,7 +1031,6 @@ func handle_unstuck_movement(delta: float) -> void:
 
 	# If stuck for too long, give up on current target
 	if unstuck_timer <= 0.0:
-		print("Bot %s successfully unstuck or timeout, resuming normal behavior" % bot.name)
 		is_stuck = false
 		unstuck_timer = 0.0
 		consecutive_stuck_checks = 0
