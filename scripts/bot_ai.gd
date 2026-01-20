@@ -170,13 +170,18 @@ func _physics_process(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update AI state based on conditions"""
-	# PRIORITY 0 (HIGHEST): Force bots out of combat states if they don't have an ability
-	# This prevents bots from strafing/attacking without weapons
+	# PRIORITY 0 (HIGHEST): No player targeting or combat without an ability
+	# This prevents bots from stalking/following/strafing/attacking without weapons
 	# Check this FIRST before anything else
 	if not bot.current_ability:
-		# Immediately exit any combat state if we have no ability
-		if state == "CHASE" or state == "ATTACK":
-			# Don't allow combat without an ability - get ability immediately
+		# CRITICAL: Clear player target completely - don't even track players without a weapon
+		# This prevents "stalking" behavior where bots follow players around
+		target_player = null
+
+		# Immediately exit any combat-related state if we have no ability
+		if state == "CHASE" or state == "ATTACK" or state == "RETREAT":
+			# Don't allow ANY combat-related behavior without an ability
+			# Prioritize getting an ability immediately
 			if target_ability and is_instance_valid(target_ability):
 				var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
 				if distance_to_ability < 60.0:
@@ -191,7 +196,7 @@ func update_state() -> void:
 			state = "WANDER"
 			return
 
-	# Priority 1: Retreat if low health and enemy nearby (can retreat without ability)
+	# Priority 1: Retreat if low health and enemy nearby (only when we have an ability)
 	if bot.health <= 1 and target_player and is_instance_valid(target_player):
 		var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 		if distance_to_target < attack_range * 1.5:
@@ -966,6 +971,12 @@ func release_spin_dash() -> void:
 
 func find_target() -> void:
 	"""Find the nearest player to target with preference for visible targets"""
+	# CRITICAL: Don't target players if we don't have an ability
+	# This prevents stalking behavior where bots follow players around without weapons
+	if not bot.current_ability:
+		target_player = null
+		return
+
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	var closest_player: Node = null
 	var closest_distance: float = INF
