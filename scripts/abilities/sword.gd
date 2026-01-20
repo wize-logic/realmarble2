@@ -216,8 +216,19 @@ func activate() -> void:
 	slash_timer = slash_duration
 	hit_players.clear()
 
+	# Scale hitbox based on charge level to match visual indicator (+20% per level)
+	var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
+	var scaled_range: float = slash_range * charge_scale
+
 	# Position and orient hitbox in front of player
 	if slash_hitbox and player:
+		# Update hitbox size to match charge level
+		if slash_hitbox.get_child_count() > 0:
+			var collision_shape: CollisionShape3D = slash_hitbox.get_child(0)
+			if collision_shape and collision_shape.shape is BoxShape3D:
+				collision_shape.shape.size = Vector3(scaled_range * 2, 0.3, scaled_range)
+				collision_shape.position = Vector3(0, 0, -scaled_range / 2)
+
 		slash_hitbox.global_position = player.global_position
 		slash_hitbox.look_at(player.global_position + slash_direction, Vector3.UP)
 		slash_hitbox.monitoring = true

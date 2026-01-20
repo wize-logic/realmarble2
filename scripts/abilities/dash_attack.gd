@@ -240,8 +240,19 @@ func activate() -> void:
 	dash_timer = dash_duration
 	hit_players.clear()
 
+	# Scale hitbox based on charge level to match visual indicator (+30% per level)
+	var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
+	var base_hitbox_radius: float = 1.5
+	var scaled_radius: float = base_hitbox_radius * charge_scale
+
 	# Enable hitbox
 	if hitbox:
+		# Update hitbox size to match charge level
+		if hitbox.get_child_count() > 0:
+			var collision_shape: CollisionShape3D = hitbox.get_child(0)
+			if collision_shape and collision_shape.shape is SphereShape3D:
+				collision_shape.shape.radius = scaled_radius
+
 		hitbox.monitoring = true
 		hitbox.global_position = player.global_position
 
