@@ -505,8 +505,12 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.2, 1.0, 0.3)  # Bright green
 	material.emission_enabled = true
-	material.emission = Color(0.2, 1.0, 0.3)
-	material.emission_energy = 0.5
+	material.emission = Color(0.3, 1.0, 0.4)  # Bright green glow
+	material.emission_energy = 2.5  # Much brighter for GL Compatibility
+	material.metallic = 0.0
+	material.roughness = 0.3
+	# Ensure material is visible in GL Compatibility mode
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	pad_instance.material_override = material
 
 	# Add collision to jump pad so players can stand on it
@@ -580,10 +584,14 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 
 	# Material for teleporter (glowing blue/purple)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 0.3, 1.0)  # Blue
+	material.albedo_color = Color(0.4, 0.4, 1.0)  # Blue
 	material.emission_enabled = true
-	material.emission = Color(0.5, 0.3, 1.0)  # Purple glow
-	material.emission_energy = 1.0
+	material.emission = Color(0.6, 0.4, 1.0)  # Purple glow
+	material.emission_energy = 2.5  # Much brighter for GL Compatibility
+	material.metallic = 0.0
+	material.roughness = 0.3
+	# Ensure material is visible in GL Compatibility mode
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	teleporter_instance.material_override = material
 
 	# Add collision to teleporter so players can stand on it
