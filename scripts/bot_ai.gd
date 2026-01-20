@@ -51,6 +51,10 @@ var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
 const TARGET_STUCK_TIMEOUT: float = 5.0  # Abandon target after 5 seconds of no progress
 
+# Line of sight tracking for targets
+var target_blocked_timer: float = 0.0
+const TARGET_BLOCKED_TIMEOUT: float = 3.0  # Abandon target after 3 seconds behind wall
+
 # Ability preferences based on situation
 const CANNON_OPTIMAL_RANGE: float = 20.0
 const SWORD_OPTIMAL_RANGE: float = 4.0
@@ -103,6 +107,7 @@ func _physics_process(delta: float) -> void:
 	obstacle_jump_timer -= delta
 	stuck_print_timer -= delta
 	slope_check_timer -= delta
+	target_blocked_timer += delta  # Increment when checking
 
 	# Check ground normal and slope status periodically
 	if slope_check_timer <= 0.0:
@@ -271,6 +276,15 @@ func do_chase(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 
+	# Check if we still have line of sight - if not for too long, find new target
+	if not has_line_of_sight(target_player.global_position, 1.0):
+		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT * 1.5:  # Give more time in combat
+			print("Bot %s lost sight of target for too long, finding new target" % bot.name)
+			find_target()  # Find a new visible target
+			target_blocked_timer = 0.0
+	else:
+		target_blocked_timer = 0.0
+
 	# CRITICAL: Make bot face the target for aiming with predictive targeting
 	look_at_target(target_player.global_position, true)
 
@@ -328,6 +342,15 @@ func do_attack(delta: float) -> void:
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
+
+	# Check if we still have line of sight - if not for too long, find new target
+	if not has_line_of_sight(target_player.global_position, 1.0):
+		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT * 1.5:  # Give more time in combat
+			print("Bot %s lost sight of target for too long, finding new target" % bot.name)
+			find_target()  # Find a new visible target
+			target_blocked_timer = 0.0
+	else:
+		target_blocked_timer = 0.0
 
 	# CRITICAL: Make bot face the target for aiming with predictive targeting
 	look_at_target(target_player.global_position, true)
@@ -608,6 +631,18 @@ func move_towards(target_pos: Vector3, delta: float, speed_mult: float = 1.0) ->
 				bot_jump()
 				obstacle_jump_timer = 0.15  # Very short cooldown on slopes
 
+		# First, check for platforms ahead that we can jump onto
+		var platform_info: Dictionary = detect_platform_ahead(direction, 6.0)
+		if platform_info.has_platform and obstacle_jump_timer <= 0.0:
+			# Platform detected ahead - jump proactively to get on it
+			bot_jump()
+			obstacle_jump_timer = 0.2
+			# Push forward while jumping
+			var force: float = bot.current_roll_force * speed_mult * 1.3
+			var climb_direction: Vector3 = direction + Vector3.UP * 0.25
+			bot.apply_central_force(climb_direction.normalized() * force)
+			return
+
 		# Check for obstacles in the path with improved detection
 		var obstacle_info: Dictionary = check_obstacle_in_direction(direction)
 
@@ -732,10 +767,12 @@ func release_spin_dash() -> void:
 			bot.execute_spin_dash()
 
 func find_target() -> void:
-	"""Find the nearest player to target"""
+	"""Find the nearest player to target with preference for visible targets"""
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	var closest_player: Node = null
 	var closest_distance: float = INF
+	var closest_visible_player: Node = null
+	var closest_visible_distance: float = INF
 
 	for player in players:
 		if player == bot:  # Don't target self
@@ -744,14 +781,26 @@ func find_target() -> void:
 			continue
 
 		var distance: float = bot.global_position.distance_to(player.global_position)
+
+		# Track closest overall
 		if distance < closest_distance:
 			closest_distance = distance
 			closest_player = player
 
-	target_player = closest_player
+		# Prioritize visible players
+		if distance < aggro_range and has_line_of_sight(player.global_position, 1.0):
+			if distance < closest_visible_distance:
+				closest_visible_distance = distance
+				closest_visible_player = player
+
+	# Prefer visible players, but fall back to closest if none visible
+	if closest_visible_player:
+		target_player = closest_visible_player
+	else:
+		target_player = closest_player
 
 func find_nearest_ability() -> void:
-	"""Find the nearest ability pickup"""
+	"""Find the nearest ability pickup with line of sight"""
 	var abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
 	var closest_ability: Node = null
 	var closest_distance: float = INF
@@ -761,9 +810,13 @@ func find_nearest_ability() -> void:
 			continue
 
 		var distance: float = bot.global_position.distance_to(ability.global_position)
-		if distance < closest_distance:
-			closest_distance = distance
-			closest_ability = ability
+
+		# Only consider abilities within reasonable range and with line of sight
+		if distance < 70.0 and distance < closest_distance:
+			# Check line of sight to ability
+			if has_line_of_sight(ability.global_position, 0.5):
+				closest_distance = distance
+				closest_ability = ability
 
 	target_ability = closest_ability
 
@@ -771,8 +824,22 @@ func do_collect_ability(delta: float) -> void:
 	"""Move towards and collect an ability"""
 	if not target_ability or not is_instance_valid(target_ability):
 		target_ability = null
+		target_blocked_timer = 0.0
 		state = "WANDER"
 		return
+
+	# Check if target is behind a wall/unreachable
+	if not has_line_of_sight(target_ability.global_position, 0.5):
+		# Target is blocked - increment timer
+		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT:
+			print("Bot %s abandoning ability behind wall after %0.1fs" % [bot.name, target_blocked_timer])
+			target_ability = null
+			target_blocked_timer = 0.0
+			state = "WANDER"
+			return
+	else:
+		# Target is visible - reset timer
+		target_blocked_timer = 0.0
 
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
@@ -817,7 +884,7 @@ func do_collect_ability(delta: float) -> void:
 		target_ability = null
 
 func find_nearest_orb() -> void:
-	"""Find the nearest collectible orb"""
+	"""Find the nearest collectible orb with line of sight"""
 	var orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
 	var closest_orb: Node = null
 	var closest_distance: float = INF
@@ -830,9 +897,13 @@ func find_nearest_orb() -> void:
 			continue
 
 		var distance: float = bot.global_position.distance_to(orb.global_position)
-		if distance < closest_distance:
-			closest_distance = distance
-			closest_orb = orb
+
+		# Only consider orbs within reasonable range and with line of sight
+		if distance < 60.0 and distance < closest_distance:
+			# Check line of sight to orb
+			if has_line_of_sight(orb.global_position, 0.5):
+				closest_distance = distance
+				closest_orb = orb
 
 	target_orb = closest_orb
 
@@ -840,14 +911,29 @@ func do_collect_orb(delta: float) -> void:
 	"""Move towards and collect an orb"""
 	if not target_orb or not is_instance_valid(target_orb):
 		target_orb = null
+		target_blocked_timer = 0.0
 		state = "WANDER"
 		return
 
 	# Check if orb was collected by someone else
 	if "is_collected" in target_orb and target_orb.is_collected:
 		target_orb = null
+		target_blocked_timer = 0.0
 		state = "WANDER"
 		return
+
+	# Check if target is behind a wall/unreachable
+	if not has_line_of_sight(target_orb.global_position, 0.5):
+		# Target is blocked - increment timer
+		if target_blocked_timer >= TARGET_BLOCKED_TIMEOUT:
+			print("Bot %s abandoning orb behind wall after %0.1fs" % [bot.name, target_blocked_timer])
+			target_orb = null
+			target_blocked_timer = 0.0
+			state = "WANDER"
+			return
+	else:
+		# Target is visible - reset timer
+		target_blocked_timer = 0.0
 
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
@@ -894,6 +980,77 @@ func do_collect_orb(delta: float) -> void:
 ## ============================================================================
 ## OBSTACLE DETECTION AND AVOIDANCE FUNCTIONS
 ## ============================================================================
+
+func has_line_of_sight(target_position: Vector3, check_height: float = 1.0) -> bool:
+	"""
+	Check if there's a clear line of sight to the target position
+	Returns true if we can see the target, false if blocked by walls/obstacles
+	"""
+	if not bot:
+		return false
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+
+	# Cast ray from bot to target at chest height
+	var start_pos: Vector3 = bot.global_position + Vector3.UP * check_height
+	var end_pos: Vector3 = target_position + Vector3.UP * check_height
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+	query.exclude = [bot]
+	query.collision_mask = 1  # Only check world geometry (layer 1)
+	query.collide_with_areas = false
+	query.collide_with_bodies = true
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	# If we hit something, there's an obstacle in the way
+	return not result
+
+func detect_platform_ahead(direction: Vector3, scan_distance: float = 5.0) -> Dictionary:
+	"""
+	Detect if there's a platform ahead that the bot can jump onto
+	Returns dictionary with: {has_platform: bool, platform_height: float, distance: float}
+	"""
+	if not bot:
+		return {"has_platform": false, "platform_height": 0.0, "distance": 0.0}
+
+	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+
+	# Cast multiple horizontal rays at different heights to detect platforms
+	var heights_to_check: Array = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]
+	var platform_detected: bool = false
+	var platform_height: float = 0.0
+	var platform_distance: float = 0.0
+
+	for height in heights_to_check:
+		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
+		var end_pos: Vector3 = start_pos + direction.normalized() * scan_distance
+
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
+		query.exclude = [bot]
+		query.collision_mask = 1
+		query.collide_with_areas = false
+		query.collide_with_bodies = true
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result:
+			# Found an obstacle - check if it's a platform we can jump onto
+			var hit_point: Vector3 = result.position
+			var obstacle_height: float = hit_point.y - bot.global_position.y
+
+			# If obstacle is between 0.5 and 4 units high, it's a jumpable platform
+			if obstacle_height > 0.3 and obstacle_height < 4.5:
+				platform_detected = true
+				platform_height = obstacle_height
+				platform_distance = bot.global_position.distance_to(hit_point)
+				break
+
+	return {
+		"has_platform": platform_detected,
+		"platform_height": platform_height,
+		"distance": platform_distance
+	}
 
 func check_ground_status() -> void:
 	"""Check the ground beneath the bot to detect slopes and update ground normal"""
@@ -1055,13 +1212,16 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0
 		if hits_at_height.size() >= 2:
 			var height_diff: float = highest_obstacle_height - lowest_obstacle_height
 			# If obstacle height varies significantly across our check heights, it's a slope
-			if height_diff > 0.3:
+			if height_diff > 0.3 and height_diff < 2.5:
 				is_slope = true
 			# If the lowest hit is above ground level, it's a platform edge
-			if lowest_obstacle_height > 0.2 and lowest_obstacle_height < 2.5:
+			if lowest_obstacle_height > 0.3 and lowest_obstacle_height < 3.5:
 				is_platform = true
-			# If we hit at all heights, it's likely a vertical wall
-			if hit_count >= check_heights.size() - 1:
+			# If we hit at most heights (4+) consistently, it's likely a vertical wall
+			if hit_count >= 4 and height_diff < 0.5:
+				is_wall = true
+			# Additional check: if we hit at all heights with minimal variance, definitely a wall
+			if hit_count >= check_heights.size() - 1 and height_diff < 1.0:
 				is_wall = true
 
 		# Check if we can jump onto this obstacle
@@ -1070,14 +1230,16 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 3.0
 		# More aggressive jump detection for slopes and platforms
 		var can_jump: bool = false
 		if is_slope or is_platform:
-			# For slopes/platforms, be more aggressive about jumping
-			can_jump = lowest_obstacle_height < 4.0 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.5
+			# For slopes/platforms, be very aggressive about jumping
+			# These are meant to be traversed
+			can_jump = lowest_obstacle_height < 4.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.3
 		elif is_wall:
-			# For walls, only jump if they're low enough
-			can_jump = lowest_obstacle_height < 2.0 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.8
+			# For walls, only jump if they're low enough (under 2.5 units)
+			# Most walls are too high to jump over
+			can_jump = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.8
 		else:
 			# For other obstacles, use moderate jump detection
-			can_jump = lowest_obstacle_height < 2.5 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.6
+			can_jump = lowest_obstacle_height < 3.0 and lowest_obstacle_height > -0.5 and distance_to_obstacle > 0.5
 
 		return {
 			"has_obstacle": true,
