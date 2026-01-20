@@ -44,6 +44,7 @@ class_name GrindRail
 var active_grinders: Array[RigidBody3D] = []
 var grinder_data: Dictionary = {}
 var nearby_players: Array[RigidBody3D] = []  # Players near rail but not attached
+var debug_frame_counter: int = 0  # For throttling debug output
 
 class GrinderData:
 	var closest_offset: float = 0.0
@@ -271,6 +272,10 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	var time_since_attach: float = current_time - data.attach_time
 
+	# Debug logging every 30 frames (about 0.5 seconds at 60fps)
+	debug_frame_counter += 1
+	var should_log: bool = (debug_frame_counter % 30 == 0)
+
 	var player_local: Vector3 = to_local(grinder.global_position)
 	var closest_offset: float = curve.get_closest_offset(player_local)
 
@@ -339,12 +344,17 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Shift speed boost - check if player is holding shift while grinding
 	var is_shift_held: bool = false
-	if grinder.has_method("is_action_pressed"):
+	var has_method: bool = grinder.has_method("is_action_pressed")
+	if has_method:
 		# For multiplayer, each player has their own input
 		is_shift_held = grinder.is_action_pressed("spin_dash")
 	else:
 		# For local player, use Input singleton
 		is_shift_held = Input.is_action_pressed("spin_dash")
+
+	# Debug logging (throttled)
+	if should_log:
+		print("[RAIL] Update: player=", grinder.name, " has_method=", has_method, " shift_held=", is_shift_held, " boost=", snapped(data.shift_boost_amount, 10))
 
 	# Debug logging for shift boost
 	if is_shift_held and data.shift_boost_amount == 0.0:
