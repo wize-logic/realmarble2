@@ -5,9 +5,9 @@ extends Node3D
 
 @export var level_seed: int = 0
 @export var arena_size: float = 120.0
-@export var platform_count: int = 24
-@export var ramp_count: int = 18  # Increased from 12 for better connectivity
-@export var min_spacing: float = 8.0  # Minimum distance between any two pieces of geometry
+@export var platform_count: int = 30  # Good amount of platforms
+@export var ramp_count: int = 20  # Good amount of slopes
+@export var min_spacing: float = 5.0  # Minimum gap - just enough so they don't touch
 
 var noise: FastNoiseLite
 var platforms: Array = []
@@ -128,68 +128,43 @@ func generate_main_floor() -> void:
 	# Store for texture application
 	platforms.append(floor_instance)
 
-	# Register floor geometry for spacing checks
-	register_geometry(floor_instance.position, floor_mesh.size)
+	# DON'T register floor - it's the base and objects should be allowed on/above it
+	# register_geometry(floor_instance.position, floor_mesh.size)
 
 	if OS.is_debug_build():
 		print("Generated main floor: ", floor_size, "x", floor_size)
 
 func generate_platforms() -> void:
-	"""Generate elevated platforms around the arena in connected tiers for parkour gameplay"""
-	var radius: float = arena_size * 0.4
+	"""Generate elevated platforms around the arena with proper spacing"""
+	var floor_radius: float = (arena_size * 0.7) / 2.0  # Radius of main floor = 42 units
 	var generated_count: int = 0
-	var max_attempts: int = platform_count * 15  # More attempts for connectivity
-
-	# Define height tiers for platform connectivity (players can jump ~5-6 units)
-	var tiers: Array[float] = [3.0, 6.0, 9.0, 12.0]  # Height levels
-	var platforms_per_tier: int = platform_count / tiers.size()
-	var tier_counts: Array[int] = [0, 0, 0, 0]  # Track platforms per tier
+	var max_attempts: int = platform_count * 10
 
 	for attempt in range(max_attempts):
 		if generated_count >= platform_count:
 			break
 
-		# Select tier (prefer lower tiers first for better connectivity to ground)
-		var tier_index: int = 0
-		var min_count: int = INF
-		for i in range(tiers.size()):
-			if tier_counts[i] < min_count:
-				min_count = tier_counts[i]
-				tier_index = i
-
-		# If target tier is full, pick next available
-		if tier_counts[tier_index] >= platforms_per_tier:
-			var found_available: bool = false
-			for i in range(tiers.size()):
-				if tier_counts[i] < platforms_per_tier:
-					tier_index = i
-					found_available = true
-					break
-			if not found_available:
-				tier_index = randi() % tiers.size()  # Fallback: random tier
-
-		var y: float = tiers[tier_index] + randf_range(-0.5, 0.5)  # Slight variation within tier
-
-		# Generate position with connectivity in mind
+		# Generate random position - keep within floor bounds with margin
 		var angle: float = randf() * TAU
-		var distance: float = radius * (0.5 + randf() * 0.5)  # 50-100% of radius
+		var distance: float = randf_range(5.0, floor_radius - 10.0)  # 5 to 32 units from center
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
+		var y: float = randf_range(3.0, 10.0)  # Heights 3-10 units
 
-		# Platform size - larger for better landing targets
-		var width: float = 7.0 + randf() * 5.0
-		var depth: float = 7.0 + randf() * 5.0
-		var height: float = 1.0 + randf() * 0.5
+		# Random platform size
+		var width: float = randf_range(6.0, 10.0)
+		var depth: float = randf_range(6.0, 10.0)
+		var height: float = randf_range(1.0, 1.5)
 
 		var platform_size: Vector3 = Vector3(width, height, depth)
 		var platform_pos: Vector3 = Vector3(x, y, z)
 
 		# Check spacing before creating
 		if not check_spacing(platform_pos, platform_size):
-			continue  # Skip this position, try next attempt
+			continue
 
-		# Valid position - create platform with smooth geometry
+		# Create platform
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
@@ -212,45 +187,38 @@ func generate_platforms() -> void:
 		# Register this geometry for future spacing checks
 		register_geometry(platform_pos, platform_size)
 
-		tier_counts[tier_index] += 1
 		generated_count += 1
 
 	if OS.is_debug_build():
-		print("Generated ", generated_count, " / ", platform_count, " platforms in tiers (", max_attempts, " attempts)")
-		print("  Tier distribution: ", tier_counts)
+		print("Generated ", generated_count, " / ", platform_count, " platforms (", max_attempts, " attempts)")
 
 func generate_ramps() -> void:
-	"""Generate ramps connecting different levels with proper spacing"""
+	"""Generate ramps/slopes on the stage with proper spacing"""
+	var floor_radius: float = (arena_size * 0.7) / 2.0  # Radius of main floor = 42 units
 	var generated_count: int = 0
-	var max_attempts: int = ramp_count * 15  # More attempts for better placement
-
-	# Target heights for ramps to connect tiers (ground to tier1, tier1 to tier2, etc.)
-	var target_heights: Array[float] = [0.5, 3.5, 6.5, 9.5]  # Bottom of each tier transition
+	var max_attempts: int = ramp_count * 10
 
 	for attempt in range(max_attempts):
 		if generated_count >= ramp_count:
 			break
 
-		# Select target height (cycle through tiers for even distribution)
-		var height_index: int = generated_count % target_heights.size()
-		var y: float = target_heights[height_index] + randf_range(-0.5, 0.5)
-
-		# Generate position around circle
-		var angle: float = randf() * TAU  # Random angle
-		var distance: float = arena_size * (0.3 + randf() * 0.25)  # 30-55% of arena size
+		# Generate position ON the stage - within floor bounds
+		var angle: float = randf() * TAU
+		var distance: float = randf_range(8.0, floor_radius - 12.0)  # 8 to 30 units from center (stay on stage)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
+		var y: float = randf_range(0.5, 5.0)  # Heights 0.5-5 units
 
 		var ramp_size: Vector3 = Vector3(8.0, 0.5, 12.0)
 		var ramp_pos: Vector3 = Vector3(x, y, z)
-		var ramp_rotation: Vector3 = Vector3(-25, rad_to_deg(angle), 0)  # Point toward center
+		var ramp_rotation: Vector3 = Vector3(-25, randf() * 360.0, 0)  # Random rotation
 
-		# Check spacing before creating (ramps need extra clearance due to rotation)
-		if not check_spacing(ramp_pos, ramp_size * 1.2, ramp_rotation):  # 1.2x size for rotation clearance
+		# Check spacing before creating
+		if not check_spacing(ramp_pos, ramp_size * 1.2):  # Extra clearance for rotation
 			continue
 
-		# Valid position - create ramp with smooth geometry
+		# Create ramp
 		var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
@@ -272,12 +240,12 @@ func generate_ramps() -> void:
 		platforms.append(ramp_instance)
 
 		# Register this geometry for future spacing checks
-		register_geometry(ramp_pos, ramp_size * 1.2, ramp_rotation)  # Use expanded size
+		register_geometry(ramp_pos, ramp_size * 1.2, ramp_rotation)
 
 		generated_count += 1
 
 	if OS.is_debug_build():
-		print("Generated ", generated_count, " / ", ramp_count, " ramps at tier transitions (", max_attempts, " attempts)")
+		print("Generated ", generated_count, " / ", ramp_count, " ramps (", max_attempts, " attempts)")
 
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
