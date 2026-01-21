@@ -162,6 +162,17 @@ var vision_update_timer: float = 0.0
 const VISION_UPDATE_INTERVAL: float = 0.1  # Update vision cache every 0.1s for stability
 # NOTE: Marbles have 360° awareness (spherical sensors), no FOV restrictions
 
+# RAIL GRINDING: Sonic-style rail grinding system (restored for Type A arenas)
+var is_grinding: bool = false  # Currently grinding on a rail
+var current_rail: GrindRail = null  # The rail we're currently grinding on
+var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene
+var target_rail: GrindRail = null  # Rail bot wants to use
+var rail_check_timer: float = 0.0
+const RAIL_CHECK_INTERVAL: float = 2.0  # Check for rails every 2 seconds
+const MAX_CACHED_RAILS: int = 12  # Max rails to cache (Type A has 12 rails)
+const MAX_RAIL_DISTANCE: float = 50.0  # Only consider nearby rails
+var movement_input_direction: Vector3 = Vector3.ZERO  # Required by rails for directional control
+
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
@@ -218,6 +229,7 @@ func _physics_process(delta: float) -> void:
 	platform_check_timer -= delta
 	platform_stabilize_timer -= delta
 	vision_update_timer -= delta
+	rail_check_timer -= delta
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -298,6 +310,11 @@ func _physics_process(delta: float) -> void:
 		else:
 			platform_check_timer = PLATFORM_CHECK_INTERVAL  # 1.5 seconds default
 
+	# NEW: Check for rails periodically (Type A arena mobility)
+	if rail_check_timer <= 0.0:
+		consider_rail_navigation()
+		rail_check_timer = RAIL_CHECK_INTERVAL  # 2 seconds
+
 	# State machine
 	match state:
 		"WANDER":
@@ -364,6 +381,9 @@ func refresh_cached_groups() -> void:
 
 	# NEW: Cache platforms from level generators
 	refresh_platform_cache()
+
+	# NEW: Cache rails from level generators (Type A arenas)
+	refresh_rail_cache()
 
 func refresh_platform_cache() -> void:
 	"""OPTIMIZED: Cache platform positions with filtering for performance
@@ -441,6 +461,57 @@ func refresh_platform_cache() -> void:
 			"size": platform_data.size,
 			"height": platform_data.height
 		})
+
+func consider_rail_navigation() -> void:
+	"""Evaluate whether to use a rail for the current situation"""
+	if not bot or is_grinding:
+		return  # Already grinding or no bot
+
+	# Don't use rails while stabilizing on a platform
+	if platform_stabilize_timer > 0.0:
+		return
+
+	# Find the best rail for current situation
+	var best_rail: GrindRail = find_best_rail()
+	if not best_rail:
+		target_rail = null
+		return
+
+	# Decision: Should we attach to this rail now?
+	var should_attach: bool = false
+
+	# Always try to attach during RETREAT (rails are great for escaping)
+	if current_state == State.RETREAT:
+		should_attach = true
+
+	# Try to attach if rail significantly helps reach chase target
+	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+		var bot_pos: Vector3 = bot.global_position
+		var target_pos: Vector3 = target_player.global_position
+		var rail_end: Vector3 = best_rail.to_global(best_rail.curve.sample_baked(best_rail.curve.get_baked_length()))
+
+		var dist_now: float = bot_pos.distance_to(target_pos)
+		var dist_via_rail: float = bot_pos.distance_to(rail_end) + rail_end.distance_to(target_pos)
+
+		# Use rail if it's roughly same distance or shorter (rails are fast!)
+		if dist_via_rail < dist_now * 1.3:
+			should_attach = true
+
+	# Try to attach if we're wandering and rail provides exploration/mobility
+	elif current_state == State.WANDER:
+		# 30% chance to use rails while wandering for variety
+		if randf() < 0.3:
+			should_attach = true
+
+	if should_attach:
+		target_rail = best_rail
+		# Try to attach if we're close enough
+		var closest_point: Vector3 = _get_closest_rail_point(best_rail)
+		var distance: float = bot.global_position.distance_to(closest_point)
+		if distance <= 30.0:  # Within attachment range
+			try_attach_to_rail(best_rail)
+	else:
+		target_rail = null
 
 func find_best_platform() -> void:
 	"""OPTIMIZED: Find the best platform with early exit for performance
@@ -663,6 +734,251 @@ func find_platform_for_position(item_pos: Vector3) -> Dictionary:
 			return platform_data
 
 	return {}  # Item not on any known platform
+
+# ============================================================================
+# RAIL GRINDING SYSTEM (Restored for Type A arena mobility)
+# ============================================================================
+
+func refresh_rail_cache() -> void:
+	"""Cache nearby rails for performance"""
+	cached_rails.clear()
+
+	if not bot:
+		return
+
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world:
+		return
+
+	# Find all rails in the scene
+	var all_rails: Array[GrindRail] = find_all_rails(world)
+	var bot_pos: Vector3 = bot.global_position
+
+	# Filter rails by distance
+	for rail in all_rails:
+		if not is_instance_valid(rail) or not rail.is_inside_tree():
+			continue
+
+		# Check if rail has a valid curve
+		if not rail.curve or rail.curve.get_baked_length() <= 0:
+			continue
+
+		# Get closest point on rail
+		var local_pos: Vector3 = rail.to_local(bot_pos)
+		var closest_offset: float = rail.curve.get_closest_offset(local_pos)
+		var closest_point: Vector3 = rail.to_global(rail.curve.sample_baked(closest_offset))
+		var distance: float = bot_pos.distance_to(closest_point)
+
+		# Only cache nearby rails
+		if distance <= MAX_RAIL_DISTANCE:
+			cached_rails.append(rail)
+
+	# Limit cache size
+	if cached_rails.size() > MAX_CACHED_RAILS:
+		# Sort by distance and keep closest
+		cached_rails.sort_custom(func(a, b):
+			var dist_a: float = bot_pos.distance_to(_get_closest_rail_point(a))
+			var dist_b: float = bot_pos.distance_to(_get_closest_rail_point(b))
+			return dist_a < dist_b
+		)
+		cached_rails = cached_rails.slice(0, MAX_CACHED_RAILS)
+
+func find_all_rails(node: Node) -> Array[GrindRail]:
+	"""Recursively find all GrindRail nodes in the scene"""
+	var rails: Array[GrindRail] = []
+
+	if node is GrindRail:
+		rails.append(node as GrindRail)
+
+	for child in node.get_children():
+		rails.append_array(find_all_rails(child))
+
+	return rails
+
+func _get_closest_rail_point(rail: GrindRail) -> Vector3:
+	"""Helper: Get closest point on rail to bot"""
+	if not rail or not rail.curve or rail.curve.get_baked_length() <= 0:
+		return Vector3.ZERO
+
+	var local_pos: Vector3 = rail.to_local(bot.global_position)
+	var closest_offset: float = rail.curve.get_closest_offset(local_pos)
+	return rail.to_global(rail.curve.sample_baked(closest_offset))
+
+func evaluate_rail_score(rail: GrindRail) -> float:
+	"""Evaluate how valuable a rail is for the bot's current goals"""
+	if not bot or not rail or not rail.curve:
+		return 0.0
+
+	var score: float = 0.0
+	var bot_pos: Vector3 = bot.global_position
+
+	# Get rail start and end positions
+	var rail_length: float = rail.curve.get_baked_length()
+	if rail_length <= 0:
+		return 0.0
+
+	var rail_start: Vector3 = rail.to_global(rail.curve.sample_baked(0))
+	var rail_end: Vector3 = rail.to_global(rail.curve.sample_baked(rail_length))
+	var closest_point: Vector3 = _get_closest_rail_point(rail)
+
+	# Factor 1: Accessibility (how easy to reach the rail)
+	var distance_to_rail: float = bot_pos.distance_to(closest_point)
+	if distance_to_rail > MAX_RAIL_DISTANCE:
+		return 0.0  # Too far away
+
+	var accessibility_score: float = 100.0 - (distance_to_rail / MAX_RAIL_DISTANCE * 50.0)
+	score += accessibility_score
+
+	# Factor 2: Height advantage (rails at good height for mobility)
+	var rail_avg_height: float = (rail_start.y + rail_end.y) / 2.0
+	var height_diff: float = rail_avg_height - bot_pos.y
+
+	if height_diff > 2.0:
+		score += 30.0  # Rail is elevated - good for mobility and positioning
+	elif height_diff < -5.0:
+		score -= 20.0  # Rail is below us - less useful
+
+	# Factor 3: Rail length (longer rails = more mobility)
+	if rail_length > 30.0:
+		score += 25.0  # Long rail - great mobility
+	elif rail_length > 15.0:
+		score += 15.0  # Medium rail
+	else:
+		score += 5.0  # Short rail
+
+	# Factor 4: Tactical value based on current state
+	if current_state == State.CHASE and target_player and is_instance_valid(target_player):
+		# Check if rail helps us reach target
+		var target_pos: Vector3 = target_player.global_position
+		var dist_to_target_now: float = bot_pos.distance_to(target_pos)
+		var dist_from_rail_end: float = rail_end.distance_to(target_pos)
+
+		if dist_from_rail_end < dist_to_target_now:
+			score += 40.0  # Rail brings us closer to target
+		else:
+			score -= 20.0  # Rail takes us away from target
+
+	elif current_state == State.RETREAT:
+		# Rails are great for escaping
+		score += 50.0
+		# Prefer rails that take us away from enemies
+		if target_player and is_instance_valid(target_player):
+			var target_pos: Vector3 = target_player.global_position
+			var dist_from_rail_end: float = rail_end.distance_to(target_pos)
+			var dist_now: float = bot_pos.distance_to(target_pos)
+			if dist_from_rail_end > dist_now:
+				score += 30.0  # Rail helps us escape
+
+	elif current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB:
+		# Check if rail helps reach collectibles
+		var collectible_pos: Vector3 = target_collectible.global_position if target_collectible else Vector3.ZERO
+		if collectible_pos != Vector3.ZERO:
+			var dist_to_collectible_now: float = bot_pos.distance_to(collectible_pos)
+			var dist_from_rail_end: float = rail_end.distance_to(collectible_pos)
+
+			if dist_from_rail_end < dist_to_collectible_now * 0.7:
+				score += 35.0  # Rail significantly helps reach collectible
+
+	# Factor 5: Rail occupancy (avoid crowded rails)
+	var occupancy: int = count_bots_on_rail(rail)
+	if occupancy >= 2:
+		score -= 100.0  # Rail is crowded
+	elif occupancy == 1:
+		score -= 30.0  # One bot already on rail
+
+	return score
+
+func count_bots_on_rail(rail: GrindRail) -> int:
+	"""Count how many bots are currently grinding on a rail"""
+	if not rail or not "active_grinders" in rail:
+		return 0
+
+	var count: int = 0
+	for grinder in rail.active_grinders:
+		if is_instance_valid(grinder) and grinder != bot:
+			count += 1
+
+	return count
+
+func find_best_rail() -> GrindRail:
+	"""Find the best rail to use based on current situation"""
+	if cached_rails.is_empty():
+		return null
+
+	var best_rail: GrindRail = null
+	var best_score: float = 20.0  # Minimum score threshold
+
+	for rail in cached_rails:
+		if not is_instance_valid(rail):
+			continue
+
+		var score: float = evaluate_rail_score(rail)
+		if score > best_score:
+			best_score = score
+			best_rail = rail
+
+	return best_rail
+
+func try_attach_to_rail(rail: GrindRail) -> bool:
+	"""Attempt to attach to a rail"""
+	if not rail or not bot:
+		return false
+
+	if is_grinding:
+		return false  # Already grinding
+
+	# Check if rail has try_attach_player method
+	if not rail.has_method("try_attach_player"):
+		return false
+
+	# Attempt attachment
+	var success: bool = rail.try_attach_player(bot)
+	if success:
+		target_rail = rail
+		return true
+
+	return false
+
+# Required functions called by GrindRail
+func start_grinding(rail: GrindRail) -> void:
+	"""Called by rail when bot enters grinding state"""
+	if is_grinding:
+		return
+
+	is_grinding = true
+	current_rail = rail
+	target_rail = rail
+
+	# Reset jump count
+	if "jump_count" in bot:
+		bot.jump_count = 0
+
+	# Reduce physics damping for smoother grinding (matching player)
+	if bot is RigidBody3D:
+		bot.linear_damp = 0.2
+
+func stop_grinding() -> void:
+	"""Called by rail when bot exits grinding state"""
+	if not is_grinding:
+		return
+
+	is_grinding = false
+	current_rail = null
+
+	# Restore normal physics damping
+	if bot and bot is RigidBody3D:
+		bot.linear_damp = 0.5
+
+func launch_from_rail(velocity: Vector3) -> void:
+	"""Called by rail when bot reaches the end of the rail"""
+	if not is_grinding:
+		return
+
+	stop_grinding()
+
+	# Bot already has velocity from rail physics, just add upward boost
+	if bot and bot is RigidBody3D:
+		bot.apply_central_impulse(Vector3.UP * 15.0)
 
 func calculate_current_aggression() -> float:
 	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
@@ -1294,6 +1610,11 @@ func move_away_from(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	var direction: Vector3 = (bot.global_position - target_pos).normalized()
 	direction.y = 0
 
+	# RAIL GRINDING: If currently grinding, update movement input and let rail physics handle movement
+	if is_grinding and current_rail:
+		movement_input_direction = direction  # Tell rail which direction we want to go
+		return  # Rail physics handles movement
+
 	if direction.length() > 0.1:
 		# EDGE DETECTION FIX: Check for edges when retreating
 		if check_for_edge(direction, 4.0):
@@ -1487,6 +1808,11 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 
 	var direction: Vector3 = (target_pos - bot.global_position).normalized()
 	direction.y = 0
+
+	# RAIL GRINDING: If currently grinding, update movement input and let rail physics handle movement
+	if is_grinding and current_rail:
+		movement_input_direction = direction  # Tell rail which direction we want to go
+		return  # Rail physics handles movement
 
 	var height_diff: float = target_pos.y - bot.global_position.y
 
