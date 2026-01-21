@@ -139,11 +139,20 @@ const PLATFORM_CHECK_INTERVAL: float = 1.5
 var is_approaching_platform: bool = false  # Special navigation mode
 var platform_jump_prepared: bool = false  # Ready to jump onto platform
 
+# SAFETY: Platform landing stabilization
+var platform_stabilize_timer: float = 0.0  # Time to stabilize after landing
+const PLATFORM_STABILIZE_TIME: float = 0.8  # How long to stabilize
+var on_platform: bool = false  # Currently standing on a platform
+
 # OPTIMIZATION: Performance limits for platform system
 const MAX_CACHED_PLATFORMS: int = 20  # Limit cache size for performance
 const MAX_PLATFORM_DISTANCE: float = 40.0  # Only consider nearby platforms
 const MIN_PLATFORM_HEIGHT: float = 2.0  # Only cache elevated platforms (ignore floor)
 const GOOD_ENOUGH_SCORE: float = 70.0  # Early exit threshold
+
+# SAFETY: Platform occupancy limits
+const MAX_BOTS_PER_PLATFORM: int = 2  # Max bots that can share a platform
+const MIN_PLATFORM_SIZE_FOR_COMBAT: float = 8.0  # Minimum platform size for combat positioning
 
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
@@ -199,6 +208,7 @@ func _physics_process(delta: float) -> void:
 	player_avoidance_timer -= delta
 	edge_check_timer -= delta
 	platform_check_timer -= delta
+	platform_stabilize_timer -= delta
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -498,6 +508,27 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 	if not is_reachable:
 		score -= 100.0  # Heavily penalize unreachable platforms
 
+	# SAFETY: Platform size scoring (prefer larger platforms)
+	var platform_size: Vector3 = platform_data.size
+	var platform_area: float = platform_size.x * platform_size.z
+	if platform_area >= 100.0:  # Large platforms (10x10 or bigger)
+		score += 15.0  # Bonus for spacious platforms
+	elif platform_area <= 50.0:  # Small platforms (7x7 or smaller)
+		score -= 15.0  # Penalty for cramped platforms
+		# Extra penalty for small platforms during combat
+		if state == "ATTACK" or state == "CHASE":
+			score -= 10.0  # Too small for combat maneuvering
+
+	# SAFETY: Platform occupancy check (avoid crowded platforms)
+	var occupancy: int = count_bots_on_platform(platform_data)
+	if occupancy >= MAX_BOTS_PER_PLATFORM:
+		score -= 60.0  # Heavy penalty - platform is full
+	elif occupancy > 0:
+		score -= 20.0  # Moderate penalty - platform has other bots
+		# Small platforms become much worse when occupied
+		if platform_area <= 64.0:  # 8x8 or smaller
+			score -= 30.0  # Very cramped with another bot
+
 	# Strategic preference bonuses (OPTIMIZED: removed expensive loops)
 	match strategic_preference:
 		"aggressive":
@@ -559,6 +590,41 @@ func can_reach_platform(platform_data: Dictionary) -> bool:
 
 	# Platform is reachable
 	return true
+
+func count_bots_on_platform(platform_data: Dictionary) -> int:
+	"""SAFETY: Count how many bots are currently on or near a platform"""
+	if platform_data.is_empty():
+		return 0
+
+	var platform_pos: Vector3 = platform_data.position
+	var platform_size: Vector3 = platform_data.size
+	var platform_height: float = platform_data.height
+
+	var bot_count: int = 0
+
+	# Check all cached players (includes bots and human players)
+	for player in cached_players:
+		if player == bot or not is_instance_valid(player):
+			continue
+
+		var player_pos: Vector3 = player.global_position
+
+		# Check if player is on this platform (within bounds and at similar height)
+		var horizontal_dist: float = Vector2(
+			player_pos.x - platform_pos.x,
+			player_pos.z - platform_pos.z
+		).length()
+
+		var height_diff: float = abs(player_pos.y - platform_height)
+
+		# Player is on platform if:
+		# - Within platform horizontal bounds (with small margin)
+		# - At similar height (within 3 units above platform)
+		var half_size: float = max(platform_size.x, platform_size.z) * 0.5
+		if horizontal_dist <= half_size and height_diff <= 3.0:
+			bot_count += 1
+
+	return bot_count
 
 func calculate_current_aggression() -> float:
 	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
@@ -886,10 +952,11 @@ func do_retreat(delta: float) -> void:
 		use_bounce_attack()
 
 func navigate_to_platform(delta: float) -> void:
-	"""NEW: Navigate to target platform with smart jumping"""
+	"""SAFETY: Navigate to target platform with smart jumping and landing stabilization"""
 	if target_platform.is_empty():
 		is_approaching_platform = false
 		platform_jump_prepared = false
+		on_platform = false
 		return
 
 	var platform_pos: Vector3 = target_platform.position
@@ -900,33 +967,58 @@ func navigate_to_platform(delta: float) -> void:
 	var horizontal_dist: float = Vector2(platform_pos.x - bot_pos.x, platform_pos.z - bot_pos.z).length()
 	var height_diff: float = platform_height - bot_pos.y
 
-	# Check if we've reached the platform
+	# SAFETY: Check if we've reached the platform
 	if horizontal_dist < platform_size.x * 0.4 and abs(height_diff) < 2.0:
-		# Successfully on platform!
-		is_approaching_platform = false
-		platform_jump_prepared = false
-		target_platform = {}  # Clear target
-		return
+		# Successfully on platform! Start stabilization period
+		if not on_platform:
+			on_platform = true
+			platform_stabilize_timer = PLATFORM_STABILIZE_TIME
+
+		# STABILIZATION: Reduce movement during stabilization period
+		if platform_stabilize_timer > 0.0:
+			# Apply gentle braking to slow down
+			if "linear_velocity" in bot:
+				var horizontal_vel: Vector3 = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z)
+				if horizontal_vel.length() > 2.0:
+					var braking: Vector3 = -horizontal_vel.normalized() * bot.current_roll_force * 0.3
+					bot.apply_central_force(braking)
+			return  # Don't move while stabilizing
+		else:
+			# Stabilization complete - clear platform navigation
+			is_approaching_platform = false
+			platform_jump_prepared = false
+			on_platform = false
+			target_platform = {}  # Clear target
+			return
 
 	# Cancel if platform is too far (re-evaluate)
 	if horizontal_dist > 30.0:
 		is_approaching_platform = false
 		platform_jump_prepared = false
+		on_platform = false
 		return
 
 	# Look at platform while navigating
 	look_at_target_smooth(platform_pos, delta)
+
+	# SAFETY: Adjust approach speed based on platform size
+	var platform_area: float = platform_size.x * platform_size.z
+	var approach_speed_mult: float = 1.0
+	if platform_area <= 50.0:  # Small platforms (7x7 or smaller)
+		approach_speed_mult = 0.6  # Much slower approach
+	elif platform_area <= 80.0:  # Medium platforms (9x9 or smaller)
+		approach_speed_mult = 0.8  # Moderately slower approach
 
 	# Approach logic based on height difference
 	if height_diff > 1.0:
 		# Platform is above us - need to jump onto it
 		if horizontal_dist > 8.0:
 			# Far away - move closer before jumping
-			move_towards(platform_pos, 0.8)
+			move_towards(platform_pos, 0.8 * approach_speed_mult)
 			platform_jump_prepared = false
 		elif horizontal_dist > 3.0:
 			# Medium distance - prepare to jump
-			move_towards(platform_pos, 0.6)
+			move_towards(platform_pos, 0.6 * approach_speed_mult)
 
 			# Execute jump based on height
 			if not platform_jump_prepared and obstacle_jump_timer <= 0.0:
@@ -952,18 +1044,18 @@ func navigate_to_platform(delta: float) -> void:
 				bot_jump()
 				platform_jump_prepared = true
 				obstacle_jump_timer = 0.5
-			# Apply upward force while jumping
-			move_towards(platform_pos, 0.4)
+			# Apply upward force while jumping (very gentle for small platforms)
+			move_towards(platform_pos, 0.4 * approach_speed_mult)
 	elif height_diff < -2.0:
 		# Platform is below us - carefully approach edge
 		if horizontal_dist > 5.0:
-			move_towards(platform_pos, 0.7)
+			move_towards(platform_pos, 0.7 * approach_speed_mult)
 		else:
-			# At edge - drop down carefully
-			move_towards(platform_pos, 0.3)
+			# At edge - drop down very carefully (especially on small platforms)
+			move_towards(platform_pos, 0.3 * approach_speed_mult)
 	else:
 		# Platform at similar height - just move toward it
-		move_towards(platform_pos, 0.8)
+		move_towards(platform_pos, 0.8 * approach_speed_mult)
 
 		# Small jump if there's a slight elevation
 		if height_diff > 0.5 and obstacle_jump_timer <= 0.0:
