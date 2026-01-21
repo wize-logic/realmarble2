@@ -626,6 +626,35 @@ func count_bots_on_platform(platform_data: Dictionary) -> int:
 
 	return bot_count
 
+func find_platform_for_position(item_pos: Vector3) -> Dictionary:
+	"""ELEVATED ITEMS: Find which platform (if any) an item is sitting on"""
+	if cached_platforms.is_empty():
+		return {}
+
+	# Check each cached platform to see if item is on it
+	for platform_data in cached_platforms:
+		var platform_pos: Vector3 = platform_data.position
+		var platform_size: Vector3 = platform_data.size
+		var platform_height: float = platform_data.height
+
+		# Check horizontal bounds
+		var horizontal_dist: float = Vector2(
+			item_pos.x - platform_pos.x,
+			item_pos.z - platform_pos.z
+		).length()
+
+		# Check height (item should be slightly above platform surface)
+		var height_diff: float = item_pos.y - platform_height
+
+		# Item is on platform if:
+		# - Within platform horizontal bounds
+		# - Height is 0.5-4 units above platform (item floating slightly, or on surface)
+		var half_size: float = max(platform_size.x, platform_size.z) * 0.5
+		if horizontal_dist <= half_size and height_diff >= -0.5 and height_diff <= 4.0:
+			return platform_data
+
+	return {}  # Item not on any known platform
+
 func calculate_current_aggression() -> float:
 	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
 	var current_aggression: float = aggression_level
@@ -1063,7 +1092,7 @@ func navigate_to_platform(delta: float) -> void:
 			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
-	"""Move towards ability without await statements"""
+	"""Move towards ability with elevated surface handling"""
 	if not target_ability or not is_instance_valid(target_ability):
 		target_ability = null
 		state = "WANDER"
@@ -1078,20 +1107,51 @@ func do_collect_ability(delta: float) -> void:
 			target_ability = null
 		return
 
+	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
+	if height_diff > 4.0 and not is_approaching_platform:
+		# Item is significantly elevated - check if it's on a known platform
+		var platform_for_item: Dictionary = find_platform_for_position(target_ability.global_position)
+		if not platform_for_item.is_empty():
+			# Item is on a platform! Navigate to platform first
+			target_platform = platform_for_item
+			is_approaching_platform = true
+			navigate_to_platform(delta)
+			return
+
+	# If we're already approaching platform, continue that navigation
+	if is_approaching_platform and not target_platform.is_empty():
+		navigate_to_platform(delta)
+		return
+
 	# Move towards ability urgently
 	move_towards(target_ability.global_position, 1.0)
 
-	# Jump aggressively for elevated abilities
+	# ENHANCED: Height-based jumping for elevated items
 	if action_timer <= 0.0:
-		if height_diff > 1.5:
+		if height_diff > 10.0:
+			# Very high - use bounce attack
+			if bounce_cooldown_timer <= 0.0:
+				use_bounce_attack()
+				action_timer = randf_range(0.5, 0.8)
+		elif height_diff > 5.0:
+			# High - use double jump
+			if bot.jump_count == 0:
+				bot_jump()
+				action_timer = 0.2  # Quick follow-up for second jump
+			elif bot.jump_count < bot.max_jumps:
+				bot_jump()
+				action_timer = randf_range(0.4, 0.6)
+		elif height_diff > 1.5:
+			# Medium elevation - single jump
 			bot_jump()
 			action_timer = randf_range(0.3, 0.5)
 		elif height_diff > 0.7 or randf() < 0.4:
+			# Small elevation - occasional jump
 			bot_jump()
 			action_timer = randf_range(0.4, 0.8)
 
 func do_collect_orb(delta: float) -> void:
-	"""Move towards orb without await statements"""
+	"""Move towards orb with elevated surface handling"""
 	if not target_orb or not is_instance_valid(target_orb):
 		target_orb = null
 		state = "WANDER"
@@ -1112,15 +1172,46 @@ func do_collect_orb(delta: float) -> void:
 			target_orb = null
 		return
 
+	# ELEVATED ITEM HANDLING: Check if orb is on a platform we need to reach
+	if height_diff > 4.0 and not is_approaching_platform:
+		# Item is significantly elevated - check if it's on a known platform
+		var platform_for_item: Dictionary = find_platform_for_position(target_orb.global_position)
+		if not platform_for_item.is_empty():
+			# Item is on a platform! Navigate to platform first
+			target_platform = platform_for_item
+			is_approaching_platform = true
+			navigate_to_platform(delta)
+			return
+
+	# If we're already approaching platform, continue that navigation
+	if is_approaching_platform and not target_platform.is_empty():
+		navigate_to_platform(delta)
+		return
+
 	# Move towards orb
 	move_towards(target_orb.global_position, 1.0)
 
-	# Jump for elevated orbs
+	# ENHANCED: Height-based jumping for elevated items
 	if action_timer <= 0.0:
-		if height_diff > 1.5:
+		if height_diff > 10.0:
+			# Very high - use bounce attack
+			if bounce_cooldown_timer <= 0.0:
+				use_bounce_attack()
+				action_timer = randf_range(0.5, 0.8)
+		elif height_diff > 5.0:
+			# High - use double jump
+			if bot.jump_count == 0:
+				bot_jump()
+				action_timer = 0.2  # Quick follow-up for second jump
+			elif bot.jump_count < bot.max_jumps:
+				bot_jump()
+				action_timer = randf_range(0.4, 0.6)
+		elif height_diff > 1.5:
+			# Medium elevation - single jump
 			bot_jump()
 			action_timer = randf_range(0.3, 0.5)
 		elif height_diff > 0.7 or randf() < 0.35:
+			# Small elevation - occasional jump
 			bot_jump()
 			action_timer = randf_range(0.4, 0.8)
 
