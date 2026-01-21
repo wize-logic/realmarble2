@@ -131,6 +131,14 @@ var cached_orbs: Array[Node] = []
 var cache_refresh_timer: float = 0.0
 const CACHE_REFRESH_INTERVAL: float = 0.5
 
+# NEW: Platform navigation system
+var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
+var target_platform: Dictionary = {}  # Current platform target
+var platform_check_timer: float = 0.0
+const PLATFORM_CHECK_INTERVAL: float = 1.5
+var is_approaching_platform: bool = false  # Special navigation mode
+var platform_jump_prepared: bool = false  # Ready to jump onto platform
+
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
@@ -184,6 +192,7 @@ func _physics_process(delta: float) -> void:
 	cache_refresh_timer -= delta
 	player_avoidance_timer -= delta
 	edge_check_timer -= delta
+	platform_check_timer -= delta
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -253,6 +262,11 @@ func _physics_process(delta: float) -> void:
 		find_nearest_orb()
 		orb_check_timer = 1.0
 
+	# NEW: Check for platforms periodically
+	if platform_check_timer <= 0.0:
+		find_best_platform()
+		platform_check_timer = PLATFORM_CHECK_INTERVAL
+
 	# State machine
 	match state:
 		"WANDER":
@@ -316,6 +330,171 @@ func refresh_cached_groups() -> void:
 	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
 	)
+
+	# NEW: Cache platforms from level generators
+	refresh_platform_cache()
+
+func refresh_platform_cache() -> void:
+	"""NEW: Cache platform positions and data from level generators"""
+	cached_platforms.clear()
+
+	# Get World node to access level generator
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world:
+		return
+
+	# Try to find level generator (Type A or Type B)
+	var level_gen: Node = world.get_node_or_null("LevelGenerator")
+	if not level_gen:
+		level_gen = world.get_node_or_null("LevelGeneratorQ3")
+
+	if not level_gen or not "platforms" in level_gen:
+		return
+
+	# Cache platform data
+	for platform_node in level_gen.platforms:
+		if not is_instance_valid(platform_node) or not platform_node.is_inside_tree():
+			continue
+
+		# Get platform position and size
+		var platform_pos: Vector3 = platform_node.global_position
+		var platform_size: Vector3 = Vector3(8, 1, 8)  # Default size
+
+		# Try to get actual mesh size
+		if platform_node is MeshInstance3D and platform_node.mesh:
+			if platform_node.mesh is BoxMesh:
+				platform_size = platform_node.mesh.size
+
+		# Store platform data
+		cached_platforms.append({
+			"node": platform_node,
+			"position": platform_pos,
+			"size": platform_size,
+			"height": platform_pos.y
+		})
+
+func find_best_platform() -> void:
+	"""NEW: Find the best platform to navigate to based on tactical value"""
+	if cached_platforms.is_empty():
+		target_platform = {}
+		return
+
+	var best_platform: Dictionary = {}
+	var best_score: float = -INF
+
+	for platform_data in cached_platforms:
+		var score: float = evaluate_platform_score(platform_data)
+
+		if score > best_score:
+			best_score = score
+			best_platform = platform_data
+
+	# Only target platform if score is high enough
+	if best_score > 30.0:  # Threshold for platform consideration
+		target_platform = best_platform
+	else:
+		target_platform = {}
+
+func evaluate_platform_score(platform_data: Dictionary) -> float:
+	"""NEW: Score a platform based on tactical value, safety, and accessibility"""
+	if not bot or platform_data.is_empty():
+		return -INF
+
+	var score: float = 0.0
+	var platform_pos: Vector3 = platform_data.position
+	var platform_height: float = platform_data.height
+	var distance: float = bot.global_position.distance_to(platform_pos)
+
+	# Base accessibility score (prefer closer platforms, but not too far)
+	if distance < 15.0:
+		score += 50.0 - (distance * 2.0)
+	elif distance < 30.0:
+		score += 30.0 - (distance * 1.0)
+	else:
+		score -= (distance - 30.0) * 0.5  # Penalize very far platforms
+
+	# Height advantage bonus (tactical value)
+	var height_diff: float = platform_height - bot.global_position.y
+	if height_diff > 2.0:
+		# High ground advantage
+		if target_player and is_instance_valid(target_player):
+			# Extra bonus if enemy is below us
+			var enemy_height: float = target_player.global_position.y
+			if platform_height > enemy_height + 2.0:
+				score += 40.0  # Significant tactical advantage
+			else:
+				score += 20.0  # Still good high ground
+		else:
+			score += 15.0  # General exploration bonus
+	elif height_diff < -2.0:
+		# Platform is below us - less valuable
+		score -= 10.0
+
+	# Reachability check (can we jump there?)
+	var is_reachable: bool = can_reach_platform(platform_data)
+	if not is_reachable:
+		score -= 100.0  # Heavily penalize unreachable platforms
+
+	# Strategic preference bonuses
+	match strategic_preference:
+		"aggressive":
+			# Aggressive bots prefer platforms near enemies
+			if target_player and is_instance_valid(target_player):
+				var dist_to_enemy: float = platform_pos.distance_to(target_player.global_position)
+				if dist_to_enemy < 20.0:
+					score += 25.0
+		"defensive":
+			# Defensive bots prefer safe, high platforms far from combat
+			if target_player and is_instance_valid(target_player):
+				var dist_to_enemy: float = platform_pos.distance_to(target_player.global_position)
+				if dist_to_enemy > 25.0 and height_diff > 5.0:
+					score += 30.0
+		"support":
+			# Support bots prefer platforms near items
+			var items_nearby: int = 0
+			for ability in cached_abilities:
+				if ability.global_position.distance_to(platform_pos) < 10.0:
+					items_nearby += 1
+			for orb in cached_orbs:
+				if orb.global_position.distance_to(platform_pos) < 10.0:
+					items_nearby += 1
+			score += items_nearby * 15.0
+
+	# Combat state modifiers
+	if state == "RETREAT" and bot.health < 2:
+		# Retreating bots heavily prioritize high ground for escape
+		if height_diff > 3.0:
+			score += 50.0
+	elif state == "ATTACK" and bot.current_ability:
+		# Attacking bots want high ground advantage
+		if height_diff > 2.0:
+			score += 30.0
+
+	return score
+
+func can_reach_platform(platform_data: Dictionary) -> bool:
+	"""NEW: Check if bot can physically reach a platform with available movement"""
+	if not bot or platform_data.is_empty():
+		return false
+
+	var platform_pos: Vector3 = platform_data.position
+	var height_diff: float = platform_pos.y - bot.global_position.y
+	var horizontal_dist: float = Vector2(platform_pos.x - bot.global_position.x, platform_pos.z - bot.global_position.z).length()
+
+	# Check vertical reachability
+	var max_single_jump_height: float = 6.0  # Approximate max height with one jump
+	var max_double_jump_height: float = 10.0  # Approximate max height with double jump
+	var max_bounce_height: float = 15.0  # Approximate max height with bounce attack
+
+	if height_diff > max_bounce_height:
+		return false  # Too high even with bounce
+
+	# Check horizontal distance (don't want platforms too far away)
+	if horizontal_dist > 20.0:
+		return false  # Too far to navigate reasonably
+
+	# Platform is reachable
+	return true
 
 func calculate_current_aggression() -> float:
 	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
@@ -389,6 +568,31 @@ func should_chase() -> bool:
 	# Standard chase range
 	return distance_to_target < aggro_range
 
+func should_use_platform_in_combat() -> bool:
+	"""NEW: Determine if we should seek platform during combat"""
+	if target_platform.is_empty() or not target_player or not is_instance_valid(target_player):
+		return false
+
+	var platform_pos: Vector3 = target_platform.position
+	var platform_height: float = target_platform.height
+
+	# Check if platform gives tactical advantage
+	var enemy_height: float = target_player.global_position.y
+	var height_advantage: float = platform_height - enemy_height
+
+	# Prefer platforms if they give significant height advantage
+	if height_advantage > 3.0:
+		# Defensive bots always prefer high ground
+		if strategic_preference == "defensive":
+			return true
+		# Others prefer it probabilistically based on health
+		if bot.health <= 2:
+			return randf() < 0.8  # Low health = seek safety
+		else:
+			return randf() < 0.4  # Moderate chance
+
+	return false
+
 func update_state() -> void:
 	"""IMPROVED: Better state prioritization with combat evaluators"""
 
@@ -434,8 +638,17 @@ func update_state() -> void:
 
 	# Priority 4: Chase if enemy in aggro range (use evaluator)
 	if bot.current_ability and has_combat_target and should_chase():
+		# NEW: Check if we should seek high ground instead of direct chase
+		if not target_platform.is_empty() and should_use_platform_in_combat():
+			is_approaching_platform = true
+			# Continue to CHASE but with platform navigation overlay
 		state = "CHASE"
 		return
+
+	# NEW: Priority 4.5: Navigate to tactical platform during retreat
+	if state == "RETREAT" and not target_platform.is_empty():
+		# Use platform navigation during retreat for escape/high ground
+		is_approaching_platform = true
 
 	# Priority 5: Combat if we HAVE an ability but enemy far
 	if bot.current_ability and has_combat_target:
@@ -444,12 +657,23 @@ func update_state() -> void:
 		elif distance_to_target < aggro_range:
 			state = "CHASE"
 		else:
+			# NEW: Consider platform navigation when wandering
+			if not target_platform.is_empty() and randf() < 0.3:
+				is_approaching_platform = true
 			state = "WANDER"
 	else:
+		# NEW: No combat - explore platforms more actively
+		if not target_platform.is_empty() and randf() < 0.4:
+			is_approaching_platform = true
 		state = "WANDER"
 
 func do_wander(delta: float) -> void:
-	"""FIXED: Wander with overhead slope avoidance"""
+	"""FIXED: Wander with overhead slope avoidance and platform navigation"""
+	# NEW: Check if we should navigate to a platform
+	if is_approaching_platform and not target_platform.is_empty():
+		navigate_to_platform(delta)
+		return
+
 	if wander_timer <= 0.0:
 		var angle: float = randf() * TAU
 		var distance: float = randf_range(wander_radius * 0.5, wander_radius)
@@ -483,6 +707,13 @@ func do_wander(delta: float) -> void:
 func do_chase(delta: float) -> void:
 	"""Chase target with tactical movement and facing"""
 	if not target_player or not is_instance_valid(target_player):
+		return
+
+	# NEW: If seeking high ground platform, navigate there first
+	if is_approaching_platform and not target_platform.is_empty():
+		navigate_to_platform(delta)
+		# Still look at enemy while navigating
+		look_at_target_smooth(target_player.global_position, delta)
 		return
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
@@ -569,6 +800,12 @@ func do_retreat(delta: float) -> void:
 	"""Retreat from danger when low health"""
 	if not target_player or not is_instance_valid(target_player) or retreat_timer <= 0.0:
 		state = "WANDER"
+		is_approaching_platform = false  # Reset platform navigation
+		return
+
+	# NEW: If we have a safe platform to retreat to, navigate there
+	if is_approaching_platform and not target_platform.is_empty():
+		navigate_to_platform(delta)
 		return
 
 	# Move away from target
@@ -583,6 +820,91 @@ func do_retreat(delta: float) -> void:
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	if height_diff < -2.0 and bounce_cooldown_timer <= 0.0 and randf() < 0.4:
 		use_bounce_attack()
+
+func navigate_to_platform(delta: float) -> void:
+	"""NEW: Navigate to target platform with smart jumping"""
+	if target_platform.is_empty():
+		is_approaching_platform = false
+		platform_jump_prepared = false
+		return
+
+	var platform_pos: Vector3 = target_platform.position
+	var platform_height: float = target_platform.height
+	var platform_size: Vector3 = target_platform.size
+
+	var bot_pos: Vector3 = bot.global_position
+	var horizontal_dist: float = Vector2(platform_pos.x - bot_pos.x, platform_pos.z - bot_pos.z).length()
+	var height_diff: float = platform_height - bot_pos.y
+
+	# Check if we've reached the platform
+	if horizontal_dist < platform_size.x * 0.4 and abs(height_diff) < 2.0:
+		# Successfully on platform!
+		is_approaching_platform = false
+		platform_jump_prepared = false
+		target_platform = {}  # Clear target
+		return
+
+	# Cancel if platform is too far (re-evaluate)
+	if horizontal_dist > 30.0:
+		is_approaching_platform = false
+		platform_jump_prepared = false
+		return
+
+	# Look at platform while navigating
+	look_at_target_smooth(platform_pos, delta)
+
+	# Approach logic based on height difference
+	if height_diff > 1.0:
+		# Platform is above us - need to jump onto it
+		if horizontal_dist > 8.0:
+			# Far away - move closer before jumping
+			move_towards(platform_pos, 0.8)
+			platform_jump_prepared = false
+		elif horizontal_dist > 3.0:
+			# Medium distance - prepare to jump
+			move_towards(platform_pos, 0.6)
+
+			# Execute jump based on height
+			if not platform_jump_prepared and obstacle_jump_timer <= 0.0:
+				platform_jump_prepared = true
+
+				if height_diff > 10.0:
+					# Very high - use bounce attack
+					if bounce_cooldown_timer <= 0.0:
+						use_bounce_attack()
+						obstacle_jump_timer = 0.5
+				elif height_diff > 6.0:
+					# High - use double jump (first jump, second will happen automatically when needed)
+					bot_jump()
+					# Second jump will be triggered by height check in subsequent frames
+					obstacle_jump_timer = 0.3  # Short cooldown for immediate second jump
+				else:
+					# Medium height - single jump should work
+					bot_jump()
+					obstacle_jump_timer = 0.5
+		else:
+			# Very close - jump straight up
+			if not platform_jump_prepared:
+				bot_jump()
+				platform_jump_prepared = true
+				obstacle_jump_timer = 0.5
+			# Apply upward force while jumping
+			move_towards(platform_pos, 0.4)
+	elif height_diff < -2.0:
+		# Platform is below us - carefully approach edge
+		if horizontal_dist > 5.0:
+			move_towards(platform_pos, 0.7)
+		else:
+			# At edge - drop down carefully
+			move_towards(platform_pos, 0.3)
+	else:
+		# Platform at similar height - just move toward it
+		move_towards(platform_pos, 0.8)
+
+		# Small jump if there's a slight elevation
+		if height_diff > 0.5 and obstacle_jump_timer <= 0.0:
+			bot_jump()
+			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
 	"""Move towards ability without await statements"""
