@@ -543,10 +543,10 @@ func consider_rail_navigation() -> void:
 
 	if should_attach:
 		target_rail = best_rail
-		# Try to attach if we're close enough
+		# Try to attach if we're close enough (stricter than player's 30.0 for better gameplay)
 		var closest_point: Vector3 = _get_closest_rail_point(best_rail)
 		var distance: float = bot.global_position.distance_to(closest_point)
-		if distance <= 30.0:  # Within attachment range
+		if distance <= 10.0:  # Within attachment range - reduced from 30.0 for realistic rail usage
 			try_attach_to_rail(best_rail)
 	else:
 		target_rail = null
@@ -969,6 +969,12 @@ func try_attach_to_rail(rail: GrindRail) -> bool:
 	# Check if rail has try_attach_player method
 	if not rail.has_method("try_attach_player"):
 		return false
+
+	# Safety: Verify we're close enough to the rail before attempting attachment
+	var closest_point: Vector3 = _get_closest_rail_point(rail)
+	var distance: float = bot.global_position.distance_to(closest_point)
+	if distance > 10.0:
+		return false  # Too far to attach
 
 	# Attempt attachment
 	var success: bool = rail.try_attach_player(bot)
