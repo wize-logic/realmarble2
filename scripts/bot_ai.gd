@@ -139,6 +139,12 @@ const PLATFORM_CHECK_INTERVAL: float = 1.5
 var is_approaching_platform: bool = false  # Special navigation mode
 var platform_jump_prepared: bool = false  # Ready to jump onto platform
 
+# OPTIMIZATION: Performance limits for platform system
+const MAX_CACHED_PLATFORMS: int = 20  # Limit cache size for performance
+const MAX_PLATFORM_DISTANCE: float = 40.0  # Only consider nearby platforms
+const MIN_PLATFORM_HEIGHT: float = 2.0  # Only cache elevated platforms (ignore floor)
+const GOOD_ENOUGH_SCORE: float = 70.0  # Early exit threshold
+
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
@@ -262,10 +268,16 @@ func _physics_process(delta: float) -> void:
 		find_nearest_orb()
 		orb_check_timer = 1.0
 
-	# NEW: Check for platforms periodically
+	# OPTIMIZED: Check for platforms with context-aware frequency
 	if platform_check_timer <= 0.0:
 		find_best_platform()
-		platform_check_timer = PLATFORM_CHECK_INTERVAL
+		# Less frequent checks during combat for performance
+		if state == "ATTACK" or state == "CHASE":
+			platform_check_timer = PLATFORM_CHECK_INTERVAL * 2.0  # 3 seconds during combat
+		elif state == "RETREAT":
+			platform_check_timer = PLATFORM_CHECK_INTERVAL * 0.5  # 0.75 seconds when retreating (urgent)
+		else:
+			platform_check_timer = PLATFORM_CHECK_INTERVAL  # 1.5 seconds default
 
 	# State machine
 	match state:
@@ -335,8 +347,20 @@ func refresh_cached_groups() -> void:
 	refresh_platform_cache()
 
 func refresh_platform_cache() -> void:
-	"""NEW: Cache platform positions and data from level generators"""
+	"""OPTIMIZED: Cache platform positions with filtering for performance
+
+	Performance characteristics:
+	- Max 20 platforms cached (reduced from potentially 50+)
+	- Only elevated platforms (Y > 2.0) - ignores floor/walls
+	- Only platforms within 40 units - spatial filtering
+	- Sorted by distance - keeps closest platforms
+	- Called every 0.5 seconds (shared with other caches)
+	- Estimated cost: <0.5ms per bot per refresh
+	"""
 	cached_platforms.clear()
+
+	if not bot:
+		return
 
 	# Get World node to access level generator
 	var world: Node = get_tree().get_root().get_node_or_null("World")
@@ -351,30 +375,64 @@ func refresh_platform_cache() -> void:
 	if not level_gen or not "platforms" in level_gen:
 		return
 
-	# Cache platform data
+	var bot_pos: Vector3 = bot.global_position
+	var candidate_platforms: Array[Dictionary] = []
+
+	# OPTIMIZATION: Pre-filter platforms by height and distance
 	for platform_node in level_gen.platforms:
 		if not is_instance_valid(platform_node) or not platform_node.is_inside_tree():
 			continue
 
-		# Get platform position and size
 		var platform_pos: Vector3 = platform_node.global_position
-		var platform_size: Vector3 = Vector3(8, 1, 8)  # Default size
 
-		# Try to get actual mesh size
+		# FILTER 1: Only cache elevated platforms (ignore floor/walls)
+		if platform_pos.y < MIN_PLATFORM_HEIGHT:
+			continue
+
+		# FILTER 2: Only cache platforms within reasonable distance
+		var distance: float = bot_pos.distance_to(platform_pos)
+		if distance > MAX_PLATFORM_DISTANCE:
+			continue
+
+		# Get platform size
+		var platform_size: Vector3 = Vector3(8, 1, 8)  # Default size
 		if platform_node is MeshInstance3D and platform_node.mesh:
 			if platform_node.mesh is BoxMesh:
 				platform_size = platform_node.mesh.size
 
-		# Store platform data
-		cached_platforms.append({
+		# Add to candidates with distance for sorting
+		candidate_platforms.append({
 			"node": platform_node,
 			"position": platform_pos,
 			"size": platform_size,
-			"height": platform_pos.y
+			"height": platform_pos.y,
+			"distance": distance
+		})
+
+	# OPTIMIZATION: Sort by distance and keep only closest MAX_CACHED_PLATFORMS
+	if candidate_platforms.size() > MAX_CACHED_PLATFORMS:
+		candidate_platforms.sort_custom(func(a, b): return a.distance < b.distance)
+		candidate_platforms = candidate_platforms.slice(0, MAX_CACHED_PLATFORMS)
+
+	# Store filtered platforms (remove distance field as it's no longer needed)
+	for platform_data in candidate_platforms:
+		cached_platforms.append({
+			"node": platform_data.node,
+			"position": platform_data.position,
+			"size": platform_data.size,
+			"height": platform_data.height
 		})
 
 func find_best_platform() -> void:
-	"""NEW: Find the best platform to navigate to based on tactical value"""
+	"""OPTIMIZED: Find the best platform with early exit for performance
+
+	Performance characteristics:
+	- Max 20 platforms evaluated (from cache)
+	- Early exit when score >= 70.0 (stops searching)
+	- Simplified scoring - no loops through items
+	- Context-aware frequency: 3s combat, 1.5s wander, 0.75s retreat
+	- Estimated cost: <0.3ms per bot per check (worst case)
+	"""
 	if cached_platforms.is_empty():
 		target_platform = {}
 		return
@@ -382,12 +440,17 @@ func find_best_platform() -> void:
 	var best_platform: Dictionary = {}
 	var best_score: float = -INF
 
+	# OPTIMIZATION: Early exit if we find a "good enough" platform
 	for platform_data in cached_platforms:
 		var score: float = evaluate_platform_score(platform_data)
 
 		if score > best_score:
 			best_score = score
 			best_platform = platform_data
+
+			# EARLY EXIT: If platform is good enough, stop searching
+			if best_score >= GOOD_ENOUGH_SCORE:
+				break
 
 	# Only target platform if score is high enough
 	if best_score > 30.0:  # Threshold for platform consideration
@@ -435,7 +498,7 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 	if not is_reachable:
 		score -= 100.0  # Heavily penalize unreachable platforms
 
-	# Strategic preference bonuses
+	# Strategic preference bonuses (OPTIMIZED: removed expensive loops)
 	match strategic_preference:
 		"aggressive":
 			# Aggressive bots prefer platforms near enemies
@@ -450,15 +513,16 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 				if dist_to_enemy > 25.0 and height_diff > 5.0:
 					score += 30.0
 		"support":
-			# Support bots prefer platforms near items
-			var items_nearby: int = 0
-			for ability in cached_abilities:
-				if ability.global_position.distance_to(platform_pos) < 10.0:
-					items_nearby += 1
-			for orb in cached_orbs:
-				if orb.global_position.distance_to(platform_pos) < 10.0:
-					items_nearby += 1
-			score += items_nearby * 15.0
+			# OPTIMIZED: Support bots prefer platforms near their current targets
+			# Instead of looping through all items, just check current targets
+			if target_ability and is_instance_valid(target_ability):
+				var dist_to_ability: float = platform_pos.distance_to(target_ability.global_position)
+				if dist_to_ability < 15.0:
+					score += 20.0  # Platform near ability = good
+			if target_orb and is_instance_valid(target_orb):
+				var dist_to_orb: float = platform_pos.distance_to(target_orb.global_position)
+				if dist_to_orb < 15.0:
+					score += 15.0  # Platform near orb = good
 
 	# Combat state modifiers
 	if state == "RETREAT" and bot.health < 2:
