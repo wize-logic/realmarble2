@@ -780,19 +780,22 @@ func consider_jump_pad_usage() -> void:
 	var distance_to_pad: float = bot.global_position.distance_to(best_jump_pad.global_position)
 
 	# Use jump pads during RETREAT (great for escaping)
-	if current_state == State.RETREAT and distance_to_pad < 15.0:
+	if state == "RETREAT" and distance_to_pad < 15.0:
 		should_use = true
 
 	# Use jump pads if they help reach elevated targets
-	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+	elif state == "CHASE" and target_player and is_instance_valid(target_player):
 		var target_pos: Vector3 = target_player.global_position
 		# If target is above us and jump pad is nearby
 		if target_pos.y > bot.global_position.y + 5.0 and distance_to_pad < 12.0:
 			should_use = true
 
 	# Use jump pads for reaching elevated items
-	elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
-		var item_pos: Vector3 = target_collectible.global_position
+	elif (state == "COLLECT_ABILITY" or state == "COLLECT_ORB"):
+		var collectible: Node = target_ability if target_ability and is_instance_valid(target_ability) else target_orb
+		if not collectible or not is_instance_valid(collectible):
+			return
+		var item_pos: Vector3 = collectible.global_position
 		# If item is elevated and jump pad is nearby
 		if item_pos.y > bot.global_position.y + 5.0 and distance_to_pad < 12.0:
 			should_use = true
@@ -841,11 +844,11 @@ func evaluate_jump_pad_score(jump_pad: Node) -> float:
 	score += (MAX_JUMP_PAD_DISTANCE - distance) / MAX_JUMP_PAD_DISTANCE * 40.0
 
 	# Factor 2: Tactical value based on state
-	if current_state == State.RETREAT:
+	if state == "RETREAT":
 		# Jump pads are excellent for escaping
 		score += 50.0
 
-	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+	elif state == "CHASE" and target_player and is_instance_valid(target_player):
 		# Check if jump pad helps reach elevated target
 		var target_pos: Vector3 = target_player.global_position
 		var height_diff: float = target_pos.y - bot_pos.y
@@ -853,7 +856,11 @@ func evaluate_jump_pad_score(jump_pad: Node) -> float:
 		if height_diff > 5.0:  # Target is significantly above us
 			score += 40.0
 
-	elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
+	elif (state == "COLLECT_ABILITY" or state == "COLLECT_ORB"):
+		var collectible: Node = target_ability if target_ability and is_instance_valid(target_ability) else target_orb
+		if not collectible or not is_instance_valid(collectible):
+			return score
+		var target_collectible = collectible
 		# Check if jump pad helps reach elevated item
 		var item_pos: Vector3 = target_collectible.global_position
 		var height_diff: float = item_pos.y - bot_pos.y
@@ -920,11 +927,11 @@ func consider_teleporter_usage() -> void:
 	var distance_to_teleporter: float = bot.global_position.distance_to(best_teleporter.global_position)
 
 	# Use teleporters during RETREAT (quick escape)
-	if current_state == State.RETREAT and distance_to_teleporter < 10.0:
+	if state == "RETREAT" and distance_to_teleporter < 10.0:
 		should_use = true
 
 	# Use teleporters if destination helps reach targets
-	elif (current_state == State.CHASE or current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB):
+	elif (state == "CHASE" or state == "COLLECT_ABILITY" or state == "COLLECT_ORB"):
 		# Only use if teleporter is very close (within 8 units)
 		if distance_to_teleporter < 8.0:
 			should_use = true
@@ -978,7 +985,7 @@ func evaluate_teleporter_score(teleporter: Node) -> float:
 		var dest_pos: Vector3 = teleporter.destination.global_position
 
 		# RETREAT: Prefer teleporters that take us far from enemies
-		if current_state == State.RETREAT and target_player and is_instance_valid(target_player):
+		if state == "RETREAT" and target_player and is_instance_valid(target_player):
 			var enemy_pos: Vector3 = target_player.global_position
 			var dist_from_enemy_now: float = bot_pos.distance_to(enemy_pos)
 			var dist_from_enemy_after: float = dest_pos.distance_to(enemy_pos)
@@ -987,7 +994,7 @@ func evaluate_teleporter_score(teleporter: Node) -> float:
 				score += 50.0  # Teleporter helps us escape
 
 		# CHASE: Prefer teleporters that bring us closer to target
-		elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+		elif state == "CHASE" and target_player and is_instance_valid(target_player):
 			var target_pos: Vector3 = target_player.global_position
 			var dist_to_target_now: float = bot_pos.distance_to(target_pos)
 			var dist_to_target_after: float = dest_pos.distance_to(target_pos)
@@ -996,8 +1003,11 @@ func evaluate_teleporter_score(teleporter: Node) -> float:
 				score += 40.0  # Teleporter significantly shortens distance
 
 		# COLLECT: Prefer teleporters that bring us closer to items
-		elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
-			var item_pos: Vector3 = target_collectible.global_position
+		elif (state == "COLLECT_ABILITY" or state == "COLLECT_ORB"):
+			var collectible: Node = target_ability if target_ability and is_instance_valid(target_ability) else target_orb
+			if not collectible or not is_instance_valid(collectible):
+				return score
+			var item_pos: Vector3 = collectible.global_position
 			var dist_to_item_now: float = bot_pos.distance_to(item_pos)
 			var dist_to_item_after: float = dest_pos.distance_to(item_pos)
 

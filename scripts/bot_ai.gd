@@ -518,11 +518,11 @@ func consider_rail_navigation() -> void:
 	var should_attach: bool = false
 
 	# Always try to attach during RETREAT (rails are great for escaping)
-	if current_state == State.RETREAT:
+	if state == "RETREAT":
 		should_attach = true
 
 	# Try to attach if rail significantly helps reach chase target
-	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+	elif state == "CHASE" and target_player and is_instance_valid(target_player):
 		var bot_pos: Vector3 = bot.global_position
 		var target_pos: Vector3 = target_player.global_position
 		var rail_end: Vector3 = best_rail.to_global(best_rail.curve.sample_baked(best_rail.curve.get_baked_length()))
@@ -535,7 +535,7 @@ func consider_rail_navigation() -> void:
 			should_attach = true
 
 	# Try to attach if we're wandering and rail provides exploration/mobility
-	elif current_state == State.WANDER:
+	elif state == "WANDER":
 		# 30% chance to use rails while wandering for variety
 		if randf() < 0.3:
 			should_attach = true
@@ -884,7 +884,7 @@ func evaluate_rail_score(rail: GrindRail) -> float:
 		score += 5.0  # Short rail
 
 	# Factor 4: Tactical value based on current state
-	if current_state == State.CHASE and target_player and is_instance_valid(target_player):
+	if state == "CHASE" and target_player and is_instance_valid(target_player):
 		# Check if rail helps us reach target
 		var target_pos: Vector3 = target_player.global_position
 		var dist_to_target_now: float = bot_pos.distance_to(target_pos)
@@ -895,7 +895,7 @@ func evaluate_rail_score(rail: GrindRail) -> float:
 		else:
 			score -= 20.0  # Rail takes us away from target
 
-	elif current_state == State.RETREAT:
+	elif state == "RETREAT":
 		# Rails are great for escaping
 		score += 50.0
 		# Prefer rails that take us away from enemies
@@ -906,9 +906,10 @@ func evaluate_rail_score(rail: GrindRail) -> float:
 			if dist_from_rail_end > dist_now:
 				score += 30.0  # Rail helps us escape
 
-	elif current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB:
+	elif state == "COLLECT_ABILITY" or state == "COLLECT_ORB":
 		# Check if rail helps reach collectibles
-		var collectible_pos: Vector3 = target_collectible.global_position if target_collectible else Vector3.ZERO
+		var collectible: Node = target_ability if target_ability and is_instance_valid(target_ability) else target_orb
+		var collectible_pos: Vector3 = collectible.global_position if collectible and is_instance_valid(collectible) else Vector3.ZERO
 		if collectible_pos != Vector3.ZERO:
 			var dist_to_collectible_now: float = bot_pos.distance_to(collectible_pos)
 			var dist_from_rail_end: float = rail_end.distance_to(collectible_pos)
