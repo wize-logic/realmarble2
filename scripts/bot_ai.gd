@@ -177,6 +177,11 @@ var movement_input_direction: Vector3 = Vector3.ZERO  # Required by rails for di
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
 
+# PERFORMANCE: Cached PhysicsDirectSpaceState3D for raycast operations
+var cached_space_state: PhysicsDirectSpaceState3D = null
+var space_state_cache_timer: float = 0.0
+const SPACE_STATE_CACHE_REFRESH: float = 1.0  # Refresh physics space state every 1s
+
 # NEW: Proactive edge avoidance
 var edge_check_timer: float = 0.0
 const EDGE_CHECK_INTERVAL: float = 0.3
@@ -196,6 +201,18 @@ func _ready() -> void:
 
 	# NEW: Initialize personality traits (OpenArena-inspired)
 	initialize_personality()
+
+	# PERFORMANCE: Stagger timer initialization to prevent all bots from processing simultaneously
+	# This reduces frame time spikes in HTML5 with 7 bots
+	cache_refresh_timer = randf_range(0.0, CACHE_REFRESH_INTERVAL)
+	platform_check_timer = randf_range(0.0, PLATFORM_CHECK_INTERVAL)
+	rail_check_timer = randf_range(0.0, RAIL_CHECK_INTERVAL)
+	ability_check_timer = randf_range(0.0, 1.2)
+	orb_check_timer = randf_range(0.0, 1.0)
+	player_search_timer = randf_range(0.0, 0.5)
+	vision_update_timer = randf_range(0.0, VISION_UPDATE_INTERVAL)
+	edge_check_timer = randf_range(0.0, EDGE_CHECK_INTERVAL)
+	player_avoidance_timer = randf_range(0.0, PLAYER_AVOIDANCE_CHECK_INTERVAL)
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -230,6 +247,13 @@ func _physics_process(delta: float) -> void:
 	platform_stabilize_timer -= delta
 	vision_update_timer -= delta
 	rail_check_timer -= delta
+	space_state_cache_timer -= delta
+
+	# PERFORMANCE: Update cached physics space state
+	if space_state_cache_timer <= 0.0:
+		if bot and bot is RigidBody3D:
+			cached_space_state = bot.get_world_3d().direct_space_state
+		space_state_cache_timer = SPACE_STATE_CACHE_REFRESH
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -980,21 +1004,55 @@ func launch_from_rail(velocity: Vector3) -> void:
 	if bot and bot is RigidBody3D:
 		bot.apply_central_impulse(Vector3.UP * 15.0)
 
+# ============================================================================
+# VALIDATION HELPERS (for safe property/method access)
+# ============================================================================
+
+func get_bot_health() -> int:
+	"""VALIDATION: Safely get bot health with fallback"""
+	if not bot or not "health" in bot:
+		return 5  # Default healthy value
+	return bot.health
+
+func get_player_health(player: Node) -> int:
+	"""VALIDATION: Safely get player health with fallback"""
+	if not player or not is_instance_valid(player) or not "health" in player:
+		return 5  # Default value
+	return player.health
+
+func has_property(node: Node, property: String) -> bool:
+	"""VALIDATION: Safely check if node has a property"""
+	if not node or not is_instance_valid(node):
+		return false
+	return property in node
+
+func has_method_safe(node: Node, method: String) -> bool:
+	"""VALIDATION: Safely check if node has a method"""
+	if not node or not is_instance_valid(node):
+		return false
+	return node.has_method(method)
+
+# ============================================================================
+# AGGRESSION & DECISION MAKING
+# ============================================================================
+
 func calculate_current_aggression() -> float:
-	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
+	"""NEW: Dynamic aggression calculation (OpenArena-inspired) with validation guards"""
 	var current_aggression: float = aggression_level
 
-	# Health penalty (low health reduces aggression)
-	if bot.health < 3:
+	# VALIDATION: Health penalty (low health reduces aggression)
+	var bot_health: int = get_bot_health()
+	if bot_health < 3:
 		current_aggression *= 0.3  # Severe penalty
-	elif bot.health < 5:
+	elif bot_health < 5:
 		current_aggression *= 0.6  # Moderate penalty
 
-	# Enemy health bonus (if we're healthier, be more aggressive)
-	if target_player and is_instance_valid(target_player) and "health" in target_player:
-		if bot.health > target_player.health + 2:
+	# VALIDATION: Enemy health bonus (if we're healthier, be more aggressive)
+	if target_player and is_instance_valid(target_player):
+		var enemy_health: int = get_player_health(target_player)
+		if bot_health > enemy_health + 2:
 			current_aggression *= 1.3  # We have advantage!
-		elif bot.health < target_player.health - 2:
+		elif bot_health < enemy_health - 2:
 			current_aggression *= 0.7  # Enemy has advantage
 
 	# Caution level affects aggression
@@ -1003,46 +1061,51 @@ func calculate_current_aggression() -> float:
 	return clamp(current_aggression, 0.1, 1.5)
 
 func should_retreat() -> bool:
-	"""NEW: Comprehensive retreat evaluation (OpenArena-inspired)"""
+	"""NEW: Comprehensive retreat evaluation (OpenArena-inspired) with validation guards"""
 	if not target_player or not is_instance_valid(target_player):
 		return false
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 
-	# Critical health retreat
-	if bot.health <= 2:
+	# VALIDATION: Critical health retreat
+	var bot_health: int = get_bot_health()
+	if bot_health <= 2:
 		return distance_to_target < aggro_range * 0.9
 
-	# Health-based retreat threshold (affected by caution)
+	# VALIDATION: Health-based retreat threshold (affected by caution)
 	var retreat_health_threshold: int = int(3 + caution_level * 2)  # 3-5 health
-	if bot.health <= retreat_health_threshold:
+	if bot_health <= retreat_health_threshold:
 		# Check enemy health advantage
-		if "health" in target_player:
-			if target_player.health >= bot.health + 2:
-				return distance_to_target < aggro_range * 0.7
+		var enemy_health: int = get_player_health(target_player)
+		if enemy_health >= bot_health + 2:
+			return distance_to_target < aggro_range * 0.7
 
-	# No ability = retreat if enemy is close
-	if not bot.current_ability and distance_to_target < attack_range * 1.5:
-		return true
+	# VALIDATION: No ability = retreat if enemy is close
+	if not has_property(bot, "current_ability") or not bot.current_ability:
+		if distance_to_target < attack_range * 1.5:
+			return true
 
 	# Defensive bots retreat earlier
-	if strategic_preference == "defensive" and bot.health <= 4:
+	if strategic_preference == "defensive" and bot_health <= 4:
 		return distance_to_target < aggro_range * 0.8
 
 	return false
 
 func should_chase() -> bool:
-	"""NEW: Chase evaluation (OpenArena-inspired)"""
+	"""NEW: Chase evaluation (OpenArena-inspired) with validation guards"""
 	if not target_player or not is_instance_valid(target_player):
 		return false
 
-	if not bot.current_ability:
+	# VALIDATION: Check if bot has ability
+	if not has_property(bot, "current_ability") or not bot.current_ability:
 		return false
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 
-	# Always chase if enemy is weak and we're healthy
-	if "health" in target_player and target_player.health <= 2 and bot.health >= 4:
+	# VALIDATION: Always chase if enemy is weak and we're healthy
+	var enemy_health: int = get_player_health(target_player)
+	var bot_health: int = get_bot_health()
+	if enemy_health <= 2 and bot_health >= 4:
 		return distance_to_target < aggro_range * 1.5
 
 	# Aggressive bots chase more eagerly
@@ -2108,11 +2171,15 @@ func is_in_field_of_view(target_pos: Vector3) -> bool:
 	return true
 
 func raycast_line_of_sight(target_pos: Vector3) -> bool:
-	"""VISION: Perform actual raycast to check obstruction"""
+	"""VISION: Perform actual raycast to check obstruction (uses cached space_state for performance)"""
 	if not bot:
 		return false
 
-	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+	# PERFORMANCE: Use cached space state if available
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
+
 	var start: Vector3 = get_eye_position()
 	var end: Vector3 = target_pos
 
@@ -2235,58 +2302,65 @@ func calculate_target_priority(player: Node) -> float:
 	return score
 
 func calculate_item_acquisition_cost(item_pos: Vector3) -> float:
-	"""COST-BENEFIT: Calculate effort/risk required to reach an item"""
+	"""COST-BENEFIT: Calculate effort/risk required to reach an item (with aggression scaling)"""
 	if not bot:
 		return INF
 
 	var cost: float = 0.0
 
-	# Factor 1: Distance cost (travel time)
-	var distance: float = bot.global_position.distance_to(item_pos)
-	cost += distance * 2.0  # Each unit of distance = 2 cost points
+	# NEW: Aggression-based cost multiplier
+	# Aggressive bots (0.8-0.9) care less about risks: 0.7-0.76x cost
+	# Defensive bots (0.6-0.7) are more cautious: 1.0-1.12x cost
+	# Formula: 1.0 - (aggression_level - 0.6) * 0.75 = maps 0.6→1.0, 0.9→0.775
+	var aggression_mult: float = 1.0 - (aggression_level - 0.6) * 0.75
+	aggression_mult = clamp(aggression_mult, 0.7, 1.2)
 
-	# Factor 2: Height/elevation cost (difficulty)
+	# Factor 1: Distance cost (travel time) - scaled by aggression
+	var distance: float = bot.global_position.distance_to(item_pos)
+	cost += distance * 2.0 * aggression_mult  # Each unit of distance = 2 cost points
+
+	# Factor 2: Height/elevation cost (difficulty) - scaled by aggression
 	var height_diff: float = item_pos.y - bot.global_position.y
 	if height_diff > 0.0:
 		if height_diff > 15.0:
-			cost += 60.0  # Very high - requires bounce attack + platform navigation
+			cost += 60.0 * aggression_mult  # Very high - requires bounce attack + platform navigation
 		elif height_diff > 8.0:
-			cost += 40.0  # High - requires platform navigation
+			cost += 40.0 * aggression_mult  # High - requires platform navigation
 		elif height_diff > 4.0:
-			cost += 20.0  # Medium - requires double jump or platform
+			cost += 20.0 * aggression_mult  # Medium - requires double jump or platform
 		else:
-			cost += height_diff * 3.0  # Small elevation - proportional cost
+			cost += height_diff * 3.0 * aggression_mult  # Small elevation - proportional cost
 
-	# Factor 3: Platform-specific costs (if item is on a platform)
+	# Factor 3: Platform-specific costs (if item is on a platform) - scaled by aggression
 	var platform_for_item: Dictionary = find_platform_for_position(item_pos)
 	if not platform_for_item.is_empty():
 		var platform_size: Vector3 = platform_for_item.size
 		var platform_area: float = platform_size.x * platform_size.z
 
-		# Small platforms are harder/riskier
+		# Small platforms are harder/riskier (aggressive bots less deterred)
 		if platform_area <= 50.0:
-			cost += 30.0  # Very small platform (6x6, 7x7) - high risk
+			cost += 30.0 * aggression_mult  # Very small platform (6x6, 7x7) - high risk
 		elif platform_area <= 80.0:
-			cost += 15.0  # Medium platform (8x8, 9x9) - moderate risk
+			cost += 15.0 * aggression_mult  # Medium platform (8x8, 9x9) - moderate risk
 
-		# Occupied platforms are contested/dangerous
+		# Occupied platforms are contested/dangerous (aggressive bots less deterred)
 		var occupancy: int = count_bots_on_platform(platform_for_item)
 		if occupancy >= 2:
-			cost += 100.0  # Full platform - likely impossible to access
+			cost += 100.0 * aggression_mult  # Full platform - likely impossible to access
 		elif occupancy == 1:
-			cost += 40.0  # 1 bot present - contested, might lead to combat
+			cost += 40.0 * aggression_mult  # 1 bot present - contested, might lead to combat
 
-	# Factor 4: Combat proximity cost (danger zone)
+	# Factor 4: Combat proximity cost (danger zone) - scaled by aggression
 	if target_player and is_instance_valid(target_player):
 		var dist_to_enemy: float = item_pos.distance_to(target_player.global_position)
 		if dist_to_enemy < 10.0:
-			cost += 50.0  # Item very close to enemy - high risk
+			cost += 50.0 * aggression_mult  # Item very close to enemy - high risk
 		elif dist_to_enemy < 20.0:
-			cost += 25.0  # Item near enemy - moderate risk
+			cost += 25.0 * aggression_mult  # Item near enemy - moderate risk
 
-	# Factor 5: Visibility cost (if can't see it, it's harder)
+	# Factor 5: Visibility cost (if can't see it, it's harder) - scaled by aggression
 	if not is_target_visible(item_pos):
-		cost += 15.0  # Can't see item - need to navigate blind
+		cost += 15.0 * aggression_mult  # Can't see item - need to navigate blind
 
 	return cost
 
@@ -2442,11 +2516,14 @@ func find_nearest_orb() -> void:
 ## ============================================================================
 
 func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
-	"""IMPROVED: Check for dangerous edge/drop-off with momentum compensation"""
+	"""IMPROVED: Check for dangerous edge/drop-off with momentum compensation (uses cached space_state)"""
 	if not bot:
 		return false
 
-	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+	# PERFORMANCE: Use cached space state if available
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
 
 	# Check current ground level
 	var current_ground_check: Vector3 = bot.global_position + Vector3.UP * 0.5
@@ -2508,11 +2585,14 @@ func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
-	"""IMPROVED v4: More aggressive overhead detection to prevent getting stuck under ramps"""
+	"""IMPROVED v4: More aggressive overhead detection to prevent getting stuck under ramps (uses cached space_state)"""
 	if not bot:
 		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
-	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+	# PERFORMANCE: Use cached space state if available
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
 
 	# IMPROVED v4: Check further ahead and at more heights
 	var extended_check_distance: float = check_distance * 1.8  # Look further ahead
@@ -2679,11 +2759,21 @@ func check_if_stuck() -> void:
 	last_position = current_pos
 
 func is_stuck_under_terrain() -> bool:
-	"""IMPROVED v4: More aggressive overhead detection with lower threshold"""
+	"""IMPROVED v4: More aggressive overhead detection with lower threshold + performance pre-filtering"""
 	if not bot:
 		return false
 
-	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
+	# PERFORMANCE: Pre-filter - only run expensive 9-ray check if bot is moving slowly
+	# This prevents unnecessary raycasts when bot is moving normally
+	if "linear_velocity" in bot:
+		var horizontal_velocity: Vector3 = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z)
+		if horizontal_velocity.length() > 2.0:
+			return false  # Bot moving normally, unlikely to be wedged
+
+	# PERFORMANCE: Use cached space state if available
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
 
 	# IMPROVED: More check points for better coverage
 	var check_points: Array = [
