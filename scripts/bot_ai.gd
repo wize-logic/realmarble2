@@ -173,6 +173,13 @@ const MAX_CACHED_RAILS: int = 12  # Max rails to cache (Type A has 12 rails)
 const MAX_RAIL_DISTANCE: float = 50.0  # Only consider nearby rails
 var movement_input_direction: Vector3 = Vector3.ZERO  # Required by rails for directional control
 
+# RAIL LAUNCH RECOVERY: Aerial navigation after rail detachment
+var post_rail_launch: bool = false  # Currently in aerial phase after rail launch
+var rail_launch_timer: float = 0.0  # Time since rail launch
+var safe_landing_target: Vector3 = Vector3.ZERO  # Target safe landing position
+const RAIL_LAUNCH_RECOVERY_TIME: float = 3.0  # Max time to attempt recovery after launch
+const SAFE_LANDING_SEARCH_RADIUS: float = 30.0  # How far to search for safe landing zones
+
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
@@ -248,6 +255,12 @@ func _physics_process(delta: float) -> void:
 	vision_update_timer -= delta
 	rail_check_timer -= delta
 	space_state_cache_timer -= delta
+	rail_launch_timer += delta
+
+	# RAIL LAUNCH RECOVERY: Handle aerial navigation after rail launch
+	if post_rail_launch:
+		handle_post_rail_launch_navigation(delta)
+		return  # Override all other AI while recovering from rail launch
 
 	# PERFORMANCE: Update cached physics space state
 	if space_state_cache_timer <= 0.0:
@@ -973,6 +986,10 @@ func start_grinding(rail: GrindRail) -> void:
 	current_rail = rail
 	target_rail = rail
 
+	# RAIL LAUNCH RECOVERY: Cancel aerial recovery if we attached to a new rail
+	post_rail_launch = false
+	rail_launch_timer = 0.0
+
 	# Reset jump count
 	if "jump_count" in bot:
 		bot.jump_count = 0
@@ -994,7 +1011,7 @@ func stop_grinding() -> void:
 		bot.linear_damp = 0.5
 
 func launch_from_rail(velocity: Vector3) -> void:
-	"""Called by rail when bot reaches the end of the rail"""
+	"""Called by rail when bot reaches the end of the rail - activates aerial recovery mode"""
 	if not is_grinding:
 		return
 
@@ -1003,6 +1020,222 @@ func launch_from_rail(velocity: Vector3) -> void:
 	# Bot already has velocity from rail physics, just add upward boost
 	if bot and bot is RigidBody3D:
 		bot.apply_central_impulse(Vector3.UP * 15.0)
+
+	# RAIL LAUNCH RECOVERY: Activate aerial navigation mode
+	post_rail_launch = true
+	rail_launch_timer = 0.0
+	# Find safe landing zone immediately
+	find_safe_landing_zone()
+
+# ============================================================================
+# RAIL LAUNCH RECOVERY SYSTEM (Aerial navigation after rail detachment)
+# ============================================================================
+
+func find_safe_landing_zone() -> void:
+	"""Find a safe place to land after being launched from a rail"""
+	if not bot:
+		return
+
+	var bot_pos: Vector3 = bot.global_position
+	var best_landing_score: float = -INF
+	var best_landing_pos: Vector3 = bot_pos  # Fallback to current position
+
+	# Strategy 1: Check for nearby platforms (elevated safe zones)
+	for platform_data in cached_platforms:
+		if not is_instance_valid(platform_data.node):
+			continue
+
+		var platform_pos: Vector3 = platform_data.position
+		var distance: float = Vector2(bot_pos.x - platform_pos.x, bot_pos.z - platform_pos.z).length()
+
+		# Only consider platforms within reasonable aerial range
+		if distance > SAFE_LANDING_SEARCH_RADIUS:
+			continue
+
+		var score: float = 0.0
+
+		# Prefer platforms below us (easier to reach)
+		var height_diff: float = platform_pos.y - bot_pos.y
+		if height_diff < 0:  # Platform below us
+			score += 50.0
+			score += min(abs(height_diff) * 5.0, 100.0)  # Prefer platforms well below
+		else:  # Platform above us
+			score -= height_diff * 10.0  # Penalty for platforms above
+
+		# Prefer closer platforms
+		score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 2.0
+
+		# Prefer larger platforms (safer landing)
+		var platform_size: Vector3 = platform_data.size
+		var platform_area: float = platform_size.x * platform_size.z
+		score += platform_area * 0.5
+
+		# Check if platform is occupied (avoid collisions)
+		var occupancy: int = count_bots_on_platform(platform_data)
+		if occupancy >= 2:
+			score -= 100.0  # Crowded platform
+		elif occupancy == 1:
+			score -= 30.0  # One bot present
+
+		if score > best_landing_score:
+			best_landing_score = score
+			best_landing_pos = platform_pos
+
+	# Strategy 2: Check for stage floor (main ground level)
+	# Raycast downward to find ground
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
+
+	# Check multiple points around bot's horizontal position
+	var check_offsets: Array = [
+		Vector3.ZERO,
+		Vector3(5, 0, 0),
+		Vector3(-5, 0, 0),
+		Vector3(0, 0, 5),
+		Vector3(0, 0, -5)
+	]
+
+	for offset in check_offsets:
+		var check_pos: Vector3 = Vector3(bot_pos.x + offset.x, bot_pos.y, bot_pos.z + offset.z)
+		var ray_start: Vector3 = check_pos + Vector3.UP * 2.0
+		var ray_end: Vector3 = check_pos + Vector3.DOWN * 100.0  # Cast down far
+
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.exclude = [bot]
+		query.collision_mask = 1
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		if result:
+			var ground_pos: Vector3 = result.position
+			var distance: float = Vector2(bot_pos.x - ground_pos.x, bot_pos.z - ground_pos.z).length()
+
+			# Only consider ground within range
+			if distance > SAFE_LANDING_SEARCH_RADIUS:
+				continue
+
+			var score: float = 0.0
+
+			# Prefer ground below us
+			var height_diff: float = ground_pos.y - bot_pos.y
+			if height_diff < 0:  # Ground below us
+				score += 40.0
+				score += min(abs(height_diff) * 3.0, 80.0)
+			else:  # Ground above us (shouldn't happen often)
+				score -= 50.0
+
+			# Prefer closer ground
+			score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 1.5
+
+			# Prefer main stage floor (typically Y ~= 0 to 2)
+			if ground_pos.y >= -1.0 and ground_pos.y <= 3.0:
+				score += 60.0  # Main stage floor bonus
+
+			if score > best_landing_score:
+				best_landing_score = score
+				best_landing_pos = ground_pos
+
+	# Set the target landing position
+	safe_landing_target = best_landing_pos
+
+func handle_post_rail_launch_navigation(delta: float) -> void:
+	"""Handle aerial navigation to return to stage after rail launch"""
+	if not bot or not bot is RigidBody3D:
+		post_rail_launch = false
+		return
+
+	# Check if we've timed out (recovery failed)
+	if rail_launch_timer >= RAIL_LAUNCH_RECOVERY_TIME:
+		post_rail_launch = false
+		rail_launch_timer = 0.0
+		return
+
+	# Check if we've landed (grounded or on platform)
+	var is_grounded: bool = false
+	if "is_grounded" in bot:
+		is_grounded = bot.is_grounded
+
+	# Alternative grounded check using velocity
+	if not is_grounded and "linear_velocity" in bot:
+		# If vertical velocity is very small and we're not high up, we probably landed
+		if abs(bot.linear_velocity.y) < 1.0:
+			var ground_check_result: Dictionary = check_ground_below(2.0)
+			if ground_check_result.has("grounded") and ground_check_result.grounded:
+				is_grounded = true
+
+	if is_grounded:
+		# Successfully landed - exit recovery mode
+		post_rail_launch = false
+		rail_launch_timer = 0.0
+		return
+
+	# Still airborne - apply aerial correction toward safe landing zone
+	var bot_pos: Vector3 = bot.global_position
+	var direction_to_safe_zone: Vector3 = (safe_landing_target - bot_pos).normalized()
+	direction_to_safe_zone.y = 0  # Only horizontal correction
+
+	if direction_to_safe_zone.length() > 0.1:
+		# Apply aerial correction force (reduced since we're airborne)
+		var aerial_force: float = bot.current_roll_force * 0.6  # 60% power in air
+		bot.apply_central_force(direction_to_safe_zone * aerial_force)
+
+	# Look toward landing target
+	look_at_target_smooth(safe_landing_target, delta)
+
+	# CRITICAL: Use double jump if available and falling toward danger
+	if "jump_count" in bot and "max_jumps" in bot:
+		var falling_fast: bool = bot.linear_velocity.y < -10.0
+		var far_from_target: bool = bot_pos.distance_to(safe_landing_target) > 15.0
+
+		if falling_fast and far_from_target and bot.jump_count < bot.max_jumps:
+			# Use double jump to extend airtime and reach safe zone
+			if obstacle_jump_timer <= 0.0:
+				bot_jump()
+				obstacle_jump_timer = 0.5
+
+	# TACTICAL: Use bounce attack if we're high up and need downward control
+	if rail_launch_timer > 0.8 and bot_pos.y > safe_landing_target.y + 10.0:
+		# We're very high and need to descend - bounce attack can help
+		if validate_bounce_properties() and bounce_cooldown_timer <= 0.0:
+			if not "is_bouncing" in bot or not bot.is_bouncing:
+				# Activate bounce attack for controlled descent
+				if bot.has_method("start_bounce"):
+					bot.start_bounce()
+					bounce_cooldown_timer = BOUNCE_COOLDOWN
+
+func check_ground_below(max_distance: float = 2.0) -> Dictionary:
+	"""Check if there's ground directly below the bot"""
+	if not bot:
+		return {"grounded": false}
+
+	var space_state: PhysicsDirectSpaceState3D = cached_space_state
+	if not space_state:
+		space_state = bot.get_world_3d().direct_space_state
+
+	var ray_start: Vector3 = bot.global_position + Vector3.UP * 0.5
+	var ray_end: Vector3 = bot.global_position + Vector3.DOWN * max_distance
+
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+	query.exclude = [bot]
+	query.collision_mask = 1
+
+	var result: Dictionary = space_state.intersect_ray(query)
+
+	if result:
+		return {
+			"grounded": true,
+			"distance": ray_start.distance_to(result.position),
+			"normal": result.normal if "normal" in result else Vector3.UP
+		}
+
+	return {"grounded": false}
+
+func validate_bounce_properties() -> bool:
+	"""VALIDATION: Check if bot has required properties for bounce attack"""
+	if not bot:
+		return false
+	return "is_bouncing" in bot and bot.has_method("start_bounce")
 
 # ============================================================================
 # VALIDATION HELPERS (for safe property/method access)
