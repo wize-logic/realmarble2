@@ -1,7 +1,7 @@
 extends Node
 
-## Bot AI Controller - PRODUCTION VERSION v2.0 Refined
-## Critical fixes for weapon accuracy, slope-stuck issues, and awareness
+## Bot AI Controller - PRODUCTION VERSION v4.0
+## OpenArena-inspired improvements + aggressive stuck-under-ramp prevention
 ##
 ## FIXES APPLIED (v1.0):
 ## 1. Removed ALL await statements that freeze bots
@@ -38,6 +38,22 @@ extends Node
 ## 28. Fixed balance: Aggression randomized to 0.6-0.9 (was 0.9-1.0)
 ## 29. Fixed robustness: Teleport fail-safe for missing spawns (+10 units up)
 ## 30. Fixed collect: Allow if visible OR distance < 15 (better item awareness)
+##
+## OPENARENA-INSPIRED IMPROVEMENTS (v3.0):
+## 31. Advanced target prioritization: Weighted scoring based on threat, distance, health
+## 32. Weapon proficiency system: Ability scoring for intelligent selection
+## 33. Dynamic aggression: Real-time risk assessment based on health ratios
+## 34. Skill-based accuracy: Varying aim quality per bot (0.7-0.95 compensation)
+## 35. Personality traits: Turn speed, caution level, and strategic preference
+## 36. Combat evaluators: Separate retreat/chase decision functions
+## 37. Enhanced strafe timing: Skill-based unpredictability
+##
+## STUCK-UNDER-RAMP FIXES (v4.0):
+## 38. More aggressive overhead detection: 9 check points (was 5), lower threshold 2.3 (was 1.8)
+## 39. Extended look-ahead distance: 1.8x check distance to catch ramps earlier
+## 40. Low-clearance tracking: Detects danger zones where bots can get wedged
+## 41. Forced teleport timeout: Auto-teleport after 3 seconds stuck under terrain
+## 42. Improved obstacle classification: Better overhead slope vs platform detection
 
 @export var target_player: Node = null
 @export var wander_radius: float = 30.0
@@ -63,6 +79,13 @@ var ability_charge_timer: float = 0.0
 var is_charging_ability: bool = false
 var aggression_level: float = 0.7  # Used for ability usage probability
 
+# NEW: OpenArena-inspired personality traits
+var bot_skill: float = 0.75  # 0.0 (novice) to 1.0 (expert) - affects accuracy & timing
+var aim_accuracy: float = 0.85  # Base accuracy multiplier for this bot
+var turn_speed_factor: float = 1.0  # Personality-based turning speed (0.7-1.3)
+var caution_level: float = 0.5  # How cautious the bot is (0.0 aggressive - 1.0 defensive)
+var strategic_preference: String = "balanced"  # "aggressive", "balanced", "defensive", "support"
+
 # Obstacle detection variables
 var stuck_timer: float = 0.0
 var last_position: Vector3 = Vector3.ZERO
@@ -73,6 +96,10 @@ var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0
 var consecutive_stuck_checks: int = 0
 const MAX_STUCK_ATTEMPTS: int = 10
+
+# NEW v4: Stuck under terrain timeout
+var stuck_under_terrain_timer: float = 0.0
+const STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT: float = 3.0  # Force teleport after 3s under terrain
 
 # Target timeout variables
 var target_stuck_timer: float = 0.0
@@ -88,6 +115,14 @@ const CANNON_OPTIMAL_RANGE: float = 15.0
 const SWORD_OPTIMAL_RANGE: float = 3.5
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
+
+# NEW: Weapon/Ability proficiency scores (OpenArena-style)
+const ABILITY_SCORES: Dictionary = {
+	"Cannon": 85,      # Long-range projectile
+	"Sword": 75,       # Close-range melee
+	"Dash Attack": 80, # Mid-range mobility
+	"Explosion": 70    # Close-range AoE
+}
 
 # IMPROVED: Cached group queries with filtering
 var cached_players: Array[Node] = []
@@ -116,6 +151,9 @@ func _ready() -> void:
 
 	# FIXED: Randomize aggression for personality variety (0.6-0.9 for more varied behavior)
 	aggression_level = randf_range(0.6, 0.9)
+
+	# NEW: Initialize personality traits (OpenArena-inspired)
+	initialize_personality()
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -158,16 +196,34 @@ func _physics_process(delta: float) -> void:
 		stuck_timer = 0.0
 
 	# FIXED: Proactive check for being stuck under terrain/slopes
-	if not is_stuck and is_stuck_under_terrain():
-		# Immediately trigger unstuck behavior if detected under terrain
-		is_stuck = true
-		unstuck_timer = randf_range(0.8, 1.5)
-		consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
-		# Set escape direction backward
-		var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
-		var random_side: float = 1.0 if randf() > 0.5 else -1.0
-		var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
-		obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
+	var currently_stuck_under_terrain: bool = is_stuck_under_terrain()
+
+	if currently_stuck_under_terrain:
+		# NEW v4: Track time stuck under terrain
+		stuck_under_terrain_timer += delta
+
+		# NEW v4: Force teleport if stuck under terrain too long
+		if stuck_under_terrain_timer >= STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT:
+			print("[BotAI] ", bot.name, " stuck under terrain for ", stuck_under_terrain_timer, "s - forcing teleport")
+			teleport_to_safe_position()
+			stuck_under_terrain_timer = 0.0
+			is_stuck = false
+			consecutive_stuck_checks = 0
+			return
+
+		# Trigger unstuck behavior if not already stuck
+		if not is_stuck:
+			is_stuck = true
+			unstuck_timer = randf_range(0.8, 1.5)
+			consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
+			# Set escape direction backward
+			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+			var random_side: float = 1.0 if randf() > 0.5 else -1.0
+			var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+			obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
+	else:
+		# Reset timer when not stuck under terrain
+		stuck_under_terrain_timer = 0.0
 
 	# Handle unstuck behavior
 	if is_stuck and unstuck_timer > 0.0:
@@ -215,6 +271,39 @@ func _physics_process(delta: float) -> void:
 	# Check state transitions
 	update_state()
 
+func initialize_personality() -> void:
+	"""NEW: Initialize bot personality traits (OpenArena-inspired)"""
+	# Skill level affects accuracy and decision speed
+	bot_skill = randf_range(0.5, 0.95)
+
+	# Aim accuracy varies per bot (70%-95% compensation)
+	aim_accuracy = randf_range(0.70, 0.95)
+
+	# Turn speed personality (some bots turn faster/slower)
+	turn_speed_factor = randf_range(0.8, 1.2)
+
+	# Caution level (affects retreat threshold and risk-taking)
+	caution_level = randf_range(0.2, 0.8)
+
+	# Strategic preference affects behavior patterns
+	var preference_roll: float = randf()
+	if preference_roll < 0.25:
+		strategic_preference = "aggressive"  # Rushes combat, takes risks
+		aggression_level = randf_range(0.75, 0.95)
+		caution_level = randf_range(0.2, 0.4)
+	elif preference_roll < 0.5:
+		strategic_preference = "defensive"   # Plays safe, retreats early
+		aggression_level = randf_range(0.5, 0.7)
+		caution_level = randf_range(0.6, 0.85)
+	elif preference_roll < 0.75:
+		strategic_preference = "support"     # Collects items, avoids direct combat
+		aggression_level = randf_range(0.55, 0.75)
+		caution_level = randf_range(0.5, 0.7)
+	else:
+		strategic_preference = "balanced"    # Standard behavior
+		aggression_level = randf_range(0.6, 0.85)
+		caution_level = randf_range(0.4, 0.6)
+
 func refresh_cached_groups() -> void:
 	"""IMPROVED: Cache group queries with validity filtering"""
 	# Filter out invalid nodes immediately
@@ -228,8 +317,80 @@ func refresh_cached_groups() -> void:
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
 	)
 
+func calculate_current_aggression() -> float:
+	"""NEW: Dynamic aggression calculation (OpenArena-inspired)"""
+	var current_aggression: float = aggression_level
+
+	# Health penalty (low health reduces aggression)
+	if bot.health < 3:
+		current_aggression *= 0.3  # Severe penalty
+	elif bot.health < 5:
+		current_aggression *= 0.6  # Moderate penalty
+
+	# Enemy health bonus (if we're healthier, be more aggressive)
+	if target_player and is_instance_valid(target_player) and "health" in target_player:
+		if bot.health > target_player.health + 2:
+			current_aggression *= 1.3  # We have advantage!
+		elif bot.health < target_player.health - 2:
+			current_aggression *= 0.7  # Enemy has advantage
+
+	# Caution level affects aggression
+	current_aggression *= (1.0 - caution_level * 0.3)
+
+	return clamp(current_aggression, 0.1, 1.5)
+
+func should_retreat() -> bool:
+	"""NEW: Comprehensive retreat evaluation (OpenArena-inspired)"""
+	if not target_player or not is_instance_valid(target_player):
+		return false
+
+	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+
+	# Critical health retreat
+	if bot.health <= 2:
+		return distance_to_target < aggro_range * 0.9
+
+	# Health-based retreat threshold (affected by caution)
+	var retreat_health_threshold: int = int(3 + caution_level * 2)  # 3-5 health
+	if bot.health <= retreat_health_threshold:
+		# Check enemy health advantage
+		if "health" in target_player:
+			if target_player.health >= bot.health + 2:
+				return distance_to_target < aggro_range * 0.7
+
+	# No ability = retreat if enemy is close
+	if not bot.current_ability and distance_to_target < attack_range * 1.5:
+		return true
+
+	# Defensive bots retreat earlier
+	if strategic_preference == "defensive" and bot.health <= 4:
+		return distance_to_target < aggro_range * 0.8
+
+	return false
+
+func should_chase() -> bool:
+	"""NEW: Chase evaluation (OpenArena-inspired)"""
+	if not target_player or not is_instance_valid(target_player):
+		return false
+
+	if not bot.current_ability:
+		return false
+
+	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
+
+	# Always chase if enemy is weak and we're healthy
+	if "health" in target_player and target_player.health <= 2 and bot.health >= 4:
+		return distance_to_target < aggro_range * 1.5
+
+	# Aggressive bots chase more eagerly
+	if strategic_preference == "aggressive":
+		return distance_to_target < aggro_range * 1.2
+
+	# Standard chase range
+	return distance_to_target < aggro_range
+
 func update_state() -> void:
-	"""IMPROVED: Better state prioritization"""
+	"""IMPROVED: Better state prioritization with combat evaluators"""
 
 	# Check if we have a valid combat target
 	var has_combat_target: bool = target_player and is_instance_valid(target_player)
@@ -237,12 +398,11 @@ func update_state() -> void:
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# IMPROVED: Retreat at health <= 2, earlier escape
-	if bot.health <= 2 and has_combat_target:
-		if distance_to_target < aggro_range * 0.8:
-			state = "RETREAT"
-			retreat_timer = randf_range(2.5, 4.5)
-			return
+	# NEW: Use retreat evaluator
+	if has_combat_target and should_retreat():
+		state = "RETREAT"
+		retreat_timer = randf_range(2.5, 4.5)
+		return
 
 	# Priority 1: CRITICAL - Get an ability if we don't have one
 	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
@@ -272,8 +432,8 @@ func update_state() -> void:
 				state = "COLLECT_ORB"
 				return
 
-	# Priority 4: Chase if enemy in aggro range
-	if bot.current_ability and has_combat_target and distance_to_target < aggro_range:
+	# Priority 4: Chase if enemy in aggro range (use evaluator)
+	if bot.current_ability and has_combat_target and should_chase():
 		state = "CHASE"
 		return
 
@@ -491,10 +651,12 @@ func strafe_around_target(preferred_distance: float) -> void:
 	if not target_player or not is_instance_valid(target_player):
 		return
 
-	# Change strafe direction periodically
+	# NEW: Skill-based strafe timing (OpenArena formula: 0.4 + (1 - skill) * 0.2)
 	if strafe_timer <= 0.0:
 		strafe_direction *= -1
-		strafe_timer = randf_range(1.2, 2.8)
+		var base_strafe_time: float = 0.4 + (1.0 - bot_skill) * 0.2
+		var variation: float = randf_range(-0.15, 0.15)
+		strafe_timer = base_strafe_time + variation
 
 	# Calculate strafe direction
 	var to_target: Vector3 = (target_player.global_position - bot.global_position).normalized()
@@ -595,8 +757,39 @@ func get_optimal_combat_distance() -> float:
 		_:
 			return 12.0
 
+func get_ability_proficiency_score(ability_name: String, distance: float) -> float:
+	"""NEW: Calculate ability proficiency score (OpenArena-inspired weapon scoring)"""
+	var base_score: float = ABILITY_SCORES.get(ability_name, 50.0)
+
+	# Distance optimization (prefer abilities at their optimal range)
+	var optimal_range: float = get_optimal_combat_distance()
+	var distance_diff: float = abs(distance - optimal_range)
+	var distance_penalty: float = distance_diff * 2.0  # Lose 2 points per unit away from optimal
+	var distance_score: float = max(0.0, base_score - distance_penalty)
+
+	# Skill affects proficiency (expert bots use all weapons better)
+	var skill_multiplier: float = 0.7 + (bot_skill * 0.5)  # 0.7x to 1.2x
+	distance_score *= skill_multiplier
+
+	# Strategic preference affects weapon choice
+	match strategic_preference:
+		"aggressive":
+			# Prefer close-range abilities
+			if ability_name in ["Sword", "Explosion"]:
+				distance_score *= 1.2
+		"defensive":
+			# Prefer long-range abilities
+			if ability_name in ["Cannon"]:
+				distance_score *= 1.25
+		"balanced":
+			# Prefer mid-range abilities
+			if ability_name in ["Dash Attack"]:
+				distance_score *= 1.15
+
+	return distance_score
+
 func use_ability_smart(distance_to_target: float) -> void:
-	"""IMPROVED: Smart ability usage with lead prediction for Cannon"""
+	"""IMPROVED: Smart ability usage with proficiency scoring and lead prediction"""
 	if not bot.current_ability or not bot.current_ability.has_method("is_ready"):
 		is_charging_ability = false
 		return
@@ -612,6 +805,10 @@ func use_ability_smart(distance_to_target: float) -> void:
 	var should_use: bool = false
 	var should_charge: bool = false
 
+	# NEW: Calculate proficiency score for this ability at current distance
+	var proficiency_score: float = get_ability_proficiency_score(ability_name, distance_to_target)
+	var usage_threshold: float = 50.0  # Minimum score to use ability
+
 	# Check if ability supports charging
 	var can_charge: bool = false
 	if "supports_charging" in bot.current_ability:
@@ -619,37 +816,43 @@ func use_ability_smart(distance_to_target: float) -> void:
 	elif bot.current_ability.has_method("start_charge"):
 		can_charge = true
 
-	# IMPROVED: Ability-specific logic with lead prediction
+	# NEW: Use current aggression for decision-making
+	var current_aggression: float = calculate_current_aggression()
+
+	# IMPROVED: Ability-specific logic with proficiency scoring
 	match ability_name:
 		"Cannon":
-			# FIXED: Lead prediction + alignment check before firing
+			# Lead prediction + alignment check before firing
 			if target_player and is_instance_valid(target_player):
 				var predicted_pos: Vector3 = calculate_lead_position()
 				var predicted_distance: float = bot.global_position.distance_to(predicted_pos)
 
-				# FIXED: Only fire if aligned with target (prevents missing due to rotation)
 				if predicted_distance > 4.0 and predicted_distance < 40.0 and is_aligned_with_target(predicted_pos, 10.0):
-					should_use = randf() < (0.85 + aggression_level * 0.15)  # Near-perfect usage (85-100%)
+					# Use proficiency score to determine usage chance
+					var usage_chance: float = (proficiency_score / 100.0) * (0.85 + current_aggression * 0.15)
+					should_use = randf() < usage_chance
 					should_charge = false  # Never charge cannon
 			elif distance_to_target > 4.0 and distance_to_target < 40.0 and is_aligned_with_target(target_player.global_position, 10.0):
-				should_use = randf() < 0.9
+				should_use = randf() < (proficiency_score / 100.0) * 0.9
 				should_charge = false
 		"Sword":
-			if distance_to_target < 6.0:
-				should_use = randf() < (0.8 + aggression_level * 0.2)  # Near-perfect usage (80-100%)
-				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + aggression_level * 0.3)
+			if distance_to_target < 6.0 and proficiency_score > usage_threshold:
+				var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
+				should_use = randf() < usage_chance
+				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
 		"Dash Attack":
-			if distance_to_target > 4.0 and distance_to_target < 18.0:
-				should_use = randf() < (0.7 + aggression_level * 0.3)  # Near-perfect usage (70-100%)
-				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + aggression_level * 0.3)
+			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
+				var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
+				should_use = randf() < usage_chance
+				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
 		"Explosion":
-			# Use explosion only at close range (was 10.0, now 8.0 for proper close-range AoE usage)
-			if distance_to_target < 8.0:
-				should_use = randf() < (0.5 + aggression_level * 0.4)
-				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + aggression_level * 0.2)
+			if distance_to_target < 8.0 and proficiency_score > usage_threshold:
+				var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
+				should_use = randf() < usage_chance
+				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
 		_:
-			if distance_to_target < 20.0:
-				should_use = randf() < 0.5
+			if distance_to_target < 20.0 and proficiency_score > usage_threshold:
+				should_use = randf() < (proficiency_score / 100.0) * 0.5
 
 	# Charging logic
 	if should_use and should_charge and can_charge and not is_charging_ability:
@@ -671,7 +874,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 		action_timer = randf_range(0.6, 1.5)
 
 func calculate_lead_position() -> Vector3:
-	"""FIXED: Calculate predicted position for lead prediction (Cannon projectiles)"""
+	"""IMPROVED: Skill-based lead prediction (OpenArena-inspired accuracy variation)"""
 	if not target_player or not is_instance_valid(target_player):
 		return bot.global_position
 
@@ -684,13 +887,18 @@ func calculate_lead_position() -> Vector3:
 	if target_velocity.length() < 2.0:
 		return target_player.global_position
 
-	# FIXED: Lead prediction with proper projectile speed (Cannon fires at ~40-60 u/s)
+	# NEW: Only predict if bot skill is high enough (OpenArena uses > 0.8 threshold)
+	if bot_skill < 0.65:
+		# Low-skill bots don't predict well
+		return target_player.global_position
+
+	# Lead prediction with proper projectile speed
 	var projectile_speed: float = 50.0  # Average cannon projectile speed
 	var current_distance: float = bot.global_position.distance_to(target_player.global_position)
 	var time_to_hit: float = current_distance / projectile_speed
 
-	# Predict target position with 95% compensation for near-perfect aim
-	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.95
+	# NEW: Skill-based compensation (70%-95% based on aim_accuracy)
+	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * aim_accuracy
 
 	return predicted_pos
 
@@ -945,7 +1153,7 @@ func is_aligned_with_target(target_position: Vector3, tolerance_degrees: float =
 	return abs(angle_diff) < deg_to_rad(tolerance_degrees)
 
 func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
-	"""FIXED: Physics-safe rotation with damping to prevent overshoot/oscillation"""
+	"""IMPROVED: Physics-safe rotation with personality-based turn speed"""
 	if not bot:
 		return
 
@@ -966,11 +1174,14 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	while angle_diff < -PI:
 		angle_diff += TAU
 
-	# FIXED: Delta-scaled angular velocity with damping to prevent overshoot
-	# Calculate target angular velocity based on angle difference
-	var target_angular_velocity: float = clamp(angle_diff * 10.0 / delta, -15.0, 15.0)
+	# NEW: Apply personality-based turn speed factor
+	var turn_multiplier: float = 10.0 * turn_speed_factor
+	var max_turn_speed: float = 15.0 * turn_speed_factor
 
-	# FIXED: Lerp current angular velocity toward target for smooth damping
+	# Calculate target angular velocity with personality
+	var target_angular_velocity: float = clamp(angle_diff * turn_multiplier / delta, -max_turn_speed, max_turn_speed)
+
+	# Lerp current angular velocity toward target for smooth damping
 	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.3)
 
 func is_target_visible(target_pos: Vector3) -> bool:
@@ -998,20 +1209,64 @@ func is_target_visible(target_pos: Vector3) -> bool:
 	return hit_distance >= target_distance - 1.0
 
 func find_target() -> void:
-	"""Find nearest player using cached groups"""
-	var closest_player: Node = null
-	var closest_distance: float = INF
+	"""NEW: Advanced target prioritization (OpenArena-inspired weighted scoring)"""
+	var best_player: Node = null
+	var best_score: float = -INF
 
 	for player in cached_players:
 		if player == bot or not is_instance_valid(player):
 			continue
 
-		var distance: float = bot.global_position.distance_to(player.global_position)
-		if distance < closest_distance:
-			closest_distance = distance
-			closest_player = player
+		var score: float = calculate_target_priority(player)
+		if score > best_score:
+			best_score = score
+			best_player = player
 
-	target_player = closest_player
+	target_player = best_player
+
+func calculate_target_priority(player: Node) -> float:
+	"""NEW: Calculate target priority score (OpenArena-inspired)"""
+	var score: float = 100.0
+
+	# Distance factor (closer = higher priority)
+	var distance: float = bot.global_position.distance_to(player.global_position)
+	var distance_score: float = max(0.0, 100.0 - distance * 2.0)  # Lose 2 points per unit
+	score += distance_score
+
+	# Health differential (weaker enemies = higher priority for aggressive bots)
+	if "health" in player:
+		var enemy_health: float = player.health
+		if enemy_health < bot.health:
+			score += (bot.health - enemy_health) * 10.0 * aggression_level
+		else:
+			# Penalize stronger enemies if we're cautious
+			score -= (enemy_health - bot.health) * 5.0 * caution_level
+
+	# Visibility bonus
+	if is_target_visible(player.global_position):
+		score += 50.0
+
+	# Attack range bonus (prioritize enemies in optimal attack range)
+	var optimal_distance: float = get_optimal_combat_distance()
+	if abs(distance - optimal_distance) < 5.0:
+		score += 40.0
+
+	# Strategic preference modifiers
+	match strategic_preference:
+		"aggressive":
+			# Prefer closer targets for rushing
+			if distance < 15.0:
+				score += 30.0
+		"defensive":
+			# Prefer targets at safer distances
+			if distance > 10.0 and distance < 25.0:
+				score += 25.0
+		"support":
+			# Prefer weaker targets
+			if "health" in player and player.health < 4:
+				score += 35.0
+
+	return score
 
 func find_nearest_ability() -> void:
 	"""FIXED: Find nearest ability (visible OR close enough)"""
@@ -1122,24 +1377,26 @@ func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
-	"""IMPROVED: Check for obstacle with overhead slope detection"""
+	"""IMPROVED v4: More aggressive overhead detection to prevent getting stuck under ramps"""
 	if not bot:
 		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Check at multiple heights including overhead
-	var check_heights: Array = [0.2, 0.5, 1.0, 1.8, 2.2]
+	# IMPROVED v4: Check further ahead and at more heights
+	var extended_check_distance: float = check_distance * 1.8  # Look further ahead
+	var check_heights: Array = [0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # More height points
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
 	var lowest_obstacle_height: float = INF
 	var highest_obstacle_height: float = -INF
 	var hit_count: int = 0
 	var overhead_hit: bool = false
+	var low_clearance_hit: bool = false
 
 	for height in check_heights:
 		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
-		var end_pos: Vector3 = start_pos + direction * check_distance
+		var end_pos: Vector3 = start_pos + direction * extended_check_distance
 
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
 		query.exclude = [bot]
@@ -1154,8 +1411,12 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			var obstacle_height: float = hit_point.y - bot.global_position.y
 
 			# Track overhead hits (above bot's center)
-			if height > 1.5:
+			if height > 1.3:
 				overhead_hit = true
+
+			# NEW v4: Track low clearance hits (danger zone for getting wedged)
+			if height > 0.5 and height < 2.5 and obstacle_height < 2.5:
+				low_clearance_hit = true
 
 			if obstacle_height < lowest_obstacle_height:
 				lowest_obstacle_height = obstacle_height
@@ -1173,8 +1434,9 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 		var height_diff: float = highest_obstacle_height - lowest_obstacle_height
 		if height_diff > 0.4:
 			is_slope = true
-			# IMPROVED: Detect dangerous overhead slopes
-			if overhead_hit and lowest_obstacle_height < 1.5:
+			# IMPROVED v4: More aggressive overhead slope detection
+			# Mark as overhead slope if: overhead hit + (low clearance OR low obstacle height)
+			if overhead_hit and (lowest_obstacle_height < 2.0 or low_clearance_hit):
 				is_overhead_slope = true
 		if lowest_obstacle_height > 0.3 and lowest_obstacle_height < 2.5:
 			is_platform = true
@@ -1286,27 +1548,31 @@ func check_if_stuck() -> void:
 	last_position = current_pos
 
 func is_stuck_under_terrain() -> bool:
-	"""IMPROVED: Check if stuck under terrain/slope with better detection"""
+	"""IMPROVED v4: More aggressive overhead detection with lower threshold"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Check multiple points above the bot for comprehensive detection
+	# IMPROVED: More check points for better coverage
 	var check_points: Array = [
 		Vector3.ZERO,           # Center
-		Vector3(0.5, 0, 0),     # Right
-		Vector3(-0.5, 0, 0),    # Left
-		Vector3(0, 0, 0.5),     # Forward
-		Vector3(0, 0, -0.5)     # Back
+		Vector3(0.6, 0, 0),     # Right
+		Vector3(-0.6, 0, 0),    # Left
+		Vector3(0, 0, 0.6),     # Forward
+		Vector3(0, 0, -0.6),    # Back
+		Vector3(0.4, 0, 0.4),   # Front-right
+		Vector3(-0.4, 0, 0.4),  # Front-left
+		Vector3(0.4, 0, -0.4),  # Back-right
+		Vector3(-0.4, 0, -0.4)  # Back-left
 	]
 
 	var overhead_hits: int = 0
 	var lowest_overhead_height: float = INF
 
 	for offset in check_points:
-		var ray_start: Vector3 = bot.global_position + offset + Vector3.UP * 0.5
-		var ray_end: Vector3 = bot.global_position + offset + Vector3.UP * 3.0
+		var ray_start: Vector3 = bot.global_position + offset + Vector3.UP * 0.3
+		var ray_end: Vector3 = bot.global_position + offset + Vector3.UP * 3.5
 
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
 		query.exclude = [bot]
@@ -1320,8 +1586,9 @@ func is_stuck_under_terrain() -> bool:
 			if hit_height < lowest_overhead_height:
 				lowest_overhead_height = hit_height
 
-	# Stuck if: multiple overhead hits OR very low overhead clearance
-	return overhead_hits >= 3 or (overhead_hits > 0 and lowest_overhead_height < 1.8)
+	# IMPROVED: More aggressive thresholds
+	# Stuck if: 2+ overhead hits OR any hit below 2.3 units clearance (was 1.8)
+	return overhead_hits >= 2 or (overhead_hits > 0 and lowest_overhead_height < 2.3)
 
 func teleport_to_safe_position() -> void:
 	"""FIXED: Teleport with fail-safe for missing spawns"""
