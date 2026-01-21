@@ -1,7 +1,7 @@
 extends Node
 
-## Bot AI Controller - PRODUCTION VERSION v2.0
-## Final polish with comprehensive validation and advanced mechanics
+## Bot AI Controller - PRODUCTION VERSION v2.0 Refined
+## Critical fixes for weapon accuracy, slope-stuck issues, and awareness
 ##
 ## FIXES APPLIED (v1.0):
 ## 1. Removed ALL await statements that freeze bots
@@ -24,6 +24,20 @@ extends Node
 ## 16. Dead code cleanup (unused variables)
 ## 17. Removed all rail grinding logic (bots no longer use rails)
 ## 18. Improved slope detection to prevent getting stuck under slopes
+##
+## CRITICAL FIXES (v2.0 Refined):
+## 19. Fixed rotation overshoot: Added damping/lerp to angular_velocity (prevents oscillation)
+## 20. Fixed weapon missing: Alignment check before cannon fires (prevents premature shots)
+## 21. Fixed lead prediction: Returns predicted position instead of distance (near-perfect aim)
+## 22. Fixed slope-stuck: Lowered threshold to 0.1, added horizontal velocity check
+## 23. Fixed slope-stuck: Added WANDER state to stuck detection
+## 24. Fixed slope-stuck: Proactive is_stuck_under_terrain check in _physics_process
+## 25. Fixed slope-stuck: Always apply downward force + torque in unstuck movement
+## 26. Fixed slope-stuck: Reduced unstuck timeout to 0.8-1.5s (was 1.2-2.2s)
+## 27. Fixed awareness: Proactive overhead slope avoidance in all movement functions
+## 28. Fixed balance: Aggression randomized to 0.6-0.9 (was 0.9-1.0)
+## 29. Fixed robustness: Teleport fail-safe for missing spawns (+10 units up)
+## 30. Fixed collect: Allow if visible OR distance < 15 (better item awareness)
 
 @export var target_player: Node = null
 @export var wander_radius: float = 30.0
@@ -100,8 +114,8 @@ func _ready() -> void:
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
 
-	# Randomize aggression for personality variety (high values for near-perfect aim consistency)
-	aggression_level = randf_range(0.9, 1.0)
+	# FIXED: Randomize aggression for personality variety (0.6-0.9 for more varied behavior)
+	aggression_level = randf_range(0.6, 0.9)
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -142,6 +156,18 @@ func _physics_process(delta: float) -> void:
 	if stuck_timer >= stuck_check_interval:
 		check_if_stuck()
 		stuck_timer = 0.0
+
+	# FIXED: Proactive check for being stuck under terrain/slopes
+	if not is_stuck and is_stuck_under_terrain():
+		# Immediately trigger unstuck behavior if detected under terrain
+		is_stuck = true
+		unstuck_timer = randf_range(0.8, 1.5)
+		consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
+		# Set escape direction backward
+		var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+		var random_side: float = 1.0 if randf() > 0.5 else -1.0
+		var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+		obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
 
 	# Handle unstuck behavior
 	if is_stuck and unstuck_timer > 0.0:
@@ -263,13 +289,28 @@ func update_state() -> void:
 		state = "WANDER"
 
 func do_wander(delta: float) -> void:
-	"""Wander around while searching for targets"""
+	"""FIXED: Wander with overhead slope avoidance"""
 	if wander_timer <= 0.0:
 		var angle: float = randf() * TAU
 		var distance: float = randf_range(wander_radius * 0.5, wander_radius)
 		wander_target = bot.global_position + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 		wander_timer = randf_range(2.5, 5.0)
 		find_target()
+
+	# FIXED: Check for overhead slopes before moving
+	var direction: Vector3 = (wander_target - bot.global_position).normalized()
+	direction.y = 0
+
+	if direction.length() > 0.1:
+		var obstacle_info: Dictionary = check_obstacle_in_direction(direction, 2.5)
+
+		# FIXED: If overhead slope detected, find new wander target
+		if obstacle_info.has_obstacle and "is_overhead_slope" in obstacle_info and obstacle_info.is_overhead_slope:
+			# Pick a new wander direction away from overhead slope
+			var safe_dir: Vector3 = find_safe_direction_from_edge(direction)
+			if safe_dir != Vector3.ZERO:
+				wander_target = bot.global_position + safe_dir * wander_radius * 0.7
+				wander_timer = randf_range(2.5, 5.0)
 
 	# Move with moderate speed
 	move_towards(wander_target, 0.5)
@@ -474,6 +515,22 @@ func strafe_around_target(preferred_distance: float) -> void:
 	# Apply combined movement
 	var movement: Vector3 = (strafe_vec * 0.7 + distance_adjustment).normalized()
 	if movement.length() > 0.1:
+		# FIXED: Check for overhead slopes before moving
+		var obstacle_info: Dictionary = check_obstacle_in_direction(movement, 2.5)
+		if obstacle_info.has_obstacle and "is_overhead_slope" in obstacle_info and obstacle_info.is_overhead_slope:
+			# Overhead slope detected! Reverse strafe and find safe direction
+			strafe_direction *= -1
+			var safe_dir: Vector3 = find_safe_direction_from_edge(movement)
+			if safe_dir != Vector3.ZERO:
+				movement = safe_dir
+			else:
+				# Apply braking
+				if "linear_velocity" in bot:
+					var braking_force: Vector3 = -bot.linear_velocity * 1.2
+					braking_force.y = 0
+					bot.apply_central_force(braking_force)
+				return
+
 		# EDGE DETECTION FIX: Check for edges before strafing
 		if check_for_edge(movement, 4.0):
 			# Edge detected! Reverse strafe direction and apply braking
@@ -565,13 +622,16 @@ func use_ability_smart(distance_to_target: float) -> void:
 	# IMPROVED: Ability-specific logic with lead prediction
 	match ability_name:
 		"Cannon":
-			# IMPROVED: Lead prediction for moving targets with near-perfect usage frequency
+			# FIXED: Lead prediction + alignment check before firing
 			if target_player and is_instance_valid(target_player):
-				var predicted_distance: float = calculate_lead_distance()
-				if predicted_distance > 4.0 and predicted_distance < 40.0:
+				var predicted_pos: Vector3 = calculate_lead_position()
+				var predicted_distance: float = bot.global_position.distance_to(predicted_pos)
+
+				# FIXED: Only fire if aligned with target (prevents missing due to rotation)
+				if predicted_distance > 4.0 and predicted_distance < 40.0 and is_aligned_with_target(predicted_pos, 10.0):
 					should_use = randf() < (0.85 + aggression_level * 0.15)  # Near-perfect usage (85-100%)
 					should_charge = false  # Never charge cannon
-			elif distance_to_target > 4.0 and distance_to_target < 40.0:
+			elif distance_to_target > 4.0 and distance_to_target < 40.0 and is_aligned_with_target(target_player.global_position, 10.0):
 				should_use = randf() < 0.9
 				should_charge = false
 		"Sword":
@@ -610,10 +670,10 @@ func use_ability_smart(distance_to_target: float) -> void:
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
 
-func calculate_lead_distance() -> float:
-	"""NEW: Calculate distance for lead prediction (Cannon projectiles)"""
+func calculate_lead_position() -> Vector3:
+	"""FIXED: Calculate predicted position for lead prediction (Cannon projectiles)"""
 	if not target_player or not is_instance_valid(target_player):
-		return INF
+		return bot.global_position
 
 	# Get target velocity
 	var target_velocity: Vector3 = Vector3.ZERO
@@ -622,17 +682,17 @@ func calculate_lead_distance() -> float:
 
 	# Skip lead if target not moving much
 	if target_velocity.length() < 2.0:
-		return bot.global_position.distance_to(target_player.global_position)
+		return target_player.global_position
 
-	# Simple lead prediction: assume projectile speed ~80 (Cannon speed)
-	var projectile_speed: float = 80.0
+	# FIXED: Lead prediction with proper projectile speed (Cannon fires at ~40-60 u/s)
+	var projectile_speed: float = 50.0  # Average cannon projectile speed
 	var current_distance: float = bot.global_position.distance_to(target_player.global_position)
 	var time_to_hit: float = current_distance / projectile_speed
 
-	# Predict target position
-	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.95  # 95% prediction for near-perfect aim
+	# Predict target position with 95% compensation for near-perfect aim
+	var predicted_pos: Vector3 = target_player.global_position + target_velocity * time_to_hit * 0.95
 
-	return bot.global_position.distance_to(predicted_pos)
+	return predicted_pos
 
 func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	"""IMPROVED: Move bot towards target with obstacle and player avoidance"""
@@ -859,8 +919,33 @@ func initiate_spin_dash() -> void:
 				bot.execute_spin_dash()
 	)
 
+func is_aligned_with_target(target_position: Vector3, tolerance_degrees: float = 15.0) -> bool:
+	"""NEW: Check if bot is aligned with target within tolerance (prevents premature firing)"""
+	if not bot:
+		return false
+
+	var target_dir: Vector3 = target_position - bot.global_position
+	target_dir.y = 0
+
+	if target_dir.length() < 0.1:
+		return false
+
+	var desired_angle: float = atan2(target_dir.x, target_dir.z)
+	var current_angle: float = bot.rotation.y
+
+	var angle_diff: float = desired_angle - current_angle
+
+	# Normalize angle to [-PI, PI]
+	while angle_diff > PI:
+		angle_diff -= TAU
+	while angle_diff < -PI:
+		angle_diff += TAU
+
+	# Check if within tolerance
+	return abs(angle_diff) < deg_to_rad(tolerance_degrees)
+
 func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
-	"""Physics-safe rotation for RigidBody3D using angular velocity"""
+	"""FIXED: Physics-safe rotation with damping to prevent overshoot/oscillation"""
 	if not bot:
 		return
 
@@ -881,13 +966,12 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	while angle_diff < -PI:
 		angle_diff += TAU
 
-	# Use angular_velocity for physics-safe rotation
-	var rotation_speed: float = 8.0
-	var target_angular_velocity: float = angle_diff * rotation_speed
+	# FIXED: Delta-scaled angular velocity with damping to prevent overshoot
+	# Calculate target angular velocity based on angle difference
+	var target_angular_velocity: float = clamp(angle_diff * 10.0 / delta, -15.0, 15.0)
 
-	target_angular_velocity = clamp(target_angular_velocity, -12.0, 12.0)
-
-	bot.angular_velocity.y = target_angular_velocity
+	# FIXED: Lerp current angular velocity toward target for smooth damping
+	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.3)
 
 func is_target_visible(target_pos: Vector3) -> bool:
 	"""NEW: Check if target is visible (raycast line-of-sight)"""
@@ -930,7 +1014,7 @@ func find_target() -> void:
 	target_player = closest_player
 
 func find_nearest_ability() -> void:
-	"""IMPROVED: Find nearest visible ability"""
+	"""FIXED: Find nearest ability (visible OR close enough)"""
 	var closest_ability: Node = null
 	var closest_distance: float = INF
 
@@ -940,8 +1024,8 @@ func find_nearest_ability() -> void:
 
 		var distance: float = bot.global_position.distance_to(ability.global_position)
 		if distance < closest_distance:
-			# Prefer visible abilities
-			if is_target_visible(ability.global_position) or distance < 20.0:
+			# FIXED: Allow if visible OR distance < 15
+			if is_target_visible(ability.global_position) or distance < 15.0:
 				closest_distance = distance
 				closest_ability = ability
 
@@ -1153,16 +1237,23 @@ func check_target_timeout(delta: float) -> void:
 		target_stuck_position = bot.global_position
 
 func check_if_stuck() -> void:
-	"""Better stuck detection with improved thresholds"""
+	"""FIXED: Better stuck detection with lower thresholds and horizontal velocity check"""
 	if not bot:
 		return
 
 	var current_pos: Vector3 = bot.global_position
 	var distance_moved: float = current_pos.distance_to(last_position)
 
-	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB"]
+	# FIXED: Added WANDER state and lowered threshold from 0.25 to 0.1
+	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB", "WANDER"]
 
-	if distance_moved < 0.25 and is_trying_to_move:
+	# FIXED: Check both position change AND horizontal velocity (catches slow sliding under slopes)
+	var horizontal_velocity: float = 0.0
+	if "linear_velocity" in bot:
+		horizontal_velocity = Vector2(bot.linear_velocity.x, bot.linear_velocity.z).length()
+
+	# FIXED: Stuck if barely moving OR horizontal velocity very low
+	if (distance_moved < 0.1 or horizontal_velocity < 1.0) and is_trying_to_move:
 		consecutive_stuck_checks += 1
 
 		# EMERGENCY: Teleport if stuck too long
@@ -1175,7 +1266,8 @@ func check_if_stuck() -> void:
 		# Trigger stuck state after 3 checks
 		if consecutive_stuck_checks >= 3 and not is_stuck:
 			is_stuck = true
-			unstuck_timer = randf_range(1.2, 2.2)
+			# FIXED: Reduced timeout from 1.2-2.2 to 0.8-1.5 for faster recovery
+			unstuck_timer = randf_range(0.8, 1.5)
 
 			# Move opposite to current facing
 			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
@@ -1232,7 +1324,7 @@ func is_stuck_under_terrain() -> bool:
 	return overhead_hits >= 3 or (overhead_hits > 0 and lowest_overhead_height < 1.8)
 
 func teleport_to_safe_position() -> void:
-	"""Teleport using world.spawns instead of bot.spawns"""
+	"""FIXED: Teleport with fail-safe for missing spawns"""
 	if not bot or not is_instance_valid(bot):
 		return
 
@@ -1259,9 +1351,15 @@ func teleport_to_safe_position() -> void:
 		bot.angular_velocity = Vector3.ZERO
 
 		print("[BotAI] Emergency teleport for ", bot.name, " to ", spawn_pos)
+	else:
+		# FIXED: Fail-safe if no spawns exist - move up and reset velocity
+		bot.global_position.y += 10.0
+		bot.linear_velocity = Vector3.ZERO
+		bot.angular_velocity = Vector3.ZERO
+		print("[BotAI] WARNING: No spawns available, moving ", bot.name, " up by 10 units")
 
 func handle_unstuck_movement(delta: float) -> void:
-	"""IMPROVED: Handle movement when stuck with better terrain escape"""
+	"""FIXED: Handle movement when stuck - always apply downward force and torque"""
 	if not bot:
 		return
 
@@ -1282,12 +1380,18 @@ func handle_unstuck_movement(delta: float) -> void:
 
 		# Apply strong backward force
 		bot.apply_central_force(obstacle_avoid_direction * force)
-
-		# Also apply downward force to try to get "unstuck" from geometry
-		if "linear_velocity" in bot and bot.linear_velocity.y > 0:
-			bot.apply_central_force(Vector3.DOWN * bot.current_roll_force * 0.5)
 	else:
 		bot.apply_central_force(obstacle_avoid_direction * force)
+
+	# FIXED: Always apply downward force to help settle and escape geometry
+	if "linear_velocity" in bot:
+		# Apply downward force regardless of vertical velocity
+		bot.apply_central_force(Vector3.DOWN * bot.current_roll_force * 0.6)
+
+		# FIXED: Add torque to help bot roll out of stuck positions
+		if "apply_torque" in bot:
+			var torque_direction: float = 1.0 if randf() > 0.5 else -1.0
+			bot.apply_torque(Vector3(torque_direction * 2.0, 0, 0))
 
 	# Jump frequently (more aggressive if under terrain)
 	var jump_chance: float = 0.85 if under_terrain else 0.55
