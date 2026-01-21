@@ -1837,28 +1837,176 @@ func calculate_target_priority(player: Node) -> float:
 
 	return score
 
+func calculate_item_acquisition_cost(item_pos: Vector3) -> float:
+	"""COST-BENEFIT: Calculate effort/risk required to reach an item"""
+	if not bot:
+		return INF
+
+	var cost: float = 0.0
+
+	# Factor 1: Distance cost (travel time)
+	var distance: float = bot.global_position.distance_to(item_pos)
+	cost += distance * 2.0  # Each unit of distance = 2 cost points
+
+	# Factor 2: Height/elevation cost (difficulty)
+	var height_diff: float = item_pos.y - bot.global_position.y
+	if height_diff > 0.0:
+		if height_diff > 15.0:
+			cost += 60.0  # Very high - requires bounce attack + platform navigation
+		elif height_diff > 8.0:
+			cost += 40.0  # High - requires platform navigation
+		elif height_diff > 4.0:
+			cost += 20.0  # Medium - requires double jump or platform
+		else:
+			cost += height_diff * 3.0  # Small elevation - proportional cost
+
+	# Factor 3: Platform-specific costs (if item is on a platform)
+	var platform_for_item: Dictionary = find_platform_for_position(item_pos)
+	if not platform_for_item.is_empty():
+		var platform_size: Vector3 = platform_for_item.size
+		var platform_area: float = platform_size.x * platform_size.z
+
+		# Small platforms are harder/riskier
+		if platform_area <= 50.0:
+			cost += 30.0  # Very small platform (6x6, 7x7) - high risk
+		elif platform_area <= 80.0:
+			cost += 15.0  # Medium platform (8x8, 9x9) - moderate risk
+
+		# Occupied platforms are contested/dangerous
+		var occupancy: int = count_bots_on_platform(platform_for_item)
+		if occupancy >= 2:
+			cost += 100.0  # Full platform - likely impossible to access
+		elif occupancy == 1:
+			cost += 40.0  # 1 bot present - contested, might lead to combat
+
+	# Factor 4: Combat proximity cost (danger zone)
+	if target_player and is_instance_valid(target_player):
+		var dist_to_enemy: float = item_pos.distance_to(target_player.global_position)
+		if dist_to_enemy < 10.0:
+			cost += 50.0  # Item very close to enemy - high risk
+		elif dist_to_enemy < 20.0:
+			cost += 25.0  # Item near enemy - moderate risk
+
+	# Factor 5: Visibility cost (if can't see it, it's harder)
+	if not is_target_visible(item_pos):
+		cost += 15.0  # Can't see item - need to navigate blind
+
+	return cost
+
+func calculate_ability_value() -> float:
+	"""COST-BENEFIT: Calculate value of acquiring an ability"""
+	var value: float = 0.0
+
+	# Base value: Abilities are always valuable
+	value += 100.0
+
+	# CRITICAL: No ability = extremely high value
+	if not bot.current_ability:
+		value += 150.0  # Total 250 - will pursue almost any ability
+
+	# Strategic preference bonuses
+	match strategic_preference:
+		"aggressive":
+			value += 30.0  # Aggressive bots highly value abilities for combat
+		"support":
+			value += 20.0  # Support bots value abilities for team utility
+		"defensive":
+			value += 15.0  # Defensive bots moderately value abilities
+
+	# Health-based value (low health = need ability for defense)
+	if bot.health <= 2:
+		value += 40.0  # Vulnerable - need combat capability
+
+	return value
+
+func calculate_orb_value() -> float:
+	"""COST-BENEFIT: Calculate value of acquiring an orb"""
+	var value: float = 0.0
+
+	# Check current level
+	if not "level" in bot or not "MAX_LEVEL" in bot:
+		return 50.0  # Default moderate value
+
+	var level: int = bot.level
+	var max_level: int = bot.MAX_LEVEL
+
+	# Level-based value (diminishing returns)
+	if level == 0:
+		value += 80.0  # Level 0->1 is very valuable (first stat boost)
+	elif level == 1:
+		value += 60.0  # Level 1->2 is quite valuable
+	elif level == 2:
+		value += 40.0  # Level 2->3 is moderately valuable
+	elif level >= max_level:
+		return 10.0  # Already max level - orbs nearly worthless
+
+	# Strategic preference modifiers
+	match strategic_preference:
+		"aggressive":
+			value += 15.0  # Aggressive bots want stat boosts for combat
+		"support":
+			value += 25.0  # Support bots highly value power-ups
+		"defensive":
+			value += 10.0  # Defensive bots moderately value orbs
+
+	# Combat state modifiers
+	if state == "RETREAT" or bot.health <= 2:
+		value -= 20.0  # Low priority when retreating or low health
+	elif state == "ATTACK" or state == "CHASE":
+		value -= 10.0  # Lower priority during active combat
+
+	return value
+
 func find_nearest_ability() -> void:
-	"""FIXED: Find nearest ability (visible OR close enough)"""
-	var closest_ability: Node = null
-	var closest_distance: float = INF
+	"""COST-BENEFIT: Find ability with best value/effort ratio"""
+	var best_ability: Node = null
+	var best_score: float = -INF
+
+	# Calculate value once (same for all abilities)
+	var ability_value: float = calculate_ability_value()
 
 	for ability in cached_abilities:
 		if not is_instance_valid(ability):
 			continue
 
-		var distance: float = bot.global_position.distance_to(ability.global_position)
-		if distance < closest_distance:
-			# FIXED: Allow if visible OR distance < 15
-			if is_target_visible(ability.global_position) or distance < 15.0:
-				closest_distance = distance
-				closest_ability = ability
+		var ability_pos: Vector3 = ability.global_position
 
-	target_ability = closest_ability
+		# Skip if too far away or not visible (unless very close)
+		var distance: float = bot.global_position.distance_to(ability_pos)
+		if distance > 60.0:  # Hard limit - too far to consider
+			continue
+		if distance > 15.0 and not is_target_visible(ability_pos):
+			continue  # Not visible and not close - skip
+
+		# Calculate acquisition cost for this ability
+		var cost: float = calculate_item_acquisition_cost(ability_pos)
+
+		# Calculate net benefit (value - cost)
+		var net_benefit: float = ability_value - cost
+
+		# Choose ability with best net benefit
+		if net_benefit > best_score:
+			best_score = net_benefit
+			best_ability = ability
+
+	# Only set target if net benefit is positive (worth pursuing)
+	if best_score > 0.0:
+		target_ability = best_ability
+	else:
+		target_ability = null  # No ability worth the effort
 
 func find_nearest_orb() -> void:
-	"""IMPROVED: Find nearest visible orb"""
-	var closest_orb: Node = null
-	var closest_distance: float = INF
+	"""COST-BENEFIT: Find orb with best value/effort ratio"""
+	var best_orb: Node = null
+	var best_score: float = -INF
+
+	# Calculate value once (same for all orbs)
+	var orb_value: float = calculate_orb_value()
+
+	# If already max level, skip orb search entirely
+	if orb_value <= 10.0:
+		target_orb = null
+		return
 
 	for orb in cached_orbs:
 		if not is_instance_valid(orb):
@@ -1866,14 +2014,31 @@ func find_nearest_orb() -> void:
 		if "is_collected" in orb and orb.is_collected:
 			continue
 
-		var distance: float = bot.global_position.distance_to(orb.global_position)
-		if distance < closest_distance:
-			# Prefer visible orbs
-			if is_target_visible(orb.global_position) or distance < 15.0:
-				closest_distance = distance
-				closest_orb = orb
+		var orb_pos: Vector3 = orb.global_position
 
-	target_orb = closest_orb
+		# Skip if too far away or not visible (unless very close)
+		var distance: float = bot.global_position.distance_to(orb_pos)
+		if distance > 50.0:  # Hard limit - too far to consider
+			continue
+		if distance > 15.0 and not is_target_visible(orb_pos):
+			continue  # Not visible and not close - skip
+
+		# Calculate acquisition cost for this orb
+		var cost: float = calculate_item_acquisition_cost(orb_pos)
+
+		# Calculate net benefit (value - cost)
+		var net_benefit: float = orb_value - cost
+
+		# Choose orb with best net benefit
+		if net_benefit > best_score:
+			best_score = net_benefit
+			best_orb = orb
+
+	# Only set target if net benefit is positive (worth pursuing)
+	if best_score > 0.0:
+		target_orb = best_orb
+	else:
+		target_orb = null  # No orb worth the effort
 
 ## ============================================================================
 ## OBSTACLE DETECTION AND AVOIDANCE
