@@ -156,11 +156,11 @@ const MIN_PLATFORM_SIZE_FOR_COMBAT: float = 8.0  # Minimum platform size for com
 
 # VISION: Stable line of sight system
 const BOT_EYE_HEIGHT: float = 1.0  # Eye position above bot center
-const BOT_FIELD_OF_VIEW: float = 180.0  # Degrees (very wide, bot has good peripheral vision)
 const VISION_HYSTERESIS_TIME: float = 0.5  # Keep seeing target for 0.5s after obstruction
 var last_seen_targets: Dictionary = {}  # Tracks when targets were last visible {node: timestamp}
 var vision_update_timer: float = 0.0
 const VISION_UPDATE_INTERVAL: float = 0.1  # Update vision cache every 0.1s for stability
+# NOTE: Marbles have 360° awareness (spherical sensors), no FOV restrictions
 
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
@@ -1769,24 +1769,17 @@ func get_eye_position() -> Vector3:
 	return bot.global_position + Vector3.UP * BOT_EYE_HEIGHT
 
 func is_in_field_of_view(target_pos: Vector3) -> bool:
-	"""VISION: Check if target is within bot's field of view"""
+	"""VISION: Check if target is within bot's field of view
+
+	NOTE: Marbles are spherical and can perceive in all directions.
+	This function returns true for 360° awareness - kept for future
+	directional constraints if needed (e.g., sensors, camera attachments).
+	"""
 	if not bot:
 		return false
 
-	var eye_pos: Vector3 = get_eye_position()
-	var to_target: Vector3 = (target_pos - eye_pos).normalized()
-
-	# Get bot's forward direction (marbles face movement direction)
-	var forward: Vector3 = Vector3.FORWARD
-	if "linear_velocity" in bot and bot.linear_velocity.length() > 0.5:
-		forward = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z).normalized()
-
-	# Calculate angle to target
-	var dot: float = forward.dot(to_target)
-	var angle: float = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
-
-	# Check if within FOV (180 degrees = 90 each side)
-	return angle <= BOT_FIELD_OF_VIEW / 2.0
+	# Marbles have 360° awareness - no directional restrictions
+	return true
 
 func raycast_line_of_sight(target_pos: Vector3) -> bool:
 	"""VISION: Perform actual raycast to check obstruction"""
