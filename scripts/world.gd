@@ -63,7 +63,9 @@ var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds
 # Bot system
 var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
-const BotAI = preload("res://scripts/bot_ai.gd")
+# Bot AI scripts loaded dynamically based on level type
+const BotAI_TypeA = preload("res://scripts/bot_ai_type_a.gd")
+const BotAI_TypeB = preload("res://scripts/bot_ai_type_b.gd")
 
 # Bot count selection dialog state (instance variables for proper closure sharing)
 var bot_count_dialog_closed: bool = false
@@ -1581,11 +1583,15 @@ func spawn_bot() -> void:
 			bot.global_position = spawn_points[spawn_index]
 			print("Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
-	# Add AI controller to bot
-	var ai: Node = BotAI.new()
+	# Add AI controller to bot - select correct type based on level
+	var ai: Node
+	if current_level_type == "A":
+		ai = BotAI_TypeA.new()
+	else:  # Type B
+		ai = BotAI_TypeB.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
-	print("BotAI added to bot %d" % bot_id)
+	print("Added %s to bot %d for level type %s" % ["BotAI_TypeA" if current_level_type == "A" else "BotAI_TypeB", bot_id, current_level_type])
 
 	# Add bot to players group
 	bot.add_to_group("players")
