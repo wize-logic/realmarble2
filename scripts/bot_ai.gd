@@ -1,7 +1,7 @@
 extends Node
 
-## Bot AI Controller - PRODUCTION VERSION v2.0 Refined
-## Critical fixes for weapon accuracy, slope-stuck issues, and awareness
+## Bot AI Controller - PRODUCTION VERSION v4.0
+## OpenArena-inspired improvements + aggressive stuck-under-ramp prevention
 ##
 ## FIXES APPLIED (v1.0):
 ## 1. Removed ALL await statements that freeze bots
@@ -47,6 +47,13 @@ extends Node
 ## 35. Personality traits: Turn speed, caution level, and strategic preference
 ## 36. Combat evaluators: Separate retreat/chase decision functions
 ## 37. Enhanced strafe timing: Skill-based unpredictability
+##
+## STUCK-UNDER-RAMP FIXES (v4.0):
+## 38. More aggressive overhead detection: 9 check points (was 5), lower threshold 2.3 (was 1.8)
+## 39. Extended look-ahead distance: 1.8x check distance to catch ramps earlier
+## 40. Low-clearance tracking: Detects danger zones where bots can get wedged
+## 41. Forced teleport timeout: Auto-teleport after 3 seconds stuck under terrain
+## 42. Improved obstacle classification: Better overhead slope vs platform detection
 
 @export var target_player: Node = null
 @export var wander_radius: float = 30.0
@@ -89,6 +96,10 @@ var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var obstacle_jump_timer: float = 0.0
 var consecutive_stuck_checks: int = 0
 const MAX_STUCK_ATTEMPTS: int = 10
+
+# NEW v4: Stuck under terrain timeout
+var stuck_under_terrain_timer: float = 0.0
+const STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT: float = 3.0  # Force teleport after 3s under terrain
 
 # Target timeout variables
 var target_stuck_timer: float = 0.0
@@ -185,16 +196,34 @@ func _physics_process(delta: float) -> void:
 		stuck_timer = 0.0
 
 	# FIXED: Proactive check for being stuck under terrain/slopes
-	if not is_stuck and is_stuck_under_terrain():
-		# Immediately trigger unstuck behavior if detected under terrain
-		is_stuck = true
-		unstuck_timer = randf_range(0.8, 1.5)
-		consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
-		# Set escape direction backward
-		var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
-		var random_side: float = 1.0 if randf() > 0.5 else -1.0
-		var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
-		obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
+	var currently_stuck_under_terrain: bool = is_stuck_under_terrain()
+
+	if currently_stuck_under_terrain:
+		# NEW v4: Track time stuck under terrain
+		stuck_under_terrain_timer += delta
+
+		# NEW v4: Force teleport if stuck under terrain too long
+		if stuck_under_terrain_timer >= STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT:
+			print("[BotAI] ", bot.name, " stuck under terrain for ", stuck_under_terrain_timer, "s - forcing teleport")
+			teleport_to_safe_position()
+			stuck_under_terrain_timer = 0.0
+			is_stuck = false
+			consecutive_stuck_checks = 0
+			return
+
+		# Trigger unstuck behavior if not already stuck
+		if not is_stuck:
+			is_stuck = true
+			unstuck_timer = randf_range(0.8, 1.5)
+			consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
+			# Set escape direction backward
+			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+			var random_side: float = 1.0 if randf() > 0.5 else -1.0
+			var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+			obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
+	else:
+		# Reset timer when not stuck under terrain
+		stuck_under_terrain_timer = 0.0
 
 	# Handle unstuck behavior
 	if is_stuck and unstuck_timer > 0.0:
@@ -1348,24 +1377,26 @@ func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	return Vector3.ZERO
 
 func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5) -> Dictionary:
-	"""IMPROVED: Check for obstacle with overhead slope detection"""
+	"""IMPROVED v4: More aggressive overhead detection to prevent getting stuck under ramps"""
 	if not bot:
 		return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Check at multiple heights including overhead
-	var check_heights: Array = [0.2, 0.5, 1.0, 1.8, 2.2]
+	# IMPROVED v4: Check further ahead and at more heights
+	var extended_check_distance: float = check_distance * 1.8  # Look further ahead
+	var check_heights: Array = [0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]  # More height points
 	var obstacle_detected: bool = false
 	var closest_hit: Vector3 = Vector3.ZERO
 	var lowest_obstacle_height: float = INF
 	var highest_obstacle_height: float = -INF
 	var hit_count: int = 0
 	var overhead_hit: bool = false
+	var low_clearance_hit: bool = false
 
 	for height in check_heights:
 		var start_pos: Vector3 = bot.global_position + Vector3.UP * height
-		var end_pos: Vector3 = start_pos + direction * check_distance
+		var end_pos: Vector3 = start_pos + direction * extended_check_distance
 
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start_pos, end_pos)
 		query.exclude = [bot]
@@ -1380,8 +1411,12 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 			var obstacle_height: float = hit_point.y - bot.global_position.y
 
 			# Track overhead hits (above bot's center)
-			if height > 1.5:
+			if height > 1.3:
 				overhead_hit = true
+
+			# NEW v4: Track low clearance hits (danger zone for getting wedged)
+			if height > 0.5 and height < 2.5 and obstacle_height < 2.5:
+				low_clearance_hit = true
 
 			if obstacle_height < lowest_obstacle_height:
 				lowest_obstacle_height = obstacle_height
@@ -1399,8 +1434,9 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 		var height_diff: float = highest_obstacle_height - lowest_obstacle_height
 		if height_diff > 0.4:
 			is_slope = true
-			# IMPROVED: Detect dangerous overhead slopes
-			if overhead_hit and lowest_obstacle_height < 1.5:
+			# IMPROVED v4: More aggressive overhead slope detection
+			# Mark as overhead slope if: overhead hit + (low clearance OR low obstacle height)
+			if overhead_hit and (lowest_obstacle_height < 2.0 or low_clearance_hit):
 				is_overhead_slope = true
 		if lowest_obstacle_height > 0.3 and lowest_obstacle_height < 2.5:
 			is_platform = true
@@ -1512,27 +1548,31 @@ func check_if_stuck() -> void:
 	last_position = current_pos
 
 func is_stuck_under_terrain() -> bool:
-	"""IMPROVED: Check if stuck under terrain/slope with better detection"""
+	"""IMPROVED v4: More aggressive overhead detection with lower threshold"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
 
-	# Check multiple points above the bot for comprehensive detection
+	# IMPROVED: More check points for better coverage
 	var check_points: Array = [
 		Vector3.ZERO,           # Center
-		Vector3(0.5, 0, 0),     # Right
-		Vector3(-0.5, 0, 0),    # Left
-		Vector3(0, 0, 0.5),     # Forward
-		Vector3(0, 0, -0.5)     # Back
+		Vector3(0.6, 0, 0),     # Right
+		Vector3(-0.6, 0, 0),    # Left
+		Vector3(0, 0, 0.6),     # Forward
+		Vector3(0, 0, -0.6),    # Back
+		Vector3(0.4, 0, 0.4),   # Front-right
+		Vector3(-0.4, 0, 0.4),  # Front-left
+		Vector3(0.4, 0, -0.4),  # Back-right
+		Vector3(-0.4, 0, -0.4)  # Back-left
 	]
 
 	var overhead_hits: int = 0
 	var lowest_overhead_height: float = INF
 
 	for offset in check_points:
-		var ray_start: Vector3 = bot.global_position + offset + Vector3.UP * 0.5
-		var ray_end: Vector3 = bot.global_position + offset + Vector3.UP * 3.0
+		var ray_start: Vector3 = bot.global_position + offset + Vector3.UP * 0.3
+		var ray_end: Vector3 = bot.global_position + offset + Vector3.UP * 3.5
 
 		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
 		query.exclude = [bot]
@@ -1546,8 +1586,9 @@ func is_stuck_under_terrain() -> bool:
 			if hit_height < lowest_overhead_height:
 				lowest_overhead_height = hit_height
 
-	# Stuck if: multiple overhead hits OR very low overhead clearance
-	return overhead_hits >= 3 or (overhead_hits > 0 and lowest_overhead_height < 1.8)
+	# IMPROVED: More aggressive thresholds
+	# Stuck if: 2+ overhead hits OR any hit below 2.3 units clearance (was 1.8)
+	return overhead_hits >= 2 or (overhead_hits > 0 and lowest_overhead_height < 2.3)
 
 func teleport_to_safe_position() -> void:
 	"""FIXED: Teleport with fail-safe for missing spawns"""
