@@ -163,23 +163,22 @@ var vision_update_timer: float = 0.0
 const VISION_UPDATE_INTERVAL: float = 0.1  # Update vision cache every 0.1s for stability
 # NOTE: Marbles have 360° awareness (spherical sensors), no FOV restrictions
 
-# RAIL GRINDING: Sonic-style rail grinding system (restored for Type A arenas)
-var is_grinding: bool = false  # Currently grinding on a rail
-var current_rail: GrindRail = null  # The rail we're currently grinding on
-var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene
-var target_rail: GrindRail = null  # Rail bot wants to use
-var rail_check_timer: float = 0.0
-const RAIL_CHECK_INTERVAL: float = 2.0  # Check for rails every 2 seconds
-const MAX_CACHED_RAILS: int = 12  # Max rails to cache (Type A has 12 rails)
-const MAX_RAIL_DISTANCE: float = 50.0  # Only consider nearby rails
-var movement_input_direction: Vector3 = Vector3.ZERO  # Required by rails for directional control
+# TYPE B: Jump pad system (Quake 3-style mobility)
+var cached_jump_pads: Array[Node] = []  # Cached list of jump pads in scene
+var target_jump_pad: Node = null  # Jump pad bot wants to use
+var jump_pad_check_timer: float = 0.0
+const JUMP_PAD_CHECK_INTERVAL: float = 2.5  # Check for jump pads every 2.5 seconds
+const MAX_CACHED_JUMP_PADS: int = 20  # Max jump pads to cache
+const MAX_JUMP_PAD_DISTANCE: float = 40.0  # Only consider nearby jump pads
 
-# RAIL LAUNCH RECOVERY: Aerial navigation after rail detachment
-var post_rail_launch: bool = false  # Currently in aerial phase after rail launch
-var rail_launch_timer: float = 0.0  # Time since rail launch
-var safe_landing_target: Vector3 = Vector3.ZERO  # Target safe landing position
-const RAIL_LAUNCH_RECOVERY_TIME: float = 3.0  # Max time to attempt recovery after launch
-const SAFE_LANDING_SEARCH_RADIUS: float = 30.0  # How far to search for safe landing zones
+# TYPE B: Teleporter system (Quake 3-style traversal)
+var cached_teleporters: Array[Node] = []  # Cached list of teleporters
+var target_teleporter: Node = null  # Teleporter bot wants to use
+var teleporter_check_timer: float = 0.0
+const TELEPORTER_CHECK_INTERVAL: float = 3.0  # Check teleporters every 3 seconds
+const MAX_CACHED_TELEPORTERS: int = 10  # Max teleporters to cache
+var teleporter_cooldown: float = 0.0  # Cooldown after using teleporter
+const TELEPORTER_USE_COOLDOWN: float = 2.0  # Wait 2s before considering teleporters again
 
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
@@ -214,7 +213,8 @@ func _ready() -> void:
 	# This reduces frame time spikes in HTML5 with 7 bots
 	cache_refresh_timer = randf_range(0.0, CACHE_REFRESH_INTERVAL)
 	platform_check_timer = randf_range(0.0, PLATFORM_CHECK_INTERVAL)
-	rail_check_timer = randf_range(0.0, RAIL_CHECK_INTERVAL)
+	jump_pad_check_timer = randf_range(0.0, JUMP_PAD_CHECK_INTERVAL)
+	teleporter_check_timer = randf_range(0.0, TELEPORTER_CHECK_INTERVAL)
 	ability_check_timer = randf_range(0.0, 1.2)
 	orb_check_timer = randf_range(0.0, 1.0)
 	player_search_timer = randf_range(0.0, 0.5)
@@ -254,14 +254,10 @@ func _physics_process(delta: float) -> void:
 	platform_check_timer -= delta
 	platform_stabilize_timer -= delta
 	vision_update_timer -= delta
-	rail_check_timer -= delta
+	jump_pad_check_timer -= delta
+	teleporter_check_timer -= delta
+	teleporter_cooldown -= delta
 	space_state_cache_timer -= delta
-	rail_launch_timer += delta
-
-	# RAIL LAUNCH RECOVERY: Handle aerial navigation after rail launch
-	if post_rail_launch:
-		handle_post_rail_launch_navigation(delta)
-		return  # Override all other AI while recovering from rail launch
 
 	# PERFORMANCE: Update cached physics space state
 	if space_state_cache_timer <= 0.0:
@@ -348,10 +344,15 @@ func _physics_process(delta: float) -> void:
 		else:
 			platform_check_timer = PLATFORM_CHECK_INTERVAL  # 1.5 seconds default
 
-	# NEW: Check for rails periodically (Type A arena mobility)
-	if rail_check_timer <= 0.0:
-		consider_rail_navigation()
-		rail_check_timer = RAIL_CHECK_INTERVAL  # 2 seconds
+	# TYPE B: Check for jump pads periodically (Quake 3 mobility)
+	if jump_pad_check_timer <= 0.0:
+		consider_jump_pad_usage()
+		jump_pad_check_timer = JUMP_PAD_CHECK_INTERVAL
+
+	# TYPE B: Check for teleporters periodically (Quake 3 traversal)
+	if teleporter_check_timer <= 0.0 and teleporter_cooldown <= 0.0:
+		consider_teleporter_usage()
+		teleporter_check_timer = TELEPORTER_CHECK_INTERVAL
 
 	# State machine
 	match state:
@@ -420,8 +421,9 @@ func refresh_cached_groups() -> void:
 	# NEW: Cache platforms from level generators
 	refresh_platform_cache()
 
-	# NEW: Cache rails from level generators (Type A arenas)
-	refresh_rail_cache()
+	# TYPE B: Cache jump pads and teleporters from level generators (Quake 3 arenas)
+	refresh_jump_pad_cache()
+	refresh_teleporter_cache()
 
 func refresh_platform_cache() -> void:
 	"""OPTIMIZED: Cache platform positions with filtering for performance
@@ -500,56 +502,6 @@ func refresh_platform_cache() -> void:
 			"height": platform_data.height
 		})
 
-func consider_rail_navigation() -> void:
-	"""Evaluate whether to use a rail for the current situation"""
-	if not bot or is_grinding:
-		return  # Already grinding or no bot
-
-	# Don't use rails while stabilizing on a platform
-	if platform_stabilize_timer > 0.0:
-		return
-
-	# Find the best rail for current situation
-	var best_rail: GrindRail = find_best_rail()
-	if not best_rail:
-		target_rail = null
-		return
-
-	# Decision: Should we attach to this rail now?
-	var should_attach: bool = false
-
-	# Always try to attach during RETREAT (rails are great for escaping)
-	if current_state == State.RETREAT:
-		should_attach = true
-
-	# Try to attach if rail significantly helps reach chase target
-	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
-		var bot_pos: Vector3 = bot.global_position
-		var target_pos: Vector3 = target_player.global_position
-		var rail_end: Vector3 = best_rail.to_global(best_rail.curve.sample_baked(best_rail.curve.get_baked_length()))
-
-		var dist_now: float = bot_pos.distance_to(target_pos)
-		var dist_via_rail: float = bot_pos.distance_to(rail_end) + rail_end.distance_to(target_pos)
-
-		# Use rail if it's roughly same distance or shorter (rails are fast!)
-		if dist_via_rail < dist_now * 1.3:
-			should_attach = true
-
-	# Try to attach if we're wandering and rail provides exploration/mobility
-	elif current_state == State.WANDER:
-		# 30% chance to use rails while wandering for variety
-		if randf() < 0.3:
-			should_attach = true
-
-	if should_attach:
-		target_rail = best_rail
-		# Try to attach if we're close enough
-		var closest_point: Vector3 = _get_closest_rail_point(best_rail)
-		var distance: float = bot.global_position.distance_to(closest_point)
-		if distance <= 30.0:  # Within attachment range
-			try_attach_to_rail(best_rail)
-	else:
-		target_rail = null
 
 func find_best_platform() -> void:
 	"""OPTIMIZED: Find the best platform with early exit for performance
@@ -774,12 +726,12 @@ func find_platform_for_position(item_pos: Vector3) -> Dictionary:
 	return {}  # Item not on any known platform
 
 # ============================================================================
-# RAIL GRINDING SYSTEM (Restored for Type A arena mobility)
+# JUMP PAD SYSTEM (Quake 3-style vertical mobility)
 # ============================================================================
 
-func refresh_rail_cache() -> void:
-	"""Cache nearby rails for performance"""
-	cached_rails.clear()
+func refresh_jump_pad_cache() -> void:
+	"""Cache nearby jump pads for tactical mobility"""
+	cached_jump_pads.clear()
 
 	if not bot:
 		return
@@ -788,449 +740,277 @@ func refresh_rail_cache() -> void:
 	if not world:
 		return
 
-	# Find all rails in the scene
-	var all_rails: Array[GrindRail] = find_all_rails(world)
+	# Find jump pads in scene (assumed to be in "jump_pads" group)
+	var all_jump_pads: Array = get_tree().get_nodes_in_group("jump_pads")
 	var bot_pos: Vector3 = bot.global_position
 
-	# Filter rails by distance
-	for rail in all_rails:
-		if not is_instance_valid(rail) or not rail.is_inside_tree():
+	# Filter by distance and validity
+	for jump_pad in all_jump_pads:
+		if not is_instance_valid(jump_pad) or not jump_pad.is_inside_tree():
 			continue
 
-		# Check if rail has a valid curve
-		if not rail.curve or rail.curve.get_baked_length() <= 0:
-			continue
-
-		# Get closest point on rail
-		var local_pos: Vector3 = rail.to_local(bot_pos)
-		var closest_offset: float = rail.curve.get_closest_offset(local_pos)
-		var closest_point: Vector3 = rail.to_global(rail.curve.sample_baked(closest_offset))
-		var distance: float = bot_pos.distance_to(closest_point)
-
-		# Only cache nearby rails
-		if distance <= MAX_RAIL_DISTANCE:
-			cached_rails.append(rail)
+		var distance: float = bot_pos.distance_to(jump_pad.global_position)
+		if distance <= MAX_JUMP_PAD_DISTANCE:
+			cached_jump_pads.append(jump_pad)
 
 	# Limit cache size
-	if cached_rails.size() > MAX_CACHED_RAILS:
-		# Sort by distance and keep closest
-		cached_rails.sort_custom(func(a, b):
-			var dist_a: float = bot_pos.distance_to(_get_closest_rail_point(a))
-			var dist_b: float = bot_pos.distance_to(_get_closest_rail_point(b))
-			return dist_a < dist_b
+	if cached_jump_pads.size() > MAX_CACHED_JUMP_PADS:
+		cached_jump_pads.sort_custom(func(a, b):
+			return bot_pos.distance_to(a.global_position) < bot_pos.distance_to(b.global_position)
 		)
-		cached_rails = cached_rails.slice(0, MAX_CACHED_RAILS)
+		cached_jump_pads = cached_jump_pads.slice(0, MAX_CACHED_JUMP_PADS)
 
-func find_all_rails(node: Node) -> Array[GrindRail]:
-	"""Recursively find all GrindRail nodes in the scene"""
-	var rails: Array[GrindRail] = []
+func consider_jump_pad_usage() -> void:
+	"""Evaluate whether to use a jump pad for the current situation"""
+	if not bot:
+		return
 
-	if node is GrindRail:
-		rails.append(node as GrindRail)
+	# Don't use jump pads while stabilizing on a platform
+	if platform_stabilize_timer > 0.0:
+		return
 
-	for child in node.get_children():
-		rails.append_array(find_all_rails(child))
+	# Find best jump pad for current situation
+	var best_jump_pad: Node = find_best_jump_pad()
+	if not best_jump_pad:
+		target_jump_pad = null
+		return
 
-	return rails
+	# Decision: Should we use this jump pad?
+	var should_use: bool = false
+	var distance_to_pad: float = bot.global_position.distance_to(best_jump_pad.global_position)
 
-func _get_closest_rail_point(rail: GrindRail) -> Vector3:
-	"""Helper: Get closest point on rail to bot"""
-	if not rail or not rail.curve or rail.curve.get_baked_length() <= 0:
-		return Vector3.ZERO
+	# Use jump pads during RETREAT (great for escaping)
+	if current_state == State.RETREAT and distance_to_pad < 15.0:
+		should_use = true
 
-	var local_pos: Vector3 = rail.to_local(bot.global_position)
-	var closest_offset: float = rail.curve.get_closest_offset(local_pos)
-	return rail.to_global(rail.curve.sample_baked(closest_offset))
+	# Use jump pads if they help reach elevated targets
+	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+		var target_pos: Vector3 = target_player.global_position
+		# If target is above us and jump pad is nearby
+		if target_pos.y > bot.global_position.y + 5.0 and distance_to_pad < 12.0:
+			should_use = true
 
-func evaluate_rail_score(rail: GrindRail) -> float:
-	"""Evaluate how valuable a rail is for the bot's current goals"""
-	if not bot or not rail or not rail.curve:
+	# Use jump pads for reaching elevated items
+	elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
+		var item_pos: Vector3 = target_collectible.global_position
+		# If item is elevated and jump pad is nearby
+		if item_pos.y > bot.global_position.y + 5.0 and distance_to_pad < 12.0:
+			should_use = true
+
+	if should_use:
+		target_jump_pad = best_jump_pad
+		# Move toward jump pad
+		if distance_to_pad > 3.0:
+			move_towards(best_jump_pad.global_position, 1.0)
+	else:
+		target_jump_pad = null
+
+func find_best_jump_pad() -> Node:
+	"""Find the best jump pad to use based on current situation"""
+	if cached_jump_pads.is_empty():
+		return null
+
+	var best_pad: Node = null
+	var best_score: float = 30.0  # Minimum score threshold
+
+	for jump_pad in cached_jump_pads:
+		if not is_instance_valid(jump_pad):
+			continue
+
+		var score: float = evaluate_jump_pad_score(jump_pad)
+		if score > best_score:
+			best_score = score
+			best_pad = jump_pad
+
+	return best_pad
+
+func evaluate_jump_pad_score(jump_pad: Node) -> float:
+	"""Evaluate how useful a jump pad is for the current situation"""
+	if not bot or not jump_pad:
 		return 0.0
 
 	var score: float = 0.0
 	var bot_pos: Vector3 = bot.global_position
+	var pad_pos: Vector3 = jump_pad.global_position
 
-	# Get rail start and end positions
-	var rail_length: float = rail.curve.get_baked_length()
-	if rail_length <= 0:
+	# Factor 1: Accessibility (closer is better)
+	var distance: float = bot_pos.distance_to(pad_pos)
+	if distance > MAX_JUMP_PAD_DISTANCE:
 		return 0.0
 
-	var rail_start: Vector3 = rail.to_global(rail.curve.sample_baked(0))
-	var rail_end: Vector3 = rail.to_global(rail.curve.sample_baked(rail_length))
-	var closest_point: Vector3 = _get_closest_rail_point(rail)
+	score += (MAX_JUMP_PAD_DISTANCE - distance) / MAX_JUMP_PAD_DISTANCE * 40.0
 
-	# Factor 1: Accessibility (how easy to reach the rail)
-	var distance_to_rail: float = bot_pos.distance_to(closest_point)
-	if distance_to_rail > MAX_RAIL_DISTANCE:
-		return 0.0  # Too far away
-
-	var accessibility_score: float = 100.0 - (distance_to_rail / MAX_RAIL_DISTANCE * 50.0)
-	score += accessibility_score
-
-	# Factor 2: Height advantage (rails at good height for mobility)
-	var rail_avg_height: float = (rail_start.y + rail_end.y) / 2.0
-	var height_diff: float = rail_avg_height - bot_pos.y
-
-	if height_diff > 2.0:
-		score += 30.0  # Rail is elevated - good for mobility and positioning
-	elif height_diff < -5.0:
-		score -= 20.0  # Rail is below us - less useful
-
-	# Factor 3: Rail length (longer rails = more mobility)
-	if rail_length > 30.0:
-		score += 25.0  # Long rail - great mobility
-	elif rail_length > 15.0:
-		score += 15.0  # Medium rail
-	else:
-		score += 5.0  # Short rail
-
-	# Factor 4: Tactical value based on current state
-	if current_state == State.CHASE and target_player and is_instance_valid(target_player):
-		# Check if rail helps us reach target
-		var target_pos: Vector3 = target_player.global_position
-		var dist_to_target_now: float = bot_pos.distance_to(target_pos)
-		var dist_from_rail_end: float = rail_end.distance_to(target_pos)
-
-		if dist_from_rail_end < dist_to_target_now:
-			score += 40.0  # Rail brings us closer to target
-		else:
-			score -= 20.0  # Rail takes us away from target
-
-	elif current_state == State.RETREAT:
-		# Rails are great for escaping
+	# Factor 2: Tactical value based on state
+	if current_state == State.RETREAT:
+		# Jump pads are excellent for escaping
 		score += 50.0
-		# Prefer rails that take us away from enemies
-		if target_player and is_instance_valid(target_player):
-			var target_pos: Vector3 = target_player.global_position
-			var dist_from_rail_end: float = rail_end.distance_to(target_pos)
-			var dist_now: float = bot_pos.distance_to(target_pos)
-			if dist_from_rail_end > dist_now:
-				score += 30.0  # Rail helps us escape
 
-	elif current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB:
-		# Check if rail helps reach collectibles
-		var collectible_pos: Vector3 = target_collectible.global_position if target_collectible else Vector3.ZERO
-		if collectible_pos != Vector3.ZERO:
-			var dist_to_collectible_now: float = bot_pos.distance_to(collectible_pos)
-			var dist_from_rail_end: float = rail_end.distance_to(collectible_pos)
+	elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+		# Check if jump pad helps reach elevated target
+		var target_pos: Vector3 = target_player.global_position
+		var height_diff: float = target_pos.y - bot_pos.y
 
-			if dist_from_rail_end < dist_to_collectible_now * 0.7:
-				score += 35.0  # Rail significantly helps reach collectible
+		if height_diff > 5.0:  # Target is significantly above us
+			score += 40.0
 
-	# Factor 5: Rail occupancy (avoid crowded rails)
-	var occupancy: int = count_bots_on_rail(rail)
-	if occupancy >= 2:
-		score -= 100.0  # Rail is crowded
-	elif occupancy == 1:
-		score -= 30.0  # One bot already on rail
+	elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
+		# Check if jump pad helps reach elevated item
+		var item_pos: Vector3 = target_collectible.global_position
+		var height_diff: float = item_pos.y - bot_pos.y
+
+		if height_diff > 5.0:  # Item is significantly above us
+			score += 35.0
+
+	# Factor 3: Height gain (assume jump pads launch upward ~15-20 units)
+	var estimated_launch_height: float = 15.0
+	var final_height: float = pad_pos.y + estimated_launch_height
+
+	# Prefer jump pads that put us on higher tiers (Y=8, 15, 22 in Type B)
+	if final_height >= 20.0:
+		score += 25.0  # Reaches tier 3 (Y=22)
+	elif final_height >= 13.0:
+		score += 20.0  # Reaches tier 2 (Y=15)
+	elif final_height >= 6.0:
+		score += 10.0  # Reaches tier 1 (Y=8)
 
 	return score
 
-func count_bots_on_rail(rail: GrindRail) -> int:
-	"""Count how many bots are currently grinding on a rail"""
-	if not rail or not "active_grinders" in rail:
-		return 0
+# ============================================================================
+# TELEPORTER SYSTEM (Quake 3-style traversal)
+# ============================================================================
 
-	var count: int = 0
-	for grinder in rail.active_grinders:
-		if is_instance_valid(grinder) and grinder != bot:
-			count += 1
+func refresh_teleporter_cache() -> void:
+	"""Cache nearby teleporters for tactical traversal"""
+	cached_teleporters.clear()
 
-	return count
+	if not bot:
+		return
 
-func find_best_rail() -> GrindRail:
-	"""Find the best rail to use based on current situation"""
-	if cached_rails.is_empty():
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world:
+		return
+
+	# Find teleporters in scene (assumed to be in "teleporters" group)
+	var all_teleporters: Array = get_tree().get_nodes_in_group("teleporters")
+
+	# Filter by validity and add to cache
+	for teleporter in all_teleporters:
+		if not is_instance_valid(teleporter) or not teleporter.is_inside_tree():
+			continue
+
+		cached_teleporters.append(teleporter)
+
+	# Limit cache size
+	if cached_teleporters.size() > MAX_CACHED_TELEPORTERS:
+		cached_teleporters = cached_teleporters.slice(0, MAX_CACHED_TELEPORTERS)
+
+func consider_teleporter_usage() -> void:
+	"""Evaluate whether to use a teleporter for the current situation"""
+	if not bot or teleporter_cooldown > 0.0:
+		return
+
+	# Find best teleporter for current situation
+	var best_teleporter: Node = find_best_teleporter()
+	if not best_teleporter:
+		target_teleporter = null
+		return
+
+	# Decision: Should we use this teleporter?
+	var should_use: bool = false
+	var distance_to_teleporter: float = bot.global_position.distance_to(best_teleporter.global_position)
+
+	# Use teleporters during RETREAT (quick escape)
+	if current_state == State.RETREAT and distance_to_teleporter < 10.0:
+		should_use = true
+
+	# Use teleporters if destination helps reach targets
+	elif (current_state == State.CHASE or current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB):
+		# Only use if teleporter is very close (within 8 units)
+		if distance_to_teleporter < 8.0:
+			should_use = true
+
+	if should_use:
+		target_teleporter = best_teleporter
+		# Move toward teleporter
+		if distance_to_teleporter > 2.0:
+			move_towards(best_teleporter.global_position, 1.0)
+		# Teleporter will activate automatically when bot enters its area
+	else:
+		target_teleporter = null
+
+func find_best_teleporter() -> Node:
+	"""Find the best teleporter to use based on current situation"""
+	if cached_teleporters.is_empty():
 		return null
 
-	var best_rail: GrindRail = null
+	var best_teleporter: Node = null
 	var best_score: float = 20.0  # Minimum score threshold
 
-	for rail in cached_rails:
-		if not is_instance_valid(rail):
+	for teleporter in cached_teleporters:
+		if not is_instance_valid(teleporter):
 			continue
 
-		var score: float = evaluate_rail_score(rail)
+		var score: float = evaluate_teleporter_score(teleporter)
 		if score > best_score:
 			best_score = score
-			best_rail = rail
+			best_teleporter = teleporter
 
-	return best_rail
+	return best_teleporter
 
-func try_attach_to_rail(rail: GrindRail) -> bool:
-	"""Attempt to attach to a rail"""
-	if not rail or not bot:
-		return false
+func evaluate_teleporter_score(teleporter: Node) -> float:
+	"""Evaluate how useful a teleporter is for the current situation"""
+	if not bot or not teleporter:
+		return 0.0
 
-	if is_grinding:
-		return false  # Already grinding
-
-	# Check if rail has try_attach_player method
-	if not rail.has_method("try_attach_player"):
-		return false
-
-	# Attempt attachment
-	var success: bool = rail.try_attach_player(bot)
-	if success:
-		target_rail = rail
-		return true
-
-	return false
-
-# Required functions called by GrindRail
-func start_grinding(rail: GrindRail) -> void:
-	"""Called by rail when bot enters grinding state"""
-	if is_grinding:
-		return
-
-	is_grinding = true
-	current_rail = rail
-	target_rail = rail
-
-	# RAIL LAUNCH RECOVERY: Cancel aerial recovery if we attached to a new rail
-	post_rail_launch = false
-	rail_launch_timer = 0.0
-
-	# Reset jump count
-	if "jump_count" in bot:
-		bot.jump_count = 0
-
-	# Reduce physics damping for smoother grinding (matching player)
-	if bot is RigidBody3D:
-		bot.linear_damp = 0.2
-
-func stop_grinding() -> void:
-	"""Called by rail when bot exits grinding state"""
-	if not is_grinding:
-		return
-
-	is_grinding = false
-	current_rail = null
-
-	# Restore normal physics damping
-	if bot and bot is RigidBody3D:
-		bot.linear_damp = 0.5
-
-func launch_from_rail(velocity: Vector3) -> void:
-	"""Called by rail when bot reaches the end of the rail - activates aerial recovery mode"""
-	if not is_grinding:
-		return
-
-	stop_grinding()
-
-	# Bot already has velocity from rail physics, just add upward boost
-	if bot and bot is RigidBody3D:
-		bot.apply_central_impulse(Vector3.UP * 15.0)
-
-	# RAIL LAUNCH RECOVERY: Activate aerial navigation mode
-	post_rail_launch = true
-	rail_launch_timer = 0.0
-	# Find safe landing zone immediately
-	find_safe_landing_zone()
-
-# ============================================================================
-# RAIL LAUNCH RECOVERY SYSTEM (Aerial navigation after rail detachment)
-# ============================================================================
-
-func find_safe_landing_zone() -> void:
-	"""Find a safe place to land after being launched from a rail"""
-	if not bot:
-		return
-
+	var score: float = 0.0
 	var bot_pos: Vector3 = bot.global_position
-	var best_landing_score: float = -INF
-	var best_landing_pos: Vector3 = bot_pos  # Fallback to current position
+	var teleporter_pos: Vector3 = teleporter.global_position
 
-	# Strategy 1: Check for nearby platforms (elevated safe zones)
-	for platform_data in cached_platforms:
-		if not is_instance_valid(platform_data.node):
-			continue
+	# Factor 1: Accessibility (must be reasonably close)
+	var distance: float = bot_pos.distance_to(teleporter_pos)
+	if distance > 30.0:
+		return 0.0  # Too far to consider
 
-		var platform_pos: Vector3 = platform_data.position
-		var distance: float = Vector2(bot_pos.x - platform_pos.x, bot_pos.z - platform_pos.z).length()
+	score += (30.0 - distance) / 30.0 * 30.0
 
-		# Only consider platforms within reasonable aerial range
-		if distance > SAFE_LANDING_SEARCH_RADIUS:
-			continue
+	# Factor 2: Destination usefulness (if teleporter has destination info)
+	if "destination" in teleporter and teleporter.destination:
+		var dest_pos: Vector3 = teleporter.destination.global_position
 
-		var score: float = 0.0
+		# RETREAT: Prefer teleporters that take us far from enemies
+		if current_state == State.RETREAT and target_player and is_instance_valid(target_player):
+			var enemy_pos: Vector3 = target_player.global_position
+			var dist_from_enemy_now: float = bot_pos.distance_to(enemy_pos)
+			var dist_from_enemy_after: float = dest_pos.distance_to(enemy_pos)
 
-		# Prefer platforms below us (easier to reach)
-		var height_diff: float = platform_pos.y - bot_pos.y
-		if height_diff < 0:  # Platform below us
-			score += 50.0
-			score += min(abs(height_diff) * 5.0, 100.0)  # Prefer platforms well below
-		else:  # Platform above us
-			score -= height_diff * 10.0  # Penalty for platforms above
+			if dist_from_enemy_after > dist_from_enemy_now:
+				score += 50.0  # Teleporter helps us escape
 
-		# Prefer closer platforms
-		score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 2.0
+		# CHASE: Prefer teleporters that bring us closer to target
+		elif current_state == State.CHASE and target_player and is_instance_valid(target_player):
+			var target_pos: Vector3 = target_player.global_position
+			var dist_to_target_now: float = bot_pos.distance_to(target_pos)
+			var dist_to_target_after: float = dest_pos.distance_to(target_pos)
 
-		# Prefer larger platforms (safer landing)
-		var platform_size: Vector3 = platform_data.size
-		var platform_area: float = platform_size.x * platform_size.z
-		score += platform_area * 0.5
+			if dist_to_target_after < dist_to_target_now * 0.7:
+				score += 40.0  # Teleporter significantly shortens distance
 
-		# Check if platform is occupied (avoid collisions)
-		var occupancy: int = count_bots_on_platform(platform_data)
-		if occupancy >= 2:
-			score -= 100.0  # Crowded platform
-		elif occupancy == 1:
-			score -= 30.0  # One bot present
+		# COLLECT: Prefer teleporters that bring us closer to items
+		elif (current_state == State.COLLECT_ABILITY or current_state == State.COLLECT_ORB) and target_collectible:
+			var item_pos: Vector3 = target_collectible.global_position
+			var dist_to_item_now: float = bot_pos.distance_to(item_pos)
+			var dist_to_item_after: float = dest_pos.distance_to(item_pos)
 
-		if score > best_landing_score:
-			best_landing_score = score
-			best_landing_pos = platform_pos
+			if dist_to_item_after < dist_to_item_now * 0.7:
+				score += 35.0  # Teleporter significantly shortens distance
 
-	# Strategy 2: Check for stage floor (main ground level)
-	# Raycast downward to find ground
-	var space_state: PhysicsDirectSpaceState3D = cached_space_state
-	if not space_state:
-		space_state = bot.get_world_3d().direct_space_state
+	# Factor 3: Combat risk (avoid teleporters near enemies)
+	if target_player and is_instance_valid(target_player):
+		var enemy_dist_to_teleporter: float = teleporter_pos.distance_to(target_player.global_position)
+		if enemy_dist_to_teleporter < 10.0:
+			score -= 30.0  # Enemy camping teleporter
 
-	# Check multiple points around bot's horizontal position
-	var check_offsets: Array = [
-		Vector3.ZERO,
-		Vector3(5, 0, 0),
-		Vector3(-5, 0, 0),
-		Vector3(0, 0, 5),
-		Vector3(0, 0, -5)
-	]
-
-	for offset in check_offsets:
-		var check_pos: Vector3 = Vector3(bot_pos.x + offset.x, bot_pos.y, bot_pos.z + offset.z)
-		var ray_start: Vector3 = check_pos + Vector3.UP * 2.0
-		var ray_end: Vector3 = check_pos + Vector3.DOWN * 100.0  # Cast down far
-
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-		query.exclude = [bot]
-		query.collision_mask = 1
-
-		var result: Dictionary = space_state.intersect_ray(query)
-
-		if result:
-			var ground_pos: Vector3 = result.position
-			var distance: float = Vector2(bot_pos.x - ground_pos.x, bot_pos.z - ground_pos.z).length()
-
-			# Only consider ground within range
-			if distance > SAFE_LANDING_SEARCH_RADIUS:
-				continue
-
-			var score: float = 0.0
-
-			# Prefer ground below us
-			var height_diff: float = ground_pos.y - bot_pos.y
-			if height_diff < 0:  # Ground below us
-				score += 40.0
-				score += min(abs(height_diff) * 3.0, 80.0)
-			else:  # Ground above us (shouldn't happen often)
-				score -= 50.0
-
-			# Prefer closer ground
-			score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 1.5
-
-			# Prefer main stage floor (typically Y ~= 0 to 2)
-			if ground_pos.y >= -1.0 and ground_pos.y <= 3.0:
-				score += 60.0  # Main stage floor bonus
-
-			if score > best_landing_score:
-				best_landing_score = score
-				best_landing_pos = ground_pos
-
-	# Set the target landing position
-	safe_landing_target = best_landing_pos
-
-func handle_post_rail_launch_navigation(delta: float) -> void:
-	"""Handle aerial navigation to return to stage after rail launch"""
-	if not bot or not bot is RigidBody3D:
-		post_rail_launch = false
-		return
-
-	# Check if we've timed out (recovery failed)
-	if rail_launch_timer >= RAIL_LAUNCH_RECOVERY_TIME:
-		post_rail_launch = false
-		rail_launch_timer = 0.0
-		return
-
-	# Check if we've landed (grounded or on platform)
-	var is_grounded: bool = false
-	if "is_grounded" in bot:
-		is_grounded = bot.is_grounded
-
-	# Alternative grounded check using velocity
-	if not is_grounded and "linear_velocity" in bot:
-		# If vertical velocity is very small and we're not high up, we probably landed
-		if abs(bot.linear_velocity.y) < 1.0:
-			var ground_check_result: Dictionary = check_ground_below(2.0)
-			if ground_check_result.has("grounded") and ground_check_result.grounded:
-				is_grounded = true
-
-	if is_grounded:
-		# Successfully landed - exit recovery mode
-		post_rail_launch = false
-		rail_launch_timer = 0.0
-		return
-
-	# Still airborne - apply aerial correction toward safe landing zone
-	var bot_pos: Vector3 = bot.global_position
-	var direction_to_safe_zone: Vector3 = (safe_landing_target - bot_pos).normalized()
-	direction_to_safe_zone.y = 0  # Only horizontal correction
-
-	if direction_to_safe_zone.length() > 0.1:
-		# Apply aerial correction force (reduced since we're airborne)
-		var aerial_force: float = bot.current_roll_force * 0.6  # 60% power in air
-		bot.apply_central_force(direction_to_safe_zone * aerial_force)
-
-	# Look toward landing target
-	look_at_target_smooth(safe_landing_target, delta)
-
-	# CRITICAL: Use double jump if available and falling toward danger
-	if "jump_count" in bot and "max_jumps" in bot:
-		var falling_fast: bool = bot.linear_velocity.y < -10.0
-		var far_from_target: bool = bot_pos.distance_to(safe_landing_target) > 15.0
-
-		if falling_fast and far_from_target and bot.jump_count < bot.max_jumps:
-			# Use double jump to extend airtime and reach safe zone
-			if obstacle_jump_timer <= 0.0:
-				bot_jump()
-				obstacle_jump_timer = 0.5
-
-	# TACTICAL: Use bounce attack if we're high up and need downward control
-	if rail_launch_timer > 0.8 and bot_pos.y > safe_landing_target.y + 10.0:
-		# We're very high and need to descend - bounce attack can help
-		if validate_bounce_properties() and bounce_cooldown_timer <= 0.0:
-			if not "is_bouncing" in bot or not bot.is_bouncing:
-				# Activate bounce attack for controlled descent
-				if bot.has_method("start_bounce"):
-					bot.start_bounce()
-					bounce_cooldown_timer = BOUNCE_COOLDOWN
-
-func check_ground_below(max_distance: float = 2.0) -> Dictionary:
-	"""Check if there's ground directly below the bot"""
-	if not bot:
-		return {"grounded": false}
-
-	var space_state: PhysicsDirectSpaceState3D = cached_space_state
-	if not space_state:
-		space_state = bot.get_world_3d().direct_space_state
-
-	var ray_start: Vector3 = bot.global_position + Vector3.UP * 0.5
-	var ray_end: Vector3 = bot.global_position + Vector3.DOWN * max_distance
-
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-	query.exclude = [bot]
-	query.collision_mask = 1
-
-	var result: Dictionary = space_state.intersect_ray(query)
-
-	if result:
-		return {
-			"grounded": true,
-			"distance": ray_start.distance_to(result.position),
-			"normal": result.normal if "normal" in result else Vector3.UP
-		}
-
-	return {"grounded": false}
+	return score
 
 func validate_bounce_properties() -> bool:
 	"""VALIDATION: Check if bot has required properties for bounce attack"""
@@ -1907,10 +1687,6 @@ func move_away_from(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	var direction: Vector3 = (bot.global_position - target_pos).normalized()
 	direction.y = 0
 
-	# RAIL GRINDING: If currently grinding, update movement input and let rail physics handle movement
-	if is_grinding and current_rail:
-		movement_input_direction = direction  # Tell rail which direction we want to go
-		return  # Rail physics handles movement
 
 	if direction.length() > 0.1:
 		# EDGE DETECTION FIX: Check for edges when retreating
@@ -2106,10 +1882,6 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	var direction: Vector3 = (target_pos - bot.global_position).normalized()
 	direction.y = 0
 
-	# RAIL GRINDING: If currently grinding, update movement input and let rail physics handle movement
-	if is_grinding and current_rail:
-		movement_input_direction = direction  # Tell rail which direction we want to go
-		return  # Rail physics handles movement
 
 	var height_diff: float = target_pos.y - bot.global_position.y
 
