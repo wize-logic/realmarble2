@@ -154,6 +154,14 @@ const GOOD_ENOUGH_SCORE: float = 70.0  # Early exit threshold
 const MAX_BOTS_PER_PLATFORM: int = 2  # Max bots that can share a platform
 const MIN_PLATFORM_SIZE_FOR_COMBAT: float = 8.0  # Minimum platform size for combat positioning
 
+# VISION: Stable line of sight system
+const BOT_EYE_HEIGHT: float = 1.0  # Eye position above bot center
+const BOT_FIELD_OF_VIEW: float = 180.0  # Degrees (very wide, bot has good peripheral vision)
+const VISION_HYSTERESIS_TIME: float = 0.5  # Keep seeing target for 0.5s after obstruction
+var last_seen_targets: Dictionary = {}  # Tracks when targets were last visible {node: timestamp}
+var vision_update_timer: float = 0.0
+const VISION_UPDATE_INTERVAL: float = 0.1  # Update vision cache every 0.1s for stability
+
 # NEW: Player avoidance
 var player_avoidance_timer: float = 0.0
 const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
@@ -209,6 +217,7 @@ func _physics_process(delta: float) -> void:
 	edge_check_timer -= delta
 	platform_check_timer -= delta
 	platform_stabilize_timer -= delta
+	vision_update_timer -= delta
 
 	# IMPROVED: Refresh cached groups with filtering
 	if cache_refresh_timer <= 0.0:
@@ -772,8 +781,8 @@ func update_state() -> void:
 		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
 		# Don't suicide for abilities when enemy is very close
 		if distance_to_ability < 60.0 and (not has_combat_target or distance_to_target > attack_range * 2.0):
-			# IMPROVED: Visibility check
-			if is_target_visible(target_ability.global_position):
+			# IMPROVED: Visibility check with hysteresis
+			if is_target_visible(target_ability.global_position, target_ability):
 				state = "COLLECT_ABILITY"
 				return
 
@@ -790,8 +799,8 @@ func update_state() -> void:
 			orb_priority_range = 50.0
 		# Don't collect if enemy is attacking
 		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 2.5):
-			# IMPROVED: Visibility check
-			if is_target_visible(target_orb.global_position):
+			# IMPROVED: Visibility check with hysteresis
+			if is_target_visible(target_orb.global_position, target_orb):
 				state = "COLLECT_ORB"
 				return
 
@@ -1753,18 +1762,44 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	# Lerp current angular velocity toward target for smooth damping
 	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.3)
 
-func is_target_visible(target_pos: Vector3) -> bool:
-	"""NEW: Check if target is visible (raycast line-of-sight)"""
+func get_eye_position() -> Vector3:
+	"""VISION: Get stable eye position for line of sight checks"""
+	if not bot:
+		return Vector3.ZERO
+	return bot.global_position + Vector3.UP * BOT_EYE_HEIGHT
+
+func is_in_field_of_view(target_pos: Vector3) -> bool:
+	"""VISION: Check if target is within bot's field of view"""
+	if not bot:
+		return false
+
+	var eye_pos: Vector3 = get_eye_position()
+	var to_target: Vector3 = (target_pos - eye_pos).normalized()
+
+	# Get bot's forward direction (marbles face movement direction)
+	var forward: Vector3 = Vector3.FORWARD
+	if "linear_velocity" in bot and bot.linear_velocity.length() > 0.5:
+		forward = Vector3(bot.linear_velocity.x, 0, bot.linear_velocity.z).normalized()
+
+	# Calculate angle to target
+	var dot: float = forward.dot(to_target)
+	var angle: float = rad_to_deg(acos(clamp(dot, -1.0, 1.0)))
+
+	# Check if within FOV (180 degrees = 90 each side)
+	return angle <= BOT_FIELD_OF_VIEW / 2.0
+
+func raycast_line_of_sight(target_pos: Vector3) -> bool:
+	"""VISION: Perform actual raycast to check obstruction"""
 	if not bot:
 		return false
 
 	var space_state: PhysicsDirectSpaceState3D = bot.get_world_3d().direct_space_state
-	var start: Vector3 = bot.global_position + Vector3.UP * 0.5
+	var start: Vector3 = get_eye_position()
 	var end: Vector3 = target_pos
 
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(start, end)
 	query.exclude = [bot]
-	query.collision_mask = 1  # Only world geometry blocks
+	query.collision_mask = 1  # Only world geometry blocks vision
 
 	var result: Dictionary = space_state.intersect_ray(query)
 
@@ -1776,6 +1811,49 @@ func is_target_visible(target_pos: Vector3) -> bool:
 	var target_distance: float = start.distance_to(target_pos)
 
 	return hit_distance >= target_distance - 1.0
+
+func is_target_visible(target_pos: Vector3, target_node: Node = null) -> bool:
+	"""VISION: Check if target is visible with hysteresis for stability
+
+	Uses three-stage check:
+	1. Field of view (can bot see this direction?)
+	2. Raycast line of sight (is path clear?)
+	3. Hysteresis (keep seeing briefly after obstruction)
+	"""
+	if not bot:
+		return false
+
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+
+	# Stage 1: Field of view check (fast rejection)
+	if not is_in_field_of_view(target_pos):
+		# Target behind bot - not visible
+		if target_node and target_node in last_seen_targets:
+			last_seen_targets.erase(target_node)
+		return false
+
+	# Stage 2: Raycast line of sight check
+	var has_line_of_sight: bool = raycast_line_of_sight(target_pos)
+
+	if has_line_of_sight:
+		# Can see target - update last seen time
+		if target_node:
+			last_seen_targets[target_node] = current_time
+		return true
+
+	# Stage 3: Hysteresis - check if we saw it recently
+	if target_node and target_node in last_seen_targets:
+		var time_since_seen: float = current_time - last_seen_targets[target_node]
+		if time_since_seen < VISION_HYSTERESIS_TIME:
+			# Still within hysteresis window - treat as visible
+			return true
+		else:
+			# Hysteresis expired - no longer visible
+			last_seen_targets.erase(target_node)
+			return false
+
+	# Not visible and no recent sighting
+	return false
 
 func find_target() -> void:
 	"""NEW: Advanced target prioritization (OpenArena-inspired weighted scoring)"""
@@ -1975,7 +2053,7 @@ func find_nearest_ability() -> void:
 		var distance: float = bot.global_position.distance_to(ability_pos)
 		if distance > 60.0:  # Hard limit - too far to consider
 			continue
-		if distance > 15.0 and not is_target_visible(ability_pos):
+		if distance > 15.0 and not is_target_visible(ability_pos, ability):
 			continue  # Not visible and not close - skip
 
 		# Calculate acquisition cost for this ability
@@ -2020,7 +2098,7 @@ func find_nearest_orb() -> void:
 		var distance: float = bot.global_position.distance_to(orb_pos)
 		if distance > 50.0:  # Hard limit - too far to consider
 			continue
-		if distance > 15.0 and not is_target_visible(orb_pos):
+		if distance > 15.0 and not is_target_visible(orb_pos, orb):
 			continue  # Not visible and not close - skip
 
 		# Calculate acquisition cost for this orb
