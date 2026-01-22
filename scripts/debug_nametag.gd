@@ -10,13 +10,14 @@ func _ready() -> void:
 	# Configure label appearance
 	billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	no_depth_test = true
-	pixel_size = 0.002
-	outline_size = 8
-	outline_modulate = Color(0, 0, 0, 0.8)
+	pixel_size = 0.01  # Much larger for visibility
+	outline_size = 16  # Thicker outline
+	outline_modulate = Color(0, 0, 0, 0.9)
 	modulate = Color(1, 1, 1, 1)
+	font_size = 32  # Larger font
 
-	# Position above player head
-	position = Vector3(0, 2.5, 0)
+	# Position higher above player head
+	position = Vector3(0, 3.5, 0)
 
 func setup(player: Node) -> void:
 	"""Initialize nametag for a specific player"""
