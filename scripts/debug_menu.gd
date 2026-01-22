@@ -400,6 +400,57 @@ func build_page_3() -> void:
 
 	page_content.add_child(HSeparator.new())
 
+	# Entity filtering section
+	var entity_filter_label = Label.new()
+	var watched_entity_text: String = "All entities"
+	if DebugLogger.watched_entity_id != null:
+		var entity_id: int = int(DebugLogger.watched_entity_id)
+		if entity_id >= 9000:
+			watched_entity_text = "Bot_%d" % (entity_id - 9000)
+		else:
+			watched_entity_text = "Player"
+	entity_filter_label.text = "Watching: " + watched_entity_text
+	entity_filter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	entity_filter_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
+	page_content.add_child(entity_filter_label)
+
+	# Entity filter buttons
+	var entity_buttons_hbox = HBoxContainer.new()
+	entity_buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	page_content.add_child(entity_buttons_hbox)
+
+	var watch_all_btn = Button.new()
+	watch_all_btn.text = "Watch All"
+	watch_all_btn.pressed.connect(_on_watch_entity.bind(null))
+	entity_buttons_hbox.add_child(watch_all_btn)
+
+	var watch_player_btn = Button.new()
+	watch_player_btn.text = "Watch Player"
+	watch_player_btn.pressed.connect(_on_watch_player)
+	entity_buttons_hbox.add_child(watch_player_btn)
+
+	# Bot watch buttons (dynamically add for each bot)
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bot_ids: Array[int] = []
+	for player in players:
+		var player_id: int = player.name.to_int()
+		if player_id >= 9000:
+			bot_ids.append(player_id)
+	bot_ids.sort()
+
+	if bot_ids.size() > 0:
+		var bot_buttons_hbox = HBoxContainer.new()
+		bot_buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		page_content.add_child(bot_buttons_hbox)
+
+		for bot_id in bot_ids:
+			var watch_bot_btn = Button.new()
+			watch_bot_btn.text = "Bot_%d" % (bot_id - 9000)
+			watch_bot_btn.pressed.connect(_on_watch_entity.bind(bot_id))
+			bot_buttons_hbox.add_child(watch_bot_btn)
+
+	page_content.add_child(HSeparator.new())
+
 	# Category toggles in a scroll container for many categories
 	var scroll = ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(0, 200)
@@ -727,3 +778,23 @@ func _on_category_toggled(enabled: bool, category: int) -> void:
 	else:
 		DebugLogger.disable_category(category)
 		print("Disabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+
+func _on_watch_entity(entity_id: Variant) -> void:
+	"""Set which entity to watch (null = all)"""
+	if entity_id == null:
+		DebugLogger.clear_watched_entity()
+	else:
+		DebugLogger.set_watched_entity(int(entity_id))
+	# Rebuild page to update the "Watching:" label
+	show_page(current_page)
+
+func _on_watch_player() -> void:
+	"""Watch the human player"""
+	var player: Node = get_local_player()
+	if player:
+		var player_id: int = player.name.to_int()
+		DebugLogger.set_watched_entity(player_id)
+		# Rebuild page to update the "Watching:" label
+		show_page(current_page)
+	else:
+		print("Error: No local player found")

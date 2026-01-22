@@ -233,31 +233,35 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
-	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
-		print("[BotAI-B] %s initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot.name, bot_skill, aggression_level, strategic_preference])
+	DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
 
 # ============================================================================
 # DEBUG HELPERS
 # ============================================================================
 
+func get_entity_id() -> int:
+	"""Get the bot's entity ID for debug logging"""
+	if bot:
+		return bot.name.to_int()
+	return -1
+
 func change_state(new_state: String, reason: String = "") -> void:
 	"""Change state with debug logging"""
 	if new_state != state:
-		if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
-			var ability_info: String = ""
-			if bot and bot.current_ability and "ability_name" in bot.current_ability:
-				ability_info = " [%s]" % bot.current_ability.ability_name
-			var target_info: String = ""
-			if target_player and is_instance_valid(target_player):
-				var dist: float = bot.global_position.distance_to(target_player.global_position)
-				target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
-			print("[BotAI-B] %s: %s → %s%s%s | %s" % [bot.name, state, new_state, ability_info, target_info, reason])
+		var ability_info: String = ""
+		if bot and bot.current_ability and "ability_name" in bot.current_ability:
+			ability_info = " [%s]" % bot.current_ability.ability_name
+		var target_info: String = ""
+		if target_player and is_instance_valid(target_player):
+			var dist: float = bot.global_position.distance_to(target_player.global_position)
+			target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
+		DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] %s → %s%s%s | %s" % [state, new_state, ability_info, target_info, reason], false, get_entity_id())
 		previous_state = state
 		state = new_state
 
 func debug_log_periodic() -> void:
 	"""Periodic debug logging of bot state"""
-	if not DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) or not bot:
+	if not bot:
 		return
 
 	var ability_name: String = "None"
@@ -270,9 +274,9 @@ func debug_log_periodic() -> void:
 		target_info = "%s (%.1fu, HP:%d)" % [target_player.name, dist, target_player.health]
 
 	var pos: Vector3 = bot.global_position
-	print("[BotAI-B] %s | State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
-		bot.name, state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
-	])
+	DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
+		state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
+	], false, get_entity_id())
 
 # ============================================================================
 # MAIN LOOP
