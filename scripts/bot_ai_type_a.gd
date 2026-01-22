@@ -1542,6 +1542,23 @@ func do_chase(delta: float) -> void:
 
 	# Movement logic
 	if distance_to_target > optimal_distance + 5.0:
+		# Check if target is significantly below us and we're on a platform
+		if height_diff < -3.0 and bot.global_position.y > 2.0:
+			# Target is below us - check if we should jump toward them
+			var horizontal_dist: float = Vector2(
+				target_player.global_position.x - bot.global_position.x,
+				target_player.global_position.z - bot.global_position.z
+			).length()
+
+			# If close horizontally but far vertically, jump off platform toward target
+			if horizontal_dist < 10.0 and obstacle_jump_timer <= 0.0:
+				bot_jump()
+				# Apply force toward target while jumping
+				var jump_direction: Vector3 = (target_player.global_position - bot.global_position).normalized()
+				jump_direction.y = 0
+				bot.apply_central_force(jump_direction * bot.current_roll_force * 0.5)
+				obstacle_jump_timer = 1.0
+
 		move_towards(target_player.global_position, 0.9)
 	else:
 		strafe_around_target(optimal_distance)
@@ -1669,7 +1686,8 @@ func navigate_to_platform(delta: float) -> void:
 					bot.apply_central_force(braking)
 			return  # Don't move while stabilizing
 		else:
-			# Stabilization complete - clear platform navigation
+			# Stabilization complete - clear platform navigation and exit function
+			# Bot will resume normal state machine behavior next frame
 			is_approaching_platform = false
 			platform_jump_prepared = false
 			on_platform = false
@@ -2081,9 +2099,10 @@ func use_ability_smart(distance_to_target: float) -> void:
 					should_use = randf() < usage_chance
 					should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
 		"Dash Attack":
-			# Dash attack needs alignment to hit properly
+			# Dash attack needs tight alignment - bot must be facing target before dashing
 			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
-				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 15.0):
+				# Tighter alignment requirement (10°) for dash attack to look natural
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 10.0):
 					var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
 					should_use = randf() < usage_chance
 					should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)

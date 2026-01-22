@@ -1826,9 +1826,10 @@ func use_ability_smart(distance_to_target: float) -> void:
 					should_use = randf() < usage_chance
 					should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
 		"Dash Attack":
-			# Dash attack needs alignment to hit properly
+			# Dash attack needs tight alignment - bot must be facing target before dashing
 			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
-				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 15.0):
+				# Tighter alignment requirement (10°) for dash attack to look natural
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 10.0):
 					var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
 					should_use = randf() < usage_chance
 					should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
