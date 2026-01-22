@@ -1810,6 +1810,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 	var current_aggression: float = calculate_current_aggression()
 
 	# IMPROVED: Ability-specific logic with proficiency scoring
+	# FIXED: Reduced randomness - bots now use abilities much more consistently when conditions are met
 	match ability_name:
 		"Cannon":
 			# Lead prediction + alignment check before firing
@@ -1818,8 +1819,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 				var predicted_distance: float = bot.global_position.distance_to(predicted_pos)
 
 				if predicted_distance > 4.0 and predicted_distance < 40.0 and is_aligned_with_target(predicted_pos, 10.0):
-					# Use proficiency score to determine usage chance
-					var usage_chance: float = (proficiency_score / 100.0) * (0.85 + current_aggression * 0.15)
+					# INCREASED: Much higher usage chance for cannons (projectile weapon should fire often)
+					var usage_chance: float = (proficiency_score / 100.0) * 0.95  # 95% at max proficiency
 					should_use = randf() < usage_chance
 					should_charge = false  # Never charge cannon
 			elif distance_to_target > 4.0 and distance_to_target < 40.0 and is_aligned_with_target(target_player.global_position, 10.0):
@@ -1830,27 +1831,31 @@ func use_ability_smart(distance_to_target: float) -> void:
 			if distance_to_target < 6.0 and proficiency_score > usage_threshold:
 				# Check if we're facing the target (important for melee!)
 				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 20.0):
-					var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
+					# INCREASED: Swing sword much more reliably when in range and aligned
+					var usage_chance: float = (proficiency_score / 100.0) * 0.9  # 90% at max proficiency
 					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
+					should_charge = can_charge and distance_to_target > 3.0 and randf() < 0.6
 		"Dash Attack":
 			# Dash attack needs tight alignment - bot must be facing target before dashing
 			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
 				# Tighter alignment requirement (10°) for dash attack to look natural
 				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 10.0):
-					var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
+					# INCREASED: Dash much more reliably when aligned (was too passive)
+					var usage_chance: float = (proficiency_score / 100.0) * 0.85  # 85% at max proficiency
 					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
+					should_charge = can_charge and distance_to_target > 8.0 and randf() < 0.7
 		"Explosion":
 			# Explosion is AoE but still benefits from rough alignment
 			if distance_to_target < 8.0 and proficiency_score > usage_threshold:
 				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 30.0):
-					var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
+					# INCREASED: Use explosion more often (was way too passive at 50%)
+					var usage_chance: float = (proficiency_score / 100.0) * 0.8  # 80% at max proficiency
 					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
+					should_charge = can_charge and distance_to_target < 7.0 and randf() < 0.5
 		_:
 			if distance_to_target < 20.0 and proficiency_score > usage_threshold:
-				should_use = randf() < (proficiency_score / 100.0) * 0.5
+				# INCREASED: Generic abilities should be used more often
+				should_use = randf() < (proficiency_score / 100.0) * 0.7
 
 	# Charging logic
 	if should_use and should_charge and can_charge and not is_charging_ability:
