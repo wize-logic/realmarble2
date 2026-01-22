@@ -66,7 +66,7 @@ var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_
 var previous_state: String = "WANDER"  # Track state changes for debug logging
 
 # DEBUG MODE - Enable for detailed bot behavior logging
-const DEBUG_BOT_AI: bool = true  # Set to false to disable debug output
+# Debug logging timer (controlled by DebugLogger autoload)
 var debug_log_timer: float = 0.0
 const DEBUG_LOG_INTERVAL: float = 2.0  # Log state every 2 seconds
 
@@ -233,7 +233,7 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
-	if DEBUG_BOT_AI:
+	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 		print("[BotAI-B] %s initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot.name, bot_skill, aggression_level, strategic_preference])
 
 # ============================================================================
@@ -243,7 +243,7 @@ func _ready() -> void:
 func change_state(new_state: String, reason: String = "") -> void:
 	"""Change state with debug logging"""
 	if new_state != state:
-		if DEBUG_BOT_AI:
+		if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 			var ability_info: String = ""
 			if bot and bot.current_ability and "ability_name" in bot.current_ability:
 				ability_info = " [%s]" % bot.current_ability.ability_name
@@ -257,7 +257,7 @@ func change_state(new_state: String, reason: String = "") -> void:
 
 func debug_log_periodic() -> void:
 	"""Periodic debug logging of bot state"""
-	if not DEBUG_BOT_AI or not bot:
+	if not DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) or not bot:
 		return
 
 	var ability_name: String = "None"
@@ -313,7 +313,7 @@ func _physics_process(delta: float) -> void:
 	debug_log_timer += delta
 
 	# DEBUG: Periodic state logging
-	if DEBUG_BOT_AI and debug_log_timer >= DEBUG_LOG_INTERVAL:
+	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) and debug_log_timer >= DEBUG_LOG_INTERVAL:
 		debug_log_periodic()
 		debug_log_timer = 0.0
 

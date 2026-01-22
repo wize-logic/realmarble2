@@ -8,7 +8,7 @@ var vbox: VBoxContainer = null
 
 # Pagination system
 var current_page: int = 0
-var total_pages: int = 3
+var total_pages: int = 4  # Added debug logging page
 var page_title: Label = null
 var page_indicator: Label = null
 var prev_button: Button = null
@@ -155,6 +155,8 @@ func show_page(page: int) -> void:
 			build_page_1()  # Match & World Controls
 		2:
 			build_page_2()  # Expansion & Advanced Controls
+		3:
+			build_page_3()  # Debug Logging Controls
 
 func _on_prev_page() -> void:
 	"""Go to previous page"""
@@ -349,6 +351,76 @@ func build_page_2() -> void:
 
 	var info_label = Label.new()
 	info_label.text = "F3: Toggle Debug Menu\nArrows/Page Keys: Navigate"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(info_label)
+
+func build_page_3() -> void:
+	"""Build Page 3: Debug Logging Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "DEBUG LOGGING"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Master toggle
+	var master_toggle = Button.new()
+	master_toggle.text = "Master Debug: " + ("ON" if DebugLogger.debug_enabled else "OFF")
+	master_toggle.pressed.connect(_on_master_debug_toggle)
+	page_content.add_child(master_toggle)
+
+	# Quick actions
+	var quick_actions_hbox = HBoxContainer.new()
+	page_content.add_child(quick_actions_hbox)
+
+	var enable_all_btn = Button.new()
+	enable_all_btn.text = "Enable All"
+	enable_all_btn.pressed.connect(_on_enable_all_categories)
+	quick_actions_hbox.add_child(enable_all_btn)
+
+	var disable_all_btn = Button.new()
+	disable_all_btn.text = "Disable All"
+	disable_all_btn.pressed.connect(_on_disable_all_categories)
+	quick_actions_hbox.add_child(disable_all_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Category toggles in a scroll container for many categories
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 200)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	page_content.add_child(scroll)
+
+	var categories_vbox = VBoxContainer.new()
+	categories_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(categories_vbox)
+
+	# Add toggle for each category
+	for category in DebugLogger.Category.values():
+		var category_hbox = HBoxContainer.new()
+		categories_vbox.add_child(category_hbox)
+
+		var check_button = CheckButton.new()
+		check_button.button_pressed = DebugLogger.is_category_enabled(category)
+		check_button.toggled.connect(_on_category_toggled.bind(category))
+		category_hbox.add_child(check_button)
+
+		var category_label = Label.new()
+		category_label.text = DebugLogger.CATEGORY_NAMES.get(category, "Unknown")
+		category_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		category_hbox.add_child(category_label)
+
+	# Info
+	page_content.add_child(HSeparator.new())
+	var info_label = Label.new()
+	info_label.text = "Enable categories to see debug output\nin the console/terminal"
 	info_label.add_theme_font_size_override("font_size", 10)
 	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -585,3 +657,38 @@ func get_local_player() -> Node:
 		if player.is_multiplayer_authority():
 			return player
 	return null
+
+# ============================================================================
+# DEBUG LOGGING HANDLERS
+# ============================================================================
+
+func _on_master_debug_toggle() -> void:
+	"""Toggle master debug setting"""
+	DebugLogger.debug_enabled = not DebugLogger.debug_enabled
+	DebugLogger.save_preferences()
+	# Rebuild page to update button text
+	show_page(current_page)
+	print("Master debug logging: ", "ENABLED" if DebugLogger.debug_enabled else "DISABLED")
+
+func _on_enable_all_categories() -> void:
+	"""Enable all debug categories"""
+	DebugLogger.enable_all()
+	# Rebuild page to update checkboxes
+	show_page(current_page)
+	print("All debug categories enabled")
+
+func _on_disable_all_categories() -> void:
+	"""Disable all debug categories"""
+	DebugLogger.disable_all()
+	# Rebuild page to update checkboxes
+	show_page(current_page)
+	print("All debug categories disabled")
+
+func _on_category_toggled(enabled: bool, category: int) -> void:
+	"""Toggle a specific debug category"""
+	if enabled:
+		DebugLogger.enable_category(category)
+		print("Enabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+	else:
+		DebugLogger.disable_category(category)
+		print("Disabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))

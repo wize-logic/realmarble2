@@ -65,8 +65,7 @@ var bot: Node = null
 var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT
 var previous_state: String = "WANDER"  # Track state changes for debug logging
 
-# DEBUG MODE - Enable for detailed bot behavior logging
-const DEBUG_BOT_AI: bool = true  # Set to false to disable debug output
+# Debug logging timer (controlled by DebugLogger autoload)
 var debug_log_timer: float = 0.0
 const DEBUG_LOG_INTERVAL: float = 2.0  # Log state every 2 seconds
 
@@ -237,7 +236,7 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
-	if DEBUG_BOT_AI:
+	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 		print("[BotAI] %s initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot.name, bot_skill, aggression_level, strategic_preference])
 
 # ============================================================================
@@ -247,7 +246,7 @@ func _ready() -> void:
 func change_state(new_state: String, reason: String = "") -> void:
 	"""Change state with debug logging"""
 	if new_state != state:
-		if DEBUG_BOT_AI:
+		if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 			var ability_info: String = ""
 			if bot and bot.current_ability and "ability_name" in bot.current_ability:
 				ability_info = " [%s]" % bot.current_ability.ability_name
@@ -318,7 +317,7 @@ func _physics_process(delta: float) -> void:
 	debug_log_timer += delta
 
 	# DEBUG: Periodic state logging
-	if DEBUG_BOT_AI and debug_log_timer >= DEBUG_LOG_INTERVAL:
+	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) and debug_log_timer >= DEBUG_LOG_INTERVAL:
 		debug_log_periodic()
 		debug_log_timer = 0.0
 
@@ -2238,7 +2237,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 			is_charging_ability = true
 			ability_charge_timer = randf_range(0.6, 1.3)
 			bot.current_ability.start_charge()
-			if DEBUG_BOT_AI:
+			if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 				print("[BotAI] %s: Charging %s (%.1fs) | Dist: %.1fu" % [bot.name, ability_name, ability_charge_timer, distance_to_target])
 
 	# Release charged ability or use instantly
@@ -2249,12 +2248,12 @@ func use_ability_smart(distance_to_target: float) -> void:
 		else:
 			bot.current_ability.use()
 		action_timer = randf_range(0.4, 1.2)
-		if DEBUG_BOT_AI:
+		if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 			print("[BotAI] %s: Released %s | Dist: %.1fu" % [bot.name, ability_name, distance_to_target])
 	elif should_use and not should_charge and not is_charging_ability:
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
-		if DEBUG_BOT_AI:
+		if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI):
 			var target_info: String = ""
 			if target_player and is_instance_valid(target_player):
 				target_info = " → %s" % target_player.name
