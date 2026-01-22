@@ -1837,30 +1837,42 @@ func use_ability_smart(distance_to_target: float) -> void:
 				should_charge = false
 		"Sword":
 			# Sword requires close range AND proper alignment with target
-			if distance_to_target < 6.0 and proficiency_score > usage_threshold:
-				# Check if we're facing the target (important for melee!)
-				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 20.0):
-					# INCREASED: Swing sword much more reliably when in range and aligned
-					var usage_chance: float = (proficiency_score / 100.0) * 0.9  # 90% at max proficiency
-					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target > 3.0 and randf() < 0.6
+			# CRITICAL: Check height difference - melee doesn't work well from above
+			if target_player and is_instance_valid(target_player):
+				var height_diff: float = abs(target_player.global_position.y - bot.global_position.y)
+				# Only use sword if height difference is small (< 3 units)
+				if distance_to_target < 6.0 and height_diff < 3.0 and proficiency_score > usage_threshold:
+					# Check if we're facing the target (important for melee!)
+					if is_aligned_with_target(target_player.global_position, 20.0):
+						# INCREASED: Swing sword much more reliably when in range and aligned
+						var usage_chance: float = (proficiency_score / 100.0) * 0.9  # 90% at max proficiency
+						should_use = randf() < usage_chance
+						should_charge = can_charge and distance_to_target > 3.0 and randf() < 0.6
 		"Dash Attack":
 			# Dash attack needs tight alignment - bot must be facing target before dashing
-			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
-				# Tighter alignment requirement (10°) for dash attack to look natural
-				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 10.0):
-					# INCREASED: Dash much more reliably when aligned (was too passive)
-					var usage_chance: float = (proficiency_score / 100.0) * 0.85  # 85% at max proficiency
-					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target > 8.0 and randf() < 0.7
+			# CRITICAL: Check height difference - dashing from high platforms is ineffective
+			if target_player and is_instance_valid(target_player):
+				var height_diff: float = abs(target_player.global_position.y - bot.global_position.y)
+				# Only dash if height difference is reasonable (< 4 units)
+				if distance_to_target > 4.0 and distance_to_target < 18.0 and height_diff < 4.0 and proficiency_score > usage_threshold:
+					# Tighter alignment requirement (10°) for dash attack to look natural
+					if is_aligned_with_target(target_player.global_position, 10.0):
+						# INCREASED: Dash much more reliably when aligned (was too passive)
+						var usage_chance: float = (proficiency_score / 100.0) * 0.85  # 85% at max proficiency
+						should_use = randf() < usage_chance
+						should_charge = can_charge and distance_to_target > 8.0 and randf() < 0.7
 		"Explosion":
 			# Explosion is AoE but still benefits from rough alignment
-			if distance_to_target < 8.0 and proficiency_score > usage_threshold:
-				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 30.0):
-					# INCREASED: Use explosion more often (was way too passive at 50%)
-					var usage_chance: float = (proficiency_score / 100.0) * 0.8  # 80% at max proficiency
-					should_use = randf() < usage_chance
-					should_charge = can_charge and distance_to_target < 7.0 and randf() < 0.5
+			# CRITICAL: Check height difference - explosion doesn't reach far vertically
+			if target_player and is_instance_valid(target_player):
+				var height_diff: float = abs(target_player.global_position.y - bot.global_position.y)
+				# Only explode if height difference is small (< 3 units)
+				if distance_to_target < 8.0 and height_diff < 3.0 and proficiency_score > usage_threshold:
+					if is_aligned_with_target(target_player.global_position, 30.0):
+						# INCREASED: Use explosion more often (was way too passive at 50%)
+						var usage_chance: float = (proficiency_score / 100.0) * 0.8  # 80% at max proficiency
+						should_use = randf() < usage_chance
+						should_charge = can_charge and distance_to_target < 7.0 and randf() < 0.5
 		_:
 			if distance_to_target < 20.0 and proficiency_score > usage_threshold:
 				# INCREASED: Generic abilities should be used more often
@@ -2583,11 +2595,12 @@ func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
 
 	var current_ground_y: float = current_result.position.y
 
-	# IMPROVED: Increase check distance based on bot's velocity (momentum compensation)
+	# REDUCED: Less aggressive velocity multiplier to prevent paralysis
+	# Was causing bots to detect "edges" everywhere and constantly brake
 	var velocity_multiplier: float = 1.0
 	if "linear_velocity" in bot:
 		var horizontal_speed: float = Vector2(bot.linear_velocity.x, bot.linear_velocity.z).length()
-		velocity_multiplier = 1.0 + min(horizontal_speed / 20.0, 1.5)  # Up to 2.5x for fast bots
+		velocity_multiplier = 1.0 + min(horizontal_speed / 30.0, 0.5)  # Up to 1.5x for fast bots (was 2.5x)
 
 	var adjusted_check_distance: float = check_distance * velocity_multiplier
 
@@ -2608,8 +2621,9 @@ func check_for_edge(direction: Vector3, check_distance: float = 4.0) -> bool:
 	var ahead_ground_y: float = result.position.y
 	var ground_drop: float = current_ground_y - ahead_ground_y
 
-	# IMPROVED: Lower threshold from 4.5 to 3.0 for more sensitive edge detection
-	return ground_drop > 3.0
+	# BALANCED: 4.0 unit threshold - sensitive enough for safety, not so sensitive it paralyzes
+	# Was 3.0 which was too aggressive and caused constant braking on platforms
+	return ground_drop > 4.0
 
 func find_safe_direction_from_edge(dangerous_direction: Vector3) -> Vector3:
 	"""Find safe direction away from edge"""
