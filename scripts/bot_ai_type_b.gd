@@ -311,9 +311,16 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# NEW: Proactive edge avoidance check
-	if edge_check_timer <= 0.0:
-		check_nearby_edges()
-		edge_check_timer = EDGE_CHECK_INTERVAL
+	# DISABLED: This was causing bots to become passive on small arenas
+	# Edge checking runs every 0.3s and applies forces OUTSIDE state machine
+	# On 84x84 floor (42u radius), bots are constantly near edges
+	# Corrective forces (40% roll force) override state machine behavior
+	# Result: Bots roll around passively with constant edge corrections
+	# FIX: Edge detection should ONLY be used within state machine movement,
+	#      not as a separate system applying forces
+	# if edge_check_timer <= 0.0:
+	# 	check_nearby_edges()
+	# 	edge_check_timer = EDGE_CHECK_INTERVAL
 
 	# Check if bot is stuck trying to reach a target
 	check_target_timeout(delta)
