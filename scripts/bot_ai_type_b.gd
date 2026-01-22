@@ -63,6 +63,13 @@ extends Node
 
 var bot: Node = null
 var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT
+var previous_state: String = "WANDER"  # Track state changes for debug logging
+
+# DEBUG MODE - Enable for detailed bot behavior logging
+const DEBUG_BOT_AI: bool = true  # Set to false to disable debug output
+var debug_log_timer: float = 0.0
+const DEBUG_LOG_INTERVAL: float = 2.0  # Log state every 2 seconds
+
 var wander_target: Vector3 = Vector3.ZERO
 var wander_timer: float = 0.0
 var action_timer: float = 0.0
@@ -226,6 +233,51 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
+	if DEBUG_BOT_AI:
+		print("[BotAI-B] %s initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot.name, bot_skill, aggression_level, strategic_preference])
+
+# ============================================================================
+# DEBUG HELPERS
+# ============================================================================
+
+func change_state(new_state: String, reason: String = "") -> void:
+	"""Change state with debug logging"""
+	if new_state != state:
+		if DEBUG_BOT_AI:
+			var ability_info: String = ""
+			if bot and bot.current_ability and "ability_name" in bot.current_ability:
+				ability_info = " [%s]" % bot.current_ability.ability_name
+			var target_info: String = ""
+			if target_player and is_instance_valid(target_player):
+				var dist: float = bot.global_position.distance_to(target_player.global_position)
+				target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
+			print("[BotAI-B] %s: %s → %s%s%s | %s" % [bot.name, state, new_state, ability_info, target_info, reason])
+		previous_state = state
+		state = new_state
+
+func debug_log_periodic() -> void:
+	"""Periodic debug logging of bot state"""
+	if not DEBUG_BOT_AI or not bot:
+		return
+
+	var ability_name: String = "None"
+	if bot.current_ability and "ability_name" in bot.current_ability:
+		ability_name = bot.current_ability.ability_name
+
+	var target_info: String = "None"
+	if target_player and is_instance_valid(target_player):
+		var dist: float = bot.global_position.distance_to(target_player.global_position)
+		target_info = "%s (%.1fu, HP:%d)" % [target_player.name, dist, target_player.health]
+
+	var pos: Vector3 = bot.global_position
+	print("[BotAI-B] %s | State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
+		bot.name, state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
+	])
+
+# ============================================================================
+# MAIN LOOP
+# ============================================================================
+
 func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
@@ -258,6 +310,12 @@ func _physics_process(delta: float) -> void:
 	teleporter_check_timer -= delta
 	teleporter_cooldown -= delta
 	space_state_cache_timer -= delta
+	debug_log_timer += delta
+
+	# DEBUG: Periodic state logging
+	if DEBUG_BOT_AI and debug_log_timer >= DEBUG_LOG_INTERVAL:
+		debug_log_periodic()
+		debug_log_timer = 0.0
 
 	# PERFORMANCE: Update cached physics space state
 	if space_state_cache_timer <= 0.0:

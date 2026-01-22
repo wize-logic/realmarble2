@@ -63,6 +63,13 @@ extends Node
 
 var bot: Node = null
 var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT
+var previous_state: String = "WANDER"  # Track state changes for debug logging
+
+# DEBUG MODE - Enable for detailed bot behavior logging
+const DEBUG_BOT_AI: bool = true  # Set to false to disable debug output
+var debug_log_timer: float = 0.0
+const DEBUG_LOG_INTERVAL: float = 2.0  # Log state every 2 seconds
+
 var wander_target: Vector3 = Vector3.ZERO
 var wander_timer: float = 0.0
 var action_timer: float = 0.0
@@ -230,6 +237,51 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
+	if DEBUG_BOT_AI:
+		print("[BotAI] %s initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot.name, bot_skill, aggression_level, strategic_preference])
+
+# ============================================================================
+# DEBUG HELPERS
+# ============================================================================
+
+func change_state(new_state: String, reason: String = "") -> void:
+	"""Change state with debug logging"""
+	if new_state != state:
+		if DEBUG_BOT_AI:
+			var ability_info: String = ""
+			if bot and bot.current_ability and "ability_name" in bot.current_ability:
+				ability_info = " [%s]" % bot.current_ability.ability_name
+			var target_info: String = ""
+			if target_player and is_instance_valid(target_player):
+				var dist: float = bot.global_position.distance_to(target_player.global_position)
+				target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
+			print("[BotAI] %s: %s → %s%s%s | %s" % [bot.name, state, new_state, ability_info, target_info, reason])
+		previous_state = state
+		state = new_state
+
+func debug_log_periodic() -> void:
+	"""Periodic debug logging of bot state"""
+	if not DEBUG_BOT_AI or not bot:
+		return
+
+	var ability_name: String = "None"
+	if bot.current_ability and "ability_name" in bot.current_ability:
+		ability_name = bot.current_ability.ability_name
+
+	var target_info: String = "None"
+	if target_player and is_instance_valid(target_player):
+		var dist: float = bot.global_position.distance_to(target_player.global_position)
+		target_info = "%s (%.1fu, HP:%d)" % [target_player.name, dist, target_player.health]
+
+	var pos: Vector3 = bot.global_position
+	print("[BotAI] %s | State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
+		bot.name, state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
+	])
+
+# ============================================================================
+# MAIN LOOP
+# ============================================================================
+
 func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
@@ -263,6 +315,12 @@ func _physics_process(delta: float) -> void:
 	space_state_cache_timer -= delta
 	rail_launch_timer += delta
 	second_jump_timer -= delta
+	debug_log_timer += delta
+
+	# DEBUG: Periodic state logging
+	if DEBUG_BOT_AI and debug_log_timer >= DEBUG_LOG_INTERVAL:
+		debug_log_periodic()
+		debug_log_timer = 0.0
 
 	# PLATFORM JUMPING: Trigger second jump if needed for high platforms
 	if needs_second_jump and second_jump_timer <= 0.0:
@@ -1431,6 +1489,7 @@ func should_use_platform_in_combat() -> bool:
 
 func update_state() -> void:
 	"""IMPROVED: Better state prioritization with combat evaluators"""
+	var old_state: String = state
 
 	# PRIORITY 0: ABSOLUTE #1 - GET AN ABILITY IMMEDIATELY IF WE DON'T HAVE ONE
 	# Without an ability, the bot CANNOT attack and is useless in combat
@@ -1438,16 +1497,16 @@ func update_state() -> void:
 	if not bot.current_ability:
 		# If we have a target ability, go get it NOW
 		if target_ability and is_instance_valid(target_ability):
-			state = "COLLECT_ABILITY"
+			change_state("COLLECT_ABILITY", "No ability - collecting")
 			return
 		else:
 			# No ability and no target ability - search for one immediately
 			find_nearest_ability()
 			if target_ability and is_instance_valid(target_ability):
-				state = "COLLECT_ABILITY"
+				change_state("COLLECT_ABILITY", "Found ability to collect")
 				return
 			# Still no ability found - wander to search for one
-			state = "WANDER"
+			change_state("WANDER", "No ability found - searching")
 			return
 
 	# Check if we have a valid combat target (only relevant after we have an ability)
@@ -1458,13 +1517,13 @@ func update_state() -> void:
 
 	# Priority 1: Use retreat evaluator (now that we have an ability)
 	if has_combat_target and should_retreat():
-		state = "RETREAT"
+		change_state("RETREAT", "Low health: %d/%d" % [bot.health, bot.MAX_HEALTH])
 		retreat_timer = randf_range(2.5, 4.5)
 		return
 
 	# Priority 2: COMBAT ALWAYS BEATS GRIND - Immediate combat if in attack range
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.2:
-		state = "ATTACK"
+		change_state("ATTACK", "In attack range: %.1fu" % distance_to_target)
 		return
 
 	# Priority 3: Collect orbs if safe
@@ -1477,7 +1536,7 @@ func update_state() -> void:
 		if distance_to_orb < orb_priority_range and (not has_combat_target or distance_to_target > attack_range * 2.5):
 			# IMPROVED: Visibility check with hysteresis
 			if is_target_visible(target_orb.global_position, target_orb):
-				state = "COLLECT_ORB"
+				change_state("COLLECT_ORB", "Safe orb collection: %.1fu" % distance_to_orb)
 				return
 
 	# Priority 4: Chase if enemy in aggro range (use evaluator)
@@ -1486,7 +1545,7 @@ func update_state() -> void:
 		if not target_platform.is_empty() and should_use_platform_in_combat():
 			is_approaching_platform = true
 			# Continue to CHASE but with platform navigation overlay
-		state = "CHASE"
+		change_state("CHASE", "Pursuing target: %.1fu" % distance_to_target)
 		return
 
 	# NEW: Priority 4.5: Navigate to tactical platform during retreat
@@ -1497,19 +1556,19 @@ func update_state() -> void:
 	# Priority 5: Combat if we HAVE an ability but enemy far
 	if bot.current_ability and has_combat_target:
 		if distance_to_target < attack_range * 1.2:
-			state = "ATTACK"
+			change_state("ATTACK", "Close enough to attack: %.1fu" % distance_to_target)
 		elif distance_to_target < aggro_range:
-			state = "CHASE"
+			change_state("CHASE", "Enemy in aggro range: %.1fu" % distance_to_target)
 		else:
 			# NEW: Consider platform navigation when wandering
 			if not target_platform.is_empty() and randf() < 0.3:
 				is_approaching_platform = true
-			state = "WANDER"
+			change_state("WANDER", "Enemy too far: %.1fu" % distance_to_target)
 	else:
 		# NEW: No combat - explore platforms more actively
 		if not target_platform.is_empty() and randf() < 0.4:
 			is_approaching_platform = true
-		state = "WANDER"
+		change_state("WANDER", "No valid target")
 
 func do_wander(delta: float) -> void:
 	"""FIXED: Wander with overhead slope avoidance and platform navigation"""
@@ -2179,6 +2238,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 			is_charging_ability = true
 			ability_charge_timer = randf_range(0.6, 1.3)
 			bot.current_ability.start_charge()
+			if DEBUG_BOT_AI:
+				print("[BotAI] %s: Charging %s (%.1fs) | Dist: %.1fu" % [bot.name, ability_name, ability_charge_timer, distance_to_target])
 
 	# Release charged ability or use instantly
 	if is_charging_ability and ability_charge_timer <= 0.0:
@@ -2188,9 +2249,16 @@ func use_ability_smart(distance_to_target: float) -> void:
 		else:
 			bot.current_ability.use()
 		action_timer = randf_range(0.4, 1.2)
+		if DEBUG_BOT_AI:
+			print("[BotAI] %s: Released %s | Dist: %.1fu" % [bot.name, ability_name, distance_to_target])
 	elif should_use and not should_charge and not is_charging_ability:
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
+		if DEBUG_BOT_AI:
+			var target_info: String = ""
+			if target_player and is_instance_valid(target_player):
+				target_info = " → %s" % target_player.name
+			print("[BotAI] %s: Used %s%s | Dist: %.1fu | Prof: %.0f" % [bot.name, ability_name, target_info, distance_to_target, proficiency_score])
 
 func calculate_lead_position() -> Vector3:
 	"""IMPROVED: Skill-based lead prediction (OpenArena-inspired accuracy variation)"""
