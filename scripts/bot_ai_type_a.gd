@@ -267,7 +267,7 @@ func _physics_process(delta: float) -> void:
 	# PLATFORM JUMPING: Trigger second jump if needed for high platforms
 	if needs_second_jump and second_jump_timer <= 0.0:
 		needs_second_jump = false
-		if validate_jump_properties() and "jump_count" in bot and "max_jumps" in bot:
+		if "jump_count" in bot and "max_jumps" in bot:
 			if bot.jump_count < bot.max_jumps:
 				bot_jump()  # Execute second jump for high platforms
 
