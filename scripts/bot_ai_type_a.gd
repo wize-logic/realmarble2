@@ -1411,27 +1411,35 @@ func should_use_platform_in_combat() -> bool:
 func update_state() -> void:
 	"""IMPROVED: Better state prioritization with combat evaluators"""
 
-	# Check if we have a valid combat target
+	# PRIORITY 0: ABSOLUTE #1 - GET AN ABILITY IMMEDIATELY IF WE DON'T HAVE ONE
+	# Without an ability, the bot CANNOT attack and is useless in combat
+	# This overrides EVERYTHING including retreat, combat, and all other states
+	if not bot.current_ability:
+		# If we have a target ability, go get it NOW
+		if target_ability and is_instance_valid(target_ability):
+			state = "COLLECT_ABILITY"
+			return
+		else:
+			# No ability and no target ability - search for one immediately
+			find_nearest_ability()
+			if target_ability and is_instance_valid(target_ability):
+				state = "COLLECT_ABILITY"
+				return
+			# Still no ability found - wander to search for one
+			state = "WANDER"
+			return
+
+	# Check if we have a valid combat target (only relevant after we have an ability)
 	var has_combat_target: bool = target_player and is_instance_valid(target_player)
 	var distance_to_target: float = INF
 	if has_combat_target:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
-	# NEW: Use retreat evaluator
+	# Priority 1: Use retreat evaluator (now that we have an ability)
 	if has_combat_target and should_retreat():
 		state = "RETREAT"
 		retreat_timer = randf_range(2.5, 4.5)
 		return
-
-	# Priority 1: CRITICAL - Get an ability if we don't have one
-	if not bot.current_ability and target_ability and is_instance_valid(target_ability):
-		var distance_to_ability: float = bot.global_position.distance_to(target_ability.global_position)
-		# Don't suicide for abilities when enemy is very close
-		if distance_to_ability < 60.0 and (not has_combat_target or distance_to_target > attack_range * 2.0):
-			# IMPROVED: Visibility check with hysteresis
-			if is_target_visible(target_ability.global_position, target_ability):
-				state = "COLLECT_ABILITY"
-				return
 
 	# Priority 2: COMBAT ALWAYS BEATS GRIND - Immediate combat if in attack range
 	if bot.current_ability and has_combat_target and distance_to_target < attack_range * 1.2:
