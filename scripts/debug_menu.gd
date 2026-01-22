@@ -20,10 +20,13 @@ var is_visible: bool = false
 var god_mode_enabled: bool = false
 var collision_shapes_visible: bool = false
 var speed_multiplier: float = 1.0
+var nametags_enabled: bool = false
+var nametag_script = preload("res://scripts/debug_nametag.gd")
 
 # Dynamic button references (will be created per page)
 var god_mode_button: Button = null
 var collision_shapes_button: Button = null
+var nametags_button: Button = null
 var bot_count_label: Label = null
 var speed_label: Label = null
 
@@ -346,6 +349,11 @@ func build_page_2() -> void:
 	collision_shapes_button.pressed.connect(_on_collision_shapes_pressed)
 	page_content.add_child(collision_shapes_button)
 
+	nametags_button = Button.new()
+	nametags_button.text = "Show Nametags: " + ("ON" if nametags_enabled else "OFF")
+	nametags_button.pressed.connect(_on_nametags_pressed)
+	page_content.add_child(nametags_button)
+
 	# Info section
 	page_content.add_child(HSeparator.new())
 
@@ -609,6 +617,33 @@ func _on_collision_shapes_pressed() -> void:
 	else:
 		collision_shapes_button.text = "Show Collision: OFF"
 		print("Collision shapes hidden")
+
+func _on_nametags_pressed() -> void:
+	"""Toggle debug nametags above players/bots"""
+	nametags_enabled = not nametags_enabled
+
+	if nametags_enabled:
+		# Spawn nametags for all players/bots
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			if not player.get_node_or_null("DebugNametag"):
+				var nametag = nametag_script.new()
+				nametag.name = "DebugNametag"
+				nametag.setup(player)
+				player.add_child(nametag)
+		print("Debug nametags enabled - showing names above all players/bots")
+	else:
+		# Remove all nametags
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			var nametag = player.get_node_or_null("DebugNametag")
+			if nametag:
+				nametag.queue_free()
+		print("Debug nametags disabled")
+
+	# Update button text
+	if nametags_button:
+		nametags_button.text = "Show Nametags: " + ("ON" if nametags_enabled else "OFF")
 
 func _on_regenerate_level_pressed() -> void:
 	"""Regenerate the procedural level"""
