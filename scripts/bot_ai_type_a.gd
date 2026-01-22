@@ -1520,7 +1520,7 @@ func update_state() -> void:
 
 	# Priority 1: Use retreat evaluator (now that we have an ability)
 	if has_combat_target and should_retreat():
-		change_state("RETREAT", "Low health: %d/%d" % [bot.health, bot.MAX_HEALTH])
+		change_state("RETREAT", "Low health: %d/3" % get_bot_health())
 		retreat_timer = randf_range(2.5, 4.5)
 		return
 
