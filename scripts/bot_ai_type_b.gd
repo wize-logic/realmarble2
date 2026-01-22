@@ -1818,20 +1818,27 @@ func use_ability_smart(distance_to_target: float) -> void:
 				should_use = randf() < (proficiency_score / 100.0) * 0.9
 				should_charge = false
 		"Sword":
+			# Sword requires close range AND proper alignment with target
 			if distance_to_target < 6.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
+				# Check if we're facing the target (important for melee!)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 20.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
 		"Dash Attack":
+			# Dash attack needs alignment to hit properly
 			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 15.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
 		"Explosion":
+			# Explosion is AoE but still benefits from rough alignment
 			if distance_to_target < 8.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 30.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
 		_:
 			if distance_to_target < 20.0 and proficiency_score > usage_threshold:
 				should_use = randf() < (proficiency_score / 100.0) * 0.5

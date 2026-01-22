@@ -139,6 +139,8 @@ var platform_check_timer: float = 0.0
 const PLATFORM_CHECK_INTERVAL: float = 1.5
 var is_approaching_platform: bool = false  # Special navigation mode
 var platform_jump_prepared: bool = false  # Ready to jump onto platform
+var needs_second_jump: bool = false  # Track if we need to trigger a second jump
+var second_jump_timer: float = 0.0  # Timer for second jump execution
 
 # SAFETY: Platform landing stabilization
 var platform_stabilize_timer: float = 0.0  # Time to stabilize after landing
@@ -173,6 +175,8 @@ const RAIL_CHECK_INTERVAL: float = 2.0  # Check for rails every 2 seconds
 const MAX_CACHED_RAILS: int = 12  # Max rails to cache (Type A has 12 rails)
 const MAX_RAIL_DISTANCE: float = 50.0  # Only consider nearby rails
 var movement_input_direction: Vector3 = Vector3.ZERO  # Required by rails for directional control
+var rail_attach_cooldown: float = 0.0  # Cooldown after failed attachment attempt
+const RAIL_ATTACH_COOLDOWN_TIME: float = 2.0  # Wait 2s after failed attachment before retrying
 
 # RAIL LAUNCH RECOVERY: Aerial navigation after rail detachment
 var post_rail_launch: bool = false  # Currently in aerial phase after rail launch
@@ -255,8 +259,17 @@ func _physics_process(delta: float) -> void:
 	platform_stabilize_timer -= delta
 	vision_update_timer -= delta
 	rail_check_timer -= delta
+	rail_attach_cooldown -= delta
 	space_state_cache_timer -= delta
 	rail_launch_timer += delta
+	second_jump_timer -= delta
+
+	# PLATFORM JUMPING: Trigger second jump if needed for high platforms
+	if needs_second_jump and second_jump_timer <= 0.0:
+		needs_second_jump = false
+		if validate_jump_properties() and "jump_count" in bot and "max_jumps" in bot:
+			if bot.jump_count < bot.max_jumps:
+				bot_jump()  # Execute second jump for high platforms
 
 	# RAIL LAUNCH RECOVERY: Handle aerial navigation after rail launch
 	if post_rail_launch:
@@ -509,6 +522,10 @@ func consider_rail_navigation() -> void:
 	if platform_stabilize_timer > 0.0:
 		return
 
+	# Don't attempt attachment if we recently failed (prevents spam attempts)
+	if rail_attach_cooldown > 0.0:
+		return
+
 	# Find the best rail for current situation
 	var best_rail: GrindRail = find_best_rail()
 	if not best_rail:
@@ -547,7 +564,17 @@ func consider_rail_navigation() -> void:
 		var closest_point: Vector3 = _get_closest_rail_point(best_rail)
 		var distance: float = bot.global_position.distance_to(closest_point)
 		if distance <= 10.0:  # Within attachment range - reduced from 30.0 for realistic rail usage
-			try_attach_to_rail(best_rail)
+			var success: bool = try_attach_to_rail(best_rail)
+			if not success:
+				# Failed to attach - set cooldown to prevent spam attempts
+				rail_attach_cooldown = RAIL_ATTACH_COOLDOWN_TIME
+		else:
+			# Too far away - move toward rail instead of spamming attach attempts
+			if distance <= 20.0:  # If reasonably close, navigate toward it
+				var direction: Vector3 = (closest_point - bot.global_position).normalized()
+				direction.y = 0  # Keep horizontal
+				if direction.length() > 0.1:
+					bot.apply_central_force(direction * bot.current_roll_force * 0.8)
 	else:
 		target_rail = null
 
@@ -1683,17 +1710,24 @@ func navigate_to_platform(delta: float) -> void:
 				platform_jump_prepared = true
 
 				if height_diff > 10.0:
-					# Very high - use bounce attack
-					if bounce_cooldown_timer <= 0.0:
+					# Very high (>10 units) - use bounce attack for maximum vertical mobility
+					if validate_bounce_properties() and bounce_cooldown_timer <= 0.0:
 						use_bounce_attack()
 						obstacle_jump_timer = 0.5
+					else:
+						# Fallback: double jump if bounce not available
+						bot_jump()
+						needs_second_jump = true
+						second_jump_timer = 0.25  # Trigger second jump in 0.25s
+						obstacle_jump_timer = 0.6
 				elif height_diff > 6.0:
-					# High - use double jump (first jump, second will happen automatically when needed)
+					# High (6-10 units) - use double jump for reliable reach
 					bot_jump()
-					# Second jump will be triggered by height check in subsequent frames
-					obstacle_jump_timer = 0.3  # Short cooldown for immediate second jump
+					needs_second_jump = true
+					second_jump_timer = 0.2  # Trigger second jump in 0.2s
+					obstacle_jump_timer = 0.5
 				else:
-					# Medium height - single jump should work
+					# Medium height (1-6 units) - single jump should work
 					bot_jump()
 					obstacle_jump_timer = 0.5
 		else:
@@ -2039,20 +2073,27 @@ func use_ability_smart(distance_to_target: float) -> void:
 				should_use = randf() < (proficiency_score / 100.0) * 0.9
 				should_charge = false
 		"Sword":
+			# Sword requires close range AND proper alignment with target
 			if distance_to_target < 6.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
+				# Check if we're facing the target (important for melee!)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 20.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.8 + current_aggression * 0.2)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target > 3.0 and randf() < (0.5 + current_aggression * 0.3)
 		"Dash Attack":
+			# Dash attack needs alignment to hit properly
 			if distance_to_target > 4.0 and distance_to_target < 18.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 15.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.7 + current_aggression * 0.3)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target > 8.0 and randf() < (0.6 + current_aggression * 0.3)
 		"Explosion":
+			# Explosion is AoE but still benefits from rough alignment
 			if distance_to_target < 8.0 and proficiency_score > usage_threshold:
-				var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
-				should_use = randf() < usage_chance
-				should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
+				if target_player and is_instance_valid(target_player) and is_aligned_with_target(target_player.global_position, 30.0):
+					var usage_chance: float = (proficiency_score / 100.0) * (0.5 + current_aggression * 0.4)
+					should_use = randf() < usage_chance
+					should_charge = can_charge and distance_to_target < 7.0 and randf() < (0.4 + current_aggression * 0.2)
 		_:
 			if distance_to_target < 20.0 and proficiency_score > usage_threshold:
 				should_use = randf() < (proficiency_score / 100.0) * 0.5
