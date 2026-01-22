@@ -560,17 +560,17 @@ func consider_rail_navigation() -> void:
 
 	if should_attach:
 		target_rail = best_rail
-		# Try to attach if we're close enough (stricter than player's 30.0 for better gameplay)
+		# Try to attach if we're close enough (balanced at 20u vs player's 30u)
 		var closest_point: Vector3 = _get_closest_rail_point(best_rail)
 		var distance: float = bot.global_position.distance_to(closest_point)
-		if distance <= 10.0:  # Within attachment range - reduced from 30.0 for realistic rail usage
+		if distance <= 20.0:  # Within attachment range - balanced for bot gameplay
 			var success: bool = try_attach_to_rail(best_rail)
 			if not success:
 				# Failed to attach - set cooldown to prevent spam attempts
 				rail_attach_cooldown = RAIL_ATTACH_COOLDOWN_TIME
 		else:
 			# Too far away - move toward rail instead of spamming attach attempts
-			if distance <= 20.0:  # If reasonably close, navigate toward it
+			if distance <= 30.0:  # If reasonably close, navigate toward it
 				var direction: Vector3 = (closest_point - bot.global_position).normalized()
 				direction.y = 0  # Keep horizontal
 				if direction.length() > 0.1:
@@ -1000,8 +1000,8 @@ func try_attach_to_rail(rail: GrindRail) -> bool:
 	# Safety: Verify we're close enough to the rail before attempting attachment
 	var closest_point: Vector3 = _get_closest_rail_point(rail)
 	var distance: float = bot.global_position.distance_to(closest_point)
-	if distance > 10.0:
-		return false  # Too far to attach
+	if distance > 20.0:
+		return false  # Too far to attach (20u balanced vs player's 30u)
 
 	# Attempt attachment
 	var success: bool = rail.try_attach_player(bot)
@@ -1815,11 +1815,16 @@ func do_collect_ability(delta: float) -> void:
 				use_bounce_attack()
 				action_timer = randf_range(0.5, 0.8)
 		elif height_diff > 5.0:
-			# High - use double jump
-			if bot.jump_count == 0:
-				bot_jump()
-				action_timer = 0.2  # Quick follow-up for second jump
-			elif bot.jump_count < bot.max_jumps:
+			# High - use double jump (requires jump property validation)
+			if "jump_count" in bot and "max_jumps" in bot:
+				if bot.jump_count == 0:
+					bot_jump()
+					action_timer = 0.2  # Quick follow-up for second jump
+				elif bot.jump_count < bot.max_jumps:
+					bot_jump()
+					action_timer = randf_range(0.4, 0.6)
+			else:
+				# Fallback: single jump if properties missing
 				bot_jump()
 				action_timer = randf_range(0.4, 0.6)
 		elif height_diff > 1.5:
@@ -1880,11 +1885,16 @@ func do_collect_orb(delta: float) -> void:
 				use_bounce_attack()
 				action_timer = randf_range(0.5, 0.8)
 		elif height_diff > 5.0:
-			# High - use double jump
-			if bot.jump_count == 0:
-				bot_jump()
-				action_timer = 0.2  # Quick follow-up for second jump
-			elif bot.jump_count < bot.max_jumps:
+			# High - use double jump (requires jump property validation)
+			if "jump_count" in bot and "max_jumps" in bot:
+				if bot.jump_count == 0:
+					bot_jump()
+					action_timer = 0.2  # Quick follow-up for second jump
+				elif bot.jump_count < bot.max_jumps:
+					bot_jump()
+					action_timer = randf_range(0.4, 0.6)
+			else:
+				# Fallback: single jump if properties missing
 				bot_jump()
 				action_timer = randf_range(0.4, 0.6)
 		elif height_diff > 1.5:
