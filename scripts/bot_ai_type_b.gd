@@ -1917,12 +1917,9 @@ func move_towards(target_pos: Vector3, speed_mult: float = 1.0) -> void:
 	var height_diff: float = target_pos.y - bot.global_position.y
 
 	if direction.length() > 0.1:
-		# NEW: Player avoidance - check for nearby players
-		if player_avoidance_timer <= 0.0:
-			var avoidance_force: Vector3 = get_player_avoidance_force()
-			if avoidance_force.length() > 0.1:
-				direction = (direction * 0.7 + avoidance_force * 0.3).normalized()
-			player_avoidance_timer = PLAYER_AVOIDANCE_CHECK_INTERVAL
+		# REMOVED: Player avoidance was causing bot clustering/huddling
+		# Bots were repelling from each other, creating oscillating huddles
+		# In FPS games, bots SHOULD cluster around objectives - that's normal behavior
 
 		# Check for dangerous edges (IMPROVED: increased distance and better braking)
 		if check_for_edge(direction, 4.0):
