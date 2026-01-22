@@ -548,6 +548,15 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 	var platform_height: float = platform_data.height
 	var distance: float = bot.global_position.distance_to(platform_pos)
 
+	# CRITICAL FIX: Don't target platform we're already on/very close to
+	# Horizontal distance check to see if we're standing on this platform
+	var horizontal_dist: float = Vector2(platform_pos.x - bot.global_position.x, platform_pos.z - bot.global_position.z).length()
+	var vertical_diff: float = abs(platform_height - bot.global_position.y)
+
+	# If we're very close horizontally and at similar height, we're on this platform - skip it
+	if horizontal_dist < 4.0 and vertical_diff < 2.0:
+		return -INF  # Never target platform we're already on
+
 	# Base accessibility score (prefer closer platforms, but not too far)
 	if distance < 15.0:
 		score += 50.0 - (distance * 2.0)
