@@ -233,7 +233,7 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
-	DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type B] Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
 
 # ============================================================================
 # DEBUG HELPERS
@@ -255,7 +255,7 @@ func change_state(new_state: String, reason: String = "") -> void:
 		if target_player and is_instance_valid(target_player):
 			var dist: float = bot.global_position.distance_to(target_player.global_position)
 			target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
-		DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] %s → %s%s%s | %s" % [state, new_state, ability_info, target_info, reason], false, get_entity_id())
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type B] %s → %s%s%s | %s" % [state, new_state, ability_info, target_info, reason], false, get_entity_id())
 		previous_state = state
 		state = new_state
 
@@ -274,7 +274,7 @@ func debug_log_periodic() -> void:
 		target_info = "%s (%.1fu, HP:%d)" % [target_player.name, dist, target_player.health]
 
 	var pos: Vector3 = bot.global_position
-	DebugLogger.log(DebugLogger.Category.BOT_AI, "[Type B] State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type B] State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
 		state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
 	], false, get_entity_id())
 

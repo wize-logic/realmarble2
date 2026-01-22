@@ -76,8 +76,8 @@ func _ready() -> void:
 	# Load saved debug preferences
 	load_preferences()
 
-func log(category: Category, message: String, force: bool = false, entity_id: Variant = null) -> void:
-	"""Log a message if the category is enabled or force flag is set
+func dlog(category: Category, message: String, force: bool = false, entity_id: Variant = null) -> void:
+	"""Debug log a message if the category is enabled or force flag is set
 
 	Args:
 		category: The debug category
@@ -110,8 +110,8 @@ func log(category: Category, message: String, force: bool = false, entity_id: Va
 
 	print("%s %s" % [prefix, message])
 
-func logf(category: Category, format: String, args: Array, force: bool = false, entity_id: Variant = null) -> void:
-	"""Log a formatted message"""
+func dlogf(category: Category, format: String, args: Array, force: bool = false, entity_id: Variant = null) -> void:
+	"""Debug log a formatted message"""
 	if not debug_enabled and not force:
 		return
 
@@ -119,7 +119,7 @@ func logf(category: Category, format: String, args: Array, force: bool = false, 
 		return
 
 	var message: String = format % args
-	log(category, message, true, entity_id)  # Already checked, pass force
+	dlog(category, message, true, entity_id)  # Already checked, pass force
 
 func enable_category(category: Category) -> void:
 	"""Enable logging for a specific category"""

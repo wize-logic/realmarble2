@@ -236,7 +236,7 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
-	DebugLogger.log(DebugLogger.Category.BOT_AI, "Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
 
 # ============================================================================
 # DEBUG HELPERS
@@ -258,7 +258,7 @@ func change_state(new_state: String, reason: String = "") -> void:
 		if target_player and is_instance_valid(target_player):
 			var dist: float = bot.global_position.distance_to(target_player.global_position)
 			target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
-		DebugLogger.log(DebugLogger.Category.BOT_AI, "%s → %s%s%s | %s" % [state, new_state, ability_info, target_info, reason], false, get_entity_id())
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "%s → %s%s%s | %s" % [state, new_state, ability_info, target_info, reason], false, get_entity_id())
 		previous_state = state
 		state = new_state
 
@@ -277,7 +277,7 @@ func debug_log_periodic() -> void:
 		target_info = "%s (%.1fu, HP:%d)" % [target_player.name, dist, target_player.health]
 
 	var pos: Vector3 = bot.global_position
-	DebugLogger.log(DebugLogger.Category.BOT_AI, "State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "State: %s | Ability: %s | Target: %s | Pos: (%.1f, %.1f, %.1f) | HP: %d" % [
 		state, ability_name, target_info, pos.x, pos.y, pos.z, bot.health
 	], false, get_entity_id())
 
@@ -2241,7 +2241,7 @@ func use_ability_smart(distance_to_target: float) -> void:
 			is_charging_ability = true
 			ability_charge_timer = randf_range(0.6, 1.3)
 			bot.current_ability.start_charge()
-			DebugLogger.log(DebugLogger.Category.BOT_AI, "Charging %s (%.1fs) | Dist: %.1fu" % [ability_name, ability_charge_timer, distance_to_target], false, get_entity_id())
+			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Charging %s (%.1fs) | Dist: %.1fu" % [ability_name, ability_charge_timer, distance_to_target], false, get_entity_id())
 
 	# Release charged ability or use instantly
 	if is_charging_ability and ability_charge_timer <= 0.0:
@@ -2251,14 +2251,14 @@ func use_ability_smart(distance_to_target: float) -> void:
 		else:
 			bot.current_ability.use()
 		action_timer = randf_range(0.4, 1.2)
-		DebugLogger.log(DebugLogger.Category.BOT_AI, "Released %s | Dist: %.1fu" % [ability_name, distance_to_target], false, get_entity_id())
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Released %s | Dist: %.1fu" % [ability_name, distance_to_target], false, get_entity_id())
 	elif should_use and not should_charge and not is_charging_ability:
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
 		var target_info: String = ""
 		if target_player and is_instance_valid(target_player):
 			target_info = " → %s" % target_player.name
-		DebugLogger.log(DebugLogger.Category.BOT_AI, "Used %s%s | Dist: %.1fu | Prof: %.0f" % [ability_name, target_info, distance_to_target, proficiency_score], false, get_entity_id())
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Used %s%s | Dist: %.1fu | Prof: %.0f" % [ability_name, target_info, distance_to_target, proficiency_score], false, get_entity_id())
 
 func calculate_lead_position() -> Vector3:
 	"""IMPROVED: Skill-based lead prediction (OpenArena-inspired accuracy variation)"""
