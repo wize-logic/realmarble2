@@ -411,10 +411,14 @@ func _physics_process(delta: float) -> void:
 			is_stuck = true
 			unstuck_timer = randf_range(0.8, 1.5)
 			consecutive_stuck_checks = max(consecutive_stuck_checks, 3)  # Mark as stuck
-			# Set escape direction backward
-			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+			# Set escape direction backward using transform (not rotation.y)
+			var opposite_dir: Vector3 = bot.global_transform.basis.z  # Backward
+			opposite_dir.y = 0
+			opposite_dir = opposite_dir.normalized()
 			var random_side: float = 1.0 if randf() > 0.5 else -1.0
-			var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+			var perpendicular: Vector3 = bot.global_transform.basis.x * random_side  # Left or right
+			perpendicular.y = 0
+			perpendicular = perpendicular.normalized()
 			obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
 	else:
 		# Reset timer when not stuck under terrain
@@ -3066,12 +3070,16 @@ func check_if_stuck() -> void:
 			# FIXED: Reduced timeout from 1.2-2.2 to 0.8-1.5 for faster recovery
 			unstuck_timer = randf_range(0.8, 1.5)
 
-			# Move opposite to current facing
-			var opposite_dir: Vector3 = Vector3(-sin(bot.rotation.y), 0, -cos(bot.rotation.y))
+			# Move opposite to current facing using transform (not rotation.y)
+			var opposite_dir: Vector3 = bot.global_transform.basis.z  # Backward
+			opposite_dir.y = 0
+			opposite_dir = opposite_dir.normalized()
 
 			if is_stuck_under_terrain():
 				var random_side: float = 1.0 if randf() > 0.5 else -1.0
-				var perpendicular: Vector3 = Vector3(-sin(bot.rotation.y), 0, cos(bot.rotation.y)) * random_side
+				var perpendicular: Vector3 = bot.global_transform.basis.x * random_side  # Left or right
+				perpendicular.y = 0
+				perpendicular = perpendicular.normalized()
 				obstacle_avoid_direction = (opposite_dir + perpendicular).normalized()
 			else:
 				obstacle_avoid_direction = opposite_dir
