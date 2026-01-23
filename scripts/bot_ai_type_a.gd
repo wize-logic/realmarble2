@@ -1519,7 +1519,8 @@ func update_state() -> void:
 		distance_to_target = bot.global_position.distance_to(target_player.global_position)
 
 	# Priority 1: Use retreat evaluator (now that we have an ability)
-	if has_combat_target and should_retreat():
+	# BUGFIX: Don't re-enter RETREAT if already retreating (prevents timer reset)
+	if has_combat_target and should_retreat() and state != "RETREAT":
 		change_state("RETREAT", "Low health: %d/3" % get_bot_health())
 		retreat_timer = randf_range(2.5, 4.5)
 		return
