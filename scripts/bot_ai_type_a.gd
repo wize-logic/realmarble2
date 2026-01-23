@@ -114,6 +114,7 @@ const STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT: float = 3.0  # Force teleport after 
 var target_stuck_timer: float = 0.0
 var target_stuck_position: Vector3 = Vector3.ZERO
 const TARGET_STUCK_TIMEOUT: float = 4.0
+const ABILITY_COLLECTION_TIMEOUT: float = 15.0  # DESPERATE: Much longer timeout for ability collection
 
 # NEW: Bounce attack support
 var bounce_cooldown_timer: float = 0.0
@@ -1910,32 +1911,48 @@ func navigate_to_platform(delta: float) -> void:
 			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
-	"""HYPER-FOCUS: Move towards ability with unwavering determination"""
+	"""DESPERATE: Move towards ability with unwavering determination - NEVER give up!"""
 	# VALIDATION: Check if target is invalid or collected
 	if not target_ability or not is_instance_valid(target_ability):
-		# Target is gone - immediately find another ability to collect!
-		find_nearest_ability()
-		if target_ability and is_instance_valid(target_ability):
-			# Found a new ability - continue collecting!
-			ability_locked_on = true
-			locked_ability_id = target_ability.get_instance_id()
-			return
+		# DESPERATE: Only look for new ability if we don't have a lock, or if locked ability is truly gone
+		if not ability_locked_on or locked_ability_id == -1:
+			find_nearest_ability()
+			if target_ability and is_instance_valid(target_ability):
+				# Found a new ability - LOCK ON!
+				ability_locked_on = true
+				locked_ability_id = target_ability.get_instance_id()
+				return
+			else:
+				# No abilities available - exit collection mode
+				ability_locked_on = false
+				locked_ability_id = -1
+				state = "WANDER"
+				return
 		else:
-			# No abilities available - exit collection mode
+			# Locked ability is gone - must have been collected
 			ability_locked_on = false
 			locked_ability_id = -1
-			state = "WANDER"
-			return
+			# Try to find another immediately
+			find_nearest_ability()
+			if target_ability and is_instance_valid(target_ability):
+				ability_locked_on = true
+				locked_ability_id = target_ability.get_instance_id()
+				return
+			else:
+				state = "WANDER"
+				return
 
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
 	# CRITICAL: Check if ability was collected by someone else
 	if target_ability.get("is_collected") == true:
-		# Ability just collected! Immediately hyper-focus on another nearby ability
+		# DESPERATE: Ability just collected! Immediately find another and LOCK ON!
+		ability_locked_on = false  # Clear old lock
+		locked_ability_id = -1
 		find_nearest_ability()
 		if target_ability and is_instance_valid(target_ability):
-			# Found replacement - continue hyper-focus!
+			# Found replacement - LOCK ON with extreme prejudice!
 			ability_locked_on = true
 			locked_ability_id = target_ability.get_instance_id()
 			return
@@ -1962,37 +1979,41 @@ func do_collect_ability(delta: float) -> void:
 		navigate_to_platform(delta)
 		return
 
-	# Move towards ability urgently
+	# DESPERATE: Move towards ability at MAXIMUM SPEED - nothing else matters!
 	move_towards(target_ability.global_position, 1.0)
 
-	# ENHANCED: Height-based jumping for elevated items
+	# DESPERATE: Aggressive jumping - jump constantly to reach ability faster
 	if action_timer <= 0.0:
 		if height_diff > 10.0:
-			# Very high - use bounce attack
+			# Very high - SPAM bounce attack!
 			if bounce_cooldown_timer <= 0.0:
 				use_bounce_attack()
-				action_timer = randf_range(0.5, 0.8)
+				action_timer = randf_range(0.3, 0.5)  # Faster retry
 		elif height_diff > 5.0:
-			# High - use double jump (requires jump property validation)
+			# High - AGGRESSIVE double jump spam
 			if "jump_count" in bot and "max_jumps" in bot:
 				if bot.jump_count == 0:
 					bot_jump()
-					action_timer = 0.2  # Quick follow-up for second jump
+					action_timer = 0.1  # VERY quick follow-up for second jump
 				elif bot.jump_count < bot.max_jumps:
 					bot_jump()
-					action_timer = randf_range(0.4, 0.6)
+					action_timer = randf_range(0.2, 0.4)  # Faster retry
 			else:
-				# Fallback: single jump if properties missing
+				# Fallback: aggressive single jump
 				bot_jump()
-				action_timer = randf_range(0.4, 0.6)
+				action_timer = randf_range(0.2, 0.4)
 		elif height_diff > 1.5:
-			# Medium elevation - single jump
+			# Medium elevation - SPAM jumps
+			bot_jump()
+			action_timer = randf_range(0.2, 0.3)  # Much faster
+		elif height_diff > 0.5:
+			# Small elevation - jump frequently
 			bot_jump()
 			action_timer = randf_range(0.3, 0.5)
-		elif height_diff > 0.7 or randf() < 0.4:
-			# Small elevation - occasional jump
+		elif distance < 20.0 and randf() < 0.6:
+			# DESPERATE: Jump even on flat ground when close to keep momentum
 			bot_jump()
-			action_timer = randf_range(0.4, 0.8)
+			action_timer = randf_range(0.4, 0.7)
 
 func do_collect_orb(delta: float) -> void:
 	"""Move towards orb with elevated surface handling"""
@@ -3278,10 +3299,14 @@ func check_target_timeout(delta: float) -> void:
 		var current_pos: Vector3 = bot.global_position
 		var distance_moved: float = current_pos.distance_to(target_stuck_position)
 
-		if distance_moved < 0.8:
+		# DESPERATE: Much more lenient stuck detection for ability collection
+		var stuck_threshold: float = 0.3 if state == "COLLECT_ABILITY" else 0.8
+		var timeout: float = ABILITY_COLLECTION_TIMEOUT if state == "COLLECT_ABILITY" else TARGET_STUCK_TIMEOUT
+
+		if distance_moved < stuck_threshold:
 			target_stuck_timer += delta
 
-			if target_stuck_timer >= TARGET_STUCK_TIMEOUT:
+			if target_stuck_timer >= timeout:
 				# Abandon target
 				if state == "COLLECT_ABILITY":
 					target_ability = null
