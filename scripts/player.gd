@@ -212,7 +212,7 @@ func _ready() -> void:
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
 		camera_arm.top_level = true
-		print("[CAMERA] Camera arm top_level set to true")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Camera arm top_level set to true", false, get_entity_id())
 
 	# Set up ground detection raycast
 	if not ground_ray:
@@ -575,9 +575,9 @@ func _ready() -> void:
 	if spawns.size() > 0:
 		var spawn_index: int = player_id % spawns.size()
 		global_position = spawns[spawn_index]
-		print("Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position], false, get_entity_id())
 	else:
-		print("WARNING: No spawn points available! Player %s using default position." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "WARNING: No spawn points available! Player %s using default position." % name, false, get_entity_id())
 		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Reset velocity on spawn
@@ -591,12 +591,12 @@ func _ready() -> void:
 
 	# CRITICAL HTML5 FIX: Set camera immediately and use deferred call for persistence
 	if camera and camera_arm:
-		print("[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)], false, get_entity_id())
 		# Position camera arm at player immediately
 		camera_arm.global_position = global_position
 		# Set camera as current
 		camera.current = true
-		print("[CAMERA] Player %s camera.current set to: %s" % [name, camera.current])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s camera.current set to: %s" % [name, camera.current], false, get_entity_id())
 		# Use deferred call to re-confirm after full scene initialization (HTML5 compatibility)
 		call_deferred("_force_camera_activation")
 
@@ -605,14 +605,14 @@ func _force_camera_activation() -> void:
 	# CRITICAL: Only local player with authority should activate camera
 	# Bots must NEVER activate their cameras or they'll hijack the player camera
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		print("[CAMERA] Player %s: Skipping camera activation (not authority)" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s: Skipping camera activation (not authority)" % name, false, get_entity_id())
 		return
 
 	if not camera or not camera_arm:
-		print("[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name, false, get_entity_id())
 		return
 
-	print("[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name, false, get_entity_id())
 
 	# Position camera arm at current player position
 	camera_arm.global_position = global_position
@@ -621,12 +621,12 @@ func _force_camera_activation() -> void:
 	var all_cameras: Array[Camera3D] = []
 	_find_all_cameras(get_tree().root, all_cameras)
 
-	print("[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name], false, get_entity_id())
 
 	# Disable all other cameras
 	for other_camera in all_cameras:
 		if other_camera != camera and other_camera.current:
-			print("[CAMERA] Disabling other camera: %s" % other_camera.get_path())
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Disabling other camera: %s" % other_camera.get_path(), false, get_entity_id())
 			other_camera.current = false
 
 	# Force our camera to be current
@@ -636,7 +636,7 @@ func _force_camera_activation() -> void:
 	camera_arm.force_update_transform()
 	camera.force_update_transform()
 
-	print("[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position], false, get_entity_id())
 
 func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 	"""Recursively find all Camera3D nodes in the scene"""
@@ -653,7 +653,7 @@ func _process(delta: float) -> void:
 		camera_arm.global_position = global_position
 	else:
 		if not camera_arm:
-			print("[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name, false, get_entity_id())
 
 	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
 	# Bots must NEVER activate their cameras or they'll hijack the player camera
@@ -663,10 +663,10 @@ func _process(delta: float) -> void:
 	elif camera and is_instance_valid(camera):
 		if not camera.current:
 			camera.current = true
-			print("[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
 	else:
 		if not camera:
-			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera is NULL in _process!" % name, false, get_entity_id())
 
 	# Handle last attacker timeout
 	if last_attacker_id != -1:
@@ -703,7 +703,7 @@ func _process(delta: float) -> void:
 		return
 
 	if not camera or not camera_arm:
-		print("[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name, false, get_entity_id())
 		return
 
 	# CRITICAL HTML5 FIX: Force camera to be current every frame
@@ -1100,7 +1100,7 @@ func check_ground() -> void:
 		var bounce_multiplier: float = pow(bounce_scale_per_count, bounce_count - 1)
 		var scaled_impulse: float = current_bounce_back_impulse * bounce_multiplier
 
-		print("BOUNCE IMPACT #%d! Multiplier: %.2fx | Impulse: %.1f" % [bounce_count, bounce_multiplier, scaled_impulse])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "BOUNCE IMPACT #%d! Multiplier: %.2fx | Impulse: %.1f" % [bounce_count, bounce_multiplier, scaled_impulse], false, get_entity_id())
 
 		# Cancel vertical velocity and apply scaled upward impulse
 		var vel: Vector3 = linear_velocity
@@ -1122,7 +1122,7 @@ func check_ground() -> void:
 		var particle_intensity: float = 1.0 + (bounce_count - 1) * 0.3  # 1.0, 1.3, 1.6
 		spawn_jump_bounce_effect(particle_intensity)
 
-		print("Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count], false, get_entity_id())
 
 	# Reset jump count when landing
 	if is_grounded and not was_grounded:
@@ -1213,7 +1213,7 @@ func start_bounce() -> void:
 	if is_bouncing:
 		return
 
-	print("Starting bounce attack!")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Starting bounce attack!", false, get_entity_id())
 	is_bouncing = true
 
 	# Cancel all horizontal velocity and apply strong downward velocity
@@ -1230,7 +1230,7 @@ func start_bounce() -> void:
 	# Spawn bounce particle effect (initiating bounce)
 	spawn_jump_bounce_effect(1.2)
 
-	print("Bounce velocity applied: y=%.1f" % vel.y)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce velocity applied: y=%.1f" % vel.y, false, get_entity_id())
 
 @rpc("any_peer")
 func receive_damage(damage: int = 1) -> void:
@@ -1260,7 +1260,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	last_attacker_time = Time.get_ticks_msec() / 1000.0
 
 	health -= damage
-	print("Received %d damage from player %d! Health: %d" % [damage, attacker_id, health])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Received %d damage from player %d! Health: %d" % [damage, attacker_id, health], false, get_entity_id())
 
 	# Play hit sound
 	if hit_sound and hit_sound.stream:
@@ -1282,16 +1282,16 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 
 			# Update attacker's killstreak and notify
 			var attacker: Node = world.get_node_or_null(str(attacker_id))
-			print("[KILL] Looking for attacker node: ", attacker_id, " - Found: ", attacker != null)
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Looking for attacker node: %d - Found: %s" % [attacker_id, attacker != null])
 			if attacker and "killstreak" in attacker:
 				attacker.killstreak += 1
-				print("[KILL] Attacker killstreak is now: ", attacker.killstreak)
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Attacker killstreak is now: %d" % attacker.killstreak)
 				# Notify HUD of kill with victim's name (call on attacker's node)
 				if attacker.has_method("notify_kill"):
-					print("[KILL] Calling notify_kill on attacker node")
+					DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Calling notify_kill on attacker node")
 					attacker.notify_kill(attacker_id, name.to_int())
 				else:
-					print("[KILL] ERROR: Attacker doesn't have notify_kill method!")
+					DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] ERROR: Attacker doesn't have notify_kill method!")
 
 				# Notify about killstreak milestones
 				if attacker.killstreak == 5 or attacker.killstreak == 10:
@@ -1305,7 +1305,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		# Delay respawn slightly for death effects to be visible
 		await get_tree().create_timer(0.1).timeout
 		respawn()
-		print("Killed by player %d!" % attacker_id)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Killed by player %d!" % attacker_id, false, get_entity_id())
 
 func respawn() -> void:
 	health = 3
@@ -1387,7 +1387,7 @@ func fall_death() -> void:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  God mode enabled, ignoring", false, get_entity_id())
 		return
 
-	print("  Starting fall death sequence")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Starting fall death sequence", false, get_entity_id())
 
 	# Track death
 	var world: Node = get_parent()
@@ -1397,7 +1397,7 @@ func fall_death() -> void:
 	# Check if there was a recent attacker who should get credit for the knockoff kill
 	var current_time: float = Time.get_ticks_msec() / 1000.0
 	if last_attacker_id != -1 and (current_time - last_attacker_time) <= ATTACKER_TIMEOUT:
-		print("  Knockoff kill credited to player %d" % last_attacker_id)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Knockoff kill credited to player %d" % last_attacker_id, false, get_entity_id())
 		# Give attacker credit for the kill
 		if world and world.has_method("add_score"):
 			world.add_score(last_attacker_id, 1)
@@ -1492,9 +1492,9 @@ func drop_ability() -> void:
 	# Spawn the ability pickup on the ground if we have a valid scene
 	if ability_scene:
 		spawn_ability_pickup(ability_scene, ability_name, ability_color)
-		print("Dropped ability: %s" % ability_name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropped ability: %s" % ability_name, false, get_entity_id())
 	else:
-		print("Dropped ability but couldn't spawn pickup: %s" % ability_name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropped ability but couldn't spawn pickup: %s" % ability_name, false, get_entity_id())
 
 func get_ability_scene_from_name(ability_name: String) -> PackedScene:
 	"""Map ability name to its scene"""
@@ -1508,7 +1508,7 @@ func get_ability_scene_from_name(ability_name: String) -> PackedScene:
 		"Sword":
 			return SwordScene
 		_:
-			print("WARNING: Unknown ability name: %s" % ability_name)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "WARNING: Unknown ability name: %s" % ability_name)
 			return null
 
 func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, ability_color: Color) -> void:
@@ -1516,7 +1516,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Get the world node (parent) to add the pickup to
 	var world: Node = get_parent()
 	if not world:
-		print("ERROR: No parent node to spawn ability pickup into!")
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "ERROR: No parent node to spawn ability pickup into!")
 		return
 
 	# Find ground position near player
@@ -1558,7 +1558,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Add the pickup to the world
 	world.add_child(pickup)
 
-	print("Ability pickup '%s' spawned on ground at position %s" % [ability_name, spawn_pos])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability pickup '%s' spawned on ground at position %s" % [ability_name, spawn_pos], false, get_entity_id())
 
 @rpc("call_local")
 func use_ability() -> void:
@@ -1650,7 +1650,7 @@ func spawn_death_particles() -> void:
 	death_particles.emitting = true
 	death_particles.restart()
 
-	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"], false, get_entity_id())
 
 func spawn_collection_effect() -> void:
 	"""Spawn blue aura collection effect rising from beneath the player"""
@@ -1686,7 +1686,7 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction], false, get_entity_id())
 
 func spawn_beam_effect() -> void:
 	"""Spawn Star Trek-style beam effect at player spawn position"""
@@ -1713,13 +1713,13 @@ func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
 	# Only spawn orbs if player has collected any (level > 0)
 	if level <= 0:
-		print("No orbs to drop - player level is 0")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "No orbs to drop - player level is 0", false, get_entity_id())
 		return
 
 	# Get the world node (parent) to add the orbs to
 	var world: Node = get_parent()
 	if not world:
-		print("ERROR: No parent node to spawn orbs into!")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "ERROR: No parent node to spawn orbs into!", false, get_entity_id())
 		return
 
 	# Spawn one orb for each level (1-3 orbs)
@@ -1772,9 +1772,9 @@ func spawn_death_orb() -> void:
 		# Add the orb to the world
 		world.add_child(orb)
 
-		print("Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)], false, get_entity_id())
 
-	print("Total %d orbs dropped by player %s" % [num_orbs, name])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Total %d orbs dropped by player %s" % [num_orbs, name], false, get_entity_id())
 
 # ============================================================================
 # UI SYSTEM
