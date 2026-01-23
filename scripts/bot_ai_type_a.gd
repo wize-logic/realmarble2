@@ -132,12 +132,19 @@ const ABILITY_SCORES: Dictionary = {
 	"Explosion": 70    # Close-range AoE
 }
 
-# IMPROVED: Cached group queries with filtering
+# IMPROVED: Cached group queries with filtering - CONSTANT AWARENESS MODE
 var cached_players: Array[Node] = []
 var cached_abilities: Array[Node] = []
 var cached_orbs: Array[Node] = []
+# HYPER-AWARENESS: Store exact coordinates for all collectibles
+var cached_ability_positions: Dictionary = {}  # {ability_node: Vector3}
+var cached_orb_positions: Dictionary = {}  # {orb_node: Vector3}
 var cache_refresh_timer: float = 0.0
-const CACHE_REFRESH_INTERVAL: float = 0.5
+const CACHE_REFRESH_INTERVAL: float = 0.1  # Update 10x per second for constant awareness!
+
+# HYPER-FOCUS: Ability collection lock-on system
+var ability_locked_on: bool = false  # Bot is hyper-focused on collecting an ability
+var locked_ability_id: int = -1  # Track which ability we're locked onto
 
 # NEW: Platform navigation system
 var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
@@ -358,6 +365,13 @@ func _physics_process(delta: float) -> void:
 	second_jump_timer -= delta
 	debug_log_timer += delta
 
+	# HYPER-FOCUS: Check if ability was successfully collected - unlock if so
+	if ability_locked_on and bot.current_ability:
+		# Bot successfully collected an ability! Release hyper-focus lock
+		ability_locked_on = false
+		locked_ability_id = -1
+		target_ability = null
+
 	# DEBUG: Periodic state logging
 	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) and debug_log_timer >= DEBUG_LOG_INTERVAL:
 		debug_log_periodic()
@@ -524,7 +538,7 @@ func initialize_personality() -> void:
 		caution_level = randf_range(0.4, 0.6)
 
 func refresh_cached_groups() -> void:
-	"""IMPROVED: Cache group queries with validity filtering"""
+	"""HYPER-AWARENESS: Cache ALL entities with exact positions - constant tracking"""
 	# Filter out invalid nodes immediately
 	cached_players = get_tree().get_nodes_in_group("players").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree()
@@ -535,6 +549,17 @@ func refresh_cached_groups() -> void:
 	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
 	)
+
+	# HYPER-AWARENESS: Store exact coordinates for ALL abilities and orbs
+	cached_ability_positions.clear()
+	for ability in cached_abilities:
+		if is_instance_valid(ability) and "global_position" in ability:
+			cached_ability_positions[ability] = ability.global_position
+
+	cached_orb_positions.clear()
+	for orb in cached_orbs:
+		if is_instance_valid(orb) and "global_position" in orb:
+			cached_orb_positions[orb] = orb.global_position
 
 	# NEW: Cache platforms from level generators
 	refresh_platform_cache()
@@ -1470,22 +1495,32 @@ func should_use_platform_in_combat() -> bool:
 	return false
 
 func update_state() -> void:
-	"""IMPROVED: Better state prioritization with combat evaluators"""
+	"""HYPER-FOCUS: State prioritization with ability collection lock"""
 	var old_state: String = state
+
+	# PRIORITY -1: HYPER-FOCUS LOCK - If collecting ability, NEVER switch states!
+	# Bot is locked onto a specific ability and will not be distracted by anything
+	if ability_locked_on and state == "COLLECT_ABILITY":
+		# Hyper-focused! Stay in COLLECT_ABILITY until ability is collected
+		return
 
 	# PRIORITY 0: ABSOLUTE #1 - GET AN ABILITY IMMEDIATELY IF WE DON'T HAVE ONE
 	# Without an ability, the bot CANNOT attack and is useless in combat
 	# This overrides EVERYTHING including retreat, combat, and all other states
 	if not bot.current_ability:
-		# If we have a target ability, go get it NOW
+		# If we have a target ability, go get it NOW with HYPER-FOCUS
 		if target_ability and is_instance_valid(target_ability):
 			change_state("COLLECT_ABILITY", "No ability - collecting")
+			ability_locked_on = true  # HYPER-FOCUS: Lock onto this ability!
+			locked_ability_id = target_ability.get_instance_id()
 			return
 		else:
 			# No ability and no target ability - search for one immediately
 			find_nearest_ability()
 			if target_ability and is_instance_valid(target_ability):
 				change_state("COLLECT_ABILITY", "Found ability to collect")
+				ability_locked_on = true  # HYPER-FOCUS: Lock onto this ability!
+				locked_ability_id = target_ability.get_instance_id()
 				return
 			# Still no ability found - wander to search for one
 			change_state("WANDER", "No ability found - searching")
@@ -1860,20 +1895,41 @@ func navigate_to_platform(delta: float) -> void:
 			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
-	"""Move towards ability with elevated surface handling"""
+	"""HYPER-FOCUS: Move towards ability with unwavering determination"""
+	# VALIDATION: Check if target is invalid or collected
 	if not target_ability or not is_instance_valid(target_ability):
-		target_ability = null
-		state = "WANDER"
-		return
+		# Target is gone - immediately find another ability to collect!
+		find_nearest_ability()
+		if target_ability and is_instance_valid(target_ability):
+			# Found a new ability - continue collecting!
+			ability_locked_on = true
+			locked_ability_id = target_ability.get_instance_id()
+			return
+		else:
+			# No abilities available - exit collection mode
+			ability_locked_on = false
+			locked_ability_id = -1
+			state = "WANDER"
+			return
 
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
-	# BUGFIX: Check if ability was collected by someone else
+	# CRITICAL: Check if ability was collected by someone else
 	if target_ability.get("is_collected") == true:
-		target_ability = null
-		state = "WANDER"
-		return
+		# Ability just collected! Immediately hyper-focus on another nearby ability
+		find_nearest_ability()
+		if target_ability and is_instance_valid(target_ability):
+			# Found replacement - continue hyper-focus!
+			ability_locked_on = true
+			locked_ability_id = target_ability.get_instance_id()
+			return
+		else:
+			# No abilities available - exit collection mode
+			ability_locked_on = false
+			locked_ability_id = -1
+			state = "WANDER"
+			return
 
 	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
 	if height_diff > 4.0 and not is_approaching_platform:
