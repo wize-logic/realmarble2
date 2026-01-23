@@ -1449,25 +1449,7 @@ func calculate_current_aggression() -> float:
 	return clamp(current_aggression, 0.1, 1.5)
 
 func should_retreat() -> bool:
-	"""NEW: Comprehensive retreat evaluation (OpenArena-inspired) with validation guards"""
-	if not target_player or not is_instance_valid(target_player):
-		return false
-
-	# BUGFIX: Don't retreat if we just exited retreat (prevents attack-retreat cycle)
-	if retreat_cooldown > 0.0:
-		return false
-
-	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
-
-	# VALIDATION: Critical health retreat - ONLY at 1 HP (bots are brave now!)
-	var bot_health: int = get_bot_health()
-	if bot_health <= 1:
-		return distance_to_target < aggro_range * 0.5  # Reduced from 0.9 - only retreat if very close
-
-	# Removed health-based retreat threshold - bots fight to the death!
-	# Removed no-ability retreat - bots are fearless even without abilities!
-	# Removed defensive bot early retreat - all bots are brave!
-
+	"""Bots never retreat - they fight to the death!"""
 	return false
 
 func should_chase() -> bool:
