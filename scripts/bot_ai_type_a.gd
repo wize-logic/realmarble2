@@ -1874,10 +1874,18 @@ func do_collect_ability(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
 
-	# Clear target by distance
+	# BUGFIX: Check if ability was collected by someone else
+	if target_ability.get("is_collected") == true:
+		target_ability = null
+		state = "WANDER"
+		return
+
+	# BUGFIX: Clear target and change state when close enough
 	if distance < 2.5:
-		if distance < 1.5:
-			target_ability = null
+		# We're close enough - either we'll collect it or someone else did
+		# Let update_state() decide what to do next
+		target_ability = null
+		state = "WANDER"
 		return
 
 	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
@@ -1944,10 +1952,12 @@ func do_collect_orb(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
-	# Clear target by distance
+	# BUGFIX: Clear target and change state when close enough
 	if distance < 2.5:
-		if distance < 1.5:
-			target_orb = null
+		# We're close enough - either we'll collect it or someone else did
+		# Let update_state() decide what to do next
+		target_orb = null
+		state = "WANDER"
 		return
 
 	# ELEVATED ITEM HANDLING: Check if orb is on a platform we need to reach
