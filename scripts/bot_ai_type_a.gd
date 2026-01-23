@@ -466,9 +466,11 @@ func _physics_process(delta: float) -> void:
 		find_target()
 		player_search_timer = 0.8
 
-	# Check for abilities periodically
+	# Check for abilities periodically (UNLESS locked onto one!)
+	# CRITICAL: Don't re-evaluate abilities when locked on - prevents target switching
 	if ability_check_timer <= 0.0:
-		find_nearest_ability()
+		if not ability_locked_on:
+			find_nearest_ability()
 		ability_check_timer = 1.2
 
 	# Check for orbs periodically
