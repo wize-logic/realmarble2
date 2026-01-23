@@ -2343,7 +2343,7 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	update_camera_aim(target_position, delta)
 
 func update_camera_aim(target_position: Vector3, delta: float) -> void:
-	"""Update CameraArm rotation to aim at target (enables proper ability aiming like players)"""
+	"""Update camera pitch for vertical aim (horizontal aim inherited from bot rotation)"""
 	if not bot or not is_instance_valid(bot):
 		return
 
@@ -2351,31 +2351,31 @@ func update_camera_aim(target_position: Vector3, delta: float) -> void:
 	if not camera_arm:
 		return
 
-	# Calculate horizontal direction to target
-	var target_dir: Vector3 = target_position - bot.global_position
-	var horizontal_dir: Vector3 = Vector3(target_dir.x, 0, target_dir.z)
+	# CRITICAL FIX: CameraArm rotation must be ZERO (local rotation)
+	# This makes it face "forward" relative to the bot
+	# The bot's rotation.y (set by look_at_target_smooth) provides horizontal aim
+	camera_arm.rotation.y = 0
 
-	if horizontal_dir.length() < 0.1:
+	# Calculate target direction
+	var target_dir: Vector3 = target_position - bot.global_position
+
+	if target_dir.length() < 0.1:
 		return
 
-	# Calculate desired yaw (horizontal rotation)
-	var desired_yaw: float = atan2(horizontal_dir.x, horizontal_dir.z)
-
-	# Apply yaw rotation to camera arm (same as player system)
-	camera_arm.rotation.y = desired_yaw
-
-	# Calculate pitch (vertical angle) based on height difference
+	# Calculate pitch (vertical angle) for aiming up/down at target
+	var horizontal_dir: Vector3 = Vector3(target_dir.x, 0, target_dir.z)
 	var horizontal_distance: float = horizontal_dir.length()
 	var height_diff: float = target_dir.y
+
 	var desired_pitch: float = -atan2(height_diff, horizontal_distance)  # Negative for look-up/down
 
 	# Clamp pitch to reasonable range (same as player)
 	desired_pitch = clamp(desired_pitch, deg_to_rad(-80), deg_to_rad(80))
 
 	# Apply pitch to camera (child of CameraArm)
+	# This tilts the camera up/down while CameraArm inherits bot's horizontal rotation
 	var camera: Camera3D = camera_arm.get_node_or_null("Camera3D")
 	if camera:
-		# Set camera rotation for vertical aim
 		camera.rotation.x = desired_pitch
 
 func get_eye_position() -> Vector3:
