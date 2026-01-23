@@ -1684,8 +1684,20 @@ func do_attack(delta: float) -> void:
 	var height_diff: float = target_player.global_position.y - bot.global_position.y
 	var optimal_distance: float = get_optimal_combat_distance()
 
+	# BUGFIX: Check if target is reachable (not on unreachable platform)
+	var target_reachable: bool = is_target_reachable(target_player.global_position)
+
+	# If target is unreachable (on different platform level), switch to chase to get closer
+	if not target_reachable:
+		state = "CHASE"
+		return
+
 	# Physics-safe rotation
 	look_at_target_smooth(target_player.global_position, delta)
+
+	# BUGFIX: Only use abilities if we're reasonably aligned with target
+	# This prevents firing in the wrong direction
+	var is_aligned: bool = is_aligned_with_target(target_player.global_position, 25.0)
 
 	# Tactical positioning
 	if distance_to_target > optimal_distance + 2.0:
@@ -1695,10 +1707,10 @@ func do_attack(delta: float) -> void:
 	else:
 		strafe_around_target(optimal_distance)
 
-	# Use ability intelligently
-	if bot.current_ability and bot.current_ability.has_method("use"):
+	# Use ability intelligently - ONLY if aligned with target
+	if bot.current_ability and bot.current_ability.has_method("use") and is_aligned:
 		use_ability_smart(distance_to_target)
-	# Spin dash as mobility option
+	# Spin dash as mobility option (doesn't require alignment)
 	elif action_timer <= 0.0 and validate_spin_dash_properties():
 		if randf() < 0.12 * aggression_level and bot.spin_cooldown <= 0.0 and not bot.is_spin_dashing:
 			initiate_spin_dash()
@@ -2195,12 +2207,13 @@ func use_ability_smart(distance_to_target: float) -> void:
 				var predicted_pos: Vector3 = calculate_lead_position()
 				var predicted_distance: float = bot.global_position.distance_to(predicted_pos)
 
-				if predicted_distance > 4.0 and predicted_distance < 40.0 and is_aligned_with_target(predicted_pos, 10.0):
+				# BUGFIX: Tighter alignment (8°) for cannons to ensure accurate shots
+				if predicted_distance > 4.0 and predicted_distance < 40.0 and is_aligned_with_target(predicted_pos, 8.0):
 					# INCREASED: Much higher usage chance for cannons (projectile weapon should fire often)
 					var usage_chance: float = (proficiency_score / 100.0) * 0.95  # 95% at max proficiency
 					should_use = randf() < usage_chance
 					should_charge = false  # Never charge cannon
-			elif distance_to_target > 4.0 and distance_to_target < 40.0 and is_aligned_with_target(target_player.global_position, 10.0):
+			elif distance_to_target > 4.0 and distance_to_target < 40.0 and is_aligned_with_target(target_player.global_position, 8.0):
 				should_use = randf() < (proficiency_score / 100.0) * 0.9
 				should_charge = false
 		"Sword":
@@ -2210,8 +2223,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 				var height_diff: float = abs(target_player.global_position.y - bot.global_position.y)
 				# Only use sword if height difference is small (< 3 units)
 				if distance_to_target < 6.0 and height_diff < 3.0 and proficiency_score > usage_threshold:
-					# Check if we're facing the target (important for melee!)
-					if is_aligned_with_target(target_player.global_position, 20.0):
+					# BUGFIX: Tighter alignment for sword (10°) - melee must be precise!
+					if is_aligned_with_target(target_player.global_position, 10.0):
 						# INCREASED: Swing sword much more reliably when in range and aligned
 						var usage_chance: float = (proficiency_score / 100.0) * 0.9  # 90% at max proficiency
 						should_use = randf() < usage_chance
@@ -2630,6 +2643,66 @@ func raycast_line_of_sight(target_pos: Vector3) -> bool:
 	var target_distance: float = start.distance_to(target_pos)
 
 	return hit_distance >= target_distance - 1.0
+
+func is_target_reachable(target_pos: Vector3) -> bool:
+	"""COMBAT: Check if target is reachable (no floor between us, or we can jump to them)"""
+	if not bot:
+		return false
+
+	var bot_pos: Vector3 = bot.global_position
+	var height_diff: float = target_pos.y - bot_pos.y
+
+	# If target is significantly below us (more than 5 units), check for floor between us
+	if height_diff < -5.0:
+		# PERFORMANCE: Use cached space state if available
+		var space_state: PhysicsDirectSpaceState3D = cached_space_state
+		if not space_state:
+			space_state = bot.get_world_3d().direct_space_state
+
+		# Cast ray downward from bot to check if there's a floor/platform
+		var ray_start: Vector3 = bot_pos
+		var ray_end: Vector3 = Vector3(bot_pos.x, target_pos.y + 1.0, bot_pos.z)
+
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.exclude = [bot]
+		query.collision_mask = 1  # World geometry
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		# If we hit something (platform) between us and target level, target is unreachable
+		if result:
+			var hit_height: float = result.position.y
+			# If the hit is above the target, there's a floor in the way
+			if hit_height > target_pos.y + 0.5:
+				return false
+
+	# If height difference is very large in either direction, check horizontal raycast for floors
+	if abs(height_diff) > 3.0:
+		var space_state: PhysicsDirectSpaceState3D = cached_space_state
+		if not space_state:
+			space_state = bot.get_world_3d().direct_space_state
+
+		# Cast horizontal ray from bot toward target to check for blocking platforms
+		var horizontal_dir: Vector3 = Vector3(target_pos.x - bot_pos.x, 0, target_pos.z - bot_pos.z).normalized()
+		var ray_start: Vector3 = bot_pos
+		var ray_end: Vector3 = bot_pos + horizontal_dir * bot_pos.distance_to(target_pos)
+		ray_end.y = bot_pos.y  # Keep it horizontal
+
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
+		query.exclude = [bot]
+		query.collision_mask = 1
+
+		var result: Dictionary = space_state.intersect_ray(query)
+
+		# If we hit a wall/platform horizontally and target is on different level, unreachable
+		if result:
+			var hit_distance: float = bot_pos.distance_to(result.position)
+			var target_horizontal_dist: float = Vector2(target_pos.x - bot_pos.x, target_pos.z - bot_pos.z).length()
+			# If we hit something before reaching target horizontally, it's blocking
+			if hit_distance < target_horizontal_dist - 2.0:
+				return false
+
+	return true
 
 func is_target_visible(target_pos: Vector3, target_node: Node = null) -> bool:
 	"""VISION: Check if target is visible with hysteresis for stability
