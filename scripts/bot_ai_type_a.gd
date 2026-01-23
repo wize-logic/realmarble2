@@ -237,7 +237,39 @@ func _ready() -> void:
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
 
+	# CRITICAL: Create CameraArm for bot aiming (same system as players)
+	call_deferred("create_bot_camera")
+
 	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [bot_skill, aggression_level, strategic_preference], false, get_entity_id())
+
+# ============================================================================
+# CAMERA SYSTEM (for aiming)
+# ============================================================================
+
+func create_bot_camera() -> void:
+	"""Create a CameraArm for bot aiming (same system as players)"""
+	if not bot or not is_instance_valid(bot):
+		return
+
+	# Check if CameraArm already exists
+	if bot.has_node("CameraArm"):
+		return
+
+	# Create CameraArm Node3D
+	var camera_arm: Node3D = Node3D.new()
+	camera_arm.name = "CameraArm"
+	bot.add_child(camera_arm)
+
+	# Create Camera3D child (same structure as player)
+	var camera: Camera3D = Camera3D.new()
+	camera.name = "Camera3D"
+	# Position camera same as player: (0, 2.5, 5)
+	camera.position = Vector3(0, 2.5, 5)
+	# Don't make this the current camera (bots don't need to render)
+	camera.current = false
+	camera_arm.add_child(camera)
+
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Created CameraArm for bot aiming", false, get_entity_id())
 
 # ============================================================================
 # DEBUG HELPERS
@@ -1906,18 +1938,6 @@ func do_collect_ability(delta: float) -> void:
 		state = "WANDER"
 		return
 
-	# BUGFIX: Don't give up immediately when close - let collision detection handle collection
-	# Instead, track time spent collecting and give up if taking too long (stuck/unreachable)
-	# The bot will collect the ability through collision when close enough
-	# If we've been trying to collect for more than 6 seconds, assume it's unreachable
-	if state == "COLLECT_ABILITY":
-		if target_stuck_timer > 6.0:
-			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Gave up collecting ability (timeout) | Dist: %.1fu" % distance, false, get_entity_id())
-			target_ability = null
-			state = "WANDER"
-			target_stuck_timer = 0.0
-			return
-
 	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
 	if height_diff > 4.0 and not is_approaching_platform:
 		# Item is significantly elevated - check if it's on a known platform
@@ -1981,16 +2001,6 @@ func do_collect_orb(delta: float) -> void:
 
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
-
-	# BUGFIX: Don't give up immediately when close - let collision detection handle collection
-	# Instead, track time spent collecting and give up if taking too long (stuck/unreachable)
-	if state == "COLLECT_ORB":
-		if target_stuck_timer > 6.0:
-			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Gave up collecting orb (timeout) | Dist: %.1fu" % distance, false, get_entity_id())
-			target_orb = null
-			state = "WANDER"
-			target_stuck_timer = 0.0
-			return
 
 	# ELEVATED ITEM HANDLING: Check if orb is on a platform we need to reach
 	if height_diff > 4.0 and not is_approaching_platform:
@@ -2616,6 +2626,45 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 
 	# Lerp current angular velocity toward target for smooth damping
 	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.3)
+
+	# CRITICAL: Update CameraArm to point at target for proper ability aiming
+	update_camera_aim(target_position, delta)
+
+func update_camera_aim(target_position: Vector3, delta: float) -> void:
+	"""Update CameraArm rotation to aim at target (enables proper ability aiming like players)"""
+	if not bot or not is_instance_valid(bot):
+		return
+
+	var camera_arm: Node3D = bot.get_node_or_null("CameraArm")
+	if not camera_arm:
+		return
+
+	# Calculate horizontal direction to target
+	var target_dir: Vector3 = target_position - bot.global_position
+	var horizontal_dir: Vector3 = Vector3(target_dir.x, 0, target_dir.z)
+
+	if horizontal_dir.length() < 0.1:
+		return
+
+	# Calculate desired yaw (horizontal rotation)
+	var desired_yaw: float = atan2(horizontal_dir.x, horizontal_dir.z)
+
+	# Apply yaw rotation to camera arm (same as player system)
+	camera_arm.rotation.y = desired_yaw
+
+	# Calculate pitch (vertical angle) based on height difference
+	var horizontal_distance: float = horizontal_dir.length()
+	var height_diff: float = target_dir.y
+	var desired_pitch: float = -atan2(height_diff, horizontal_distance)  # Negative for look-up/down
+
+	# Clamp pitch to reasonable range (same as player)
+	desired_pitch = clamp(desired_pitch, deg_to_rad(-80), deg_to_rad(80))
+
+	# Apply pitch to camera (child of CameraArm)
+	var camera: Camera3D = camera_arm.get_node_or_null("Camera3D")
+	if camera:
+		# Set camera rotation for vertical aim
+		camera.rotation.x = desired_pitch
 
 func get_eye_position() -> Vector3:
 	"""VISION: Get stable eye position for line of sight checks"""
