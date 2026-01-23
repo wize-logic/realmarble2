@@ -86,6 +86,7 @@ var retreat_timer: float = 0.0
 var retreat_cooldown: float = 0.0  # Prevents immediate re-entry into RETREAT after exiting
 var ability_charge_timer: float = 0.0
 var is_charging_ability: bool = false
+var charge_locked_target: Node = null  # Aggressive target lock during ability charge
 var aggression_level: float = 0.7  # Used for ability usage probability
 
 # NEW: OpenArena-inspired personality traits
@@ -1207,10 +1208,10 @@ func calculate_current_aggression() -> float:
 
 	# VALIDATION: Health penalty (low health reduces aggression)
 	var bot_health: int = get_bot_health()
-	if bot_health < 3:
-		current_aggression *= 0.3  # Severe penalty
-	elif bot_health < 5:
-		current_aggression *= 0.6  # Moderate penalty
+	if bot_health <= 1:
+		current_aggression *= 0.3  # Severe penalty (critical health)
+	elif bot_health == 2:
+		current_aggression *= 0.6  # Moderate penalty (low health)
 
 	# VALIDATION: Enemy health bonus (if we're healthier, be more aggressive)
 	if target_player and is_instance_valid(target_player):
@@ -1243,7 +1244,7 @@ func should_chase() -> bool:
 	# VALIDATION: Always chase if enemy is weak and we're healthy
 	var enemy_health: int = get_player_health(target_player)
 	var bot_health: int = get_bot_health()
-	if enemy_health <= 2 and bot_health >= 4:
+	if enemy_health <= 1 and bot_health >= 3:
 		return distance_to_target < aggro_range * 1.5
 
 	# Aggressive bots chase more eagerly
@@ -1412,6 +1413,10 @@ func do_chase(delta: float) -> void:
 	"""Chase target with tactical movement and facing"""
 	if not target_player or not is_instance_valid(target_player):
 		return
+
+	# AGGRESSIVE LOCK-ON: Override target with locked target during charge
+	if is_charging_ability and charge_locked_target and is_instance_valid(charge_locked_target):
+		target_player = charge_locked_target
 
 	# NEW: If seeking high ground platform, navigate there first
 	if is_approaching_platform and not target_platform.is_empty():
@@ -2018,7 +2023,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 						# INCREASED: Dash much more reliably when aligned (was too passive)
 						var usage_chance: float = (proficiency_score / 100.0) * 0.85  # 85% at max proficiency
 						should_use = randf() < usage_chance
-						should_charge = can_charge and distance_to_target > 8.0 and randf() < 0.7
+						# IMPROVED: Always charge dash at longer distances (>10 units), makes bots more aggressive
+						should_charge = can_charge and distance_to_target > 10.0
 		"Explosion":
 			# Explosion is AoE but still benefits from rough alignment
 			# CRITICAL: Check height difference - explosion doesn't reach far vertically
@@ -2042,6 +2048,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 			is_charging_ability = true
 			ability_charge_timer = randf_range(0.6, 1.3)
 			bot.current_ability.start_charge()
+			# AGGRESSIVE LOCK-ON: Lock onto current target during charge
+			charge_locked_target = target_player
 
 	# Release charged ability or use instantly
 	if is_charging_ability and ability_charge_timer <= 0.0:
@@ -2051,6 +2059,8 @@ func use_ability_smart(distance_to_target: float) -> void:
 		else:
 			bot.current_ability.use()
 		action_timer = randf_range(0.4, 1.2)
+		# Clear locked target after releasing charge
+		charge_locked_target = null
 	elif should_use and not should_charge and not is_charging_ability:
 		bot.current_ability.use()
 		action_timer = randf_range(0.6, 1.5)
@@ -2608,7 +2618,7 @@ func calculate_target_priority(player: Node) -> float:
 				score += 25.0
 		"support":
 			# Prefer weaker targets
-			if "health" in player and player.health < 4:
+			if "health" in player and player.health <= 2:
 				score += 35.0
 
 	return score

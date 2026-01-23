@@ -141,27 +141,10 @@ func _process(delta: float) -> void:
 			var slash_direction: Vector3 = Vector3.FORWARD
 
 			if camera_arm:
-				# Arc in camera forward direction
+				# Arc in camera forward direction (works for both players and bots)
 				slash_direction = -camera_arm.global_transform.basis.z
 				slash_direction.y = 0
 				slash_direction = slash_direction.normalized()
-			else:
-				# For bots: aim directly at their current target for accurate hits
-				var bot_ai: Node = player.get_node_or_null("BotAI")
-				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-					# Aim at bot's target
-					slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-					slash_direction.y = 0
-					if slash_direction.length() < 0.1:
-						# Target too close, use transform-based forward direction (FIXED)
-						slash_direction = -player.global_transform.basis.z
-						slash_direction.y = 0
-						slash_direction = slash_direction.normalized()
-				else:
-					# Fallback: use player's facing direction (FIXED)
-					slash_direction = -player.global_transform.basis.z
-					slash_direction.y = 0
-					slash_direction = slash_direction.normalized()
 
 			# Position at player's feet, offset in slash direction
 			# Use raycasting to find ground below the indicator position
@@ -221,26 +204,10 @@ func activate() -> void:
 	var slash_direction: Vector3 = Vector3.FORWARD
 
 	if camera_arm:
-		# Slash in camera forward direction
+		# Slash in camera forward direction (works for both players and bots)
 		slash_direction = -camera_arm.global_transform.basis.z
 		slash_direction.y = 0
 		slash_direction = slash_direction.normalized()
-	else:
-		# For bots: aim directly at their current target for accurate hits (full 3D aiming)
-		var bot_ai: Node = player.get_node_or_null("BotAI")
-		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Aim at bot's target in full 3D (no y-flattening for near-perfect vertical aim)
-			slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			if slash_direction.length() < 0.1:
-				# Target too close, use transform-based forward direction (FIXED)
-				slash_direction = -player.global_transform.basis.z
-				slash_direction.y = 0
-				slash_direction = slash_direction.normalized()
-		else:
-			# Fallback: use player's facing direction (FIXED)
-			slash_direction = -player.global_transform.basis.z
-			slash_direction.y = 0
-			slash_direction = slash_direction.normalized()
 
 	# Start slash
 	is_slashing = true

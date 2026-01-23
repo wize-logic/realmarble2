@@ -146,27 +146,10 @@ func _process(delta: float) -> void:
 			var target_direction: Vector3 = Vector3.FORWARD
 
 			if camera_arm:
-				# Point in camera forward direction
+				# Point in camera forward direction (works for both players and bots)
 				target_direction = -camera_arm.global_transform.basis.z
 				target_direction.y = 0
 				target_direction = target_direction.normalized()
-			else:
-				# For bots: aim directly at their current target for accurate dashes
-				var bot_ai: Node = player.get_node_or_null("BotAI")
-				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-					# Point toward bot's target
-					target_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-					target_direction.y = 0
-					if target_direction.length() < 0.1:
-						# Target too close, use transform-based forward direction (FIXED)
-						target_direction = -player.global_transform.basis.z
-						target_direction.y = 0
-						target_direction = target_direction.normalized()
-				else:
-					# Fallback: use player's facing direction (FIXED)
-					target_direction = -player.global_transform.basis.z
-					target_direction.y = 0
-					target_direction = target_direction.normalized()
 
 			# Position at player's feet, offset in dash direction
 			# Use raycasting to find ground below the indicator position
@@ -226,26 +209,10 @@ func activate() -> void:
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 
 	if camera_arm:
-		# Dash in camera forward direction
+		# Dash in camera forward direction (works for both players and bots)
 		dash_direction = -camera_arm.global_transform.basis.z
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
-	else:
-		# For bots: aim directly at their current target for accurate dashes (full 3D aiming)
-		var bot_ai: Node = player.get_node_or_null("BotAI")
-		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Dash toward bot's target in full 3D (no y-flattening for near-perfect vertical aim)
-			dash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			if dash_direction.length() < 0.1:
-				# Target too close, use transform-based forward direction (FIXED)
-				dash_direction = -player.global_transform.basis.z
-				dash_direction.y = 0
-				dash_direction = dash_direction.normalized()
-		else:
-			# Fallback: use player's facing direction (FIXED)
-			dash_direction = -player.global_transform.basis.z
-			dash_direction.y = 0
-			dash_direction = dash_direction.normalized()
 
 	# Apply initial dash impulse
 	if player is RigidBody3D:
