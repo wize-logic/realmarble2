@@ -1169,32 +1169,43 @@ func launch_from_rail(velocity: Vector3) -> void:
 
 	stop_grinding()
 
-	# Bot already has velocity from rail physics, just add upward boost
+	# Find safe landing zone FIRST (before applying impulse)
+	find_safe_landing_zone()
+
+	# AGGRESSIVE LAUNCH: Apply strong impulse toward target platform + upward boost
 	if bot and bot is RigidBody3D:
+		# Upward boost (unchanged)
 		bot.apply_central_impulse(Vector3.UP * 15.0)
+
+		# AGGRESSIVE HORIZONTAL IMPULSE: Immediately aim toward platform target
+		var bot_pos: Vector3 = bot.global_position
+		var direction_to_platform: Vector3 = (safe_landing_target - bot_pos).normalized()
+		direction_to_platform.y = 0  # Only horizontal component
+
+		# Apply MASSIVE initial impulse toward platform (30.0 = very aggressive!)
+		bot.apply_central_impulse(direction_to_platform * 30.0)
 
 	# RAIL LAUNCH RECOVERY: Activate aerial navigation mode
 	post_rail_launch = true
 	rail_launch_timer = 0.0
-	# Find safe landing zone immediately
-	find_safe_landing_zone()
 
 # ============================================================================
 # RAIL LAUNCH RECOVERY SYSTEM (Aerial navigation after rail detachment)
 # ============================================================================
 
 func find_safe_landing_zone() -> void:
-	"""Find a safe place to land after being launched from a rail"""
+	"""Find a safe place to land after being launched from a rail - ALWAYS prioritize platforms"""
 	if not bot:
 		return
 
 	var bot_pos: Vector3 = bot.global_position
 	var best_landing_score: float = -INF
-	# IMPROVED: Default to stage center (Y=1.5 for floor height) instead of current position
-	# This ensures bot always has a valid target to navigate toward
 	var best_landing_pos: Vector3 = Vector3(0, 1.5, 0)  # Stage center fallback
 
-	# Strategy 1: Check for nearby platforms (elevated safe zones)
+	# AGGRESSIVE PLATFORM TARGETING: Prioritize platforms heavily when launched from rail
+	# Expanded search radius for more aggressive platform seeking
+	var expanded_search_radius: float = SAFE_LANDING_SEARCH_RADIUS * 2.0  # Double the search range!
+
 	for platform_data in cached_platforms:
 		if not is_instance_valid(platform_data.node):
 			continue
@@ -1202,93 +1213,43 @@ func find_safe_landing_zone() -> void:
 		var platform_pos: Vector3 = platform_data.position
 		var distance: float = Vector2(bot_pos.x - platform_pos.x, bot_pos.z - platform_pos.z).length()
 
-		# Only consider platforms within reasonable aerial range
-		if distance > SAFE_LANDING_SEARCH_RADIUS:
+		# Expanded range - seek platforms more aggressively
+		if distance > expanded_search_radius:
 			continue
 
-		var score: float = 0.0
+		# MASSIVELY increased base score for platforms
+		var score: float = 500.0  # Huge bonus just for being a platform!
 
 		# Prefer platforms below us (easier to reach)
 		var height_diff: float = platform_pos.y - bot_pos.y
 		if height_diff < 0:  # Platform below us
-			score += 50.0
-			score += min(abs(height_diff) * 5.0, 100.0)  # Prefer platforms well below
-		else:  # Platform above us
-			score -= height_diff * 10.0  # Penalty for platforms above
+			score += 200.0  # Massive bonus for platforms below
+			score += min(abs(height_diff) * 10.0, 300.0)  # Big height bonus
+		else:  # Platform above us - still valuable!
+			score += 100.0  # Still prefer platforms even if above
+			score -= height_diff * 5.0  # Smaller penalty
 
-		# Prefer closer platforms
-		score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 2.0
+		# Distance matters less - we aggressively go for ANY platform
+		score += (expanded_search_radius - distance) * 5.0
 
 		# Prefer larger platforms (safer landing)
 		var platform_size: Vector3 = platform_data.size
 		var platform_area: float = platform_size.x * platform_size.z
-		score += platform_area * 0.5
+		score += platform_area * 2.0  # Increased weight
 
-		# Check if platform is occupied (avoid collisions)
+		# Occupancy matters less - platforms are priority
 		var occupancy: int = count_bots_on_platform(platform_data)
-		if occupancy >= 2:
-			score -= 100.0  # Crowded platform
-		elif occupancy == 1:
-			score -= 30.0  # One bot present
+		if occupancy >= 3:  # Only avoid if very crowded
+			score -= 50.0
+		elif occupancy >= 2:
+			score -= 20.0
 
 		if score > best_landing_score:
 			best_landing_score = score
 			best_landing_pos = platform_pos
 
-	# Strategy 2: Check for stage floor (main ground level)
-	# Raycast downward to find ground
-	var space_state: PhysicsDirectSpaceState3D = cached_space_state
-	if not space_state:
-		space_state = bot.get_world_3d().direct_space_state
-
-	# Check multiple points around bot's horizontal position
-	var check_offsets: Array = [
-		Vector3.ZERO,
-		Vector3(5, 0, 0),
-		Vector3(-5, 0, 0),
-		Vector3(0, 0, 5),
-		Vector3(0, 0, -5)
-	]
-
-	for offset in check_offsets:
-		var check_pos: Vector3 = Vector3(bot_pos.x + offset.x, bot_pos.y, bot_pos.z + offset.z)
-		var ray_start: Vector3 = check_pos + Vector3.UP * 2.0
-		var ray_end: Vector3 = check_pos + Vector3.DOWN * 100.0  # Cast down far
-
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-		query.exclude = [bot]
-		query.collision_mask = 1
-
-		var result: Dictionary = space_state.intersect_ray(query)
-
-		if result:
-			var ground_pos: Vector3 = result.position
-			var distance: float = Vector2(bot_pos.x - ground_pos.x, bot_pos.z - ground_pos.z).length()
-
-			# Only consider ground within range
-			if distance > SAFE_LANDING_SEARCH_RADIUS:
-				continue
-
-			var score: float = 0.0
-
-			# Prefer ground below us
-			var height_diff: float = ground_pos.y - bot_pos.y
-			if height_diff < 0:  # Ground below us
-				score += 40.0
-				score += min(abs(height_diff) * 3.0, 80.0)
-			else:  # Ground above us (shouldn't happen often)
-				score -= 50.0
-
-			# Prefer closer ground
-			score += (SAFE_LANDING_SEARCH_RADIUS - distance) * 1.5
-
-			# Prefer main stage floor (typically Y ~= 0 to 2)
-			if ground_pos.y >= -1.0 and ground_pos.y <= 3.0:
-				score += 60.0  # Main stage floor bonus
-
-			if score > best_landing_score:
-				best_landing_score = score
-				best_landing_pos = ground_pos
+	# Ground search removed - bots MUST aim for platforms when launched from rails!
+	# If no platform found, fallback to stage center is sufficient
 
 	# Set the target landing position
 	safe_landing_target = best_landing_pos
@@ -1324,16 +1285,23 @@ func handle_post_rail_launch_navigation(delta: float) -> void:
 		rail_launch_timer = 0.0
 		return
 
-	# Still airborne - apply aerial correction toward safe landing zone
+	# Still airborne - apply AGGRESSIVE aerial correction toward platform target
 	var bot_pos: Vector3 = bot.global_position
 	var direction_to_safe_zone: Vector3 = (safe_landing_target - bot_pos).normalized()
 	direction_to_safe_zone.y = 0  # Only horizontal correction
 
 	if direction_to_safe_zone.length() > 0.1:
-		# INCREASED: Apply stronger aerial correction force to ensure bot reaches stage
-		# Was 60%, now 85% - bots need strong aerial control to get back from rails
-		var aerial_force: float = bot.current_roll_force * 0.85
+		# AGGRESSIVE: Apply MAXIMUM aerial correction force - bots MUST reach platforms!
+		# Increased from 85% to 150% for extremely aggressive platform seeking
+		var aerial_force: float = bot.current_roll_force * 1.5
 		bot.apply_central_force(direction_to_safe_zone * aerial_force)
+
+		# EXTRA BOOST: Add additional impulse if far from target for extra aggression
+		var distance_to_target: float = bot_pos.distance_to(safe_landing_target)
+		if distance_to_target > 20.0:
+			# Apply extra impulse every 0.5 seconds when far from target
+			if fmod(rail_launch_timer, 0.5) < delta:
+				bot.apply_central_impulse(direction_to_safe_zone * 8.0)
 
 	# Look toward landing target
 	look_at_target_smooth(safe_landing_target, delta)
