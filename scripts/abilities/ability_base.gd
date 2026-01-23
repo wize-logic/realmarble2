@@ -104,12 +104,12 @@ func _process(delta: float) -> void:
 ## Called when the ability is picked up by a player
 func pickup(p_player: Node) -> void:
 	player = p_player
-	print("Player picked up: ", ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player picked up: %s" % ability_name, false, get_entity_id())
 
 ## Called when the ability is dropped by the player
 func drop() -> void:
 	player = null
-	print("Player dropped: ", ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player dropped: %s" % ability_name, false, get_entity_id())
 
 ## Called when the player uses the ability
 func use() -> void:
@@ -147,7 +147,7 @@ func start_charge() -> void:
 		if player:
 			charge_particles.global_position = player.global_position
 
-	print("Started charging %s" % ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Started charging %s" % ability_name, false, get_entity_id())
 
 ## Stop charging and release the ability
 func release_charge() -> void:
@@ -167,7 +167,7 @@ func release_charge() -> void:
 	is_on_cooldown = true
 	cooldown_timer = cooldown_time
 
-	print("Released %s at charge level %d (%.1fs)" % [ability_name, charge_level, charge_time])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Released %s at charge level %d (%.1fs)" % [ability_name, charge_level, charge_time], false, get_entity_id())
 
 	# Reset charge
 	charge_time = 0.0

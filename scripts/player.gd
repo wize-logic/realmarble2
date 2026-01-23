@@ -1206,7 +1206,7 @@ func execute_spin_dash() -> void:
 	if spin_sound and spin_sound.stream:
 		play_spin_sound.rpc()
 
-	print("Spin dash towards reticle! Direction: %s | Rotation: %.1f° | Charge: %.1f%% | Force: %.1f" % [dash_direction, rad_to_deg(target_rotation_y), charge_multiplier * 100, dash_impulse])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Spin dash towards reticle! Direction: %s | Rotation: %.1f° | Charge: %.1f%% | Force: %.1f" % [dash_direction, rad_to_deg(target_rotation_y), charge_multiplier * 100, dash_impulse], false, get_entity_id())
 
 func start_bounce() -> void:
 	"""Start the bounce attack - Sonic Adventure 2 style"""
@@ -1662,7 +1662,7 @@ func spawn_collection_effect() -> void:
 	collection_particles.emitting = true
 	collection_particles.restart()
 
-	print("Collection effect spawned for %s at position %s" % [name, global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Collection effect spawned for %s at position %s" % [name, global_position], false, get_entity_id())
 
 func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	"""Spawn 3 dark blue circles that trail behind player motion (Sonic Adventure 2 style)"""

@@ -196,7 +196,7 @@ func _process(delta: float) -> void:
 
 			# Spawn pending bots now that match is active
 			if pending_bot_count > 0:
-				print("Spawning %d pending bots..." % pending_bot_count)
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawning %d pending bots..." % pending_bot_count)
 				spawn_pending_bots()
 				pending_bot_count = 0
 
@@ -213,7 +213,7 @@ func _process(delta: float) -> void:
 		# Log every 30 seconds (but only once per interval)
 		var current_interval: int = int(game_time_remaining) / 30
 		if current_interval != last_time_print and int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
-			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 			last_time_print = current_interval
 
 		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
@@ -1357,7 +1357,7 @@ func add_death(player_id: int) -> void:
 	if not player_deaths.has(player_id):
 		player_deaths[player_id] = 0
 	player_deaths[player_id] += 1
-	print("Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
@@ -1556,14 +1556,14 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 func spawn_bot() -> void:
 	"""Spawn an AI-controlled bot player"""
-	print("--- spawn_bot() called ---")
-	print("Bot counter before: ", bot_counter)
-	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "--- spawn_bot() called ---")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Bot counter before: %d" % bot_counter)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Current players in game: %d" % get_tree().get_nodes_in_group("players").size())
 
 	# Check if we're already at max capacity (8 total: 1 player + 7 bots)
 	var current_player_count: int = get_tree().get_nodes_in_group("players").size()
 	if current_player_count >= 8:
-		print("Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
 		return
 
 	bot_counter += 1
@@ -1581,7 +1581,7 @@ func spawn_bot() -> void:
 			# Spawn at appropriate position
 			var spawn_index: int = bot_id % spawn_points.size()
 			bot.global_position = spawn_points[spawn_index]
-			print("Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
 	# Add AI controller to bot - select correct type based on level
 	var ai: Node
@@ -1591,7 +1591,7 @@ func spawn_bot() -> void:
 		ai = BotAI_TypeB.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
-	print("Added %s to bot %d for level type %s" % ["BotAI_TypeA" if current_level_type == "A" else "BotAI_TypeB", bot_id, current_level_type])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Added %s to bot %d for level type %s" % ["BotAI_TypeA" if current_level_type == "A" else "BotAI_TypeB", bot_id, current_level_type])
 
 	# Add bot to players group
 	bot.add_to_group("players")
@@ -1600,19 +1600,19 @@ func spawn_bot() -> void:
 	player_scores[bot_id] = 0
 	player_deaths[bot_id] = 0
 
-	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
-	print("--- spawn_bot() complete ---")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "--- spawn_bot() complete ---")
 
 func spawn_pending_bots() -> void:
 	"""Spawn all pending bots (called when match becomes active)"""
-	print("spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
 	for i in range(pending_bot_count):
-		print("Spawning bot %d of %d" % [i + 1, pending_bot_count])
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawning bot %d of %d" % [i + 1, pending_bot_count])
 		spawn_bot()
 		# Small delay between spawns for visual effect
 		if i < pending_bot_count - 1:  # Don't wait after last bot
 			await get_tree().create_timer(0.1).timeout
-	print("All pending bots spawned. Total players: ", get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "All pending bots spawned. Total players: %d" % get_tree().get_nodes_in_group("players").size())
 
 func despawn_all_bots() -> void:
 	"""Remove all bot players from the game"""
