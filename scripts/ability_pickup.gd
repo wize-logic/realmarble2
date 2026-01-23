@@ -155,7 +155,7 @@ func collect(player: Node) -> void:
 	if ability_scene:
 		player.pickup_ability(ability_scene, ability_name)
 	else:
-		print("Warning: Ability pickup has no ability_scene assigned!")
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Warning: Ability pickup has no ability_scene assigned!")
 
 	# Play pickup sound
 	if pickup_sound and pickup_sound.stream:
@@ -171,7 +171,7 @@ func collect(player: Node) -> void:
 	if collision_shape:
 		collision_shape.set_deferred("disabled", true)
 
-	print("Ability '%s' collected by player! Respawning in %.1f seconds" % [ability_name, respawn_time])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability '%s' collected by player! Respawning in %.1f seconds" % [ability_name, respawn_time])
 
 func respawn_pickup() -> void:
 	"""Respawn the ability pickup"""
@@ -192,7 +192,7 @@ func respawn_pickup() -> void:
 	# Reset animation phase slightly for variety
 	time += randf() * 2.0
 
-	print("Ability pickup '%s' respawned!" % ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability pickup '%s' respawned!" % ability_name)
 
 @rpc("call_local")
 func play_pickup_sound() -> void:

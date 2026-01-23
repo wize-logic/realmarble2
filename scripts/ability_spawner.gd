@@ -59,7 +59,7 @@ func spawn_abilities() -> void:
 	# Check if game is active before spawning
 	var world: Node = get_parent()
 	if not (world and world.has_method("is_game_active") and world.is_game_active()):
-		print("ABILITY SPAWNER: Game is not active, skipping spawn")
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "ABILITY SPAWNER: Game is not active, skipping spawn")
 		return
 
 	# Scale ability count based on number of players (4.0 abilities per player)
@@ -82,35 +82,35 @@ func spawn_abilities() -> void:
 	var scaled_cannon: int = max(1, int(total_abilities * 0.25))     # 25%
 	var scaled_sword: int = max(1, int(total_abilities * 0.25))      # 25%
 
-	print("=== ABILITY SPAWNER: Starting to spawn abilities ===")
-	print("Players: %d | Total abilities: %d" % [player_count, total_abilities])
-	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ABILITY SPAWNER: Starting to spawn abilities ===")
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Players: %d | Total abilities: %d" % [player_count, total_abilities])
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
 	# Spawn dash attacks
 	for i in range(scaled_dash):
 		var pos: Vector3 = get_random_spawn_position()
-		print("Dash Attack %d spawning at: %s" % [i+1, pos])
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Dash Attack %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, DashAttackScene, "Dash Attack", Color.MAGENTA)
 
 	# Spawn explosions
 	for i in range(scaled_explosion):
 		var pos: Vector3 = get_random_spawn_position()
-		print("Explosion %d spawning at: %s" % [i+1, pos])
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Explosion %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, ExplosionScene, "Explosion", Color.ORANGE)
 
 	# Spawn cannons
 	for i in range(scaled_cannon):
 		var pos: Vector3 = get_random_spawn_position()
-		print("Cannon %d spawning at: %s" % [i+1, pos])
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cannon %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, CannonScene, "Cannon", Color(0.5, 1.0, 0.0))  # Lime green
 
 	# Spawn swords
 	for i in range(scaled_sword):
 		var pos: Vector3 = get_random_spawn_position()
-		print("Sword %d spawning at: %s" % [i+1, pos])
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Sword %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, SwordScene, "Sword", Color.CYAN)
 
-	print("=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground, avoiding overlap with existing items"""
@@ -158,7 +158,7 @@ func get_random_spawn_position() -> Vector3:
 		return candidate_pos
 
 	# If we exhausted all attempts, return a fallback position (center of map)
-	print("Warning: Could not find non-overlapping position after %d attempts, using fallback" % MAX_ATTEMPTS)
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Warning: Could not find non-overlapping position after %d attempts, using fallback" % MAX_ATTEMPTS)
 	return Vector3(0, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, 0)
 
 func is_position_too_close_to_existing(pos: Vector3) -> bool:
@@ -215,7 +215,7 @@ func check_and_respawn_pickups() -> void:
 			# Properly reset the pickup state by calling its respawn function
 			if pickup.has_method("respawn_pickup"):
 				pickup.respawn_pickup()
-			print("Respawned pickup at new random location: ", pickup.global_position)
+			DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Respawned pickup at new random location: %s" % pickup.global_position)
 
 func spawn_random_ability(pos: Vector3) -> void:
 	"""Spawn a random ability at the given position (for debug menu)"""
@@ -235,7 +235,7 @@ func clear_all() -> void:
 		if pickup:
 			pickup.queue_free()
 	spawned_pickups.clear()
-	print("Cleared all ability pickups")
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared all ability pickups")
 
 func respawn_all() -> void:
 	"""Clear and respawn all abilities (called when level is regenerated)"""

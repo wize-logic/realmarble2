@@ -690,7 +690,7 @@ func _process(delta: float) -> void:
 
 		# Respawn after 2 seconds (works for both players and bots)
 		if fall_death_timer >= 2.0:
-			print("Fall death timer reached 2.0s, respawning %s" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Fall death timer reached 2.0s, respawning %s" % name, false, get_entity_id())
 			respawn()
 			is_falling_to_death = false
 			fall_camera_detached = false
@@ -883,15 +883,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if Input.is_action_just_pressed("use_ability"):
 		# Check if we're targeting a rail and can attach
 		if targeted_rail and not is_grinding:
-			print("[RAIL] E pressed - attempting to attach to ", targeted_rail.name)
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] E pressed - attempting to attach to %s" % targeted_rail.name, false, get_entity_id())
 			if targeted_rail.has_method("try_attach_player"):
 				if targeted_rail.try_attach_player(self):
-					print("[RAIL] Successfully attached to rail via E key!")
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Successfully attached to rail via E key!", false, get_entity_id())
 					return  # Don't use ability
 				else:
-					print("[RAIL] Failed to attach to rail")
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Failed to attach to rail", false, get_entity_id())
 			else:
-				print("[RAIL] Rail doesn't have try_attach_player method")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Rail doesn't have try_attach_player method", false, get_entity_id())
 
 		# Otherwise, start charging the ability
 		if current_ability and current_ability.has_method("start_charge"):
@@ -1328,7 +1328,7 @@ func respawn() -> void:
 	if current_ability:
 		current_ability.queue_free()
 		current_ability = null
-		print("Cleared ability on respawn for %s" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Cleared ability on respawn for %s" % name, false, get_entity_id())
 
 	# CRITICAL: Reset all movement states that could get stuck
 	is_bouncing = false
@@ -1360,9 +1360,9 @@ func respawn() -> void:
 	if spawns.size() > 0:
 		var spawn_index: int = player_id % spawns.size()
 		global_position = spawns[spawn_index]
-		print("Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot], false, get_entity_id())
 	else:
-		print("WARNING: No spawn points available for player %s! Using fallback position." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "WARNING: No spawn points available for player %s! Using fallback position." % name, false, get_entity_id())
 		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Play spawn sound effect
@@ -1377,14 +1377,14 @@ func fall_death() -> void:
 	var player_id: int = str(name).to_int()
 	var is_bot: bool = player_id >= 9000
 
-	print("fall_death() called for %s (is_bot: %s, position: %s)" % [name, is_bot, global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "fall_death() called for %s (is_bot: %s, position: %s)" % [name, is_bot, global_position], false, get_entity_id())
 
 	if is_falling_to_death:
-		print("  Already falling to death, ignoring")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Already falling to death, ignoring", false, get_entity_id())
 		return
 
 	if god_mode:
-		print("  God mode enabled, ignoring")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  God mode enabled, ignoring", false, get_entity_id())
 		return
 
 	print("  Starting fall death sequence")
@@ -1432,9 +1432,9 @@ func collect_orb() -> void:
 	if level < MAX_LEVEL:
 		level += 1
 		update_stats()
-		print("⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force], false, get_entity_id())
 	else:
-		print("Already at MAX_LEVEL (%d)" % MAX_LEVEL)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already at MAX_LEVEL (%d)" % MAX_LEVEL, false, get_entity_id())
 
 func update_stats() -> void:
 	"""Update movement stats based on current level"""
@@ -1457,7 +1457,7 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 		# Remove the ability from player (just disappear, don't spawn pickup)
 		current_ability.queue_free()
 		current_ability = null
-		print("Removed previous ability (disappeared)")
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Removed previous ability (disappeared)", false, get_entity_id())
 
 	# Instantiate and equip the new ability
 	current_ability = ability_scene.instantiate()
@@ -1467,7 +1467,7 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	if current_ability.has_method("pickup"):
 		current_ability.pickup(self)
 
-	print("Picked up ability: ", ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Picked up ability: %s" % ability_name, false, get_entity_id())
 
 func drop_ability() -> void:
 	"""Drop the current ability and spawn it as a pickup on the ground"""
@@ -1545,7 +1545,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Don't spawn abilities in or near the death zone
 	const MIN_SAFE_Y: float = -40.0
 	if spawn_pos.y < MIN_SAFE_Y:
-		print("Cannot spawn ability pickup - too close to death zone (Y: %.1f)" % spawn_pos.y)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Cannot spawn ability pickup - too close to death zone (Y: %.1f)" % spawn_pos.y, false, get_entity_id())
 		return
 
 	# Instantiate the ability pickup
@@ -1707,7 +1707,7 @@ func spawn_beam_effect() -> void:
 	# Play the beam effect
 	beam_effect.play_beam()
 
-	print("Beam spawn effect created for %s at position %s" % [name, beam_effect.global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Beam spawn effect created for %s at position %s" % [name, beam_effect.global_position], false, get_entity_id())
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
@@ -1762,7 +1762,7 @@ func spawn_death_orb() -> void:
 		# Don't spawn orbs in or near the death zone
 		const MIN_SAFE_Y: float = -40.0
 		if spawn_pos.y < MIN_SAFE_Y:
-			print("Skipping orb spawn - too close to death zone (Y: %.1f)" % spawn_pos.y)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Skipping orb spawn - too close to death zone (Y: %.1f)" % spawn_pos.y, false, get_entity_id())
 			continue
 
 		# Instantiate the orb
@@ -1934,9 +1934,9 @@ func update_rail_targeting() -> void:
 			var prev_count: int = cached_rails.size()
 			cached_rails = find_all_rails(world)
 			if prev_count == 0 and cached_rails.size() > 0:
-				print("[RAIL] Found ", cached_rails.size(), " rails in scene")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Found %d rails in scene" % cached_rails.size(), false, get_entity_id())
 			elif cached_rails.size() == 0:
-				print("[RAIL] WARNING: No rails found in scene!")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] WARNING: No rails found in scene!", false, get_entity_id())
 			rails_cache_timer = 0.0
 
 	# Clean up invalid rails from cache
@@ -1990,7 +1990,7 @@ func update_rail_targeting() -> void:
 	targeted_rail = found_rail
 
 	if targeted_rail and not prev_targeted:
-		print("[RAIL] Targeting rail: ", targeted_rail.name)
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Targeting rail: %s" % targeted_rail.name, false, get_entity_id())
 
 	if targeted_rail:
 		rail_reticle_ui.visible = true

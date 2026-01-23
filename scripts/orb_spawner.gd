@@ -49,7 +49,7 @@ func spawn_orbs() -> void:
 	# Check if game is active before spawning
 	var world: Node = get_parent()
 	if not (world and world.has_method("is_game_active") and world.is_game_active()):
-		print("ORB SPAWNER: Game is not active, skipping spawn")
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "ORB SPAWNER: Game is not active, skipping spawn")
 		return
 
 	# Scale orb count based on number of players (5 orbs per player)
@@ -65,16 +65,16 @@ func spawn_orbs() -> void:
 
 	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 25, 80)  # Increased from 12-48
 
-	print("=== ORB SPAWNER: Starting to spawn orbs ===")
-	print("Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
-	print("Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ORB SPAWNER: Starting to spawn orbs ===")
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Spawn bounds: min=%s, max=%s" % [spawn_bounds_min, spawn_bounds_max])
 
 	for i in range(scaled_orbs):
 		var random_pos: Vector3 = get_random_spawn_position()
-		print("Orb %d spawning at position: %s" % [i+1, random_pos])
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Orb %d spawning at position: %s" % [i+1, random_pos])
 		spawn_orb_at_position(random_pos)
 
-	print("=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ORB SPAWNER: Spawned %d orbs in 3D map volume ===" % spawned_orbs.size())
 
 func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground, avoiding overlap with existing items"""
@@ -122,7 +122,7 @@ func get_random_spawn_position() -> Vector3:
 		return candidate_pos
 
 	# If we exhausted all attempts, return a fallback position (center of map)
-	print("Warning: Could not find non-overlapping position after %d attempts, using fallback" % MAX_ATTEMPTS)
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Warning: Could not find non-overlapping position after %d attempts, using fallback" % MAX_ATTEMPTS)
 	return Vector3(0, (spawn_bounds_min.y + spawn_bounds_max.y) / 2.0, 0)
 
 func is_position_too_close_to_existing(pos: Vector3) -> bool:
@@ -177,7 +177,7 @@ func check_and_respawn_orbs() -> void:
 			# Properly reset the orb state by calling its respawn function
 			if orb.has_method("respawn_orb"):
 				orb.respawn_orb()
-			print("Respawned orb at new random location: ", orb.global_position)
+			DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Respawned orb at new random location: %s" % orb.global_position)
 
 func clear_all() -> void:
 	"""Clear all orbs without respawning (called when match ends)"""
@@ -185,7 +185,7 @@ func clear_all() -> void:
 		if orb:
 			orb.queue_free()
 	spawned_orbs.clear()
-	print("Cleared all orbs")
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared all orbs")
 
 func respawn_all() -> void:
 	"""Clear and respawn all orbs (called when level is regenerated)"""

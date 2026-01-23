@@ -616,7 +616,7 @@ func _on_kill_player_pressed() -> void:
 	var player: Node = get_local_player()
 	if player and player.has_method("respawn"):
 		player.respawn()
-		print("Player killed - respawning...")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Player killed - respawning...")
 
 func _on_kill_all_pressed() -> void:
 	"""Kill all players except the local player"""
