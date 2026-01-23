@@ -173,12 +173,14 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 	# Validate distance one more time (max 30 units as per player.gd)
 	var distance: float = pos.distance_to(closest_world)
 	if distance > 30.0:
-		print("[", name, "] Attachment failed - too far: ", distance)
+		var entity_id: int = grinder.name.to_int() if grinder else -1
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Attachment failed - too far: %s" % [name, distance], false, entity_id)
 		return false
 
 	_attach(grinder, offset, closest_world)
 	nearby_players.erase(grinder)  # Remove from nearby list if present
-	print("[", name, "] Manual attachment successful! Distance: ", distance)
+	var entity_id: int = grinder.name.to_int() if grinder else -1
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Manual attachment successful! Distance: %s" % [name, distance], false, entity_id)
 	return true
 
 
@@ -212,7 +214,8 @@ func _attach(grinder: RigidBody3D, offset: float, closest_world: Vector3) -> voi
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
 
-	print("[", name, "] Attached — unbreakable rope at ", snapped(offset, 0.1))
+	var entity_id: int = grinder.name.to_int() if grinder else -1
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Attached — unbreakable rope at %s" % [name, snapped(offset, 0.1)], false, entity_id)
 
 
 func _remove_grinder(grinder: RigidBody3D) -> void:
@@ -422,11 +425,13 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 					data.boost_attempts += 1
 					data.last_boost_time = current_time
 
-					print("[", name, "] STUCK SAFEGUARD: Applied boost #", data.boost_attempts, " toward ", boost_desc)
+					var entity_id: int = grinder.name.to_int() if grinder else -1
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] STUCK SAFEGUARD: Applied boost #%d toward %s" % [name, data.boost_attempts, boost_desc], false, entity_id)
 
 				elif data.boost_attempts >= max_boost_attempts:
 					# Tried multiple boosts, still stuck - detach player safely
-					print("[", name, "] STUCK SAFEGUARD: Max boost attempts reached, detaching player safely")
+					var entity_id: int = grinder.name.to_int() if grinder else -1
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] STUCK SAFEGUARD: Max boost attempts reached, detaching player safely" % name, false, entity_id)
 
 					# Give player a gentle upward and forward impulse
 					grinder.apply_central_impulse(Vector3.UP * 80.0)
@@ -445,7 +450,8 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Only detach at end of rail
 	if attach_offset <= 1.5 or attach_offset >= length - 1.5:
-		print("[", name, "] End of rail — HIGH LAUNCH!")
+		var entity_id: int = grinder.name.to_int() if grinder else -1
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] End of rail — HIGH LAUNCH!" % name, false, entity_id)
 		if grinder.has_method("launch_from_rail"):
 			grinder.launch_from_rail(grinder.linear_velocity)
 

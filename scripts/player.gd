@@ -905,44 +905,44 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_O:
 		if event.pressed and not event.echo:
 			if current_ability:
-				print("Dropping ability!")
+				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropping ability!", false, get_entity_id())
 				drop_ability()
 
 	# Spin dash - start charging (Shift key)
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
-		print("Shift key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Cooldown: ", spin_cooldown)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift key detected! Pressed: %s | Grounded: %s | Cooldown: %s" % [event.pressed, is_grounded, spin_cooldown], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Check if game is active
 			var world: Node = get_tree().get_root().get_node_or_null("World")
 			var game_is_active: bool = world and world.get("game_active")
 
 			if not game_is_active:
-				print("Can't spin dash - game not started yet")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - game not started yet", false, get_entity_id())
 			elif is_grounded and spin_cooldown <= 0.0:
-				print("Starting spin dash charge!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Starting spin dash charge!", false, get_entity_id())
 				is_charging_spin = true
 				spin_charge = 0.0
 			else:
 				if not is_grounded:
-					print("Can't spin dash - not grounded")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - not grounded", false, get_entity_id())
 				if spin_cooldown > 0.0:
-					print("Can't spin dash - on cooldown")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - on cooldown", false, get_entity_id())
 
 		# Spin dash - release to dash (Shift key)
 		if not event.pressed:
-			print("Shift released! Charging: ", is_charging_spin, " | Charge amount: ", spin_charge)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift released! Charging: %s | Charge amount: %s" % [is_charging_spin, spin_charge], false, get_entity_id())
 			# Check if game is active
 			var world: Node = get_tree().get_root().get_node_or_null("World")
 			var game_is_active: bool = world and world.get("game_active")
 
 			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
-				print("Executing spin dash!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Executing spin dash!", false, get_entity_id())
 				execute_spin_dash()
 			elif is_charging_spin:
 				if not game_is_active:
-					print("Can't spin dash - game not started yet")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - game not started yet", false, get_entity_id())
 				else:
-					print("Charge too low: ", spin_charge)
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Charge too low: %s" % spin_charge, false, get_entity_id())
 			is_charging_spin = false
 			spin_charge = 0.0
 
@@ -2059,7 +2059,7 @@ func start_grinding(rail: GrindRail) -> void:
 	if is_grinding:
 		return
 
-	print("Started grinding on rail!")
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Started grinding on rail!", false, get_entity_id())
 	is_grinding = true
 	current_rail = rail
 	jump_count = 0  # Reset jumps when starting grind
@@ -2082,7 +2082,7 @@ func stop_grinding() -> void:
 	if not is_grinding:
 		return
 
-	print("Stopped grinding!")
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding!", false, get_entity_id())
 	is_grinding = false
 	current_rail = null
 
@@ -2098,7 +2098,7 @@ func launch_from_rail(velocity: Vector3) -> void:
 	if not is_grinding:
 		return
 
-	print("Launched from rail end with velocity: ", velocity)
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
 	stop_grinding()
 
 	# Player already has velocity from physics, just add upward boost
@@ -2124,7 +2124,7 @@ func jump_off_rail() -> void:
 	# Spawn jump particle effect
 	spawn_jump_bounce_effect(1.2)
 
-	print("Jumped off rail! Velocity: ", linear_velocity)
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s" % linear_velocity, false, get_entity_id())
 
 # ============================================================================
 # JUMP PAD & TELEPORTER SYSTEM (Q3 ARENA STYLE)
