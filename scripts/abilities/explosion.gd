@@ -235,7 +235,7 @@ func activate() -> void:
 	# Get charge multiplier for scaled damage/radius/force
 	var charge_multiplier: float = get_charge_multiplier()
 
-	print("EXPLOSION! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "EXPLOSION! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier], false, get_entity_id())
 
 	# Start explosion
 	is_exploding = true
@@ -286,7 +286,7 @@ func activate() -> void:
 	if player is RigidBody3D:
 		var charged_launch_force: float = upward_launch_force * charge_multiplier
 		player.apply_central_impulse(Vector3.UP * charged_launch_force)
-		print("Player launched upward with %.1fx force!" % charge_multiplier)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player launched upward with %.1fx force!" % charge_multiplier, false, get_entity_id())
 
 func damage_nearby_players() -> void:
 	"""Damage all players in explosion radius"""
@@ -328,11 +328,11 @@ func damage_nearby_players() -> void:
 			if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 				# Local call for bots, no multiplayer, or local peer
 				body.receive_damage_from(scaled_damage, attacker_id)
-				print("Explosion hit player (local): ", body.name, " | Damage: ", scaled_damage, " (charge x%.1f)" % charge_mult)
+				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Explosion hit player (local): %s | Damage: %d (charge x%.1f)" % [body.name, scaled_damage, charge_mult], false, get_entity_id())
 			else:
 				# RPC call for remote network players only
 				body.receive_damage_from.rpc_id(target_id, scaled_damage, attacker_id)
-				print("Explosion hit player (RPC): ", body.name, " | Damage: ", scaled_damage, " (charge x%.1f)" % charge_mult)
+				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Explosion hit player (RPC): %s | Damage: %d (charge x%.1f)" % [body.name, scaled_damage, charge_mult], false, get_entity_id())
 
 			# Apply knockback scaled by charge and player level
 			var player_level: int = player.level if player and "level" in player else 0

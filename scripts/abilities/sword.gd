@@ -210,7 +210,7 @@ func activate() -> void:
 	var charged_damage: int = int(slash_damage * charge_multiplier)
 	var charged_knockback: float = 70.0 * charge_multiplier  # Increased from 30.0 for stronger impact
 
-	print("SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier], false, get_entity_id())
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -297,11 +297,11 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(charged_damage, attacker_id)
-			print("Sword slash hit player (local): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player (local): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
-			print("Sword slash hit player (RPC): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player (RPC): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 
 		hit_players.append(body)
 
@@ -313,7 +313,7 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()
 
-		print("Sword slash hit player: ", body.name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player: %s" % body.name, false, get_entity_id())
 
 func end_slash() -> void:
 	is_slashing = false

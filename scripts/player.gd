@@ -167,6 +167,22 @@ var fall_camera_position: Vector3 = Vector3.ZERO
 # Debug/cheat properties
 var god_mode: bool = false
 
+# ============================================================================
+# DEBUG HELPERS
+# ============================================================================
+
+func get_entity_id() -> int:
+	"""Get the player/bot's entity ID for debug logging"""
+	return name.to_int()
+
+func is_bot() -> bool:
+	"""Check if this entity is a bot"""
+	return get_entity_id() >= 9000
+
+# ============================================================================
+# LIFECYCLE
+# ============================================================================
+
 func _enter_tree() -> void:
 	set_multiplayer_authority(str(name).to_int())
 
@@ -812,11 +828,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Jump - Space key (with double jump, and jumping off rails)
 	if event is InputEventKey and event.keycode == KEY_SPACE:
-		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps, " | Grinding: ", is_grinding)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Space key detected! Pressed: %s | Grounded: %s | Jumps: %d/%d | Grinding: %s" % [event.pressed, is_grounded, jump_count, max_jumps, is_grinding], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Jump off rail if grinding
 			if is_grinding:
-				print("JUMPING OFF RAIL!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "JUMPING OFF RAIL!", false, get_entity_id())
 				jump_off_rail()
 				return
 
@@ -826,7 +842,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				if jump_count == 1:
 					jump_strength *= 0.85
 
-				print("JUMPING! (Jump #", jump_count + 1, ") Impulse: ", jump_strength)
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "JUMPING! (Jump #%d) Impulse: %.1f" % [jump_count + 1, jump_strength], false, get_entity_id())
 
 				# Cancel vertical velocity for consistent jumps
 				var vel: Vector3 = linear_velocity
@@ -843,24 +859,24 @@ func _unhandled_input(event: InputEvent) -> void:
 				# Spawn jump particle effect
 				spawn_jump_bounce_effect(1.0)
 			else:
-				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't jump - no jumps remaining (%d/%d)" % [jump_count, max_jumps], false, get_entity_id())
 
 	# Bounce attack - Right mouse button (Sonic Adventure 2 style)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			# Can only bounce in the air and if not on cooldown (not while grinding)
 			if not is_grounded and not is_grinding and bounce_cooldown <= 0.0 and not is_bouncing:
-				print("BOUNCE ATTACK!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "BOUNCE ATTACK!", false, get_entity_id())
 				start_bounce()
 			else:
 				if is_grounded:
-					print("Can't bounce - on ground")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - on ground", false, get_entity_id())
 				elif is_grinding:
-					print("Can't bounce - grinding on rail")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - grinding on rail", false, get_entity_id())
 				elif bounce_cooldown > 0.0:
-					print("Can't bounce - on cooldown (%.2f)" % bounce_cooldown)
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - on cooldown (%.2f)" % bounce_cooldown, false, get_entity_id())
 				elif is_bouncing:
-					print("Already bouncing")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already bouncing", false, get_entity_id())
 
 	# Use ability - E key or controller X button (with charging support)
 	# PRIORITY: If looking at a rail, attach to it instead
@@ -1120,9 +1136,9 @@ func check_ground() -> void:
 		# Reset bounce counter if landing normally (not from a bounce)
 		if not just_bounce_landed:
 			if bounce_count > 0:
-				print("Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count)
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count, false, get_entity_id())
 			else:
-				print("Landed! Jump count reset")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Landed! Jump count reset", false, get_entity_id())
 			bounce_count = 0
 
 		# Play landing sound (only if not from a bounce, since bounce has its own sound)
@@ -1131,15 +1147,15 @@ func check_ground() -> void:
 
 	# Debug logging every 60 frames (about once per second)
 	if Engine.get_physics_frames() % 60 == 0:
-		print("Ground check: ", is_grounded, " | Y-pos: ", global_position.y, " | Jumps: ", jump_count, "/", max_jumps)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Ground check: %s | Y-pos: %.11f | Jumps: %d/%d" % [is_grounded, global_position.y, jump_count, max_jumps], false, get_entity_id())
 		if is_grounded:
-			print("  Hit: ", ground_ray.get_collider(), " at distance: ", ground_ray.get_collision_point().distance_to(global_position))
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Hit: %s at distance: %.11f" % [ground_ray.get_collider(), ground_ray.get_collision_point().distance_to(global_position)], false, get_entity_id())
 		else:
-			print("  No ground detected under marble")
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "  No ground detected under marble", false, get_entity_id())
 
 	# Log ground state changes
 	if was_grounded != is_grounded:
-		print("Ground state changed: ", is_grounded, " | Position: ", global_position)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Ground state changed: %s | Position: %s" % [is_grounded, global_position], false, get_entity_id())
 
 func execute_spin_dash() -> void:
 	"""Execute a Sonic-style spin dash - Always dash towards reticle position"""

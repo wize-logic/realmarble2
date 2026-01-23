@@ -129,7 +129,7 @@ func activate() -> void:
 	var damage: int = 1  # Fixed damage, never modified
 	var speed: float = projectile_speed
 
-	print("BOOM! (Instant fire)")
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "BOOM! (Instant fire)", false, get_entity_id())
 
 	# Get initial firing direction from camera
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -196,7 +196,7 @@ func activate() -> void:
 			oldest_projectile.queue_free()
 		active_projectiles.remove_at(0)
 		if OS.is_debug_build():
-			print("Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles, false, get_entity_id())
 
 	# Spawn projectile
 	var projectile: Node3D = create_projectile()
@@ -270,11 +270,11 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, owner_id)
-			print('Cannonball hit player (local): ', body.name, ' | Damage: ', damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannonball hit player (local): %s | Damage: %d" % [body.name, damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
-			print('Cannonball hit player (RPC): ', body.name, ' | Damage: ', damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannonball hit player (RPC): %s | Damage: %d" % [body.name, damage], false, get_entity_id())
 
 		# Apply stronger knockback from cannonball impact
 		# Get player level multiplier from projectile metadata

@@ -216,7 +216,7 @@ func activate() -> void:
 	var charged_dash_force: float = dash_force * charge_multiplier
 	var charged_knockback: float = 117.0 * charge_multiplier  # Reduced by 35% from 180.0 for better balance
 
-	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier], false, get_entity_id())
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -317,11 +317,11 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(charged_damage, attacker_id)
-			print("Dash attack hit player (local): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player (local): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
-			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player (RPC): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 
 		hit_players.append(body)
 
@@ -333,7 +333,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()
 
-		print("Dash attack hit player: ", body.name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player: %s" % body.name, false, get_entity_id())
 
 func end_dash() -> void:
 	is_dashing = false

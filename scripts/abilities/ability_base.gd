@@ -20,6 +20,12 @@ var charge_time: float = 0.0  # Current charge time
 var charge_level: int = 1  # 1 = weak, 2 = medium, 3 = max
 var charge_particles: CPUParticles3D = null  # Visual feedback for charging
 
+func get_entity_id() -> int:
+	"""Get the owner player/bot's entity ID for debug logging"""
+	if player:
+		return player.name.to_int()
+	return -1
+
 func _ready() -> void:
 	# Create charge particles if charging is supported
 	if supports_charging:
