@@ -1211,27 +1211,14 @@ func should_retreat() -> bool:
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 
-	# VALIDATION: Critical health retreat
+	# VALIDATION: Critical health retreat - ONLY at 1 HP (bots are brave now!)
 	var bot_health: int = get_bot_health()
-	if bot_health <= 2:
-		return distance_to_target < aggro_range * 0.9
+	if bot_health <= 1:
+		return distance_to_target < aggro_range * 0.5  # Reduced from 0.9 - only retreat if very close
 
-	# VALIDATION: Health-based retreat threshold (affected by caution)
-	var retreat_health_threshold: int = int(3 + caution_level * 2)  # 3-5 health
-	if bot_health <= retreat_health_threshold:
-		# Check enemy health advantage
-		var enemy_health: int = get_player_health(target_player)
-		if enemy_health >= bot_health + 2:
-			return distance_to_target < aggro_range * 0.7
-
-	# VALIDATION: No ability = retreat if enemy is close
-	if not has_property(bot, "current_ability") or not bot.current_ability:
-		if distance_to_target < attack_range * 1.5:
-			return true
-
-	# Defensive bots retreat earlier
-	if strategic_preference == "defensive" and bot_health <= 4:
-		return distance_to_target < aggro_range * 0.8
+	# Removed health-based retreat threshold - bots fight to the death!
+	# Removed no-ability retreat - bots are fearless even without abilities!
+	# Removed defensive bot early retreat - all bots are brave!
 
 	return false
 
