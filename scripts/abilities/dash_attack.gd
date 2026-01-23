@@ -458,7 +458,11 @@ func create_direction_indicator() -> void:
 	direction_indicator.visible = false
 
 func drop() -> void:
-	"""Override drop to clean up indicator"""
+	"""Override drop to clean up indicator and dash state"""
+	# BUGFIX: End dash if currently dashing (fixes stuck dash attack state)
+	if is_dashing:
+		end_dash()
+
 	# Call parent drop first to handle ability drop logic
 	if has_method("super"):
 		super.drop()

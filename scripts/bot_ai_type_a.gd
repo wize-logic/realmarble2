@@ -82,6 +82,7 @@ var player_search_timer: float = 0.0
 var strafe_direction: float = 1.0
 var strafe_timer: float = 0.0
 var retreat_timer: float = 0.0
+var retreat_cooldown: float = 0.0  # Prevents immediate re-entry into RETREAT after exiting
 var ability_charge_timer: float = 0.0
 var is_charging_ability: bool = false
 var aggression_level: float = 0.7  # Used for ability usage probability
@@ -262,6 +263,10 @@ func change_state(new_state: String, reason: String = "") -> void:
 		previous_state = state
 		state = new_state
 
+		# BUGFIX: Reset collection timer when entering COLLECT_ABILITY or COLLECT_ORB
+		if new_state == "COLLECT_ABILITY" or new_state == "COLLECT_ORB":
+			target_stuck_timer = 0.0
+
 func debug_log_periodic() -> void:
 	"""Periodic debug logging of bot state"""
 	if not bot:
@@ -301,6 +306,7 @@ func _physics_process(delta: float) -> void:
 	orb_check_timer -= delta
 	strafe_timer -= delta
 	retreat_timer -= delta
+	retreat_cooldown -= delta
 	ability_charge_timer -= delta
 	stuck_timer += delta
 	unstuck_timer -= delta
@@ -1415,6 +1421,10 @@ func should_retreat() -> bool:
 	if not target_player or not is_instance_valid(target_player):
 		return false
 
+	# BUGFIX: Don't retreat if we just exited retreat (prevents attack-retreat cycle)
+	if retreat_cooldown > 0.0:
+		return false
+
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)
 
 	# VALIDATION: Critical health retreat
@@ -1655,8 +1665,10 @@ func do_chase(delta: float) -> void:
 	else:
 		strafe_around_target(optimal_distance)
 
-	# Use ability while chasing if in range
-	if bot.current_ability and bot.current_ability.has_method("use"):
+	# BUGFIX: Only use abilities while chasing if reasonably aligned with target
+	# This prevents firing in the wrong direction while turning
+	var is_aligned: bool = is_aligned_with_target(target_player.global_position, 25.0)
+	if bot.current_ability and bot.current_ability.has_method("use") and is_aligned:
 		use_ability_smart(distance_to_target)
 
 	# Smart jumping for height differences
@@ -1737,6 +1749,8 @@ func do_retreat(delta: float) -> void:
 	if not target_player or not is_instance_valid(target_player) or retreat_timer <= 0.0:
 		state = "WANDER"
 		is_approaching_platform = false  # Reset platform navigation
+		# BUGFIX: Set cooldown to prevent immediate re-entry into RETREAT (fixes attack-retreat cycle)
+		retreat_cooldown = randf_range(3.0, 5.0)
 		return
 
 	# NEW: If we have a safe platform to retreat to, navigate there
@@ -1892,13 +1906,17 @@ func do_collect_ability(delta: float) -> void:
 		state = "WANDER"
 		return
 
-	# BUGFIX: Clear target and change state when close enough
-	if distance < 2.5:
-		# We're close enough - either we'll collect it or someone else did
-		# Let update_state() decide what to do next
-		target_ability = null
-		state = "WANDER"
-		return
+	# BUGFIX: Don't give up immediately when close - let collision detection handle collection
+	# Instead, track time spent collecting and give up if taking too long (stuck/unreachable)
+	# The bot will collect the ability through collision when close enough
+	# If we've been trying to collect for more than 6 seconds, assume it's unreachable
+	if state == "COLLECT_ABILITY":
+		if target_stuck_timer > 6.0:
+			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Gave up collecting ability (timeout) | Dist: %.1fu" % distance, false, get_entity_id())
+			target_ability = null
+			state = "WANDER"
+			target_stuck_timer = 0.0
+			return
 
 	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
 	if height_diff > 4.0 and not is_approaching_platform:
@@ -1964,13 +1982,15 @@ func do_collect_orb(delta: float) -> void:
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
 
-	# BUGFIX: Clear target and change state when close enough
-	if distance < 2.5:
-		# We're close enough - either we'll collect it or someone else did
-		# Let update_state() decide what to do next
-		target_orb = null
-		state = "WANDER"
-		return
+	# BUGFIX: Don't give up immediately when close - let collision detection handle collection
+	# Instead, track time spent collecting and give up if taking too long (stuck/unreachable)
+	if state == "COLLECT_ORB":
+		if target_stuck_timer > 6.0:
+			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Gave up collecting orb (timeout) | Dist: %.1fu" % distance, false, get_entity_id())
+			target_orb = null
+			state = "WANDER"
+			target_stuck_timer = 0.0
+			return
 
 	# ELEVATED ITEM HANDLING: Check if orb is on a platform we need to reach
 	if height_diff > 4.0 and not is_approaching_platform:
