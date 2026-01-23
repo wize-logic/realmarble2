@@ -3293,29 +3293,22 @@ func check_obstacle_in_direction(direction: Vector3, check_distance: float = 2.5
 	return {"has_obstacle": false, "can_jump": false, "is_slope": false, "is_platform": false, "is_wall": false, "is_overhead_slope": false}
 
 func check_target_timeout(delta: float) -> void:
-	"""Check if bot is stuck trying to reach target"""
+	"""Check if bot is stuck trying to reach target (NOT for abilities - never give up!)"""
 	if not bot:
 		return
 
-	if state in ["COLLECT_ABILITY", "COLLECT_ORB", "CHASE", "ATTACK"]:
+	# REMOVED: COLLECT_ABILITY from this check - bots NEVER give up on abilities!
+	# They will keep trying until the ability is collected or becomes invalid
+	if state in ["COLLECT_ORB", "CHASE", "ATTACK"]:
 		var current_pos: Vector3 = bot.global_position
 		var distance_moved: float = current_pos.distance_to(target_stuck_position)
 
-		# DESPERATE: Much more lenient stuck detection for ability collection
-		var stuck_threshold: float = 0.3 if state == "COLLECT_ABILITY" else 0.8
-		var timeout: float = ABILITY_COLLECTION_TIMEOUT if state == "COLLECT_ABILITY" else TARGET_STUCK_TIMEOUT
-
-		if distance_moved < stuck_threshold:
+		if distance_moved < 0.8:
 			target_stuck_timer += delta
 
-			if target_stuck_timer >= timeout:
+			if target_stuck_timer >= TARGET_STUCK_TIMEOUT:
 				# Abandon target
-				if state == "COLLECT_ABILITY":
-					target_ability = null
-					# CRITICAL: Clear hyper-focus lock so bot can change states
-					ability_locked_on = false
-					locked_ability_id = -1
-				elif state == "COLLECT_ORB":
+				if state == "COLLECT_ORB":
 					target_orb = null
 				elif state in ["CHASE", "ATTACK"]:
 					find_target()
