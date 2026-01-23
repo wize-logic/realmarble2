@@ -1289,8 +1289,14 @@ func update_state() -> void:
 	# PRIORITY -1: HYPER-FOCUS LOCK - If collecting ability, NEVER switch states!
 	# Bot is locked onto a specific ability and will not be distracted by anything
 	if ability_locked_on and state == "COLLECT_ABILITY":
-		# Hyper-focused! Stay in COLLECT_ABILITY until ability is collected
-		return
+		# SAFETY: Only stay locked if target is still valid
+		if target_ability and is_instance_valid(target_ability):
+			# Hyper-focused! Stay in COLLECT_ABILITY until ability is collected
+			return
+		else:
+			# Target became invalid - clear lock and allow state change
+			ability_locked_on = false
+			locked_ability_id = -1
 
 	# PRIORITY 0: ABSOLUTE #1 - GET AN ABILITY IMMEDIATELY IF WE DON'T HAVE ONE
 	# Without an ability, the bot CANNOT attack and is useless in combat
@@ -3023,6 +3029,9 @@ func check_target_timeout(delta: float) -> void:
 				# Abandon target
 				if state == "COLLECT_ABILITY":
 					target_ability = null
+					# CRITICAL: Clear hyper-focus lock so bot can change states
+					ability_locked_on = false
+					locked_ability_id = -1
 				elif state == "COLLECT_ORB":
 					target_orb = null
 				elif state in ["CHASE", "ATTACK"]:
