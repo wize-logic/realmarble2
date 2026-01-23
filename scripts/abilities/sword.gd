@@ -153,11 +153,15 @@ func _process(delta: float) -> void:
 					slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 					slash_direction.y = 0
 					if slash_direction.length() < 0.1:
-						# Target too close, use rotation fallback
-						slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+						# Target too close, use transform-based forward direction (FIXED)
+						slash_direction = -player.global_transform.basis.z
+						slash_direction.y = 0
+						slash_direction = slash_direction.normalized()
 				else:
-					# Fallback: use player's facing direction
-					slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+					# Fallback: use player's facing direction (FIXED)
+					slash_direction = -player.global_transform.basis.z
+					slash_direction.y = 0
+					slash_direction = slash_direction.normalized()
 
 			# Position at player's feet, offset in slash direction
 			# Use raycasting to find ground below the indicator position
@@ -228,11 +232,15 @@ func activate() -> void:
 			# Aim at bot's target in full 3D (no y-flattening for near-perfect vertical aim)
 			slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 			if slash_direction.length() < 0.1:
-				# Target too close, use rotation fallback
-				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				# Target too close, use transform-based forward direction (FIXED)
+				slash_direction = -player.global_transform.basis.z
+				slash_direction.y = 0
+				slash_direction = slash_direction.normalized()
 		else:
-			# Fallback: use player's facing direction (rotation.y)
-			slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+			# Fallback: use player's facing direction (FIXED)
+			slash_direction = -player.global_transform.basis.z
+			slash_direction.y = 0
+			slash_direction = slash_direction.normalized()
 
 	# Start slash
 	is_slashing = true

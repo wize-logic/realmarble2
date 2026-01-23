@@ -79,8 +79,8 @@ func find_nearest_player() -> Node3D:
 			# Use direction to bot's current target
 			forward_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 		else:
-			# Final fallback: use player's facing direction (horizontal for bots)
-			forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+			# Final fallback: use player's facing direction (FIXED)
+			forward_direction = -player.global_transform.basis.z
 
 	forward_direction = forward_direction.normalized()
 
@@ -165,8 +165,8 @@ func activate() -> void:
 				# Aim at bot's target (full 3D)
 				fire_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 			else:
-				# Final fallback: use player's facing direction
-				fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				# Final fallback: use player's facing direction (FIXED)
+				fire_direction = -player.global_transform.basis.z
 
 		# Flatten to horizontal plane for manual aim (no up/down)
 		fire_direction.y = 0

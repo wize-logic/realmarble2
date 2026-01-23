@@ -158,11 +158,15 @@ func _process(delta: float) -> void:
 					target_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 					target_direction.y = 0
 					if target_direction.length() < 0.1:
-						# Target too close, use rotation fallback
-						target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+						# Target too close, use transform-based forward direction (FIXED)
+						target_direction = -player.global_transform.basis.z
+						target_direction.y = 0
+						target_direction = target_direction.normalized()
 				else:
-					# Fallback: use player's facing direction
-					target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+					# Fallback: use player's facing direction (FIXED)
+					target_direction = -player.global_transform.basis.z
+					target_direction.y = 0
+					target_direction = target_direction.normalized()
 
 			# Position at player's feet, offset in dash direction
 			# Use raycasting to find ground below the indicator position
@@ -233,11 +237,15 @@ func activate() -> void:
 			# Dash toward bot's target in full 3D (no y-flattening for near-perfect vertical aim)
 			dash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
 			if dash_direction.length() < 0.1:
-				# Target too close, use rotation fallback
-				dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+				# Target too close, use transform-based forward direction (FIXED)
+				dash_direction = -player.global_transform.basis.z
+				dash_direction.y = 0
+				dash_direction = dash_direction.normalized()
 		else:
-			# Fallback: use player's facing direction (rotation.y)
-			dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
+			# Fallback: use player's facing direction (FIXED)
+			dash_direction = -player.global_transform.basis.z
+			dash_direction.y = 0
+			dash_direction = dash_direction.normalized()
 
 	# Apply initial dash impulse
 	if player is RigidBody3D:
