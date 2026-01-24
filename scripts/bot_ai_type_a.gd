@@ -147,6 +147,9 @@ const CACHE_REFRESH_INTERVAL: float = 0.1  # Update 10x per second for constant 
 # HYPER-FOCUS: Ability collection lock-on system
 var ability_locked_on: bool = false  # Bot is hyper-focused on collecting an ability
 var locked_ability_id: int = -1  # Track which ability we're locked onto
+var ability_collection_last_distance: float = 999999.0  # Track progress towards ability
+var ability_collection_progress_timer: float = 0.0  # Check progress every few seconds
+var ability_collection_stuck_counter: int = 0  # Count how many times we haven't made progress
 
 # NEW: Platform navigation system
 var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
@@ -1923,6 +1926,9 @@ func do_collect_ability(delta: float) -> void:
 				# Found a new ability - LOCK ON!
 				ability_locked_on = true
 				locked_ability_id = target_ability.get_instance_id()
+				ability_collection_stuck_counter = 0
+				ability_collection_last_distance = bot.global_position.distance_to(target_ability.global_position)
+				ability_collection_progress_timer = 2.5
 				return
 			else:
 				# No abilities available - exit collection mode
@@ -1946,6 +1952,38 @@ func do_collect_ability(delta: float) -> void:
 
 	var distance: float = bot.global_position.distance_to(target_ability.global_position)
 	var height_diff: float = target_ability.global_position.y - bot.global_position.y
+
+	# PROGRESS TRACKING: Check if we're making progress towards the ability
+	ability_collection_progress_timer -= delta
+	if ability_collection_progress_timer <= 0.0:
+		# Check progress every 2.5 seconds
+		ability_collection_progress_timer = 2.5
+
+		# If we haven't gotten closer (within 2 units tolerance), we're stuck
+		if distance >= ability_collection_last_distance - 2.0:
+			ability_collection_stuck_counter += 1
+
+			# If stuck 3 times (7.5 seconds of no progress), this ability is unreachable
+			if ability_collection_stuck_counter >= 3:
+				# Give up on this ability and find another
+				ability_locked_on = false
+				locked_ability_id = -1
+				ability_collection_stuck_counter = 0
+				ability_collection_last_distance = 999999.0
+				find_nearest_ability()
+				if target_ability and is_instance_valid(target_ability):
+					ability_locked_on = true
+					locked_ability_id = target_ability.get_instance_id()
+					ability_collection_last_distance = bot.global_position.distance_to(target_ability.global_position)
+				else:
+					state = "WANDER"
+				return
+		else:
+			# Making progress! Reset stuck counter
+			ability_collection_stuck_counter = 0
+
+		# Update last known distance
+		ability_collection_last_distance = distance
 
 	# CRITICAL: Check if ability was collected by someone else
 	if target_ability.get("is_collected") == true:
@@ -3330,8 +3368,9 @@ func check_if_stuck() -> void:
 	var current_pos: Vector3 = bot.global_position
 	var distance_moved: float = current_pos.distance_to(last_position)
 
-	# FIXED: Added WANDER state and lowered threshold from 0.25 to 0.1
-	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ABILITY", "COLLECT_ORB", "WANDER"]
+	# FIXED: Removed COLLECT_ABILITY - let ability collection handle its own navigation
+	# Stuck detection was interfering with ability pursuit (random forces fighting goal-directed movement)
+	var is_trying_to_move: bool = state in ["CHASE", "ATTACK", "COLLECT_ORB", "WANDER"]
 
 	# FIXED: Check both position change AND horizontal velocity (catches slow sliding under slopes)
 	var horizontal_velocity: float = 0.0
