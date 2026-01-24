@@ -1422,6 +1422,9 @@ func do_wander(delta: float) -> void:
 				wander_target = bot.global_position + safe_dir * wander_radius * 0.7
 				wander_timer = randf_range(2.5, 5.0)
 
+	# AGGRESSIVE: Snap rotation to face wander target
+	look_at_target_smooth(wander_target, delta)
+
 	# Move with moderate speed
 	move_towards(wander_target, 0.5)
 
@@ -1687,6 +1690,9 @@ func do_collect_ability(delta: float) -> void:
 			state = "WANDER"
 			return
 
+	# AGGRESSIVE: Snap rotation to face ability
+	look_at_target_smooth(target_ability.global_position, delta)
+
 	# Move towards ability
 	move_towards(target_ability.global_position, 1.0)
 
@@ -1708,6 +1714,9 @@ func do_collect_orb(delta: float) -> void:
 		target_orb = null
 		state = "WANDER"
 		return
+
+	# AGGRESSIVE: Snap rotation to face orb
+	look_at_target_smooth(target_orb.global_position, delta)
 
 	var distance: float = bot.global_position.distance_to(target_orb.global_position)
 	var height_diff: float = target_orb.global_position.y - bot.global_position.y
@@ -2313,15 +2322,15 @@ func look_at_target_smooth(target_position: Vector3, delta: float) -> void:
 	while angle_diff < -PI:
 		angle_diff += TAU
 
-	# NEW: Apply personality-based turn speed factor
-	var turn_multiplier: float = 10.0 * turn_speed_factor
-	var max_turn_speed: float = 15.0 * turn_speed_factor
+	# AGGRESSIVE: Much higher turn speeds for instant target locking
+	var turn_multiplier: float = 30.0 * turn_speed_factor
+	var max_turn_speed: float = 50.0 * turn_speed_factor
 
-	# Calculate target angular velocity with personality
+	# Calculate target angular velocity
 	var target_angular_velocity: float = clamp(angle_diff * turn_multiplier / delta, -max_turn_speed, max_turn_speed)
 
-	# Lerp current angular velocity toward target for smooth damping
-	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.3)
+	# AGGRESSIVE: High lerp value (0.9) for near-instant rotation
+	bot.angular_velocity.y = lerp(bot.angular_velocity.y, target_angular_velocity, 0.9)
 
 	# CRITICAL: Update CameraArm to point at target for proper ability aiming
 	update_camera_aim(target_position, delta)
