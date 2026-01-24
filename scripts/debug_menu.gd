@@ -22,11 +22,14 @@ var collision_shapes_visible: bool = false
 var speed_multiplier: float = 1.0
 var nametags_enabled: bool = false
 var nametag_script = preload("res://scripts/debug_nametag.gd")
+var direction_arrows_enabled: bool = false
+var direction_arrow_script = preload("res://scripts/debug_direction_arrow.gd")
 
 # Dynamic button references (will be created per page)
 var god_mode_button: Button = null
 var collision_shapes_button: Button = null
 var nametags_button: Button = null
+var direction_arrows_button: Button = null
 var bot_count_label: Label = null
 var speed_label: Label = null
 
@@ -354,6 +357,11 @@ func build_page_2() -> void:
 	nametags_button.pressed.connect(_on_nametags_pressed)
 	page_content.add_child(nametags_button)
 
+	direction_arrows_button = Button.new()
+	direction_arrows_button.text = "Bot Direction Arrows: " + ("ON" if direction_arrows_enabled else "OFF")
+	direction_arrows_button.pressed.connect(_on_direction_arrows_pressed)
+	page_content.add_child(direction_arrows_button)
+
 	# Info section
 	page_content.add_child(HSeparator.new())
 
@@ -502,6 +510,30 @@ func _on_spawn_bot_pressed() -> void:
 	if world and world.has_method("spawn_bot"):
 		world.spawn_bot()
 		update_bot_count()
+
+		# Wait a frame for the bot to be fully initialized
+		await get_tree().process_frame
+
+		# Add debug visualizations to new bot if enabled
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		if players.size() > 0:
+			var new_bot: Node = players[players.size() - 1]  # Last spawned
+			var player_id: int = new_bot.name.to_int()
+
+			if player_id >= 9000:  # Verify it's a bot
+				# Add nametag if enabled
+				if nametags_enabled and not new_bot.get_node_or_null("DebugNametag"):
+					var nametag = nametag_script.new()
+					nametag.name = "DebugNametag"
+					nametag.setup(new_bot)
+					new_bot.add_child(nametag)
+
+				# Add direction arrow if enabled
+				if direction_arrows_enabled and not new_bot.get_node_or_null("DebugDirectionArrow"):
+					var arrow = direction_arrow_script.new()
+					arrow.name = "DebugDirectionArrow"
+					arrow.setup(new_bot)
+					new_bot.add_child(arrow)
 	else:
 		print("Error: Could not spawn bot - World node not found or missing spawn_bot method")
 
@@ -695,6 +727,36 @@ func _on_nametags_pressed() -> void:
 	# Update button text
 	if nametags_button:
 		nametags_button.text = "Show Nametags: " + ("ON" if nametags_enabled else "OFF")
+
+func _on_direction_arrows_pressed() -> void:
+	"""Toggle debug direction arrows for bots"""
+	direction_arrows_enabled = not direction_arrows_enabled
+
+	if direction_arrows_enabled:
+		# Spawn direction arrows for all bots (not players)
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			# Only add arrows to bots (ID >= 9000)
+			var player_id: int = player.name.to_int()
+			if player_id >= 9000:  # It's a bot
+				if not player.get_node_or_null("DebugDirectionArrow"):
+					var arrow = direction_arrow_script.new()
+					arrow.name = "DebugDirectionArrow"
+					arrow.setup(player)
+					player.add_child(arrow)
+		print("Debug direction arrows enabled - showing arrows in front of bots")
+	else:
+		# Remove all direction arrows
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			var arrow = player.get_node_or_null("DebugDirectionArrow")
+			if arrow:
+				arrow.queue_free()
+		print("Debug direction arrows disabled")
+
+	# Update button text
+	if direction_arrows_button:
+		direction_arrows_button.text = "Bot Direction Arrows: " + ("ON" if direction_arrows_enabled else "OFF")
 
 func _on_regenerate_level_pressed() -> void:
 	"""Regenerate the procedural level"""
