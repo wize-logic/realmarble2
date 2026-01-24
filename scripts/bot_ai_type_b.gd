@@ -1679,154 +1679,22 @@ func navigate_to_platform(delta: float) -> void:
 			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
-	"""DESPERATE: Move towards ability with unwavering determination - NEVER give up!"""
-	# VALIDATION: Check if target is invalid or collected
+	"""Simple ability collection - just move and jump"""
+	# If no target, find one
 	if not target_ability or not is_instance_valid(target_ability):
-		# DESPERATE: Only look for new ability if we don't have a lock, or if locked ability is truly gone
-		if not ability_locked_on or locked_ability_id == -1:
-			find_nearest_ability()
-			if target_ability and is_instance_valid(target_ability):
-				# Found a new ability - LOCK ON!
-				ability_locked_on = true
-				locked_ability_id = target_ability.get_instance_id()
-				ability_collection_stuck_counter = 0
-				ability_collection_last_distance = bot.global_position.distance_to(target_ability.global_position)
-				ability_collection_progress_timer = 2.5
-				return
-			else:
-				# No abilities available - exit collection mode
-				ability_locked_on = false
-				locked_ability_id = -1
-				state = "WANDER"
-				return
-		else:
-			# Locked ability is gone - must have been collected
-			ability_locked_on = false
-			locked_ability_id = -1
-			# Try to find another immediately
-			find_nearest_ability()
-			if target_ability and is_instance_valid(target_ability):
-				ability_locked_on = true
-				locked_ability_id = target_ability.get_instance_id()
-				return
-			else:
-				state = "WANDER"
-				return
-
-	var distance: float = bot.global_position.distance_to(target_ability.global_position)
-	var height_diff: float = target_ability.global_position.y - bot.global_position.y
-
-	# PROGRESS TRACKING: Check if we're making progress towards the ability
-	ability_collection_progress_timer -= delta
-	if ability_collection_progress_timer <= 0.0:
-		# Check progress every 2.5 seconds
-		ability_collection_progress_timer = 2.5
-
-		# If we haven't gotten closer (within 2 units tolerance), we're stuck
-		if distance >= ability_collection_last_distance - 2.0:
-			ability_collection_stuck_counter += 1
-
-			# If stuck 3 times (7.5 seconds of no progress), this ability is unreachable
-			if ability_collection_stuck_counter >= 3:
-				# ANTI-LOOP: Blacklist this failed ability to prevent retargeting it
-				var failed_ability_id: int = target_ability.get_instance_id()
-				failed_abilities[failed_ability_id] = Time.get_ticks_msec() / 1000.0
-
-				# Trim blacklist if it gets too large
-				if failed_abilities.size() > MAX_BLACKLIST_SIZE:
-					var oldest_key: int = -1
-					var oldest_time: float = INF
-					for ability_id in failed_abilities.keys():
-						if failed_abilities[ability_id] < oldest_time:
-							oldest_time = failed_abilities[ability_id]
-							oldest_key = ability_id
-					if oldest_key != -1:
-						failed_abilities.erase(oldest_key)
-
-				# Give up on this ability and find another
-				ability_locked_on = false
-				locked_ability_id = -1
-				ability_collection_stuck_counter = 0
-				ability_collection_last_distance = 999999.0
-				find_nearest_ability()
-				if target_ability and is_instance_valid(target_ability):
-					ability_locked_on = true
-					locked_ability_id = target_ability.get_instance_id()
-					ability_collection_last_distance = bot.global_position.distance_to(target_ability.global_position)
-				else:
-					state = "WANDER"
-				return
-		else:
-			# Making progress! Reset stuck counter
-			ability_collection_stuck_counter = 0
-
-		# Update last known distance
-		ability_collection_last_distance = distance
-
-	# CRITICAL: Check if ability was collected by someone else
-	if target_ability.get("is_collected") == true:
-		# DESPERATE: Ability just collected! Immediately find another and LOCK ON!
-		ability_locked_on = false  # Clear old lock
-		locked_ability_id = -1
 		find_nearest_ability()
-		if target_ability and is_instance_valid(target_ability):
-			# Found replacement - LOCK ON with extreme prejudice!
-			ability_locked_on = true
-			locked_ability_id = target_ability.get_instance_id()
-			return
-		else:
-			# No abilities available - exit collection mode
-			ability_locked_on = false
-			locked_ability_id = -1
+		if not target_ability:
 			state = "WANDER"
 			return
 
-	# ELEVATED ITEM HANDLING: Check if ability is on a platform we need to reach
-	if height_diff > 4.0 and not is_approaching_platform:
-		# Item is significantly elevated - check if it's on a known platform
-		var platform_for_item: Dictionary = find_platform_for_position(target_ability.global_position)
-		if not platform_for_item.is_empty():
-			# Item is on a platform! Navigate to platform first
-			target_platform = platform_for_item
-			is_approaching_platform = true
-			navigate_to_platform(delta)
-			return
-
-	# If we're already approaching platform, continue that navigation
-	if is_approaching_platform and not target_platform.is_empty():
-		navigate_to_platform(delta)
-		return
-
-	# DESPERATE: Move towards ability at MAXIMUM SPEED - nothing else matters!
+	# Move towards ability
 	move_towards(target_ability.global_position, 1.0)
 
-	# DESPERATE: Aggressive jumping - jump constantly to reach ability faster
-	if action_timer <= 0.0:
-		if height_diff > 10.0:
-			# Very high - SPAM bounce attack!
-			if bounce_cooldown_timer <= 0.0:
-				use_bounce_attack()
-				action_timer = randf_range(0.3, 0.5)  # Faster retry
-		elif height_diff > 5.0:
-			# High - AGGRESSIVE double jump spam
-			if bot.jump_count == 0:
-				bot_jump()
-				action_timer = 0.1  # VERY quick follow-up for second jump
-			elif bot.jump_count < bot.max_jumps:
-				bot_jump()
-				action_timer = randf_range(0.2, 0.4)  # Faster retry
-		elif height_diff > 1.5:
-			# Medium elevation - SPAM jumps
-			bot_jump()
-			action_timer = randf_range(0.2, 0.3)  # Much faster
-		elif height_diff > 0.5:
-			# Small elevation - jump frequently
-			bot_jump()
-			action_timer = randf_range(0.3, 0.5)
-		elif distance < 20.0 and randf() < 0.6:
-			# DESPERATE: Jump even on flat ground when close to keep momentum
-			bot_jump()
-			action_timer = randf_range(0.4, 0.7)
+	# Jump if ability is above us
+	var height_diff: float = target_ability.global_position.y - bot.global_position.y
+	if action_timer <= 0.0 and height_diff > 1.0:
+		bot_jump()
+		action_timer = 0.5
 
 func do_collect_orb(delta: float) -> void:
 	"""Move towards orb with elevated surface handling"""
@@ -2832,61 +2700,20 @@ func calculate_orb_value() -> float:
 	return value
 
 func find_nearest_ability() -> void:
-	"""COST-BENEFIT: Find ability with best value/effort ratio (with blacklist filtering)"""
-	var best_ability: Node = null
-	var best_score: float = -INF
-
-	# ANTI-LOOP: Clean up expired blacklist entries
-	var current_time: float = Time.get_ticks_msec() / 1000.0
-	var expired_keys: Array[int] = []
-	for ability_id in failed_abilities.keys():
-		if current_time - failed_abilities[ability_id] > ABILITY_BLACKLIST_DURATION:
-			expired_keys.append(ability_id)
-	for key in expired_keys:
-		failed_abilities.erase(key)
-
-	# Calculate value once (same for all abilities)
-	var ability_value: float = calculate_ability_value()
+	"""Find nearest ability - simple distance check"""
+	var nearest: Node = null
+	var nearest_dist: float = INF
 
 	for ability in cached_abilities:
 		if not is_instance_valid(ability):
 			continue
 
-		# ANTI-LOOP: Skip blacklisted abilities
-		var ability_id: int = ability.get_instance_id()
-		if failed_abilities.has(ability_id):
-			continue  # Skip this failed ability
+		var distance: float = bot.global_position.distance_to(ability.global_position)
+		if distance < nearest_dist:
+			nearest_dist = distance
+			nearest = ability
 
-		var ability_pos: Vector3 = ability.global_position
-
-		# Skip if too far away or not visible (unless very close)
-		var distance: float = bot.global_position.distance_to(ability_pos)
-		if distance > 60.0:  # Hard limit - too far to consider
-			continue
-		if distance > 15.0 and not is_target_visible(ability_pos, ability):
-			continue  # Not visible and not close - skip
-
-		# Calculate acquisition cost for this ability
-		var cost: float = calculate_item_acquisition_cost(ability_pos)
-
-		# Calculate net benefit (value - cost)
-		var net_benefit: float = ability_value - cost
-
-		# Choose ability with best net benefit
-		if net_benefit > best_score:
-			best_score = net_benefit
-			best_ability = ability
-
-	# Only set target if net benefit is positive (worth pursuing)
-	if best_score > 0.0:
-		target_ability = best_ability
-	else:
-		# ANTI-LOOP: If no valid abilities found but we have a blacklist, clear it and retry
-		if not failed_abilities.is_empty() and cached_abilities.size() > 0:
-			failed_abilities.clear()  # Give all abilities another chance
-			find_nearest_ability()  # Recursive retry without blacklist
-			return
-		target_ability = null  # No ability worth the effort
+	target_ability = nearest
 
 func find_nearest_orb() -> void:
 	"""COST-BENEFIT: Find orb with best value/effort ratio"""
