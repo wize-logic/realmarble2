@@ -2881,6 +2881,11 @@ func find_nearest_ability() -> void:
 	if best_score > 0.0:
 		target_ability = best_ability
 	else:
+		# ANTI-LOOP: If no valid abilities found but we have a blacklist, clear it and retry
+		if not failed_abilities.is_empty() and cached_abilities.size() > 0:
+			failed_abilities.clear()  # Give all abilities another chance
+			find_nearest_ability()  # Recursive retry without blacklist
+			return
 		target_ability = null  # No ability worth the effort
 
 func find_nearest_orb() -> void:
