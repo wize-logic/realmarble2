@@ -97,7 +97,7 @@ func collect(player: Node) -> void:
 	if collision_shape:
 		collision_shape.set_deferred("disabled", true)
 
-	print("Orb collected by player! Respawning in %.1f seconds" % respawn_time)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Orb collected by player! Respawning in %.1f seconds" % respawn_time)
 
 func respawn_orb() -> void:
 	"""Respawn the orb"""
@@ -112,7 +112,7 @@ func respawn_orb() -> void:
 	# Reset animation phase slightly for variety
 	time += randf() * 2.0
 
-	print("Orb respawned!")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Orb respawned!")
 
 @rpc("call_local")
 func play_collection_sound() -> void:

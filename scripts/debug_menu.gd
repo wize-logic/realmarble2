@@ -8,7 +8,7 @@ var vbox: VBoxContainer = null
 
 # Pagination system
 var current_page: int = 0
-var total_pages: int = 3
+var total_pages: int = 4  # Added debug logging page
 var page_title: Label = null
 var page_indicator: Label = null
 var prev_button: Button = null
@@ -20,10 +20,16 @@ var is_visible: bool = false
 var god_mode_enabled: bool = false
 var collision_shapes_visible: bool = false
 var speed_multiplier: float = 1.0
+var nametags_enabled: bool = false
+var nametag_script = preload("res://scripts/debug_nametag.gd")
+var direction_arrows_enabled: bool = false
+var direction_arrow_script = preload("res://scripts/debug_direction_arrow.gd")
 
 # Dynamic button references (will be created per page)
 var god_mode_button: Button = null
 var collision_shapes_button: Button = null
+var nametags_button: Button = null
+var direction_arrows_button: Button = null
 var bot_count_label: Label = null
 var speed_label: Label = null
 
@@ -155,6 +161,8 @@ func show_page(page: int) -> void:
 			build_page_1()  # Match & World Controls
 		2:
 			build_page_2()  # Expansion & Advanced Controls
+		3:
+			build_page_3()  # Debug Logging Controls
 
 func _on_prev_page() -> void:
 	"""Go to previous page"""
@@ -344,11 +352,142 @@ func build_page_2() -> void:
 	collision_shapes_button.pressed.connect(_on_collision_shapes_pressed)
 	page_content.add_child(collision_shapes_button)
 
+	nametags_button = Button.new()
+	nametags_button.text = "Show Nametags: " + ("ON" if nametags_enabled else "OFF")
+	nametags_button.pressed.connect(_on_nametags_pressed)
+	page_content.add_child(nametags_button)
+
+	direction_arrows_button = Button.new()
+	direction_arrows_button.text = "Bot Direction Arrows: " + ("ON" if direction_arrows_enabled else "OFF")
+	direction_arrows_button.pressed.connect(_on_direction_arrows_pressed)
+	page_content.add_child(direction_arrows_button)
+
 	# Info section
 	page_content.add_child(HSeparator.new())
 
 	var info_label = Label.new()
 	info_label.text = "F3: Toggle Debug Menu\nArrows/Page Keys: Navigate"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(info_label)
+
+func build_page_3() -> void:
+	"""Build Page 3: Debug Logging Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "DEBUG LOGGING"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Master toggle
+	var master_toggle = Button.new()
+	master_toggle.text = "Master Debug: " + ("ON" if DebugLogger.debug_enabled else "OFF")
+	master_toggle.pressed.connect(_on_master_debug_toggle)
+	page_content.add_child(master_toggle)
+
+	# Quick actions
+	var quick_actions_hbox = HBoxContainer.new()
+	page_content.add_child(quick_actions_hbox)
+
+	var enable_all_btn = Button.new()
+	enable_all_btn.text = "Enable All"
+	enable_all_btn.pressed.connect(_on_enable_all_categories)
+	quick_actions_hbox.add_child(enable_all_btn)
+
+	var disable_all_btn = Button.new()
+	disable_all_btn.text = "Disable All"
+	disable_all_btn.pressed.connect(_on_disable_all_categories)
+	quick_actions_hbox.add_child(disable_all_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Entity filtering section
+	var entity_filter_label = Label.new()
+	var watched_entity_text: String = "All entities"
+	if DebugLogger.watched_entity_id != null:
+		var entity_id: int = int(DebugLogger.watched_entity_id)
+		if entity_id >= 9000:
+			watched_entity_text = "Bot_%d" % (entity_id - 9000)
+		else:
+			watched_entity_text = "Player"
+	entity_filter_label.text = "Watching: " + watched_entity_text
+	entity_filter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	entity_filter_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
+	page_content.add_child(entity_filter_label)
+
+	# Entity filter buttons
+	var entity_buttons_hbox = HBoxContainer.new()
+	entity_buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	page_content.add_child(entity_buttons_hbox)
+
+	var watch_all_btn = Button.new()
+	watch_all_btn.text = "Watch All"
+	watch_all_btn.pressed.connect(_on_watch_entity.bind(null))
+	entity_buttons_hbox.add_child(watch_all_btn)
+
+	var watch_player_btn = Button.new()
+	watch_player_btn.text = "Watch Player"
+	watch_player_btn.pressed.connect(_on_watch_player)
+	entity_buttons_hbox.add_child(watch_player_btn)
+
+	# Bot watch buttons (dynamically add for each bot)
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bot_ids: Array[int] = []
+	for player in players:
+		var player_id: int = player.name.to_int()
+		if player_id >= 9000:
+			bot_ids.append(player_id)
+	bot_ids.sort()
+
+	if bot_ids.size() > 0:
+		var bot_buttons_hbox = HBoxContainer.new()
+		bot_buttons_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		page_content.add_child(bot_buttons_hbox)
+
+		for bot_id in bot_ids:
+			var watch_bot_btn = Button.new()
+			watch_bot_btn.text = "Bot_%d" % (bot_id - 9000)
+			watch_bot_btn.pressed.connect(_on_watch_entity.bind(bot_id))
+			bot_buttons_hbox.add_child(watch_bot_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Category toggles in a scroll container for many categories
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 200)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	page_content.add_child(scroll)
+
+	var categories_vbox = VBoxContainer.new()
+	categories_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(categories_vbox)
+
+	# Add toggle for each category
+	for category in DebugLogger.Category.values():
+		var category_hbox = HBoxContainer.new()
+		categories_vbox.add_child(category_hbox)
+
+		var check_button = CheckButton.new()
+		check_button.button_pressed = DebugLogger.is_category_enabled(category)
+		check_button.toggled.connect(_on_category_toggled.bind(category))
+		category_hbox.add_child(check_button)
+
+		var category_label = Label.new()
+		category_label.text = DebugLogger.CATEGORY_NAMES.get(category, "Unknown")
+		category_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		category_hbox.add_child(category_label)
+
+	# Info
+	page_content.add_child(HSeparator.new())
+	var info_label = Label.new()
+	info_label.text = "Enable categories to see debug output\nin the console/terminal"
 	info_label.add_theme_font_size_override("font_size", 10)
 	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -371,6 +510,30 @@ func _on_spawn_bot_pressed() -> void:
 	if world and world.has_method("spawn_bot"):
 		world.spawn_bot()
 		update_bot_count()
+
+		# Wait a frame for the bot to be fully initialized
+		await get_tree().process_frame
+
+		# Add debug visualizations to new bot if enabled
+		players = get_tree().get_nodes_in_group("players")
+		if players.size() > 0:
+			var new_bot: Node = players[players.size() - 1]  # Last spawned
+			var player_id: int = new_bot.name.to_int()
+
+			if player_id >= 9000:  # Verify it's a bot
+				# Add nametag if enabled
+				if nametags_enabled and not new_bot.get_node_or_null("DebugNametag"):
+					var nametag = nametag_script.new()
+					nametag.name = "DebugNametag"
+					nametag.setup(new_bot)
+					new_bot.add_child(nametag)
+
+				# Add direction arrow if enabled
+				if direction_arrows_enabled and not new_bot.get_node_or_null("DebugDirectionArrow"):
+					var arrow = direction_arrow_script.new()
+					arrow.name = "DebugDirectionArrow"
+					arrow.setup(new_bot)
+					new_bot.add_child(arrow)
 	else:
 		print("Error: Could not spawn bot - World node not found or missing spawn_bot method")
 
@@ -485,7 +648,7 @@ func _on_kill_player_pressed() -> void:
 	var player: Node = get_local_player()
 	if player and player.has_method("respawn"):
 		player.respawn()
-		print("Player killed - respawning...")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Player killed - respawning...")
 
 func _on_kill_all_pressed() -> void:
 	"""Kill all players except the local player"""
@@ -538,6 +701,63 @@ func _on_collision_shapes_pressed() -> void:
 		collision_shapes_button.text = "Show Collision: OFF"
 		print("Collision shapes hidden")
 
+func _on_nametags_pressed() -> void:
+	"""Toggle debug nametags above players/bots"""
+	nametags_enabled = not nametags_enabled
+
+	if nametags_enabled:
+		# Spawn nametags for all players/bots
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			if not player.get_node_or_null("DebugNametag"):
+				var nametag = nametag_script.new()
+				nametag.name = "DebugNametag"
+				nametag.setup(player)
+				player.add_child(nametag)
+		print("Debug nametags enabled - showing names above all players/bots")
+	else:
+		# Remove all nametags
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			var nametag = player.get_node_or_null("DebugNametag")
+			if nametag:
+				nametag.queue_free()
+		print("Debug nametags disabled")
+
+	# Update button text
+	if nametags_button:
+		nametags_button.text = "Show Nametags: " + ("ON" if nametags_enabled else "OFF")
+
+func _on_direction_arrows_pressed() -> void:
+	"""Toggle debug direction arrows for bots"""
+	direction_arrows_enabled = not direction_arrows_enabled
+
+	if direction_arrows_enabled:
+		# Spawn direction arrows for all bots (not players)
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			# Only add arrows to bots (ID >= 9000)
+			var player_id: int = player.name.to_int()
+			if player_id >= 9000:  # It's a bot
+				if not player.get_node_or_null("DebugDirectionArrow"):
+					var arrow = direction_arrow_script.new()
+					arrow.name = "DebugDirectionArrow"
+					arrow.setup(player)
+					player.add_child(arrow)
+		print("Debug direction arrows enabled - showing arrows in front of bots")
+	else:
+		# Remove all direction arrows
+		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		for player in players:
+			var arrow = player.get_node_or_null("DebugDirectionArrow")
+			if arrow:
+				arrow.queue_free()
+		print("Debug direction arrows disabled")
+
+	# Update button text
+	if direction_arrows_button:
+		direction_arrows_button.text = "Bot Direction Arrows: " + ("ON" if direction_arrows_enabled else "OFF")
+
 func _on_regenerate_level_pressed() -> void:
 	"""Regenerate the procedural level"""
 	var world: Node = get_tree().get_root().get_node_or_null("World")
@@ -585,3 +805,58 @@ func get_local_player() -> Node:
 		if player.is_multiplayer_authority():
 			return player
 	return null
+
+# ============================================================================
+# DEBUG LOGGING HANDLERS
+# ============================================================================
+
+func _on_master_debug_toggle() -> void:
+	"""Toggle master debug setting"""
+	DebugLogger.debug_enabled = not DebugLogger.debug_enabled
+	DebugLogger.save_preferences()
+	# Rebuild page to update button text
+	show_page(current_page)
+	print("Master debug logging: ", "ENABLED" if DebugLogger.debug_enabled else "DISABLED")
+
+func _on_enable_all_categories() -> void:
+	"""Enable all debug categories"""
+	DebugLogger.enable_all()
+	# Rebuild page to update checkboxes
+	show_page(current_page)
+	print("All debug categories enabled")
+
+func _on_disable_all_categories() -> void:
+	"""Disable all debug categories"""
+	DebugLogger.disable_all()
+	# Rebuild page to update checkboxes
+	show_page(current_page)
+	print("All debug categories disabled")
+
+func _on_category_toggled(enabled: bool, category: int) -> void:
+	"""Toggle a specific debug category"""
+	if enabled:
+		DebugLogger.enable_category(category)
+		print("Enabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+	else:
+		DebugLogger.disable_category(category)
+		print("Disabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+
+func _on_watch_entity(entity_id: Variant) -> void:
+	"""Set which entity to watch (null = all)"""
+	if entity_id == null:
+		DebugLogger.clear_watched_entity()
+	else:
+		DebugLogger.set_watched_entity(int(entity_id))
+	# Rebuild page to update the "Watching:" label
+	show_page(current_page)
+
+func _on_watch_player() -> void:
+	"""Watch the human player"""
+	var player: Node = get_local_player()
+	if player:
+		var player_id: int = player.name.to_int()
+		DebugLogger.set_watched_entity(player_id)
+		# Rebuild page to update the "Watching:" label
+		show_page(current_page)
+	else:
+		print("Error: No local player found")

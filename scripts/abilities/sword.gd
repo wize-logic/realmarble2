@@ -141,23 +141,10 @@ func _process(delta: float) -> void:
 			var slash_direction: Vector3 = Vector3.FORWARD
 
 			if camera_arm:
-				# Arc in camera forward direction
+				# Arc in camera forward direction (works for both players and bots)
 				slash_direction = -camera_arm.global_transform.basis.z
 				slash_direction.y = 0
 				slash_direction = slash_direction.normalized()
-			else:
-				# For bots: aim directly at their current target for accurate hits
-				var bot_ai: Node = player.get_node_or_null("BotAI")
-				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-					# Aim at bot's target
-					slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-					slash_direction.y = 0
-					if slash_direction.length() < 0.1:
-						# Target too close, use rotation fallback
-						slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-				else:
-					# Fallback: use player's facing direction
-					slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in slash direction
 			# Use raycasting to find ground below the indicator position
@@ -210,29 +197,17 @@ func activate() -> void:
 	var charged_damage: int = int(slash_damage * charge_multiplier)
 	var charged_knockback: float = 70.0 * charge_multiplier  # Increased from 30.0 for stronger impact
 
-	print("SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier], false, get_entity_id())
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 	var slash_direction: Vector3 = Vector3.FORWARD
 
 	if camera_arm:
-		# Slash in camera forward direction
+		# Slash in camera forward direction (works for both players and bots)
 		slash_direction = -camera_arm.global_transform.basis.z
 		slash_direction.y = 0
 		slash_direction = slash_direction.normalized()
-	else:
-		# For bots: aim directly at their current target for accurate hits (full 3D aiming)
-		var bot_ai: Node = player.get_node_or_null("BotAI")
-		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Aim at bot's target in full 3D (no y-flattening for near-perfect vertical aim)
-			slash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			if slash_direction.length() < 0.1:
-				# Target too close, use rotation fallback
-				slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-		else:
-			# Fallback: use player's facing direction (rotation.y)
-			slash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Start slash
 	is_slashing = true
@@ -297,11 +272,11 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(charged_damage, attacker_id)
-			print("Sword slash hit player (local): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player (local): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
-			print("Sword slash hit player (RPC): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player (RPC): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 
 		hit_players.append(body)
 
@@ -313,7 +288,7 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()
 
-		print("Sword slash hit player: ", body.name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Sword slash hit player: %s" % body.name, false, get_entity_id())
 
 func end_slash() -> void:
 	is_slashing = false

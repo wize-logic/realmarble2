@@ -167,6 +167,22 @@ var fall_camera_position: Vector3 = Vector3.ZERO
 # Debug/cheat properties
 var god_mode: bool = false
 
+# ============================================================================
+# DEBUG HELPERS
+# ============================================================================
+
+func get_entity_id() -> int:
+	"""Get the player/bot's entity ID for debug logging"""
+	return name.to_int()
+
+func is_bot() -> bool:
+	"""Check if this entity is a bot"""
+	return get_entity_id() >= 9000
+
+# ============================================================================
+# LIFECYCLE
+# ============================================================================
+
 func _enter_tree() -> void:
 	set_multiplayer_authority(str(name).to_int())
 
@@ -196,7 +212,7 @@ func _ready() -> void:
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
 		camera_arm.top_level = true
-		print("[CAMERA] Camera arm top_level set to true")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Camera arm top_level set to true", false, get_entity_id())
 
 	# Set up ground detection raycast
 	if not ground_ray:
@@ -559,9 +575,9 @@ func _ready() -> void:
 	if spawns.size() > 0:
 		var spawn_index: int = player_id % spawns.size()
 		global_position = spawns[spawn_index]
-		print("Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Player %s spawned at spawn point %d: %s" % [name, spawn_index, global_position], false, get_entity_id())
 	else:
-		print("WARNING: No spawn points available! Player %s using default position." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "WARNING: No spawn points available! Player %s using default position." % name, false, get_entity_id())
 		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Reset velocity on spawn
@@ -575,12 +591,12 @@ func _ready() -> void:
 
 	# CRITICAL HTML5 FIX: Set camera immediately and use deferred call for persistence
 	if camera and camera_arm:
-		print("[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s initializing camera. Camera valid: %s" % [name, is_instance_valid(camera)], false, get_entity_id())
 		# Position camera arm at player immediately
 		camera_arm.global_position = global_position
 		# Set camera as current
 		camera.current = true
-		print("[CAMERA] Player %s camera.current set to: %s" % [name, camera.current])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s camera.current set to: %s" % [name, camera.current], false, get_entity_id())
 		# Use deferred call to re-confirm after full scene initialization (HTML5 compatibility)
 		call_deferred("_force_camera_activation")
 
@@ -589,14 +605,14 @@ func _force_camera_activation() -> void:
 	# CRITICAL: Only local player with authority should activate camera
 	# Bots must NEVER activate their cameras or they'll hijack the player camera
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		print("[CAMERA] Player %s: Skipping camera activation (not authority)" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s: Skipping camera activation (not authority)" % name, false, get_entity_id())
 		return
 
 	if not camera or not camera_arm:
-		print("[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] _force_camera_activation: Camera or CameraArm is null for player %s" % name, false, get_entity_id())
 		return
 
-	print("[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] _force_camera_activation called for LOCAL PLAYER %s" % name, false, get_entity_id())
 
 	# Position camera arm at current player position
 	camera_arm.global_position = global_position
@@ -605,12 +621,12 @@ func _force_camera_activation() -> void:
 	var all_cameras: Array[Camera3D] = []
 	_find_all_cameras(get_tree().root, all_cameras)
 
-	print("[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Found %d cameras in scene. Setting player %s camera as current..." % [all_cameras.size(), name], false, get_entity_id())
 
 	# Disable all other cameras
 	for other_camera in all_cameras:
 		if other_camera != camera and other_camera.current:
-			print("[CAMERA] Disabling other camera: %s" % other_camera.get_path())
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Disabling other camera: %s" % other_camera.get_path(), false, get_entity_id())
 			other_camera.current = false
 
 	# Force our camera to be current
@@ -620,7 +636,7 @@ func _force_camera_activation() -> void:
 	camera_arm.force_update_transform()
 	camera.force_update_transform()
 
-	print("[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s camera.current = %s, global_position = %s" % [name, camera.current, camera.global_position], false, get_entity_id())
 
 func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 	"""Recursively find all Camera3D nodes in the scene"""
@@ -637,7 +653,7 @@ func _process(delta: float) -> void:
 		camera_arm.global_position = global_position
 	else:
 		if not camera_arm:
-			print("[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name, false, get_entity_id())
 
 	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
 	# Bots must NEVER activate their cameras or they'll hijack the player camera
@@ -647,10 +663,10 @@ func _process(delta: float) -> void:
 	elif camera and is_instance_valid(camera):
 		if not camera.current:
 			camera.current = true
-			print("[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
 	else:
 		if not camera:
-			print("[CAMERA ERROR] Player %s: camera is NULL in _process!" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera is NULL in _process!" % name, false, get_entity_id())
 
 	# Handle last attacker timeout
 	if last_attacker_id != -1:
@@ -674,7 +690,7 @@ func _process(delta: float) -> void:
 
 		# Respawn after 2 seconds (works for both players and bots)
 		if fall_death_timer >= 2.0:
-			print("Fall death timer reached 2.0s, respawning %s" % name)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Fall death timer reached 2.0s, respawning %s" % name, false, get_entity_id())
 			respawn()
 			is_falling_to_death = false
 			fall_camera_detached = false
@@ -687,7 +703,7 @@ func _process(delta: float) -> void:
 		return
 
 	if not camera or not camera_arm:
-		print("[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: Camera or CameraArm is null! Cannot update camera." % name, false, get_entity_id())
 		return
 
 	# CRITICAL HTML5 FIX: Force camera to be current every frame
@@ -812,11 +828,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Jump - Space key (with double jump, and jumping off rails)
 	if event is InputEventKey and event.keycode == KEY_SPACE:
-		print("Space key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Jumps: ", jump_count, "/", max_jumps, " | Grinding: ", is_grinding)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Space key detected! Pressed: %s | Grounded: %s | Jumps: %d/%d | Grinding: %s" % [event.pressed, is_grounded, jump_count, max_jumps, is_grinding], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Jump off rail if grinding
 			if is_grinding:
-				print("JUMPING OFF RAIL!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "JUMPING OFF RAIL!", false, get_entity_id())
 				jump_off_rail()
 				return
 
@@ -826,7 +842,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				if jump_count == 1:
 					jump_strength *= 0.85
 
-				print("JUMPING! (Jump #", jump_count + 1, ") Impulse: ", jump_strength)
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "JUMPING! (Jump #%d) Impulse: %.1f" % [jump_count + 1, jump_strength], false, get_entity_id())
 
 				# Cancel vertical velocity for consistent jumps
 				var vel: Vector3 = linear_velocity
@@ -843,39 +859,39 @@ func _unhandled_input(event: InputEvent) -> void:
 				# Spawn jump particle effect
 				spawn_jump_bounce_effect(1.0)
 			else:
-				print("Can't jump - no jumps remaining (", jump_count, "/", max_jumps, ")")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't jump - no jumps remaining (%d/%d)" % [jump_count, max_jumps], false, get_entity_id())
 
 	# Bounce attack - Right mouse button (Sonic Adventure 2 style)
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
 			# Can only bounce in the air and if not on cooldown (not while grinding)
 			if not is_grounded and not is_grinding and bounce_cooldown <= 0.0 and not is_bouncing:
-				print("BOUNCE ATTACK!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "BOUNCE ATTACK!", false, get_entity_id())
 				start_bounce()
 			else:
 				if is_grounded:
-					print("Can't bounce - on ground")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - on ground", false, get_entity_id())
 				elif is_grinding:
-					print("Can't bounce - grinding on rail")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - grinding on rail", false, get_entity_id())
 				elif bounce_cooldown > 0.0:
-					print("Can't bounce - on cooldown (%.2f)" % bounce_cooldown)
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't bounce - on cooldown (%.2f)" % bounce_cooldown, false, get_entity_id())
 				elif is_bouncing:
-					print("Already bouncing")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already bouncing", false, get_entity_id())
 
 	# Use ability - E key or controller X button (with charging support)
 	# PRIORITY: If looking at a rail, attach to it instead
 	if Input.is_action_just_pressed("use_ability"):
 		# Check if we're targeting a rail and can attach
 		if targeted_rail and not is_grinding:
-			print("[RAIL] E pressed - attempting to attach to ", targeted_rail.name)
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] E pressed - attempting to attach to %s" % targeted_rail.name, false, get_entity_id())
 			if targeted_rail.has_method("try_attach_player"):
 				if targeted_rail.try_attach_player(self):
-					print("[RAIL] Successfully attached to rail via E key!")
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Successfully attached to rail via E key!", false, get_entity_id())
 					return  # Don't use ability
 				else:
-					print("[RAIL] Failed to attach to rail")
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Failed to attach to rail", false, get_entity_id())
 			else:
-				print("[RAIL] Rail doesn't have try_attach_player method")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Rail doesn't have try_attach_player method", false, get_entity_id())
 
 		# Otherwise, start charging the ability
 		if current_ability and current_ability.has_method("start_charge"):
@@ -889,44 +905,44 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.keycode == KEY_O:
 		if event.pressed and not event.echo:
 			if current_ability:
-				print("Dropping ability!")
+				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropping ability!", false, get_entity_id())
 				drop_ability()
 
 	# Spin dash - start charging (Shift key)
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
-		print("Shift key detected! Pressed: ", event.pressed, " | Grounded: ", is_grounded, " | Cooldown: ", spin_cooldown)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift key detected! Pressed: %s | Grounded: %s | Cooldown: %s" % [event.pressed, is_grounded, spin_cooldown], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Check if game is active
 			var world: Node = get_tree().get_root().get_node_or_null("World")
 			var game_is_active: bool = world and world.get("game_active")
 
 			if not game_is_active:
-				print("Can't spin dash - game not started yet")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - game not started yet", false, get_entity_id())
 			elif is_grounded and spin_cooldown <= 0.0:
-				print("Starting spin dash charge!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Starting spin dash charge!", false, get_entity_id())
 				is_charging_spin = true
 				spin_charge = 0.0
 			else:
 				if not is_grounded:
-					print("Can't spin dash - not grounded")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - not grounded", false, get_entity_id())
 				if spin_cooldown > 0.0:
-					print("Can't spin dash - on cooldown")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - on cooldown", false, get_entity_id())
 
 		# Spin dash - release to dash (Shift key)
 		if not event.pressed:
-			print("Shift released! Charging: ", is_charging_spin, " | Charge amount: ", spin_charge)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift released! Charging: %s | Charge amount: %s" % [is_charging_spin, spin_charge], false, get_entity_id())
 			# Check if game is active
 			var world: Node = get_tree().get_root().get_node_or_null("World")
 			var game_is_active: bool = world and world.get("game_active")
 
 			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
-				print("Executing spin dash!")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Executing spin dash!", false, get_entity_id())
 				execute_spin_dash()
 			elif is_charging_spin:
 				if not game_is_active:
-					print("Can't spin dash - game not started yet")
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - game not started yet", false, get_entity_id())
 				else:
-					print("Charge too low: ", spin_charge)
+					DebugLogger.dlog(DebugLogger.Category.PLAYER, "Charge too low: %s" % spin_charge, false, get_entity_id())
 			is_charging_spin = false
 			spin_charge = 0.0
 
@@ -1084,7 +1100,7 @@ func check_ground() -> void:
 		var bounce_multiplier: float = pow(bounce_scale_per_count, bounce_count - 1)
 		var scaled_impulse: float = current_bounce_back_impulse * bounce_multiplier
 
-		print("BOUNCE IMPACT #%d! Multiplier: %.2fx | Impulse: %.1f" % [bounce_count, bounce_multiplier, scaled_impulse])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "BOUNCE IMPACT #%d! Multiplier: %.2fx | Impulse: %.1f" % [bounce_count, bounce_multiplier, scaled_impulse], false, get_entity_id())
 
 		# Cancel vertical velocity and apply scaled upward impulse
 		var vel: Vector3 = linear_velocity
@@ -1106,7 +1122,7 @@ func check_ground() -> void:
 		var particle_intensity: float = 1.0 + (bounce_count - 1) * 0.3  # 1.0, 1.3, 1.6
 		spawn_jump_bounce_effect(particle_intensity)
 
-		print("Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count], false, get_entity_id())
 
 	# Reset jump count when landing
 	if is_grounded and not was_grounded:
@@ -1120,9 +1136,9 @@ func check_ground() -> void:
 		# Reset bounce counter if landing normally (not from a bounce)
 		if not just_bounce_landed:
 			if bounce_count > 0:
-				print("Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count)
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Landed normally! Jump count reset | Bounce streak ended: %d bounces" % bounce_count, false, get_entity_id())
 			else:
-				print("Landed! Jump count reset")
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Landed! Jump count reset", false, get_entity_id())
 			bounce_count = 0
 
 		# Play landing sound (only if not from a bounce, since bounce has its own sound)
@@ -1131,15 +1147,15 @@ func check_ground() -> void:
 
 	# Debug logging every 60 frames (about once per second)
 	if Engine.get_physics_frames() % 60 == 0:
-		print("Ground check: ", is_grounded, " | Y-pos: ", global_position.y, " | Jumps: ", jump_count, "/", max_jumps)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Ground check: %s | Y-pos: %.11f | Jumps: %d/%d" % [is_grounded, global_position.y, jump_count, max_jumps], false, get_entity_id())
 		if is_grounded:
-			print("  Hit: ", ground_ray.get_collider(), " at distance: ", ground_ray.get_collision_point().distance_to(global_position))
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Hit: %s at distance: %.11f" % [ground_ray.get_collider(), ground_ray.get_collision_point().distance_to(global_position)], false, get_entity_id())
 		else:
-			print("  No ground detected under marble")
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "  No ground detected under marble", false, get_entity_id())
 
 	# Log ground state changes
 	if was_grounded != is_grounded:
-		print("Ground state changed: ", is_grounded, " | Position: ", global_position)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Ground state changed: %s | Position: %s" % [is_grounded, global_position], false, get_entity_id())
 
 func execute_spin_dash() -> void:
 	"""Execute a Sonic-style spin dash - Always dash towards reticle position"""
@@ -1190,14 +1206,14 @@ func execute_spin_dash() -> void:
 	if spin_sound and spin_sound.stream:
 		play_spin_sound.rpc()
 
-	print("Spin dash towards reticle! Direction: %s | Rotation: %.1f° | Charge: %.1f%% | Force: %.1f" % [dash_direction, rad_to_deg(target_rotation_y), charge_multiplier * 100, dash_impulse])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Spin dash towards reticle! Direction: %s | Rotation: %.1f° | Charge: %.1f%% | Force: %.1f" % [dash_direction, rad_to_deg(target_rotation_y), charge_multiplier * 100, dash_impulse], false, get_entity_id())
 
 func start_bounce() -> void:
 	"""Start the bounce attack - Sonic Adventure 2 style"""
 	if is_bouncing:
 		return
 
-	print("Starting bounce attack!")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Starting bounce attack!", false, get_entity_id())
 	is_bouncing = true
 
 	# Cancel all horizontal velocity and apply strong downward velocity
@@ -1214,7 +1230,7 @@ func start_bounce() -> void:
 	# Spawn bounce particle effect (initiating bounce)
 	spawn_jump_bounce_effect(1.2)
 
-	print("Bounce velocity applied: y=%.1f" % vel.y)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce velocity applied: y=%.1f" % vel.y, false, get_entity_id())
 
 @rpc("any_peer")
 func receive_damage(damage: int = 1) -> void:
@@ -1244,7 +1260,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	last_attacker_time = Time.get_ticks_msec() / 1000.0
 
 	health -= damage
-	print("Received %d damage from player %d! Health: %d" % [damage, attacker_id, health])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Received %d damage from player %d! Health: %d" % [damage, attacker_id, health], false, get_entity_id())
 
 	# Play hit sound
 	if hit_sound and hit_sound.stream:
@@ -1266,16 +1282,16 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 
 			# Update attacker's killstreak and notify
 			var attacker: Node = world.get_node_or_null(str(attacker_id))
-			print("[KILL] Looking for attacker node: ", attacker_id, " - Found: ", attacker != null)
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Looking for attacker node: %d - Found: %s" % [attacker_id, attacker != null])
 			if attacker and "killstreak" in attacker:
 				attacker.killstreak += 1
-				print("[KILL] Attacker killstreak is now: ", attacker.killstreak)
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Attacker killstreak is now: %d" % attacker.killstreak)
 				# Notify HUD of kill with victim's name (call on attacker's node)
 				if attacker.has_method("notify_kill"):
-					print("[KILL] Calling notify_kill on attacker node")
+					DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Calling notify_kill on attacker node")
 					attacker.notify_kill(attacker_id, name.to_int())
 				else:
-					print("[KILL] ERROR: Attacker doesn't have notify_kill method!")
+					DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] ERROR: Attacker doesn't have notify_kill method!")
 
 				# Notify about killstreak milestones
 				if attacker.killstreak == 5 or attacker.killstreak == 10:
@@ -1289,7 +1305,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		# Delay respawn slightly for death effects to be visible
 		await get_tree().create_timer(0.1).timeout
 		respawn()
-		print("Killed by player %d!" % attacker_id)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Killed by player %d!" % attacker_id, false, get_entity_id())
 
 func respawn() -> void:
 	health = 3
@@ -1312,7 +1328,7 @@ func respawn() -> void:
 	if current_ability:
 		current_ability.queue_free()
 		current_ability = null
-		print("Cleared ability on respawn for %s" % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Cleared ability on respawn for %s" % name, false, get_entity_id())
 
 	# CRITICAL: Reset all movement states that could get stuck
 	is_bouncing = false
@@ -1344,9 +1360,9 @@ func respawn() -> void:
 	if spawns.size() > 0:
 		var spawn_index: int = player_id % spawns.size()
 		global_position = spawns[spawn_index]
-		print("Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Player %s respawned at spawn %d (is_bot: %s)" % [name, spawn_index, is_bot], false, get_entity_id())
 	else:
-		print("WARNING: No spawn points available for player %s! Using fallback position." % name)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "WARNING: No spawn points available for player %s! Using fallback position." % name, false, get_entity_id())
 		global_position = Vector3(0, 2, 0)  # Fallback spawn position
 
 	# Play spawn sound effect
@@ -1361,17 +1377,17 @@ func fall_death() -> void:
 	var player_id: int = str(name).to_int()
 	var is_bot: bool = player_id >= 9000
 
-	print("fall_death() called for %s (is_bot: %s, position: %s)" % [name, is_bot, global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "fall_death() called for %s (is_bot: %s, position: %s)" % [name, is_bot, global_position], false, get_entity_id())
 
 	if is_falling_to_death:
-		print("  Already falling to death, ignoring")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Already falling to death, ignoring", false, get_entity_id())
 		return
 
 	if god_mode:
-		print("  God mode enabled, ignoring")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  God mode enabled, ignoring", false, get_entity_id())
 		return
 
-	print("  Starting fall death sequence")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Starting fall death sequence", false, get_entity_id())
 
 	# Track death
 	var world: Node = get_parent()
@@ -1381,7 +1397,7 @@ func fall_death() -> void:
 	# Check if there was a recent attacker who should get credit for the knockoff kill
 	var current_time: float = Time.get_ticks_msec() / 1000.0
 	if last_attacker_id != -1 and (current_time - last_attacker_time) <= ATTACKER_TIMEOUT:
-		print("  Knockoff kill credited to player %d" % last_attacker_id)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "  Knockoff kill credited to player %d" % last_attacker_id, false, get_entity_id())
 		# Give attacker credit for the kill
 		if world and world.has_method("add_score"):
 			world.add_score(last_attacker_id, 1)
@@ -1416,9 +1432,9 @@ func collect_orb() -> void:
 	if level < MAX_LEVEL:
 		level += 1
 		update_stats()
-		print("⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force], false, get_entity_id())
 	else:
-		print("Already at MAX_LEVEL (%d)" % MAX_LEVEL)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already at MAX_LEVEL (%d)" % MAX_LEVEL, false, get_entity_id())
 
 func update_stats() -> void:
 	"""Update movement stats based on current level"""
@@ -1441,7 +1457,7 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 		# Remove the ability from player (just disappear, don't spawn pickup)
 		current_ability.queue_free()
 		current_ability = null
-		print("Removed previous ability (disappeared)")
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Removed previous ability (disappeared)", false, get_entity_id())
 
 	# Instantiate and equip the new ability
 	current_ability = ability_scene.instantiate()
@@ -1451,7 +1467,7 @@ func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	if current_ability.has_method("pickup"):
 		current_ability.pickup(self)
 
-	print("Picked up ability: ", ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Picked up ability: %s" % ability_name, false, get_entity_id())
 
 func drop_ability() -> void:
 	"""Drop the current ability and spawn it as a pickup on the ground"""
@@ -1476,9 +1492,9 @@ func drop_ability() -> void:
 	# Spawn the ability pickup on the ground if we have a valid scene
 	if ability_scene:
 		spawn_ability_pickup(ability_scene, ability_name, ability_color)
-		print("Dropped ability: %s" % ability_name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropped ability: %s" % ability_name, false, get_entity_id())
 	else:
-		print("Dropped ability but couldn't spawn pickup: %s" % ability_name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropped ability but couldn't spawn pickup: %s" % ability_name, false, get_entity_id())
 
 func get_ability_scene_from_name(ability_name: String) -> PackedScene:
 	"""Map ability name to its scene"""
@@ -1492,7 +1508,7 @@ func get_ability_scene_from_name(ability_name: String) -> PackedScene:
 		"Sword":
 			return SwordScene
 		_:
-			print("WARNING: Unknown ability name: %s" % ability_name)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "WARNING: Unknown ability name: %s" % ability_name)
 			return null
 
 func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, ability_color: Color) -> void:
@@ -1500,7 +1516,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Get the world node (parent) to add the pickup to
 	var world: Node = get_parent()
 	if not world:
-		print("ERROR: No parent node to spawn ability pickup into!")
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "ERROR: No parent node to spawn ability pickup into!")
 		return
 
 	# Find ground position near player
@@ -1529,7 +1545,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Don't spawn abilities in or near the death zone
 	const MIN_SAFE_Y: float = -40.0
 	if spawn_pos.y < MIN_SAFE_Y:
-		print("Cannot spawn ability pickup - too close to death zone (Y: %.1f)" % spawn_pos.y)
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Cannot spawn ability pickup - too close to death zone (Y: %.1f)" % spawn_pos.y, false, get_entity_id())
 		return
 
 	# Instantiate the ability pickup
@@ -1542,7 +1558,7 @@ func spawn_ability_pickup(ability_scene: PackedScene, ability_name: String, abil
 	# Add the pickup to the world
 	world.add_child(pickup)
 
-	print("Ability pickup '%s' spawned on ground at position %s" % [ability_name, spawn_pos])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability pickup '%s' spawned on ground at position %s" % [ability_name, spawn_pos], false, get_entity_id())
 
 @rpc("call_local")
 func use_ability() -> void:
@@ -1634,7 +1650,7 @@ func spawn_death_particles() -> void:
 	death_particles.emitting = true
 	death_particles.restart()
 
-	print("Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Death particles spawned for %s (player: %s)" % [name, "human" if not is_bot else "bot"], false, get_entity_id())
 
 func spawn_collection_effect() -> void:
 	"""Spawn blue aura collection effect rising from beneath the player"""
@@ -1646,7 +1662,7 @@ func spawn_collection_effect() -> void:
 	collection_particles.emitting = true
 	collection_particles.restart()
 
-	print("Collection effect spawned for %s at position %s" % [name, global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Collection effect spawned for %s at position %s" % [name, global_position], false, get_entity_id())
 
 func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	"""Spawn 3 dark blue circles that trail behind player motion (Sonic Adventure 2 style)"""
@@ -1670,7 +1686,7 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 	jump_bounce_particles.emitting = true
 	jump_bounce_particles.restart()
 
-	print("Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Jump/Bounce effect (3 dark blue circles trailing behind motion) spawned for %s (intensity: %.2fx, dir: %s)" % [name, intensity_multiplier, trail_direction], false, get_entity_id())
 
 func spawn_beam_effect() -> void:
 	"""Spawn Star Trek-style beam effect at player spawn position"""
@@ -1691,19 +1707,19 @@ func spawn_beam_effect() -> void:
 	# Play the beam effect
 	beam_effect.play_beam()
 
-	print("Beam spawn effect created for %s at position %s" % [name, beam_effect.global_position])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Beam spawn effect created for %s at position %s" % [name, beam_effect.global_position], false, get_entity_id())
 
 func spawn_death_orb() -> void:
 	"""Spawn orbs at the player's death position - places them on the ground nearby"""
 	# Only spawn orbs if player has collected any (level > 0)
 	if level <= 0:
-		print("No orbs to drop - player level is 0")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "No orbs to drop - player level is 0", false, get_entity_id())
 		return
 
 	# Get the world node (parent) to add the orbs to
 	var world: Node = get_parent()
 	if not world:
-		print("ERROR: No parent node to spawn orbs into!")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "ERROR: No parent node to spawn orbs into!", false, get_entity_id())
 		return
 
 	# Spawn one orb for each level (1-3 orbs)
@@ -1746,7 +1762,7 @@ func spawn_death_orb() -> void:
 		# Don't spawn orbs in or near the death zone
 		const MIN_SAFE_Y: float = -40.0
 		if spawn_pos.y < MIN_SAFE_Y:
-			print("Skipping orb spawn - too close to death zone (Y: %.1f)" % spawn_pos.y)
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Skipping orb spawn - too close to death zone (Y: %.1f)" % spawn_pos.y, false, get_entity_id())
 			continue
 
 		# Instantiate the orb
@@ -1756,9 +1772,9 @@ func spawn_death_orb() -> void:
 		# Add the orb to the world
 		world.add_child(orb)
 
-		print("Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Orb #%d placed on ground at position %s (angle: %.1f°)" % [i + 1, spawn_pos, rad_to_deg(angle)], false, get_entity_id())
 
-	print("Total %d orbs dropped by player %s" % [num_orbs, name])
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Total %d orbs dropped by player %s" % [num_orbs, name], false, get_entity_id())
 
 # ============================================================================
 # UI SYSTEM
@@ -1918,9 +1934,9 @@ func update_rail_targeting() -> void:
 			var prev_count: int = cached_rails.size()
 			cached_rails = find_all_rails(world)
 			if prev_count == 0 and cached_rails.size() > 0:
-				print("[RAIL] Found ", cached_rails.size(), " rails in scene")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Found %d rails in scene" % cached_rails.size(), false, get_entity_id())
 			elif cached_rails.size() == 0:
-				print("[RAIL] WARNING: No rails found in scene!")
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] WARNING: No rails found in scene!", false, get_entity_id())
 			rails_cache_timer = 0.0
 
 	# Clean up invalid rails from cache
@@ -1974,7 +1990,7 @@ func update_rail_targeting() -> void:
 	targeted_rail = found_rail
 
 	if targeted_rail and not prev_targeted:
-		print("[RAIL] Targeting rail: ", targeted_rail.name)
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Targeting rail: %s" % targeted_rail.name, false, get_entity_id())
 
 	if targeted_rail:
 		rail_reticle_ui.visible = true
@@ -2043,7 +2059,7 @@ func start_grinding(rail: GrindRail) -> void:
 	if is_grinding:
 		return
 
-	print("Started grinding on rail!")
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Started grinding on rail!", false, get_entity_id())
 	is_grinding = true
 	current_rail = rail
 	jump_count = 0  # Reset jumps when starting grind
@@ -2066,7 +2082,7 @@ func stop_grinding() -> void:
 	if not is_grinding:
 		return
 
-	print("Stopped grinding!")
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding!", false, get_entity_id())
 	is_grinding = false
 	current_rail = null
 
@@ -2082,7 +2098,7 @@ func launch_from_rail(velocity: Vector3) -> void:
 	if not is_grinding:
 		return
 
-	print("Launched from rail end with velocity: ", velocity)
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
 	stop_grinding()
 
 	# Player already has velocity from physics, just add upward boost
@@ -2108,7 +2124,7 @@ func jump_off_rail() -> void:
 	# Spawn jump particle effect
 	spawn_jump_bounce_effect(1.2)
 
-	print("Jumped off rail! Velocity: ", linear_velocity)
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s" % linear_velocity, false, get_entity_id())
 
 # ============================================================================
 # JUMP PAD & TELEPORTER SYSTEM (Q3 ARENA STYLE)

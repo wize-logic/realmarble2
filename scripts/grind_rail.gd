@@ -173,12 +173,14 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 	# Validate distance one more time (max 30 units as per player.gd)
 	var distance: float = pos.distance_to(closest_world)
 	if distance > 30.0:
-		print("[", name, "] Attachment failed - too far: ", distance)
+		var entity_id: int = grinder.name.to_int() if grinder else -1
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Attachment failed - too far: %s" % [name, distance], false, entity_id)
 		return false
 
 	_attach(grinder, offset, closest_world)
 	nearby_players.erase(grinder)  # Remove from nearby list if present
-	print("[", name, "] Manual attachment successful! Distance: ", distance)
+	var entity_id: int = grinder.name.to_int() if grinder else -1
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Manual attachment successful! Distance: %s" % [name, distance], false, entity_id)
 	return true
 
 
@@ -212,7 +214,8 @@ func _attach(grinder: RigidBody3D, offset: float, closest_world: Vector3) -> voi
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
 
-	print("[", name, "] Attached — unbreakable rope at ", snapped(offset, 0.1))
+	var entity_id: int = grinder.name.to_int() if grinder else -1
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Attached — unbreakable rope at %s" % [name, snapped(offset, 0.1)], false, entity_id)
 
 
 func _remove_grinder(grinder: RigidBody3D) -> void:
@@ -348,11 +351,11 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Debug logging (throttled)
 	if should_log:
-		print("[RAIL] Update: player=", grinder.name, " shift_held=", is_shift_held, " boost=", snapped(data.shift_boost_amount, 10))
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "Update: player=%s shift_held=%s boost=%d" % [grinder.name, is_shift_held, snapped(data.shift_boost_amount, 10)])
 
 	# Debug logging for shift boost
 	if is_shift_held and data.shift_boost_amount == 0.0:
-		print("[RAIL] Shift held - starting boost buildup")
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "Shift held - starting boost buildup")
 
 	# Update shift boost amount
 	if is_shift_held:
@@ -360,7 +363,7 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		var prev_boost: float = data.shift_boost_amount
 		data.shift_boost_amount = min(data.shift_boost_amount + shift_boost_acceleration * delta, shift_boost_max)
 		if int(prev_boost / 1000.0) != int(data.shift_boost_amount / 1000.0):  # Log every 1000 units
-			print("[RAIL] Boost building: ", snapped(data.shift_boost_amount, 100), " / ", shift_boost_max)
+				DebugLogger.dlog(DebugLogger.Category.RAILS, "Boost building: %d / %d" % [snapped(data.shift_boost_amount, 100), shift_boost_max])
 	else:
 		# Gradually decay boost when shift is released
 		data.shift_boost_amount = max(data.shift_boost_amount - shift_boost_decay_rate * delta, 0.0)
@@ -422,11 +425,13 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 					data.boost_attempts += 1
 					data.last_boost_time = current_time
 
-					print("[", name, "] STUCK SAFEGUARD: Applied boost #", data.boost_attempts, " toward ", boost_desc)
+					var entity_id: int = grinder.name.to_int() if grinder else -1
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] STUCK SAFEGUARD: Applied boost #%d toward %s" % [name, data.boost_attempts, boost_desc], false, entity_id)
 
 				elif data.boost_attempts >= max_boost_attempts:
 					# Tried multiple boosts, still stuck - detach player safely
-					print("[", name, "] STUCK SAFEGUARD: Max boost attempts reached, detaching player safely")
+					var entity_id: int = grinder.name.to_int() if grinder else -1
+					DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] STUCK SAFEGUARD: Max boost attempts reached, detaching player safely" % name, false, entity_id)
 
 					# Give player a gentle upward and forward impulse
 					grinder.apply_central_impulse(Vector3.UP * 80.0)
@@ -445,7 +450,8 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 
 	# Only detach at end of rail
 	if attach_offset <= 1.5 or attach_offset >= length - 1.5:
-		print("[", name, "] End of rail — HIGH LAUNCH!")
+		var entity_id: int = grinder.name.to_int() if grinder else -1
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] End of rail — HIGH LAUNCH!" % name, false, entity_id)
 		if grinder.has_method("launch_from_rail"):
 			grinder.launch_from_rail(grinder.linear_velocity)
 

@@ -63,7 +63,9 @@ var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds
 # Bot system
 var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
-const BotAI = preload("res://scripts/bot_ai.gd")
+# Bot AI scripts loaded dynamically based on level type
+const BotAI_TypeA = preload("res://scripts/bot_ai_type_a.gd")
+const BotAI_TypeB = preload("res://scripts/bot_ai_type_b.gd")
 
 # Bot count selection dialog state (instance variables for proper closure sharing)
 var bot_count_dialog_closed: bool = false
@@ -194,7 +196,7 @@ func _process(delta: float) -> void:
 
 			# Spawn pending bots now that match is active
 			if pending_bot_count > 0:
-				print("Spawning %d pending bots..." % pending_bot_count)
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawning %d pending bots..." % pending_bot_count)
 				spawn_pending_bots()
 				pending_bot_count = 0
 
@@ -211,7 +213,7 @@ func _process(delta: float) -> void:
 		# Log every 30 seconds (but only once per interval)
 		var current_interval: int = int(game_time_remaining) / 30
 		if current_interval != last_time_print and int(game_time_remaining) % 30 == 0 and game_time_remaining > 0 and game_time_remaining < 300:
-			print("Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 			last_time_print = current_interval
 
 		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
@@ -752,13 +754,13 @@ func start_practice_mode(bot_count: int, level_type: String = "A") -> void:
 		$Menu/Blur.hide()
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
-		print("[CAMERA] Destroying preview camera for practice mode")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for practice mode")
 		preview_camera.current = false
 		preview_camera.queue_free()
 		preview_camera = null
 
 	if has_node("MarblePreview"):
-		print("[CAMERA] Destroying MarblePreview node")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
 		var marble_preview_node: Node = get_node("MarblePreview")
 		marble_preview_node.queue_free()
 
@@ -885,13 +887,13 @@ func _on_host_button_pressed() -> void:
 
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
-		print("[CAMERA] Destroying preview camera for host mode")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for host mode")
 		preview_camera.current = false
 		preview_camera.queue_free()
 		preview_camera = null
 
 	if has_node("MarblePreview"):
-		print("[CAMERA] Destroying MarblePreview node")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
 		var marble_preview_node: Node = get_node("MarblePreview")
 		marble_preview_node.queue_free()
 
@@ -930,13 +932,13 @@ func _on_join_button_pressed() -> void:
 
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
-		print("[CAMERA] Destroying preview camera for join mode")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for join mode")
 		preview_camera.current = false
 		preview_camera.queue_free()
 		preview_camera = null
 
 	if has_node("MarblePreview"):
-		print("[CAMERA] Destroying MarblePreview node")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
 		var marble_preview_node: Node = get_node("MarblePreview")
 		marble_preview_node.queue_free()
 
@@ -1109,13 +1111,13 @@ func start_deathmatch() -> void:
 
 	# Destroy preview camera and marble since we're starting the game
 	if preview_camera and is_instance_valid(preview_camera):
-		print("[CAMERA] Destroying preview camera for multiplayer match")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for multiplayer match")
 		preview_camera.current = false
 		preview_camera.queue_free()
 		preview_camera = null
 
 	if has_node("MarblePreview"):
-		print("[CAMERA] Destroying MarblePreview node")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
 		var marble_preview_node: Node = get_node("MarblePreview")
 		marble_preview_node.queue_free()
 
@@ -1331,7 +1333,7 @@ func return_to_main_menu() -> void:
 	await generate_procedural_level("A", false)
 
 	# Recreate marble preview after level regeneration
-	print("[CAMERA] Recreating marble preview for main menu")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Recreating marble preview for main menu")
 	_create_marble_preview()
 
 	# Start menu music
@@ -1355,7 +1357,7 @@ func add_death(player_id: int) -> void:
 	if not player_deaths.has(player_id):
 		player_deaths[player_id] = 0
 	player_deaths[player_id] += 1
-	print("Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
@@ -1412,7 +1414,7 @@ func _load_music_from_directory(dir: String) -> int:
 			print("Failed to open music directory: %s" % dir)
 		return 0
 
-	print("[MUSIC] Scanning directory: %s" % dir)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Scanning directory: %s" % dir)
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
@@ -1424,44 +1426,44 @@ func _load_music_from_directory(dir: String) -> int:
 				# Extract the original filename (remove .import extension)
 				var original_name: String = file_name.trim_suffix(".import")
 				var ext: String = original_name.get_extension().to_lower()
-				print("[MUSIC] Found imported file: %s -> original: %s (ext: %s)" % [file_name, original_name, ext])
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found imported file: %s -> original: %s (ext: %s)" % [file_name, original_name, ext])
 
 				# Check if it's a supported audio format
 				if ext in ["mp3", "ogg", "wav"]:
 					# Use the ORIGINAL filename (without .import) for loading
 					var file_path: String = dir.path_join(original_name)
-					print("[MUSIC] Attempting to load: %s" % file_path)
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
 					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 					if audio_stream and gameplay_music.has_method("add_song"):
 						gameplay_music.add_song(audio_stream, file_path)
 						songs_loaded += 1
-						print("[MUSIC] ✅ Successfully loaded: %s" % original_name)
+						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ Successfully loaded: %s" % original_name)
 					else:
-						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [original_name, "null" if not audio_stream else "exists"])
+						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ Failed to load: %s (stream=%s)" % [original_name, "null" if not audio_stream else "exists"])
 			else:
 				# Non-imported file (external music directory)
 				var ext: String = file_name.get_extension().to_lower()
-				print("[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
 
 				# Check if it's a supported audio format
 				if ext in ["mp3", "ogg", "wav"]:
 					var file_path: String = dir.path_join(file_name)
-					print("[MUSIC] Attempting to load: %s" % file_path)
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
 					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
 					if audio_stream and gameplay_music.has_method("add_song"):
 						gameplay_music.add_song(audio_stream, file_path)
 						songs_loaded += 1
-						print("[MUSIC] ✅ Successfully loaded: %s" % file_name)
+						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ Successfully loaded: %s" % file_name)
 					else:
-						print("[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
+						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
 
 		file_name = dir_access.get_next()
 
 	dir_access.list_dir_end()
 
-	print("[MUSIC] Scan complete. Songs loaded: %d" % songs_loaded)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Scan complete. Songs loaded: %d" % songs_loaded)
 	return songs_loaded
 
 func _on_music_directory_button_pressed() -> void:
@@ -1496,29 +1498,29 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 	# For res:// paths, try ResourceLoader first (for imported files)
 	if file_path.begins_with("res://"):
-		print("[MUSIC] Trying ResourceLoader.load(%s)..." % file_path)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Trying ResourceLoader.load(%s)..." % file_path)
 		audio_stream = ResourceLoader.load(file_path)
 		if audio_stream:
-			print("[MUSIC] ✅ ResourceLoader succeeded: %s" % file_path)
+			DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ ResourceLoader succeeded: %s" % file_path)
 			return audio_stream
 		else:
-			print("[MUSIC] ⚠️ ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
+			DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ⚠️ ResourceLoader failed for %s, trying FileAccess fallback..." % file_path)
 			# Fall through to FileAccess method below
 
 	# For external files (or res:// files that aren't imported), use FileAccess
-	print("[MUSIC] Trying FileAccess for %s extension..." % extension)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Trying FileAccess for %s extension..." % extension)
 	match extension:
 		"mp3":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 			if file:
-				print("[MUSIC] FileAccess opened successfully, loading MP3 data...")
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] FileAccess opened successfully, loading MP3 data...")
 				var mp3_stream: AudioStreamMP3 = AudioStreamMP3.new()
 				mp3_stream.data = file.get_buffer(file.get_length())
 				file.close()
 				audio_stream = mp3_stream
-				print("[MUSIC] ✅ MP3 stream created successfully")
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ MP3 stream created successfully")
 			else:
-				print("[MUSIC] ❌ FileAccess.open failed for: %s" % file_path)
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ FileAccess.open failed for: %s" % file_path)
 
 		"ogg":
 			var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
@@ -1554,14 +1556,14 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 
 func spawn_bot() -> void:
 	"""Spawn an AI-controlled bot player"""
-	print("--- spawn_bot() called ---")
-	print("Bot counter before: ", bot_counter)
-	print("Current players in game: ", get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "--- spawn_bot() called ---")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Bot counter before: %d" % bot_counter)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Current players in game: %d" % get_tree().get_nodes_in_group("players").size())
 
 	# Check if we're already at max capacity (8 total: 1 player + 7 bots)
 	var current_player_count: int = get_tree().get_nodes_in_group("players").size()
 	if current_player_count >= 8:
-		print("Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
 		return
 
 	bot_counter += 1
@@ -1579,13 +1581,17 @@ func spawn_bot() -> void:
 			# Spawn at appropriate position
 			var spawn_index: int = bot_id % spawn_points.size()
 			bot.global_position = spawn_points[spawn_index]
-			print("Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
-	# Add AI controller to bot
-	var ai: Node = BotAI.new()
+	# Add AI controller to bot - select correct type based on level
+	var ai: Node
+	if current_level_type == "A":
+		ai = BotAI_TypeA.new()
+	else:  # Type B
+		ai = BotAI_TypeB.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
-	print("BotAI added to bot %d" % bot_id)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Added %s to bot %d for level type %s" % ["BotAI_TypeA" if current_level_type == "A" else "BotAI_TypeB", bot_id, current_level_type])
 
 	# Add bot to players group
 	bot.add_to_group("players")
@@ -1594,19 +1600,19 @@ func spawn_bot() -> void:
 	player_scores[bot_id] = 0
 	player_deaths[bot_id] = 0
 
-	print("Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
-	print("--- spawn_bot() complete ---")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawned bot with ID: %d | Total players now: %d" % [bot_id, get_tree().get_nodes_in_group("players").size()])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "--- spawn_bot() complete ---")
 
 func spawn_pending_bots() -> void:
 	"""Spawn all pending bots (called when match becomes active)"""
-	print("spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "spawn_pending_bots() called - spawning %d bots" % pending_bot_count)
 	for i in range(pending_bot_count):
-		print("Spawning bot %d of %d" % [i + 1, pending_bot_count])
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Spawning bot %d of %d" % [i + 1, pending_bot_count])
 		spawn_bot()
 		# Small delay between spawns for visual effect
 		if i < pending_bot_count - 1:  # Don't wait after last bot
 			await get_tree().create_timer(0.1).timeout
-	print("All pending bots spawned. Total players: ", get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "All pending bots spawned. Total players: %d" % get_tree().get_nodes_in_group("players").size())
 
 func despawn_all_bots() -> void:
 	"""Remove all bot players from the game"""

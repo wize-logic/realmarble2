@@ -146,23 +146,10 @@ func _process(delta: float) -> void:
 			var target_direction: Vector3 = Vector3.FORWARD
 
 			if camera_arm:
-				# Point in camera forward direction
+				# Point in camera forward direction (works for both players and bots)
 				target_direction = -camera_arm.global_transform.basis.z
 				target_direction.y = 0
 				target_direction = target_direction.normalized()
-			else:
-				# For bots: aim directly at their current target for accurate dashes
-				var bot_ai: Node = player.get_node_or_null("BotAI")
-				if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-					# Point toward bot's target
-					target_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-					target_direction.y = 0
-					if target_direction.length() < 0.1:
-						# Target too close, use rotation fallback
-						target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-				else:
-					# Fallback: use player's facing direction
-					target_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 			# Position at player's feet, offset in dash direction
 			# Use raycasting to find ground below the indicator position
@@ -216,28 +203,16 @@ func activate() -> void:
 	var charged_dash_force: float = dash_force * charge_multiplier
 	var charged_knockback: float = 117.0 * charge_multiplier  # Reduced by 35% from 180.0 for better balance
 
-	print("DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier])
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "DASH ATTACK! (Charge level %d, %.1fx power)" % [charge_level, charge_multiplier], false, get_entity_id())
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 
 	if camera_arm:
-		# Dash in camera forward direction
+		# Dash in camera forward direction (works for both players and bots)
 		dash_direction = -camera_arm.global_transform.basis.z
 		dash_direction.y = 0
 		dash_direction = dash_direction.normalized()
-	else:
-		# For bots: aim directly at their current target for accurate dashes (full 3D aiming)
-		var bot_ai: Node = player.get_node_or_null("BotAI")
-		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Dash toward bot's target in full 3D (no y-flattening for near-perfect vertical aim)
-			dash_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			if dash_direction.length() < 0.1:
-				# Target too close, use rotation fallback
-				dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
-		else:
-			# Fallback: use player's facing direction (rotation.y)
-			dash_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	# Apply initial dash impulse
 	if player is RigidBody3D:
@@ -317,11 +292,11 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(charged_damage, attacker_id)
-			print("Dash attack hit player (local): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player (local): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, charged_damage, attacker_id)
-			print("Dash attack hit player (RPC): ", body.name, " | Damage: ", charged_damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player (RPC): %s | Damage: %d" % [body.name, charged_damage], false, get_entity_id())
 
 		hit_players.append(body)
 
@@ -333,7 +308,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		# Play attack hit sound (satisfying feedback for landing a hit)
 		play_attack_hit_sound()
 
-		print("Dash attack hit player: ", body.name)
+		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player: %s" % body.name, false, get_entity_id())
 
 func end_dash() -> void:
 	is_dashing = false
@@ -458,7 +433,11 @@ func create_direction_indicator() -> void:
 	direction_indicator.visible = false
 
 func drop() -> void:
-	"""Override drop to clean up indicator"""
+	"""Override drop to clean up indicator and dash state"""
+	# BUGFIX: End dash if currently dashing (fixes stuck dash attack state)
+	if is_dashing:
+		end_dash()
+
 	# Call parent drop first to handle ability drop logic
 	if has_method("super"):
 		super.drop()

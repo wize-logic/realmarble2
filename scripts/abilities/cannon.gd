@@ -67,20 +67,11 @@ func find_nearest_player() -> Node3D:
 	var camera: Camera3D = player.get_node_or_null("CameraArm/Camera3D")
 
 	if camera:
-		# Use camera's forward direction (full 3D)
+		# Use camera's forward direction (full 3D - works for both players and bots)
 		forward_direction = -camera.global_transform.basis.z
 	elif camera_arm:
 		# Fallback to camera_arm
 		forward_direction = -camera_arm.global_transform.basis.z
-	else:
-		# For bots: try to get direction from BotAI target, else use rotation
-		var bot_ai: Node = player.get_node_or_null("BotAI")
-		if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-			# Use direction to bot's current target
-			forward_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-		else:
-			# Final fallback: use player's facing direction (horizontal for bots)
-			forward_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 	forward_direction = forward_direction.normalized()
 
@@ -129,7 +120,7 @@ func activate() -> void:
 	var damage: int = 1  # Fixed damage, never modified
 	var speed: float = projectile_speed
 
-	print("BOOM! (Instant fire)")
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "BOOM! (Instant fire)", false, get_entity_id())
 
 	# Get initial firing direction from camera
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -153,20 +144,11 @@ func activate() -> void:
 	else:
 		# MANUAL AIM: No target found - shoot horizontally forward based on camera direction
 		if camera:
-			# Get camera's forward direction
+			# Get camera's forward direction (works for both players and bots)
 			fire_direction = -camera.global_transform.basis.z
 		elif camera_arm:
 			# Fallback to camera_arm if camera not found
 			fire_direction = -camera_arm.global_transform.basis.z
-		else:
-			# For bots: try to aim at their current target even if not in auto-aim cone
-			var bot_ai: Node = player.get_node_or_null("BotAI")
-			if bot_ai and "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
-				# Aim at bot's target (full 3D)
-				fire_direction = (bot_ai.target_player.global_position - player.global_position).normalized()
-			else:
-				# Final fallback: use player's facing direction
-				fire_direction = Vector3(sin(player.rotation.y), 0, cos(player.rotation.y))
 
 		# Flatten to horizontal plane for manual aim (no up/down)
 		fire_direction.y = 0
@@ -196,7 +178,7 @@ func activate() -> void:
 			oldest_projectile.queue_free()
 		active_projectiles.remove_at(0)
 		if OS.is_debug_build():
-			print("Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles, false, get_entity_id())
 
 	# Spawn projectile
 	var projectile: Node3D = create_projectile()
@@ -270,11 +252,11 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, owner_id)
-			print('Cannonball hit player (local): ', body.name, ' | Damage: ', damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannonball hit player (local): %s | Damage: %d" % [body.name, damage], false, get_entity_id())
 		else:
 			# RPC call for remote network players only
 			body.receive_damage_from.rpc_id(target_id, damage, owner_id)
-			print('Cannonball hit player (RPC): ', body.name, ' | Damage: ', damage)
+			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannonball hit player (RPC): %s | Damage: %d" % [body.name, damage], false, get_entity_id())
 
 		# Apply stronger knockback from cannonball impact
 		# Get player level multiplier from projectile metadata

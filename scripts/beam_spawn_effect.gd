@@ -75,7 +75,7 @@ func create_beam_effect() -> void:
 	# Create secondary glow particles for extra shine
 	create_glow_particles()
 
-	print("Beam spawn effect created")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Beam spawn effect created")
 
 func create_glow_particles() -> void:
 	"""Create additional glow particles for enhanced beam effect (HTML5-optimized)"""
@@ -182,7 +182,7 @@ func play_beam() -> void:
 	if beam_particles and glow_particles:
 		beam_particles.emitting = true
 		glow_particles.emitting = true
-		print("Beam spawn effect playing at position: ", global_position)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Beam spawn effect playing at position: %s" % global_position)
 		# Auto-cleanup after effect finishes
 		await get_tree().create_timer(beam_particles.lifetime + 0.5).timeout
 		queue_free()

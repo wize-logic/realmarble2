@@ -5,11 +5,13 @@ extends Node3D
 
 @export var level_seed: int = 0
 @export var arena_size: float = 120.0
-@export var platform_count: int = 24
-@export var ramp_count: int = 12
+@export var platform_count: int = 30  # Good amount of platforms
+@export var ramp_count: int = 20  # Good amount of slopes
+@export var min_spacing: float = 5.0  # Minimum gap - just enough so they don't touch
 
 var noise: FastNoiseLite
 var platforms: Array = []
+var geometry_positions: Array[Dictionary] = []  # Stores {position: Vector3, size: Vector3, rotation: Vector3}
 var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
 func _ready() -> void:
@@ -45,6 +47,51 @@ func clear_level() -> void:
 	for child in get_children():
 		child.queue_free()
 	platforms.clear()
+	geometry_positions.clear()
+
+func check_spacing(new_pos: Vector3, new_size: Vector3, new_rotation: Vector3 = Vector3.ZERO) -> bool:
+	"""Check if a new piece of geometry would have proper spacing from existing geometry
+
+	Returns true if the position is valid (has enough spacing), false if it would overlap/touch
+	"""
+	# Calculate oriented bounding box for new geometry
+	var new_half_size: Vector3 = new_size * 0.5
+
+	for existing in geometry_positions:
+		var existing_pos: Vector3 = existing.position
+		var existing_size: Vector3 = existing.size
+		var existing_half_size: Vector3 = existing_size * 0.5
+
+		# Simple distance check first (fast rejection)
+		var distance: float = new_pos.distance_to(existing_pos)
+		var combined_radius: float = (new_half_size.length() + existing_half_size.length()) + min_spacing
+
+		if distance < combined_radius:
+			# More precise AABB check (axis-aligned bounding box)
+			# Expand both boxes by min_spacing/2 to ensure separation
+			var spacing_margin: float = min_spacing * 0.5
+
+			var new_min: Vector3 = new_pos - new_half_size - Vector3.ONE * spacing_margin
+			var new_max: Vector3 = new_pos + new_half_size + Vector3.ONE * spacing_margin
+
+			var existing_min: Vector3 = existing_pos - existing_half_size - Vector3.ONE * spacing_margin
+			var existing_max: Vector3 = existing_pos + existing_half_size + Vector3.ONE * spacing_margin
+
+			# AABB overlap test
+			if (new_min.x <= existing_max.x and new_max.x >= existing_min.x and
+				new_min.y <= existing_max.y and new_max.y >= existing_min.y and
+				new_min.z <= existing_max.z and new_max.z >= existing_min.z):
+				return false  # Would overlap/touch
+
+	return true  # Valid position with proper spacing
+
+func register_geometry(pos: Vector3, size: Vector3, rotation: Vector3 = Vector3.ZERO) -> void:
+	"""Register a piece of geometry in the spacing tracker"""
+	geometry_positions.append({
+		"position": pos,
+		"size": size,
+		"rotation": rotation
+	})
 
 func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
 	"""Create a box mesh with smooth appearance"""
@@ -81,34 +128,49 @@ func generate_main_floor() -> void:
 	# Store for texture application
 	platforms.append(floor_instance)
 
+	# DON'T register floor - it's the base and objects should be allowed on/above it
+	# register_geometry(floor_instance.position, floor_mesh.size)
+
 	if OS.is_debug_build():
 		print("Generated main floor: ", floor_size, "x", floor_size)
 
 func generate_platforms() -> void:
-	"""Generate elevated platforms around the arena"""
-	var radius: float = arena_size * 0.4
+	"""Generate elevated platforms around the arena with proper spacing"""
+	var floor_radius: float = (arena_size * 0.7) / 2.0  # Radius of main floor = 42 units
+	var generated_count: int = 0
+	var max_attempts: int = platform_count * 10
 
-	for i in range(platform_count):
-		var angle: float = (float(i) / platform_count) * TAU
-		var distance: float = radius * (0.6 + randf() * 0.4)
+	for attempt in range(max_attempts):
+		if generated_count >= platform_count:
+			break
 
-		# Position around circle with noise variation
+		# Generate random position - keep within floor bounds with margin
+		var angle: float = randf() * TAU
+		var distance: float = randf_range(5.0, floor_radius - 10.0)  # 5 to 32 units from center
+
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
-		var y: float = 3.0 + randf() * 8.0  # Random heights
+		var y: float = randf_range(3.0, 10.0)  # Heights 3-10 units
 
 		# Random platform size
-		var width: float = 6.0 + randf() * 6.0
-		var depth: float = 6.0 + randf() * 6.0
-		var height: float = 1.0 + randf() * 1.0
+		var width: float = randf_range(6.0, 10.0)
+		var depth: float = randf_range(6.0, 10.0)
+		var height: float = randf_range(1.0, 1.5)
 
-		# Create platform with smooth geometry
-		var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(width, height, depth))
+		var platform_size: Vector3 = Vector3(width, height, depth)
+		var platform_pos: Vector3 = Vector3(x, y, z)
+
+		# Check spacing before creating
+		if not check_spacing(platform_pos, platform_size):
+			continue
+
+		# Create platform
+		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
 		platform_instance.mesh = platform_mesh
-		platform_instance.name = "Platform" + str(i)
-		platform_instance.position = Vector3(x, y, z)
+		platform_instance.name = "Platform" + str(generated_count)
+		platform_instance.position = platform_pos
 		add_child(platform_instance)
 
 		# Add collision
@@ -122,27 +184,48 @@ func generate_platforms() -> void:
 
 		platforms.append(platform_instance)
 
+		# Register this geometry for future spacing checks
+		register_geometry(platform_pos, platform_size)
+
+		generated_count += 1
+
 	if OS.is_debug_build():
-		print("Generated ", platform_count, " platforms")
+		print("Generated ", generated_count, " / ", platform_count, " platforms (", max_attempts, " attempts)")
 
 func generate_ramps() -> void:
-	"""Generate ramps connecting different levels"""
-	for i in range(ramp_count):
-		var angle: float = (float(i) / ramp_count) * TAU + (TAU / ramp_count * 0.5)
-		var distance: float = arena_size * 0.3
+	"""Generate ramps/slopes on the stage with proper spacing"""
+	var floor_radius: float = (arena_size * 0.7) / 2.0  # Radius of main floor = 42 units
+	var generated_count: int = 0
+	var max_attempts: int = ramp_count * 10
+
+	for attempt in range(max_attempts):
+		if generated_count >= ramp_count:
+			break
+
+		# Generate position ON the stage - within floor bounds
+		var angle: float = randf() * TAU
+		var distance: float = randf_range(8.0, floor_radius - 12.0)  # 8 to 30 units from center (stay on stage)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
-		var y: float = 0.0
+		var y: float = randf_range(0.5, 5.0)  # Heights 0.5-5 units
 
-		# Create ramp with smooth geometry
-		var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 12.0))
+		var ramp_size: Vector3 = Vector3(8.0, 0.5, 12.0)
+		var ramp_pos: Vector3 = Vector3(x, y, z)
+		var ramp_rotation: Vector3 = Vector3(-25, randf() * 360.0, 0)  # Random rotation
+
+		# Check spacing before creating
+		if not check_spacing(ramp_pos, ramp_size * 1.2):  # Extra clearance for rotation
+			continue
+
+		# Create ramp
+		var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 		ramp_instance.mesh = ramp_mesh
-		ramp_instance.name = "Ramp" + str(i)
-		ramp_instance.position = Vector3(x, y + 3, z)
-		ramp_instance.rotation_degrees = Vector3(-25, rad_to_deg(angle), 0)  # Sloped
+		ramp_instance.name = "Ramp" + str(generated_count)
+		ramp_instance.position = ramp_pos
+		ramp_instance.rotation_degrees = ramp_rotation
 		add_child(ramp_instance)
 
 		# Add collision
@@ -156,8 +239,13 @@ func generate_ramps() -> void:
 
 		platforms.append(ramp_instance)
 
+		# Register this geometry for future spacing checks
+		register_geometry(ramp_pos, ramp_size * 1.2, ramp_rotation)
+
+		generated_count += 1
+
 	if OS.is_debug_build():
-		print("Generated ", ramp_count, " ramps")
+		print("Generated ", generated_count, " / ", ramp_count, " ramps (", max_attempts, " attempts)")
 
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
@@ -380,19 +468,19 @@ func generate_death_zone() -> void:
 	# Connect signal
 	death_zone.body_entered.connect(_on_death_zone_entered)
 
-	print("Generated death zone")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated death zone")
 
 func _on_death_zone_entered(body: Node3D) -> void:
 	"""Handle player falling into death zone"""
-	print("Death zone entered by: %s (type: %s)" % [body.name, body.get_class()])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Death zone entered by: %s (type: %s)" % [body.name, body.get_class()])
 	if body.has_method("fall_death"):
-		print("Calling fall_death() on %s" % body.name)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling fall_death() on %s" % body.name)
 		body.fall_death()
 	elif body.has_method("respawn"):
-		print("Calling respawn() directly on %s" % body.name)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling respawn() directly on %s" % body.name)
 		body.respawn()
 	else:
-		print("WARNING: %s has neither fall_death() nor respawn() method!" % body.name)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: %s has neither fall_death() nor respawn() method!" % body.name)
 
 func apply_procedural_textures() -> void:
 	"""Apply procedurally generated textures to all platforms"""
