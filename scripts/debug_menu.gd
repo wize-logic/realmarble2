@@ -515,7 +515,7 @@ func _on_spawn_bot_pressed() -> void:
 		await get_tree().process_frame
 
 		# Add debug visualizations to new bot if enabled
-		var players: Array[Node] = get_tree().get_nodes_in_group("players")
+		players = get_tree().get_nodes_in_group("players")
 		if players.size() > 0:
 			var new_bot: Node = players[players.size() - 1]  # Last spawned
 			var player_id: int = new_bot.name.to_int()
