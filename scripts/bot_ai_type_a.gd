@@ -62,7 +62,7 @@ extends Node
 @export var attack_range: float = 12.0
 
 var bot: Node = null
-var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ABILITY, COLLECT_ORB, RETREAT
+var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ORB, RETREAT
 var previous_state: String = "WANDER"  # Track state changes for debug logging
 
 # Debug logging timer (controlled by DebugLogger autoload)
@@ -72,9 +72,7 @@ const DEBUG_LOG_INTERVAL: float = 2.0  # Log state every 2 seconds
 var wander_target: Vector3 = Vector3.ZERO
 var wander_timer: float = 0.0
 var action_timer: float = 0.0
-var target_ability: Node = null
 var target_orb: Node = null
-var ability_check_timer: float = 0.0
 var orb_check_timer: float = 0.0
 var player_search_timer: float = 0.0
 
@@ -136,27 +134,10 @@ const ABILITY_SCORES: Dictionary = {
 
 # IMPROVED: Cached group queries with filtering - CONSTANT AWARENESS MODE
 var cached_players: Array[Node] = []
-var cached_abilities: Array[Node] = []
 var cached_orbs: Array[Node] = []
-# HYPER-AWARENESS: Store exact coordinates for all collectibles
-var cached_ability_positions: Dictionary = {}  # {ability_node: Vector3}
 var cached_orb_positions: Dictionary = {}  # {orb_node: Vector3}
 var cache_refresh_timer: float = 0.0
 const CACHE_REFRESH_INTERVAL: float = 0.1  # Update 10x per second for constant awareness!
-
-# HYPER-FOCUS: Ability collection lock-on system
-var ability_locked_on: bool = false  # Bot is hyper-focused on collecting an ability
-var locked_ability_id: int = -1  # Track which ability we're locked onto
-var ability_collection_last_distance: float = 999999.0  # Track progress towards ability
-var ability_collection_progress_timer: float = 0.0  # Check progress every few seconds
-var ability_collection_stuck_counter: int = 0  # Count how many times we haven't made progress
-
-# ANTI-LOOP: Failed ability blacklist system - prevents infinite twitching
-var failed_abilities: Dictionary = {}  # {ability_instance_id: fail_timestamp} - abilities bot couldn't reach
-const ABILITY_BLACKLIST_DURATION: float = 15.0  # How long to blacklist a failed ability
-const MAX_BLACKLIST_SIZE: int = 10  # Limit blacklist size for performance
-var ability_blacklist_wander_timer: float = 0.0  # Wander cooldown before clearing blacklist
-const ABILITY_BLACKLIST_WANDER_TIME: float = 5.0  # Wander for 5 seconds before retrying
 
 # NEW: Platform navigation system
 var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
@@ -245,7 +226,6 @@ func _ready() -> void:
 	cache_refresh_timer = randf_range(0.0, CACHE_REFRESH_INTERVAL)
 	platform_check_timer = randf_range(0.0, PLATFORM_CHECK_INTERVAL)
 	rail_check_timer = randf_range(0.0, RAIL_CHECK_INTERVAL)
-	ability_check_timer = randf_range(0.0, 1.2)
 	orb_check_timer = randf_range(0.0, 1.0)
 	player_search_timer = randf_range(0.0, 0.5)
 	vision_update_timer = randf_range(0.0, VISION_UPDATE_INTERVAL)
@@ -314,8 +294,8 @@ func change_state(new_state: String, reason: String = "") -> void:
 		previous_state = state
 		state = new_state
 
-		# BUGFIX: Reset collection timer when entering COLLECT_ABILITY or COLLECT_ORB
-		if new_state == "COLLECT_ABILITY" or new_state == "COLLECT_ORB":
+		# BUGFIX: Reset collection timer when entering COLLECT_ORB
+		if new_state == "COLLECT_ORB":
 			target_stuck_timer = 0.0
 
 func debug_log_periodic() -> void:
@@ -353,7 +333,6 @@ func _physics_process(delta: float) -> void:
 	# Update timers
 	wander_timer -= delta
 	action_timer -= delta
-	ability_check_timer -= delta
 	orb_check_timer -= delta
 	strafe_timer -= delta
 	retreat_timer -= delta
@@ -376,13 +355,6 @@ func _physics_process(delta: float) -> void:
 	rail_launch_timer += delta
 	second_jump_timer -= delta
 	debug_log_timer += delta
-
-	# HYPER-FOCUS: Check if ability was successfully collected - unlock if so
-	if ability_locked_on and bot.current_ability:
-		# Bot successfully collected an ability! Release hyper-focus lock
-		ability_locked_on = false
-		locked_ability_id = -1
-		target_ability = null
 
 	# DEBUG: Periodic state logging
 	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) and debug_log_timer >= DEBUG_LOG_INTERVAL:
@@ -476,13 +448,6 @@ func _physics_process(delta: float) -> void:
 		find_target()
 		player_search_timer = 0.8
 
-	# Check for abilities periodically (UNLESS locked onto one!)
-	# CRITICAL: Don't re-evaluate abilities when locked on - prevents target switching
-	if ability_check_timer <= 0.0:
-		if not ability_locked_on:
-			find_nearest_ability()
-		ability_check_timer = 1.2
-
 	# Check for orbs periodically
 	if orb_check_timer <= 0.0:
 		find_nearest_orb()
@@ -514,8 +479,6 @@ func _physics_process(delta: float) -> void:
 			do_attack(delta)
 		"RETREAT":
 			do_retreat(delta)
-		"COLLECT_ABILITY":
-			do_collect_ability(delta)
 		"COLLECT_ORB":
 			do_collect_orb(delta)
 
@@ -556,24 +519,16 @@ func initialize_personality() -> void:
 		caution_level = randf_range(0.4, 0.6)
 
 func refresh_cached_groups() -> void:
-	"""HYPER-AWARENESS: Cache ALL entities with exact positions - constant tracking"""
+	"""Cache entities with exact positions"""
 	# Filter out invalid nodes immediately
 	cached_players = get_tree().get_nodes_in_group("players").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
-	cached_abilities = get_tree().get_nodes_in_group("ability_pickups").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree()
 	)
 	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
 	)
 
-	# HYPER-AWARENESS: Store exact coordinates for ALL abilities and orbs
-	cached_ability_positions.clear()
-	for ability in cached_abilities:
-		if is_instance_valid(ability) and "global_position" in ability:
-			cached_ability_positions[ability] = ability.global_position
-
+	# Store exact coordinates for orbs
 	cached_orb_positions.clear()
 	for orb in cached_orbs:
 		if is_instance_valid(orb) and "global_position" in orb:
@@ -667,9 +622,9 @@ func consider_rail_navigation() -> void:
 	if not bot or is_grinding:
 		return  # Already grinding or no bot
 
-	# CRITICAL: Don't interfere with combat or ability collection states
+	# CRITICAL: Don't interfere with combat or orb collection states
 	# Rail navigation should only happen during WANDER, CHASE, and RETREAT
-	if state == "ATTACK" or state == "COLLECT_ABILITY" or state == "COLLECT_ORB":
+	if state == "ATTACK" or state == "COLLECT_ORB":
 		target_rail = null
 		return
 
@@ -850,11 +805,6 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 					score += 30.0
 		"support":
 			# OPTIMIZED: Support bots prefer platforms near their current targets
-			# Instead of looping through all items, just check current targets
-			if target_ability and is_instance_valid(target_ability):
-				var dist_to_ability: float = platform_pos.distance_to(target_ability.global_position)
-				if dist_to_ability < 15.0:
-					score += 20.0  # Platform near ability = good
 			if target_orb and is_instance_valid(target_orb):
 				var dist_to_orb: float = platform_pos.distance_to(target_orb.global_position)
 				if dist_to_orb < 15.0:
@@ -1094,9 +1044,9 @@ func evaluate_rail_score(rail: GrindRail) -> float:
 			if dist_from_rail_end > dist_now:
 				score += 30.0  # Rail helps us escape
 
-	elif state == "COLLECT_ABILITY" or state == "COLLECT_ORB":
-		# Check if rail helps reach collectibles
-		var collectible: Node = target_ability if target_ability and is_instance_valid(target_ability) else target_orb
+	elif state == "COLLECT_ORB":
+		# Check if rail helps reach orb
+		var collectible: Node = target_orb
 		var collectible_pos: Vector3 = collectible.global_position if collectible and is_instance_valid(collectible) else Vector3.ZERO
 		if collectible_pos != Vector3.ZERO:
 			var dist_to_collectible_now: float = bot_pos.distance_to(collectible_pos)
@@ -1516,41 +1466,7 @@ func update_state() -> void:
 	"""HYPER-FOCUS: State prioritization with ability collection lock"""
 	var old_state: String = state
 
-	# PRIORITY -1: HYPER-FOCUS LOCK - If collecting ability, NEVER switch states!
-	# Bot is locked onto a specific ability and will not be distracted by anything
-	if ability_locked_on and state == "COLLECT_ABILITY":
-		# SAFETY: Only stay locked if target is still valid
-		if target_ability and is_instance_valid(target_ability):
-			# Hyper-focused! Stay in COLLECT_ABILITY until ability is collected
-			return
-		else:
-			# Target became invalid - clear lock and allow state change
-			ability_locked_on = false
-			locked_ability_id = -1
-
-	# PRIORITY 0: ABSOLUTE #1 - GET AN ABILITY IMMEDIATELY IF WE DON'T HAVE ONE
-	# Without an ability, the bot CANNOT attack and is useless in combat
-	# This overrides EVERYTHING including retreat, combat, and all other states
-	if not bot.current_ability:
-		# If we have a target ability, go get it NOW with HYPER-FOCUS
-		if target_ability and is_instance_valid(target_ability):
-			change_state("COLLECT_ABILITY", "No ability - collecting")
-			ability_locked_on = true  # HYPER-FOCUS: Lock onto this ability!
-			locked_ability_id = target_ability.get_instance_id()
-			return
-		else:
-			# No ability and no target ability - search for one immediately
-			find_nearest_ability()
-			if target_ability and is_instance_valid(target_ability):
-				change_state("COLLECT_ABILITY", "Found ability to collect")
-				ability_locked_on = true  # HYPER-FOCUS: Lock onto this ability!
-				locked_ability_id = target_ability.get_instance_id()
-				return
-			# Still no ability found - wander to search for one
-			change_state("WANDER", "No ability found - searching")
-			return
-
-	# Check if we have a valid combat target (only relevant after we have an ability)
+	# Check if we have a valid combat target
 	var has_combat_target: bool = target_player and is_instance_valid(target_player)
 	var distance_to_target: float = INF
 	if has_combat_target:
@@ -1614,13 +1530,6 @@ func update_state() -> void:
 
 func do_wander(delta: float) -> void:
 	"""FIXED: Wander with overhead slope avoidance and platform navigation"""
-	# Blacklist cooldown - clear blacklist after wandering for a bit
-	if ability_blacklist_wander_timer > 0.0:
-		ability_blacklist_wander_timer -= delta
-		if ability_blacklist_wander_timer <= 0.0:
-			# Cooldown finished - clear blacklist
-			failed_abilities.clear()
-
 	# NEW: Check if we should navigate to a platform
 	if is_approaching_platform and not target_platform.is_empty():
 		navigate_to_platform(delta)
@@ -1931,75 +1840,6 @@ func navigate_to_platform(delta: float) -> void:
 		if height_diff > 0.5 and obstacle_jump_timer <= 0.0:
 			bot_jump()
 			obstacle_jump_timer = 0.4
-
-func do_collect_ability(delta: float) -> void:
-	"""Ability collection with blacklist and stuck detection"""
-	# If no target, find one
-	if not target_ability or not is_instance_valid(target_ability):
-		find_nearest_ability()
-		if not target_ability:
-			state = "WANDER"
-			return
-
-	# Track distance for stuck detection
-	var distance: float = bot.global_position.distance_to(target_ability.global_position)
-
-	# Stuck detection - check progress every 2.5 seconds
-	ability_collection_progress_timer -= delta
-	if ability_collection_progress_timer <= 0.0:
-		ability_collection_progress_timer = 2.5
-
-		# If we haven't gotten closer, we're stuck
-		if distance >= ability_collection_last_distance - 2.0:
-			ability_collection_stuck_counter += 1
-
-			# After 3 failed attempts (7.5 seconds), blacklist this ability
-			if ability_collection_stuck_counter >= 3:
-				# Blacklist the failed ability
-				var failed_ability_id: int = target_ability.get_instance_id()
-				failed_abilities[failed_ability_id] = Time.get_ticks_msec() / 1000.0
-
-				# Trim blacklist if too large
-				if failed_abilities.size() > MAX_BLACKLIST_SIZE:
-					var oldest_key: int = -1
-					var oldest_time: float = INF
-					for ability_id in failed_abilities.keys():
-						if failed_abilities[ability_id] < oldest_time:
-							oldest_time = failed_abilities[ability_id]
-							oldest_key = ability_id
-					if oldest_key != -1:
-						failed_abilities.erase(oldest_key)
-
-				# Reset counters
-				ability_collection_stuck_counter = 0
-				ability_collection_last_distance = 999999.0
-				target_ability = null
-
-				# Try to find another ability
-				find_nearest_ability()
-				if not target_ability:
-					# No valid abilities - start wander cooldown
-					ability_blacklist_wander_timer = ABILITY_BLACKLIST_WANDER_TIME
-					state = "WANDER"
-				return
-		else:
-			# Making progress - reset counter
-			ability_collection_stuck_counter = 0
-
-		# Update last known distance
-		ability_collection_last_distance = distance
-
-	# AGGRESSIVE: Snap rotation to face ability
-	look_at_target_smooth(target_ability.global_position, delta)
-
-	# Move towards ability
-	move_towards(target_ability.global_position, 1.0)
-
-	# Jump if ability is above us
-	var height_diff: float = target_ability.global_position.y - bot.global_position.y
-	if action_timer <= 0.0 and height_diff > 1.0:
-		bot_jump()
-		action_timer = 0.5
 
 func do_collect_orb(delta: float) -> void:
 	"""Move towards orb with elevated surface handling"""
@@ -3025,36 +2865,6 @@ func calculate_orb_value() -> float:
 		value -= 10.0  # Lower priority during active combat
 
 	return value
-
-func find_nearest_ability() -> void:
-	"""Find nearest ability - simple distance check with blacklist filtering"""
-	var nearest: Node = null
-	var nearest_dist: float = INF
-
-	# Clean up expired blacklist entries
-	var current_time: float = Time.get_ticks_msec() / 1000.0
-	var expired_keys: Array[int] = []
-	for ability_id in failed_abilities.keys():
-		if current_time - failed_abilities[ability_id] > ABILITY_BLACKLIST_DURATION:
-			expired_keys.append(ability_id)
-	for key in expired_keys:
-		failed_abilities.erase(key)
-
-	for ability in cached_abilities:
-		if not is_instance_valid(ability):
-			continue
-
-		# Skip blacklisted abilities
-		var ability_id: int = ability.get_instance_id()
-		if failed_abilities.has(ability_id):
-			continue
-
-		var distance: float = bot.global_position.distance_to(ability.global_position)
-		if distance < nearest_dist:
-			nearest_dist = distance
-			nearest = ability
-
-	target_ability = nearest
 
 func find_nearest_orb() -> void:
 	"""COST-BENEFIT: Find orb with best value/effort ratio"""
