@@ -155,6 +155,8 @@ var ability_collection_stuck_counter: int = 0  # Count how many times we haven't
 var failed_abilities: Dictionary = {}  # {ability_instance_id: fail_timestamp} - abilities bot couldn't reach
 const ABILITY_BLACKLIST_DURATION: float = 15.0  # How long to blacklist a failed ability
 const MAX_BLACKLIST_SIZE: int = 10  # Limit blacklist size for performance
+var ability_blacklist_wander_timer: float = 0.0  # Wander cooldown before clearing blacklist
+const ABILITY_BLACKLIST_WANDER_TIME: float = 5.0  # Wander for 5 seconds before retrying
 
 # NEW: Platform navigation system
 var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
@@ -1612,6 +1614,13 @@ func update_state() -> void:
 
 func do_wander(delta: float) -> void:
 	"""FIXED: Wander with overhead slope avoidance and platform navigation"""
+	# Blacklist cooldown - clear blacklist after wandering for a bit
+	if ability_blacklist_wander_timer > 0.0:
+		ability_blacklist_wander_timer -= delta
+		if ability_blacklist_wander_timer <= 0.0:
+			# Cooldown finished - clear blacklist
+			failed_abilities.clear()
+
 	# NEW: Check if we should navigate to a platform
 	if is_approaching_platform and not target_platform.is_empty():
 		navigate_to_platform(delta)
@@ -1924,13 +1933,61 @@ func navigate_to_platform(delta: float) -> void:
 			obstacle_jump_timer = 0.4
 
 func do_collect_ability(delta: float) -> void:
-	"""Simple ability collection - just move and jump"""
+	"""Ability collection with blacklist and stuck detection"""
 	# If no target, find one
 	if not target_ability or not is_instance_valid(target_ability):
 		find_nearest_ability()
 		if not target_ability:
 			state = "WANDER"
 			return
+
+	# Track distance for stuck detection
+	var distance: float = bot.global_position.distance_to(target_ability.global_position)
+
+	# Stuck detection - check progress every 2.5 seconds
+	ability_collection_progress_timer -= delta
+	if ability_collection_progress_timer <= 0.0:
+		ability_collection_progress_timer = 2.5
+
+		# If we haven't gotten closer, we're stuck
+		if distance >= ability_collection_last_distance - 2.0:
+			ability_collection_stuck_counter += 1
+
+			# After 3 failed attempts (7.5 seconds), blacklist this ability
+			if ability_collection_stuck_counter >= 3:
+				# Blacklist the failed ability
+				var failed_ability_id: int = target_ability.get_instance_id()
+				failed_abilities[failed_ability_id] = Time.get_ticks_msec() / 1000.0
+
+				# Trim blacklist if too large
+				if failed_abilities.size() > MAX_BLACKLIST_SIZE:
+					var oldest_key: int = -1
+					var oldest_time: float = INF
+					for ability_id in failed_abilities.keys():
+						if failed_abilities[ability_id] < oldest_time:
+							oldest_time = failed_abilities[ability_id]
+							oldest_key = ability_id
+					if oldest_key != -1:
+						failed_abilities.erase(oldest_key)
+
+				# Reset counters
+				ability_collection_stuck_counter = 0
+				ability_collection_last_distance = 999999.0
+				target_ability = null
+
+				# Try to find another ability
+				find_nearest_ability()
+				if not target_ability:
+					# No valid abilities - start wander cooldown
+					ability_blacklist_wander_timer = ABILITY_BLACKLIST_WANDER_TIME
+					state = "WANDER"
+				return
+		else:
+			# Making progress - reset counter
+			ability_collection_stuck_counter = 0
+
+		# Update last known distance
+		ability_collection_last_distance = distance
 
 	# AGGRESSIVE: Snap rotation to face ability
 	look_at_target_smooth(target_ability.global_position, delta)
@@ -2970,12 +3027,26 @@ func calculate_orb_value() -> float:
 	return value
 
 func find_nearest_ability() -> void:
-	"""Find nearest ability - simple distance check"""
+	"""Find nearest ability - simple distance check with blacklist filtering"""
 	var nearest: Node = null
 	var nearest_dist: float = INF
 
+	# Clean up expired blacklist entries
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+	var expired_keys: Array[int] = []
+	for ability_id in failed_abilities.keys():
+		if current_time - failed_abilities[ability_id] > ABILITY_BLACKLIST_DURATION:
+			expired_keys.append(ability_id)
+	for key in expired_keys:
+		failed_abilities.erase(key)
+
 	for ability in cached_abilities:
 		if not is_instance_valid(ability):
+			continue
+
+		# Skip blacklisted abilities
+		var ability_id: int = ability.get_instance_id()
+		if failed_abilities.has(ability_id):
 			continue
 
 		var distance: float = bot.global_position.distance_to(ability.global_position)
