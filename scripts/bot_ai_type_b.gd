@@ -152,6 +152,11 @@ var ability_collection_last_distance: float = 999999.0  # Track progress towards
 var ability_collection_progress_timer: float = 0.0  # Check progress every few seconds
 var ability_collection_stuck_counter: int = 0  # Count how many times we haven't made progress
 
+# ANTI-LOOP: Failed ability blacklist system - prevents infinite twitching
+var failed_abilities: Dictionary = {}  # {ability_instance_id: fail_timestamp} - abilities bot couldn't reach
+const ABILITY_BLACKLIST_DURATION: float = 15.0  # How long to blacklist a failed ability
+const MAX_BLACKLIST_SIZE: int = 10  # Limit blacklist size for performance
+
 # NEW: Platform navigation system
 var cached_platforms: Array[Dictionary] = []  # Stores {node, position, size, height}
 var target_platform: Dictionary = {}  # Current platform target
@@ -1723,6 +1728,21 @@ func do_collect_ability(delta: float) -> void:
 
 			# If stuck 3 times (7.5 seconds of no progress), this ability is unreachable
 			if ability_collection_stuck_counter >= 3:
+				# ANTI-LOOP: Blacklist this failed ability to prevent retargeting it
+				var failed_ability_id: int = target_ability.get_instance_id()
+				failed_abilities[failed_ability_id] = Time.get_ticks_msec() / 1000.0
+
+				# Trim blacklist if it gets too large
+				if failed_abilities.size() > MAX_BLACKLIST_SIZE:
+					var oldest_key: int = -1
+					var oldest_time: float = INF
+					for ability_id in failed_abilities.keys():
+						if failed_abilities[ability_id] < oldest_time:
+							oldest_time = failed_abilities[ability_id]
+							oldest_key = ability_id
+					if oldest_key != -1:
+						failed_abilities.erase(oldest_key)
+
 				# Give up on this ability and find another
 				ability_locked_on = false
 				locked_ability_id = -1
@@ -2812,9 +2832,18 @@ func calculate_orb_value() -> float:
 	return value
 
 func find_nearest_ability() -> void:
-	"""COST-BENEFIT: Find ability with best value/effort ratio"""
+	"""COST-BENEFIT: Find ability with best value/effort ratio (with blacklist filtering)"""
 	var best_ability: Node = null
 	var best_score: float = -INF
+
+	# ANTI-LOOP: Clean up expired blacklist entries
+	var current_time: float = Time.get_ticks_msec() / 1000.0
+	var expired_keys: Array[int] = []
+	for ability_id in failed_abilities.keys():
+		if current_time - failed_abilities[ability_id] > ABILITY_BLACKLIST_DURATION:
+			expired_keys.append(ability_id)
+	for key in expired_keys:
+		failed_abilities.erase(key)
 
 	# Calculate value once (same for all abilities)
 	var ability_value: float = calculate_ability_value()
@@ -2822,6 +2851,11 @@ func find_nearest_ability() -> void:
 	for ability in cached_abilities:
 		if not is_instance_valid(ability):
 			continue
+
+		# ANTI-LOOP: Skip blacklisted abilities
+		var ability_id: int = ability.get_instance_id()
+		if failed_abilities.has(ability_id):
+			continue  # Skip this failed ability
 
 		var ability_pos: Vector3 = ability.global_position
 
