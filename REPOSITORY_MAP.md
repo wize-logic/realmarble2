@@ -125,7 +125,9 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── ability_spawner.gd
 │   ├── audio_metadata_parser.gd
 │   ├── beam_spawn_effect.gd       # Star Trek-style transporter beam spawn effect
-│   ├── bot_ai.gd                  # Advanced bot AI (1,043 lines)
+│   ├── bot_ai.gd                  # BASE bot AI class (1,100+ lines) - v5.0 inheritance
+│   ├── bot_ai_type_a.gd           # Type A bot AI extension (570 lines) - rails for Sonic arenas
+│   ├── bot_ai_type_b.gd           # Type B bot AI extension (370 lines) - pads/teleporters for Quake arenas
 │   ├── camera_occlusion.gd
 │   ├── collectible_orb.gd         # Collectible orb logic
 │   ├── crazygames_sdk.gd
@@ -168,6 +170,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │
 ├── *.md                            # Documentation
 │   ├── REPOSITORY_MAP.md          # This file
+│   ├── BOT_GUIDE.md               # Comprehensive bot AI documentation (v5.0)
 │   ├── MULTIPLAYER_README.md      # Networking guide
 │   ├── MUSIC_PLAYLIST.md          # Music system docs
 │   ├── ROCKET_LEAGUE_MENU.md      # Menu system overview
@@ -341,30 +344,108 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 
 **See:** `MULTIPLAYER_README.md` for full details
 
-### 9. Bot AI System
+### 9. Bot AI System (v5.0 - Inheritance Architecture)
 
-**Location:** `scripts/bot_ai.gd` (1,043 lines)
+**Location:** `scripts/bot_ai.gd` (base class), `scripts/bot_ai_type_a.gd` (Sonic arenas), `scripts/bot_ai_type_b.gd` (Quake arenas)
+
+**Architecture:**
+```
+bot_ai.gd (BASE CLASS - 1,100+ lines)
+    ├─ Shared state machine
+    ├─ Stuck detection & recovery
+    ├─ Personality system (OpenArena-inspired)
+    ├─ Movement & combat helpers
+    ├─ Platform navigation
+    ├─ Ability collection (NEW v5.0)
+    ├─ Retreat behavior (NEW v5.0)
+    ├─ Bot-bot repulsion (NEW v5.0)
+    └─ Virtual methods for arena-specific overrides
+
+bot_ai_type_a.gd (EXTENDS BASE - 570 lines)
+    └─ Rail grinding system for Sonic arenas
+
+bot_ai_type_b.gd (EXTENDS BASE - 370 lines)
+    └─ Jump pads & teleporters for Quake arenas
+```
 
 **State Machine:**
 ```
-WANDER → CHASE → ATTACK
-   ↑       ↑        ↓
-   └─── RETREAT ←──┘
-          ↓
-  COLLECT_ABILITY / COLLECT_ORB
+Priority 1: RETREAT (health ≤ 2, caution-based) - v5.0 ENABLED
+Priority 2: COLLECT_ABILITY (unarmed, visible/close) - v5.0 WORKING
+Priority 3: ATTACK (in range, armed)
+Priority 4: CHASE (in aggro range, armed)
+Priority 5: COLLECT_ORB (safe, has ability)
+Priority 6: WANDER (default, biased to hotspots) - v5.0 IMPROVED
 ```
 
+**v5.0 Key Improvements:**
+- **Inheritance-based architecture:** 90% code deduplication (-2,097 lines)
+- **Safe ability collection:** 15s timeout, blacklist system, no freezes
+- **Retreat behavior enabled:** Bots actually retreat when health ≤ 2
+- **Bot repulsion:** 3-unit separation prevents clumping
+- **Wander hotspot bias:** 60% chance to seek items/platforms
+- **Performance:** Cache refresh 0.5s (was 0.1s, 5x improvement)
+- **Arena-specific AI:** Rails for Type A, jump pads/teleporters for Type B
+
 **AI Features:**
-- **Combat tactics:** Ability-specific optimal ranges, strafing, charging
-- **Obstacle avoidance:** Edge detection, wall detection, stuck recovery
-- **Target prioritization:** Abilities > Combat > Orbs > Wander
-- **Personality variety:** Randomized aggression and reaction times
+- **Combat tactics:** Ability-specific optimal ranges, strafing, charging, lead prediction
+- **Obstacle avoidance:** 9-point overhead detection, edge detection, stuck recovery
+- **Target prioritization:** Health-based retreat, ability collection, combat, orb collection
+- **Personality variety:** OpenArena-inspired (skill, aggression, caution, strategy)
+- **Social behaviors:** Bot repulsion, death pause, hotspot awareness
 
 **Optimal Combat Ranges:**
-- Sword: 2-5 units (melee)
-- Dash: 5-10 units (melee dash)
-- Explosion: 3-8 units (AoE)
-- Cannon: 8-15 units (forward-facing only, 120° cone)
+- Cannon: 15 units optimal (4-40 effective)
+- Sword: 3.5 units optimal (0-6 effective)
+- Dash Attack: 8 units optimal (4-18 effective)
+- Explosion: 6 units optimal (0-10 effective)
+
+**See:** `BOT_GUIDE.md` for comprehensive documentation
+
+#### v5.0 Bot AI Refactor Details
+
+**Architecture Changes:**
+- **Before v5.0:** Two massive duplicated files (bot_ai_type_a.gd ~2,200 lines, bot_ai_type_b.gd ~2,200 lines)
+- **After v5.0:** Clean inheritance (bot_ai.gd 1,100 lines + type_a.gd 570 lines + type_b.gd 370 lines)
+- **Result:** -2,097 lines total (90% code deduplication)
+
+**Ability Collection System (FIXED):**
+- **Problem:** Previously removed due to bots freezing indefinitely
+- **Solution v5.0:**
+  - 15-second timeout per collection attempt
+  - Blacklist system for failed pickups (30s cooldown)
+  - Clear exit conditions (distance < 1.5u, invalid target, has ability)
+  - No awaits in physics flow (HTML5-safe)
+  - Integrates with unstuck system (state persists)
+
+**Retreat Behavior (ENABLED):**
+- **Problem:** Bots were suiciding at low health
+- **Solution v5.0:**
+  - Health ≤ 2 triggers retreat state
+  - Modified by `caution_level` personality trait (20-80%)
+  - Seeks high ground and distance from enemies
+  - Uses defensive abilities
+
+**Performance Improvements:**
+- **Cache refresh:** 0.1s → 0.5s (5x reduction in queries)
+- **Staggered timers:** Each bot starts at random offset (prevents simultaneous processing)
+- **Early exit scoring:** Platform evaluation stops at GOOD_ENOUGH_SCORE (70.0)
+
+**New Behaviors:**
+- **Bot repulsion:** 3-unit separation force prevents clumping at item spawns
+- **Wander hotspot bias:** 60% chance to bias toward orbs/abilities/platforms (was 100% random)
+- **Death pause:** 1s pause after respawn before re-engaging AI
+
+**Type A Arena Enhancements:**
+- Rail grinding evaluation with tactical scoring
+- Rail launch recovery (aerial navigation to platforms)
+- Safe attachment with 20-unit max distance and 2s cooldown
+- Occupancy tracking (avoids crowded rails)
+
+**Type B Arena Enhancements:**
+- Jump pad tactical usage (retreat, chase, collect states)
+- Teleporter strategic evaluation (destination-based scoring)
+- Combat risk assessment (avoids enemy-camped teleporters)
 
 ### 10. Menu System
 
@@ -560,7 +641,9 @@ Sword (Node3D) [scripts/abilities/sword.gd]
 | `global.gd` | - | Global singleton (settings, persistence) |
 | `world.gd` | 1,646 | Main game controller, match logic, menu system |
 | `player.gd` | 1,695 | Player physics, movement, abilities, health |
-| `bot_ai.gd` | 1,043 | Advanced bot AI state machine |
+| `bot_ai.gd` | 1,100+ | Base bot AI class (v5.0 inheritance architecture) |
+| `bot_ai_type_a.gd` | 570 | Type A bot AI extension (rails for Sonic arenas) |
+| `bot_ai_type_b.gd` | 370 | Type B bot AI extension (pads/teleporters for Quake arenas) |
 | `multiplayer_manager.gd` | - | WebSocket/ENet networking, room management |
 | `level_generator.gd` | - | Type A arena generation |
 | `level_generator_q3.gd` | 765 | Type B arena generation |
@@ -915,21 +998,33 @@ Clients (Peer 2-16)
 - **Match timer:** Host-authoritative
 - **Game state:** RPC to all clients
 
-### Bot AI Summary
+### Bot AI Summary (v5.0)
 
 **State Priority:**
-1. **COLLECT_ABILITY** (critical - can't fight without one)
-2. **ATTACK** (in optimal range with ability)
-3. **CHASE** (target nearby, has ability)
-4. **RETREAT** (health < 2, no ability)
-5. **COLLECT_ORB** (has ability, low priority)
-6. **WANDER** (default state)
+1. **RETREAT** (health ≤ 2, caution-modified) - **NEW: v5.0 enabled!**
+2. **COLLECT_ABILITY** (unarmed, visible/close) - **NEW: v5.0 working with safe implementation!**
+3. **ATTACK** (in optimal range with ability)
+4. **CHASE** (target in aggro range, has ability)
+5. **COLLECT_ORB** (safe, has ability)
+6. **WANDER** (default, biased to hotspots) - **NEW: v5.0 improved!**
+
+**v5.0 Improvements:**
+- **Safe ability collection:** 15s timeout, blacklist system, no freezes
+- **Retreat behavior:** Actually works now! Bots flee when health ≤ 2
+- **Bot repulsion:** 3-unit separation prevents clumping at item spawns
+- **Wander hotspot bias:** 60% chance to seek items/platforms instead of random
+- **Performance:** 5x better caching (0.5s vs 0.1s refresh)
 
 **Combat Effectiveness:**
-- Uses abilities intelligently (70% charge rate)
-- Avoids obstacles and edges
-- Varied aggression levels
-- Reaction delay (0.5-1.5s) for fairness
+- Uses abilities intelligently with lead prediction (70-95% accuracy based on skill)
+- Avoids obstacles with 9-point overhead detection
+- Varied personality traits (aggression, caution, skill, strategy)
+- Skill-based variation (50-95% aim accuracy)
+- OpenArena-inspired target prioritization
+
+**Arena-Specific Behaviors:**
+- **Type A:** Uses rail grinding for mobility and positioning
+- **Type B:** Uses jump pads for vertical mobility, teleporters for tactical repositioning
 
 ---
 
@@ -946,7 +1041,9 @@ Clients (Peer 2-16)
 | Health/damage | `player.gd:take_damage()`, `die()` |
 | Level-up | `player.gd:_on_collectible_orb_collected()` (~800) |
 | Ability system | `abilities/ability_base.gd` |
-| Bot AI | `bot_ai.gd` |
+| Bot AI (base) | `bot_ai.gd` (v5.0 inheritance architecture) |
+| Bot AI (Type A) | `bot_ai_type_a.gd` (rails for Sonic arenas) |
+| Bot AI (Type B) | `bot_ai_type_b.gd` (pads/teleporters for Quake arenas) |
 | Multiplayer | `multiplayer_manager.gd` |
 | Match logic | `world.gd` |
 | Type A arena | `level_generator.gd` |
@@ -978,11 +1075,16 @@ Clients (Peer 2-16)
 1. Open `world.gd`
 2. Edit `match_duration` variable (~50)
 
-**Add Bot Behavior:**
-1. Open `bot_ai.gd`
-2. Add state to `AIState` enum
-3. Implement logic in `_physics_process()`
-4. Add transitions
+**Add Bot Behavior (v5.0 Inheritance):**
+1. **For shared behavior:** Edit `bot_ai.gd` (base class)
+   - Add state to state machine
+   - Implement in `_physics_process()` or helper methods
+   - Add state transitions in `update_state()`
+2. **For arena-specific behavior:** Edit `bot_ai_type_a.gd` or `bot_ai_type_b.gd`
+   - Override virtual methods: `setup_arena_specific_caches()`, `consider_arena_specific_navigation()`, `handle_arena_specific_state_updates()`
+   - Add arena-specific variables and methods
+   - Call `super.method_name()` to preserve base functionality
+3. **Example:** Adding Type A rail grinding was done entirely in `bot_ai_type_a.gd` without touching base class
 
 **Customize Level Generation:**
 - **Type A:** Edit `level_generator.gd` (platforms, rails, ramps)
@@ -1038,6 +1140,7 @@ Clients (Peer 2-16)
 ## Documentation Files
 
 - **REPOSITORY_MAP.md** - This file (comprehensive overview)
+- **BOT_GUIDE.md** - Comprehensive bot AI documentation (v5.0 inheritance architecture)
 - **MULTIPLAYER_README.md** - Detailed networking guide
 - **MUSIC_PLAYLIST.md** - Music system documentation
 - **ROCKET_LEAGUE_MENU.md** - Menu system overview
@@ -1058,7 +1161,7 @@ Clients (Peer 2-16)
 
 ---
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-01-24 (v5.0 Bot AI Refactor)
 **Godot Version:** 4.5.1 (GL Compatibility)
 **Primary Platform:** HTML5/Web (CrazyGames)
 

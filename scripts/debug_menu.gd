@@ -8,7 +8,7 @@ var vbox: VBoxContainer = null
 
 # Pagination system
 var current_page: int = 0
-var total_pages: int = 4  # Added debug logging page
+var total_pages: int = 5  # Added bot AI status page (v5.0)
 var page_title: Label = null
 var page_indicator: Label = null
 var prev_button: Button = null
@@ -163,6 +163,8 @@ func show_page(page: int) -> void:
 			build_page_2()  # Expansion & Advanced Controls
 		3:
 			build_page_3()  # Debug Logging Controls
+		4:
+			build_page_4()  # Bot AI Status (v5.0)
 
 func _on_prev_page() -> void:
 	"""Go to previous page"""
@@ -492,6 +494,185 @@ func build_page_3() -> void:
 	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
 	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page_content.add_child(info_label)
+
+func build_page_4() -> void:
+	"""Build Page 4: Bot AI Status (v5.0)"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "BOT AI STATUS (v5.0)"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1.0))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Get all bots
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	var bots: Array[Node] = []
+
+	for player in players:
+		var player_id: int = player.name.to_int()
+		if player_id >= 9000:  # Bot IDs start at 9000
+			bots.append(player)
+
+	# Sort by ID
+	bots.sort_custom(func(a, b): return a.name.to_int() < b.name.to_int())
+
+	if bots.is_empty():
+		var no_bots_label = Label.new()
+		no_bots_label.text = "No bots spawned"
+		no_bots_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		no_bots_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		page_content.add_child(no_bots_label)
+	else:
+		# Create scrollable container for bot list
+		var scroll = ScrollContainer.new()
+		scroll.custom_minimum_size = Vector2(0, 300)
+		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		page_content.add_child(scroll)
+
+		var bots_vbox = VBoxContainer.new()
+		bots_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(bots_vbox)
+
+		# Display each bot's status
+		for bot in bots:
+			var bot_id: int = bot.name.to_int()
+			var bot_ai: Node = bot.get_node_or_null("BotAI")
+
+			# Bot container
+			var bot_container = PanelContainer.new()
+			bot_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			bots_vbox.add_child(bot_container)
+
+			var bot_vbox = VBoxContainer.new()
+			bot_container.add_child(bot_vbox)
+
+			# Bot name and type
+			var bot_name_label = Label.new()
+			var ai_type_text: String = ""
+			if bot_ai and bot_ai.has_method("get_ai_type"):
+				ai_type_text = " [%s]" % bot_ai.get_ai_type()
+			bot_name_label.text = "Bot_%d%s" % [bot_id - 9000, ai_type_text]
+			bot_name_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))
+			bot_vbox.add_child(bot_name_label)
+
+			# State
+			if bot_ai and "state" in bot_ai:
+				var state_label = Label.new()
+				var state: String = bot_ai.state
+
+				# Color-code by state
+				var state_color: Color = Color(0.8, 0.8, 0.8)
+				match state:
+					"ATTACK":
+						state_color = Color(1.0, 0.3, 0.3)
+					"RETREAT":
+						state_color = Color(0.3, 0.5, 1.0)
+					"COLLECT_ABILITY":
+						state_color = Color(1.0, 0.5, 1.0)
+					"CHASE":
+						state_color = Color(1.0, 0.6, 0.2)
+					"COLLECT_ORB":
+						state_color = Color(0.3, 1.0, 1.0)
+					"WANDER":
+						state_color = Color(1.0, 1.0, 0.3)
+
+				state_label.text = "State: %s" % state
+				state_label.add_theme_color_override("font_color", state_color)
+				bot_vbox.add_child(state_label)
+
+			# Health
+			if "health" in bot:
+				var health_label = Label.new()
+				health_label.text = "Health: %d/3" % bot.health
+				bot_vbox.add_child(health_label)
+
+			# Ability
+			if "current_ability" in bot:
+				var ability_label = Label.new()
+				if bot.current_ability and "ability_name" in bot.current_ability:
+					ability_label.text = "Ability: %s" % bot.current_ability.ability_name
+					ability_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+				else:
+					ability_label.text = "Ability: None"
+					ability_label.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+				bot_vbox.add_child(ability_label)
+
+			# Target
+			if bot_ai and "target_player" in bot_ai:
+				var target_label = Label.new()
+				if bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+					var target_name: String = bot_ai.target_player.name
+					var target_id: int = target_name.to_int()
+					if target_id >= 9000:
+						target_label.text = "Target: Bot_%d" % (target_id - 9000)
+					else:
+						target_label.text = "Target: Player"
+					target_label.add_theme_color_override("font_color", Color(1.0, 0.6, 0.2))
+				else:
+					target_label.text = "Target: None"
+					target_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+				bot_vbox.add_child(target_label)
+
+			# Personality (v5.0)
+			if bot_ai and "strategic_preference" in bot_ai:
+				var personality_label = Label.new()
+				var strategy: String = bot_ai.strategic_preference
+				var aggression: float = bot_ai.get("aggression_level") if "aggression_level" in bot_ai else 0.0
+				var skill: float = bot_ai.get("bot_skill") if "bot_skill" in bot_ai else 0.0
+				personality_label.text = "Personality: %s (Skill: %.0f%%, Aggro: %.0f%%)" % [
+					strategy.capitalize(),
+					skill * 100,
+					aggression * 100
+				]
+				personality_label.add_theme_font_size_override("font_size", 10)
+				personality_label.add_theme_color_override("font_color", Color(0.7, 0.7, 1.0))
+				bot_vbox.add_child(personality_label)
+
+			# v5.0 specific info
+			if bot_ai:
+				var v5_info_label = Label.new()
+				var info_parts: Array[String] = []
+
+				# Retreat status
+				if bot_ai.has_method("should_retreat"):
+					if bot_ai.call("should_retreat"):
+						info_parts.append("⚠ Should Retreat")
+
+				# Collection info
+				if "target_ability" in bot_ai and bot_ai.target_ability and is_instance_valid(bot_ai.target_ability):
+					info_parts.append("🎯 Seeking Ability")
+
+				# Stuck status
+				if "is_stuck" in bot_ai and bot_ai.is_stuck:
+					info_parts.append("🚫 Stuck")
+
+				# Rail grinding (Type A)
+				if "is_grinding" in bot_ai and bot_ai.is_grinding:
+					info_parts.append("🛤️ Grinding Rail")
+
+				# Post-rail launch (Type A)
+				if "post_rail_launch" in bot_ai and bot_ai.post_rail_launch:
+					info_parts.append("✈️ Aerial Recovery")
+
+				if not info_parts.is_empty():
+					v5_info_label.text = " ".join(info_parts)
+					v5_info_label.add_theme_font_size_override("font_size", 10)
+					v5_info_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.5))
+					bot_vbox.add_child(v5_info_label)
+
+	# Legend
+	page_content.add_child(HSeparator.new())
+	var legend_label = Label.new()
+	legend_label.text = "Colors: Red=Attack, Blue=Retreat, Magenta=Ability\nOrange=Chase, Cyan=Orb, Yellow=Wander"
+	legend_label.add_theme_font_size_override("font_size", 10)
+	legend_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	legend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(legend_label)
 
 # ============================================================================
 # BUTTON HANDLERS
