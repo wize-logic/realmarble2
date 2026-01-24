@@ -66,18 +66,52 @@ func update_nametag() -> void:
 	else:
 		ability_text = " | No Ability"
 
-	# Bot state (if available)
+	# Bot state (if available) - v5.0 enhanced
 	var state_text: String = ""
 	if is_bot:
 		var bot_ai: Node = target_player.get_node_or_null("BotAI")
 		if bot_ai and "state" in bot_ai:
-			state_text = "\n[%s]" % bot_ai.state
+			var state: String = bot_ai.state
+			state_text = "\n[%s]" % state
+
+			# Add AI type (Type A/Type B)
+			if bot_ai.has_method("get_ai_type"):
+				var ai_type: String = bot_ai.get_ai_type()
+				state_text += " (%s)" % ai_type
+
+			# Add target info if available
+			if "target_player" in bot_ai and bot_ai.target_player and is_instance_valid(bot_ai.target_player):
+				var target_name: String = bot_ai.target_player.name
+				var target_id: int = target_name.to_int()
+				if target_id >= 9000:
+					state_text += "\nTarget: Bot_%d" % (target_id - 9000)
+				else:
+					state_text += "\nTarget: Player"
 
 	# Combine all info
 	text = display_name + health_text + ability_text + state_text
 
-	# Color code by type
+	# Color code by type and state
 	if is_bot:
-		modulate = Color(1.0, 0.8, 0.2)  # Yellow for bots
+		var bot_ai: Node = target_player.get_node_or_null("BotAI")
+		if bot_ai and "state" in bot_ai:
+			# Color-code by state (v5.0)
+			match bot_ai.state:
+				"ATTACK":
+					modulate = Color(1.0, 0.2, 0.2)  # Red for attacking
+				"RETREAT":
+					modulate = Color(0.2, 0.4, 1.0)  # Blue for retreating
+				"COLLECT_ABILITY":
+					modulate = Color(1.0, 0.5, 1.0)  # Magenta for collecting ability
+				"CHASE":
+					modulate = Color(1.0, 0.6, 0.0)  # Orange for chasing
+				"COLLECT_ORB":
+					modulate = Color(0.2, 1.0, 1.0)  # Cyan for collecting orb
+				"WANDER":
+					modulate = Color(1.0, 1.0, 0.2)  # Yellow for wandering
+				_:
+					modulate = Color(1.0, 0.8, 0.2)  # Default yellow for bots
+		else:
+			modulate = Color(1.0, 0.8, 0.2)  # Default yellow for bots
 	else:
 		modulate = Color(0.2, 1.0, 0.4)  # Green for player
