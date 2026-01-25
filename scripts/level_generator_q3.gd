@@ -19,8 +19,8 @@ var clear_positions: Array[Vector3] = []
 var occupied_cells: Dictionary = {}  # Grid-based collision avoidance
 var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
-# Grid cell size for structure placement
-const CELL_SIZE: float = 12.0
+# Grid cell size for structure placement (smaller = more structures can fit)
+const CELL_SIZE: float = 8.0
 
 # ============================================================================
 # STRUCTURE TYPES - Q3-inspired architectural elements
@@ -91,8 +91,8 @@ func clear_level() -> void:
 
 func get_structure_budget() -> int:
 	"""Determine how many major structures based on complexity"""
-	var base_count: int = 4 + complexity * 2  # 6, 8, 10, 12
-	var size_bonus: int = int((arena_size - 140.0) / 40.0)  # More for larger arenas
+	var base_count: int = 6 + complexity * 3  # 9, 12, 15, 18
+	var size_bonus: int = int((arena_size - 140.0) / 30.0)  # More for larger arenas
 	return base_count + size_bonus
 
 # ============================================================================
@@ -120,7 +120,7 @@ func mark_cell_occupied(pos: Vector3, radius: int = 1) -> void:
 
 func get_random_position_in_arena() -> Vector3:
 	"""Get a random position within the arena bounds"""
-	var floor_extent: float = (arena_size * 0.6) / 2.0 - CELL_SIZE
+	var floor_extent: float = (arena_size * 0.6) / 2.0 * 0.85  # Use 85% of floor area
 	return Vector3(
 		rng.randf_range(-floor_extent, floor_extent),
 		0,
@@ -142,8 +142,8 @@ func generate_main_arena() -> void:
 		"MainArenaFloor"
 	)
 
-	# Mark center area
-	mark_cell_occupied(Vector3.ZERO, 1)
+	# Just mark the exact center cell (not a wide area)
+	mark_cell_occupied(Vector3.ZERO, 0)
 	clear_positions.append(Vector3(0, 0, 0))
 
 	# Randomly add floor height variations (complexity 2+)
@@ -206,22 +206,23 @@ func generate_procedural_structures(budget: int) -> void:
 	print("  Occupied cells: %d" % occupied_cells.size())
 
 func get_structure_cell_radius(type: int) -> int:
+	# Use smaller radii to allow more structures to fit
 	match type:
 		StructureType.PILLAR:
-			return 1
+			return 0  # Single cell
 		StructureType.TIERED_PLATFORM, StructureType.JUMP_TOWER:
-			return 1
+			return 0
 		StructureType.L_WALL, StructureType.RAMP_PLATFORM:
-			return 1
+			return 0
 		StructureType.BUNKER, StructureType.ARCHWAY:
-			return 2
+			return 1  # Slightly larger
 		StructureType.CATWALK:
-			return 1
+			return 1  # Needs length
 		StructureType.SPLIT_LEVEL:
-			return 2
-		StructureType.SNIPER_NEST:
 			return 1
-	return 1
+		StructureType.SNIPER_NEST:
+			return 0
+	return 0
 
 func generate_structure(type: int, pos: Vector3, scale: float, index: int) -> void:
 	match type:
