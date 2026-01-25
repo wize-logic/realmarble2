@@ -2547,13 +2547,14 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 		level_generator.complexity = multiplier.complexity
 		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 	else:
-		# Use original generator (Type A)
+		# Use Sonic-style generator (Type A) v3.0
 		level_generator.set_script(LevelGenerator)
-		# Configure size based on level_size parameter
+		# Configure size and complexity based on level_size parameter
 		level_generator.arena_size = 120.0 * multiplier.arena
-		level_generator.platform_count = int(30 * multiplier.platforms)
-		level_generator.ramp_count = int(20 * multiplier.ramps)
-		print("Using original level generator (arena_size: %.1f, platforms: %d, ramps: %d)" % [level_generator.arena_size, level_generator.platform_count, level_generator.ramp_count])
+		level_generator.complexity = multiplier.complexity  # New v3.0 complexity parameter
+		level_generator.platform_count = int(30 * multiplier.platforms)  # Legacy parameter backup
+		level_generator.ramp_count = int(20 * multiplier.ramps)  # Legacy parameter backup
+		print("Using Sonic-style level generator v3.0 (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
 	add_child(level_generator)
 
