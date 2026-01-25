@@ -878,14 +878,8 @@ func ask_level_config() -> Dictionary:
 	size_section.add_child(size_value_label)
 
 	# Update size value display when slider changes
-	size_slider.value_changed.connect(func(value: float):
-		level_config_size = int(value)
-		match int(value):
-			1: size_value_label.text = "Small (Compact arena)"
-			2: size_value_label.text = "Medium (Standard arena)"
-			3: size_value_label.text = "Large (Expanded arena)"
-			4: size_value_label.text = "Huge (Massive arena)"
-	)
+	# IMPORTANT: Use _update_level_config_size method to properly set instance variable
+	size_slider.value_changed.connect(_on_size_slider_changed.bind(size_value_label))
 
 	# Add separator
 	var separator2 = HSeparator.new()
@@ -941,16 +935,9 @@ func ask_level_config() -> Dictionary:
 	time_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	time_section.add_child(time_value_label)
 
-	# Time values mapping: slider value to seconds
-	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
-	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
-
 	# Update time value display when slider changes
-	time_slider.value_changed.connect(func(value: float):
-		var index: int = int(value) - 1
-		level_config_time = time_values[index]
-		time_value_label.text = time_labels[index]
-	)
+	# IMPORTANT: Use _update_level_config_time method to properly set instance variable
+	time_slider.value_changed.connect(_on_time_slider_changed.bind(time_value_label))
 
 	# Add separator
 	var separator3 = HSeparator.new()
@@ -1040,6 +1027,25 @@ func ask_level_config() -> Dictionary:
 
 	print("Level config selected - Size: %d, Time: %.0f" % [level_config_size, level_config_time])
 	return {"size": level_config_size, "time": level_config_time}
+
+func _on_size_slider_changed(value: float, label: Label) -> void:
+	"""Callback for size slider - properly sets instance variable"""
+	level_config_size = int(value)
+	print("[SLIDER] Size changed to: %d" % level_config_size)
+	match int(value):
+		1: label.text = "Small (Compact arena)"
+		2: label.text = "Medium (Standard arena)"
+		3: label.text = "Large (Expanded arena)"
+		4: label.text = "Huge (Massive arena)"
+
+func _on_time_slider_changed(value: float, label: Label) -> void:
+	"""Callback for time slider - properly sets instance variable"""
+	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
+	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+	var index: int = int(value) - 1
+	level_config_time = time_values[index]
+	label.text = time_labels[index]
+	print("[SLIDER] Time changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
 func start_practice_mode(bot_count: int, level_type: String = "A", level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
@@ -2506,8 +2512,12 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 	"""
-	if OS.is_debug_build():
-		print("Generating procedural arena (Type %s, Size/Complexity %d)..." % [level_type, level_size])
+	print("======================================")
+	print("[LEVEL GEN] RECEIVED PARAMETERS:")
+	print("  level_type: %s" % level_type)
+	print("  level_size: %d" % level_size)
+	print("  spawn_collectibles: %s" % spawn_collectibles)
+	print("======================================")
 
 	# Size multipliers for arena dimensions
 	# Larger arenas get DRAMATICALLY more space
