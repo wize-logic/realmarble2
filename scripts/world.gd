@@ -880,6 +880,7 @@ func ask_level_config() -> Dictionary:
 	# Update size value display when slider changes
 	# IMPORTANT: Use _update_level_config_size method to properly set instance variable
 	size_slider.value_changed.connect(_on_size_slider_changed.bind(size_value_label))
+	print("[DEBUG] Size slider connected. Initial value: %d, focusable: %s, editable: %s" % [size_slider.value, size_slider.focus_mode != Control.FOCUS_NONE, size_slider.editable])
 
 	# Add separator
 	var separator2 = HSeparator.new()
@@ -938,6 +939,7 @@ func ask_level_config() -> Dictionary:
 	# Update time value display when slider changes
 	# IMPORTANT: Use _update_level_config_time method to properly set instance variable
 	time_slider.value_changed.connect(_on_time_slider_changed.bind(time_value_label))
+	print("[DEBUG] Time slider connected. Initial value: %d" % time_slider.value)
 
 	# Add separator
 	var separator3 = HSeparator.new()
@@ -1025,7 +1027,11 @@ func ask_level_config() -> Dictionary:
 		print("Level config cancelled")
 		return {}
 
-	print("Level config selected - Size: %d, Time: %.0f" % [level_config_size, level_config_time])
+	print("======================================")
+	print("[LEVEL CONFIG] FINAL VALUES BEING RETURNED:")
+	print("  level_config_size = %d" % level_config_size)
+	print("  level_config_time = %.0f" % level_config_time)
+	print("======================================")
 	return {"size": level_config_size, "time": level_config_time}
 
 func _on_size_slider_changed(value: float, label: Label) -> void:
