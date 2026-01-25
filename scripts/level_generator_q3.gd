@@ -343,9 +343,11 @@ func generate_cover_objects() -> void:
 
 func generate_upper_platforms() -> void:
 	"""Generate multiple tiers of platforms for vertical gameplay"""
-	# Tier heights and distances scale with complexity
-	var tier_base_height: float = 8.0
-	var tier_height_increment: float = 6.0 + complexity
+	var size_factor: float = arena_size / 140.0
+
+	# Tier heights and distances scale with arena size
+	var tier_base_height: float = 8.0 * size_factor
+	var tier_height_increment: float = (6.0 + complexity) * size_factor
 	var tier_base_distance: float = arena_size * 0.18
 	var tier_distance_decrement: float = arena_size * 0.03
 
@@ -362,33 +364,42 @@ func generate_upper_platforms() -> void:
 
 func generate_tier_platforms(tier: int, count: int, height: float, distance_from_center: float) -> void:
 	"""Generate a ring of platforms at a specific tier level"""
-	# Platform size decreases at higher tiers and higher complexity
-	var size_reduction_per_tier: float = 2.0
+	var size_factor: float = arena_size / 140.0
+
+	# Platform size scales with arena and decreases at higher tiers
+	var size_reduction_per_tier: float = 2.0 * size_factor
 	var complexity_size_factor: float = 1.0 - (complexity - 2) * 0.1  # Slightly smaller at high complexity
+	var generated_count: int = 0
 
 	for i in range(count):
 		var angle: float = (float(i) / count) * TAU
 		var x: float = cos(angle) * distance_from_center
 		var z: float = sin(angle) * distance_from_center
 
-		# Platform size varies by tier (higher = smaller)
-		var base_size: float = 14.0 - tier * size_reduction_per_tier
-		base_size = max(base_size, 5.0)  # Minimum size
+		# Platform size scales with arena, varies by tier (higher = smaller)
+		var base_size: float = (14.0 - tier * 2.0) * size_factor
+		base_size = max(base_size, 5.0 * size_factor)  # Minimum size
 		base_size *= complexity_size_factor
-		# Add some random variation
+		# Add some random variation (scaled with arena)
+		var variation: float = randf_range(-1.0, 2.0) * size_factor
 		var platform_size: Vector3 = Vector3(
-			base_size + randf_range(-1.0, 2.0),
-			1.5,
-			base_size + randf_range(-1.0, 2.0)
+			base_size + variation,
+			1.5 * size_factor,
+			base_size + variation
 		)
+		var platform_pos: Vector3 = Vector3(x, height, z)
+
+		# Check spacing before creating
+		if not check_spacing(platform_pos, platform_size):
+			continue
 
 		# Create platform with smooth geometry
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
 		platform_instance.mesh = platform_mesh
-		platform_instance.name = "Tier" + str(tier) + "Platform" + str(i)
-		platform_instance.position = Vector3(x, height, z)
+		platform_instance.name = "Tier" + str(tier) + "Platform" + str(generated_count)
+		platform_instance.position = platform_pos
 		add_child(platform_instance)
 
 		# Add collision
@@ -401,36 +412,48 @@ func generate_tier_platforms(tier: int, count: int, height: float, distance_from
 		platform_instance.add_child(static_body)
 
 		platforms.append(platform_instance)
+		register_geometry(platform_pos, platform_size)
+		generated_count += 1
 
 		# Add connecting ramps to some platforms
-		if tier == 1 and i % 2 == 0:  # Every other platform on tier 1
-			generate_ramp_to_platform(Vector3(x, height, z), platform_size)
+		if tier == 1 and generated_count % 2 == 0:  # Every other platform on tier 1
+			generate_ramp_to_platform(platform_pos, platform_size)
 
 func generate_ramp_to_platform(platform_pos: Vector3, platform_size: Vector3) -> void:
 	"""Generate a ramp leading up to a platform"""
+	var size_factor: float = arena_size / 140.0
 
 	# Calculate ramp position (extend from platform toward center)
 	var direction_to_center: Vector3 = -platform_pos.normalized()
-	var ramp_offset: float = platform_size.z / 2.0 + 6.0  # Extend from platform edge
+	var ramp_offset: float = platform_size.z / 2.0 + 6.0 * size_factor  # Extend from platform edge
 	var ramp_base: Vector3 = platform_pos + direction_to_center * ramp_offset
 	ramp_base.y = 0.0  # Start at ground level
 
+	# Ramp size scales with arena
+	var ramp_size: Vector3 = Vector3(8.0 * size_factor, 0.5 * size_factor, 14.0 * size_factor)
+
+	# Position at midpoint between ground and platform
+	var ramp_height: float = platform_pos.y / 2.0
+	var ramp_pos: Vector3 = Vector3(ramp_base.x, ramp_height, ramp_base.z)
+
+	# Check spacing before creating
+	if not check_spacing(ramp_pos, ramp_size):
+		return
+
 	# Create ramp with smooth geometry
-	var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 14.0))
+	var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 	ramp_instance.mesh = ramp_mesh
 	ramp_instance.name = "RampTo" + str(platform_pos)
-
-	# Position at midpoint between ground and platform
-	var ramp_height: float = platform_pos.y / 2.0
-	ramp_instance.position = Vector3(ramp_base.x, ramp_height, ramp_base.z)
+	ramp_instance.position = ramp_pos
 
 	# Rotate ramp to face center and tilt
 	var angle_to_center: float = atan2(-direction_to_center.x, -direction_to_center.z)
 	ramp_instance.rotation = Vector3(-0.4, angle_to_center, 0)  # Tilted slope
 
 	add_child(ramp_instance)
+	register_geometry(ramp_pos, ramp_size)
 
 	# Add collision
 	var static_body: StaticBody3D = StaticBody3D.new()
