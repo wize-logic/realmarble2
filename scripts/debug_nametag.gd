@@ -66,6 +66,16 @@ func update_nametag() -> void:
 	else:
 		ability_text = " | No Ability"
 
+	# Ground/Air state and Grinding state
+	var movement_state_text: String = ""
+	if "is_grinding" in target_player and target_player.is_grinding:
+		movement_state_text = " | GRINDING"
+	elif "is_grounded" in target_player:
+		if target_player.is_grounded:
+			movement_state_text = " | GROUNDED"
+		else:
+			movement_state_text = " | AIR"
+
 	# Bot state (if available) - v5.0 enhanced
 	var state_text: String = ""
 	if is_bot:
@@ -89,7 +99,7 @@ func update_nametag() -> void:
 					state_text += "\nTarget: Player"
 
 	# Combine all info
-	text = display_name + health_text + ability_text + state_text
+	text = display_name + health_text + ability_text + movement_state_text + state_text
 
 	# Color code by type and state
 	if is_bot:
