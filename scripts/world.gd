@@ -2504,23 +2504,20 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	Args:
 		level_type: "A" for original generator, "B" for Quake 3 arena style
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
-		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size and platform count)
+		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 	"""
 	if OS.is_debug_build():
-		print("Generating procedural arena (Type %s, Size %d)..." % [level_type, level_size])
+		print("Generating procedural arena (Type %s, Size/Complexity %d)..." % [level_type, level_size])
 
-	# Calculate arena parameters based on level_size
-	# Size 1: Small - compact arena for quick, close-quarters combat
-	# Size 2: Medium - standard arena (default)
-	# Size 3: Large - expanded arena with more platforms
-	# Size 4: Huge - massive arena for extended gameplay
-	var size_multipliers: Dictionary = {
-		1: {"arena": 0.7, "platforms": 0.5, "ramps": 0.5},   # Small
-		2: {"arena": 1.0, "platforms": 1.0, "ramps": 1.0},   # Medium (default)
-		3: {"arena": 1.4, "platforms": 1.5, "ramps": 1.5},   # Large
-		4: {"arena": 1.8, "platforms": 2.0, "ramps": 2.0}    # Huge
+	# Size multipliers for arena dimensions
+	# Larger arenas get DRAMATICALLY more space
+	var arena_multipliers: Dictionary = {
+		1: 0.7,   # Small - compact arena
+		2: 1.0,   # Medium - standard arena (default)
+		3: 1.5,   # Large - significantly expanded
+		4: 2.0    # Huge - massive arena
 	}
-	var multiplier: Dictionary = size_multipliers.get(level_size, size_multipliers[2])
+	var arena_mult: float = arena_multipliers.get(level_size, 1.0)
 
 	# Remove old level generator if it exists
 	if level_generator:
@@ -2542,17 +2539,17 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	if level_type == "B":
 		# Use Quake 3 Arena-style generator
 		level_generator.set_script(LevelGeneratorQ3)
-		# Configure size based on level_size parameter
-		level_generator.arena_size = 140.0 * multiplier.arena
-		print("Using Quake 3 Arena-style level generator (arena_size: %.1f)" % level_generator.arena_size)
+		# Set arena size and complexity - generator handles all internal scaling
+		level_generator.arena_size = 140.0 * arena_mult
+		level_generator.complexity = level_size  # Use size setting as complexity
+		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 	else:
-		# Use original generator (Type A)
+		# Use original generator (Type A - Sonic-style speedrun)
 		level_generator.set_script(LevelGenerator)
-		# Configure size based on level_size parameter
-		level_generator.arena_size = 120.0 * multiplier.arena
-		level_generator.platform_count = int(30 * multiplier.platforms)
-		level_generator.ramp_count = int(20 * multiplier.ramps)
-		print("Using original level generator (arena_size: %.1f, platforms: %d, ramps: %d)" % [level_generator.arena_size, level_generator.platform_count, level_generator.ramp_count])
+		# Set arena size and complexity - generator handles all internal scaling
+		level_generator.arena_size = 120.0 * arena_mult
+		level_generator.complexity = level_size  # Use size setting as complexity
+		print("Using Sonic-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
 	add_child(level_generator)
 

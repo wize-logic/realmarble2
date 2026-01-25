@@ -2,17 +2,81 @@ extends Node3D
 
 ## Quake 3 Arena-Style Level Generator (Type B)
 ## Creates multi-tiered arenas with complex geometry, rooms, corridors, and vertical gameplay
+## Features: rooms, corridors, jump pads, teleporters, catwalks, and tunnels
+
+# ============================================================================
+# EXPORTED PARAMETERS
+# ============================================================================
 
 @export var level_seed: int = 0
-@export var arena_size: float = 140.0
+@export var arena_size: float = 140.0  # Base arena size (scaled by size setting)
+@export var complexity: int = 2  # 1=Low, 2=Medium, 3=High, 4=Extreme
+
+# Calculated counts (set by configure_for_complexity)
+var room_count: int = 4
+var corridor_width: float = 6.0
+var tier1_platform_count: int = 4
+var tier2_platform_count: int = 6
+var tier3_platform_count: int = 4
+var pillar_count: int = 4
+var cover_count: int = 8
+var jump_pad_count: int = 5
+var teleporter_pair_count: int = 2
+
+# Internal parameters
+var min_interactive_spacing: float = 8.0  # Minimum gap for interactive objects only
 
 var noise: FastNoiseLite
 var platforms: Array = []
-var teleporters: Array = []  # For potential teleporter pairs
+var teleporters: Array = []
+var interactive_positions: Array[Dictionary] = []  # Track jump pads and teleporters
 var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
+# ============================================================================
+# INITIALIZATION
+# ============================================================================
+
 func _ready() -> void:
+	configure_for_complexity()
 	generate_level()
+
+func configure_for_complexity() -> void:
+	"""Configure all parameters based on complexity and arena size.
+	Complexity affects density, variety, and advanced features.
+	Larger arenas need more geometry to fill the space."""
+
+	# Calculate arena scale factor
+	var scale_factor: float = arena_size / 140.0
+	var area_multiplier: float = scale_factor * scale_factor
+
+	# Clamp complexity
+	var c: int = clampi(complexity, 1, 4)
+
+	# Room and corridor configuration
+	room_count = [2, 4, 6, 8][c - 1]  # 2, 4, 6, 8 rooms
+	corridor_width = [8.0, 6.0, 5.0, 4.0][c - 1]  # Narrower at high complexity
+
+	# Platform tiers (scaled by area)
+	tier1_platform_count = int([2, 4, 6, 8][c - 1] * sqrt(area_multiplier))
+	tier2_platform_count = int([4, 6, 8, 12][c - 1] * sqrt(area_multiplier))
+	tier3_platform_count = int([2, 4, 6, 8][c - 1] * sqrt(area_multiplier))
+
+	# Arena features
+	pillar_count = int([2, 4, 6, 8][c - 1] * sqrt(area_multiplier))
+	cover_count = int([4, 8, 12, 16][c - 1] * area_multiplier)
+
+	# Interactive objects (scaled less aggressively)
+	jump_pad_count = int([3, 5, 7, 9][c - 1] * sqrt(scale_factor))
+	teleporter_pair_count = int([1, 2, 3, 4][c - 1] * sqrt(scale_factor))
+
+	if OS.is_debug_build():
+		print("Q3 Level configured - Complexity: %d, Arena Size: %.1f, Scale: %.2f" % [c, arena_size, scale_factor])
+		print("  Rooms: %d, Tiers: %d/%d/%d, Pillars: %d, Cover: %d" % [room_count, tier1_platform_count, tier2_platform_count, tier3_platform_count, pillar_count, cover_count])
+		print("  Jump Pads: %d, Teleporter Pairs: %d" % [jump_pad_count, teleporter_pair_count])
+
+# ============================================================================
+# LEVEL GENERATION
+# ============================================================================
 
 func generate_level() -> void:
 	"""Generate a complete Quake 3 Arena-style level"""
@@ -32,8 +96,17 @@ func generate_level() -> void:
 	generate_upper_platforms()
 	generate_side_rooms()
 	generate_corridors()
+
+	# Generate complexity-based advanced features
+	if complexity >= 3:
+		generate_catwalks()
+	if complexity >= 4:
+		generate_tunnels()
+
+	# Generate interactive objects (with spacing checks)
 	generate_jump_pads()
 	generate_teleporters()
+
 	generate_perimeter_walls()
 	generate_death_zone()
 
@@ -48,12 +121,42 @@ func clear_level() -> void:
 		child.queue_free()
 	platforms.clear()
 	teleporters.clear()
+	interactive_positions.clear()
+
+# ============================================================================
+# SPACING CHECKS (Only for interactive objects)
+# ============================================================================
+
+func check_interactive_spacing(new_pos: Vector3, new_radius: float) -> bool:
+	"""Check if an interactive object has proper spacing from others.
+	Only used for jump pads, teleporters - NOT for geometry."""
+
+	for existing in interactive_positions:
+		var existing_pos: Vector3 = existing.position
+		var existing_radius: float = existing.radius
+		var distance: float = new_pos.distance_to(existing_pos)
+		var min_dist: float = new_radius + existing_radius + min_interactive_spacing
+
+		if distance < min_dist:
+			return false
+
+	return true
+
+func register_interactive(pos: Vector3, radius: float) -> void:
+	"""Register an interactive object for spacing checks"""
+	interactive_positions.append({
+		"position": pos,
+		"radius": radius
+	})
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
 
 func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
 	"""Create a box mesh with smooth appearance"""
 	var mesh = BoxMesh.new()
 	mesh.size = size
-	# Increase subdivisions for smoother appearance
 	mesh.subdivide_width = 2
 	mesh.subdivide_height = 2
 	mesh.subdivide_depth = 2
@@ -97,24 +200,26 @@ func generate_main_arena() -> void:
 		print("Generated main arena floor: ", floor_size, "x", floor_size)
 
 func generate_arena_pillars() -> void:
-	"""Generate decorative pillars around the main arena"""
-	var pillar_positions: Array = [
-		Vector3(20, 0, 20),
-		Vector3(-20, 0, 20),
-		Vector3(20, 0, -20),
-		Vector3(-20, 0, -20),
-	]
+	"""Generate decorative pillars - count and height scale with complexity"""
+	var floor_radius: float = (arena_size * 0.6) / 2.0
+	var pillar_dist: float = floor_radius * 0.5
 
-	for i in range(pillar_positions.size()):
-		var pos: Vector3 = pillar_positions[i]
+	# Pillar height increases with complexity
+	var pillar_height: float = 8.0 + complexity * 2.0  # 10, 12, 14, 16
+
+	for i in range(pillar_count):
+		var angle: float = (float(i) / pillar_count) * TAU
+		var x: float = cos(angle) * pillar_dist
+		var z: float = sin(angle) * pillar_dist
 
 		# Create tall pillar with smooth geometry
-		var pillar_mesh: BoxMesh = create_smooth_box_mesh(Vector3(4.0, 12.0, 4.0))
+		var pillar_size: Vector3 = Vector3(3.0 + complexity * 0.5, pillar_height, 3.0 + complexity * 0.5)
+		var pillar_mesh: BoxMesh = create_smooth_box_mesh(pillar_size)
 
 		var pillar_instance: MeshInstance3D = MeshInstance3D.new()
 		pillar_instance.mesh = pillar_mesh
 		pillar_instance.name = "Pillar" + str(i)
-		pillar_instance.position = Vector3(pos.x, 6.0, pos.z)
+		pillar_instance.position = Vector3(x, pillar_height / 2.0, z)
 		add_child(pillar_instance)
 
 		# Add collision
@@ -130,22 +235,26 @@ func generate_arena_pillars() -> void:
 
 func generate_cover_objects() -> void:
 	"""Generate small cover boxes scattered in the arena"""
-	var cover_count: int = 8
+	var floor_radius: float = (arena_size * 0.6) / 2.0
 
 	for i in range(cover_count):
-		var angle: float = (float(i) / cover_count) * TAU
-		var distance: float = 15.0 + randf() * 10.0
+		var angle: float = (float(i) / cover_count) * TAU + randf() * 0.5
+		var distance: float = randf_range(10.0, floor_radius - 5.0)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
 
-		# Create cover box with smooth geometry
-		var cover_mesh: BoxMesh = create_smooth_box_mesh(Vector3(3.0 + randf() * 2.0, 2.0 + randf() * 1.0, 3.0 + randf() * 2.0))
+		# Cover size varies with complexity
+		var cover_width: float = 2.0 + randf() * (1.0 + complexity * 0.5)
+		var cover_height: float = 1.5 + randf() * (0.5 + complexity * 0.3)
+		var cover_depth: float = 2.0 + randf() * (1.0 + complexity * 0.5)
+
+		var cover_mesh: BoxMesh = create_smooth_box_mesh(Vector3(cover_width, cover_height, cover_depth))
 
 		var cover_instance: MeshInstance3D = MeshInstance3D.new()
 		cover_instance.mesh = cover_mesh
 		cover_instance.name = "Cover" + str(i)
-		cover_instance.position = Vector3(x, cover_mesh.size.y / 2.0, z)
+		cover_instance.position = Vector3(x, cover_height / 2.0, z)
 		add_child(cover_instance)
 
 		# Add collision
@@ -165,17 +274,23 @@ func generate_cover_objects() -> void:
 
 func generate_upper_platforms() -> void:
 	"""Generate multiple tiers of platforms for vertical gameplay"""
+	var base_distance: float = arena_size * 0.18
 
-	# Tier 1: Mid-level ring platforms (4 large platforms)
-	generate_tier_platforms(1, 4, 8.0, 25.0)
+	# Tier heights scale with complexity
+	var tier1_height: float = 6.0 + complexity * 1.0
+	var tier2_height: float = 12.0 + complexity * 2.0
+	var tier3_height: float = 18.0 + complexity * 3.0
 
-	# Tier 2: Upper-level platforms (8 smaller platforms)
-	generate_tier_platforms(2, 8, 15.0, 20.0)
+	# Tier 1: Mid-level ring platforms
+	generate_tier_platforms(1, tier1_platform_count, tier1_height, base_distance)
 
-	# Tier 3: Highest sniper platforms (4 small platforms)
-	generate_tier_platforms(3, 4, 22.0, 15.0)
+	# Tier 2: Upper-level platforms
+	generate_tier_platforms(2, tier2_platform_count, tier2_height, base_distance * 0.8)
 
-	print("Generated multi-tier platform system")
+	# Tier 3: Highest sniper platforms
+	generate_tier_platforms(3, tier3_platform_count, tier3_height, base_distance * 0.6)
+
+	print("Generated multi-tier platform system (heights: %.0f/%.0f/%.0f)" % [tier1_height, tier2_height, tier3_height])
 
 func generate_tier_platforms(tier: int, count: int, height: float, distance_from_center: float) -> void:
 	"""Generate a ring of platforms at a specific tier level"""
@@ -185,17 +300,14 @@ func generate_tier_platforms(tier: int, count: int, height: float, distance_from
 		var x: float = cos(angle) * distance_from_center
 		var z: float = sin(angle) * distance_from_center
 
-		# Platform size varies by tier (higher = smaller)
-		var platform_size: Vector3
-		match tier:
-			1:  # Large mid-level platforms
-				platform_size = Vector3(12.0, 1.5, 12.0)
-			2:  # Medium upper platforms
-				platform_size = Vector3(8.0, 1.5, 8.0)
-			3:  # Small sniper platforms
-				platform_size = Vector3(6.0, 1.5, 6.0)
-			_:
-				platform_size = Vector3(8.0, 1.5, 8.0)
+		# Platform size varies by tier and complexity
+		var base_size: float = [10.0, 7.0, 5.0][tier - 1]
+		var size_mod: float = 1.0 + complexity * 0.1
+		var platform_size: Vector3 = Vector3(
+			base_size * size_mod + randf() * 2.0,
+			1.2 + complexity * 0.2,
+			base_size * size_mod + randf() * 2.0
+		)
 
 		# Create platform with smooth geometry
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
@@ -217,46 +329,49 @@ func generate_tier_platforms(tier: int, count: int, height: float, distance_from
 
 		platforms.append(platform_instance)
 
-		# Add connecting ramps to some platforms
-		if tier == 1 and i % 2 == 0:  # Every other platform on tier 1
-			generate_ramp_to_platform(Vector3(x, height, z), platform_size)
+		# Add connecting SLOPES (not stairs) to tier 1 platforms
+		if tier == 1 and i % 2 == 0:
+			generate_slope_to_platform(Vector3(x, height, z), platform_size)
 
-func generate_ramp_to_platform(platform_pos: Vector3, platform_size: Vector3) -> void:
-	"""Generate a ramp leading up to a platform"""
+func generate_slope_to_platform(platform_pos: Vector3, platform_size: Vector3) -> void:
+	"""Generate a slope leading up to a platform (slopes work better for marbles than stairs)"""
 
-	# Calculate ramp position (extend from platform toward center)
+	# Calculate slope position (extend from platform toward center)
 	var direction_to_center: Vector3 = -platform_pos.normalized()
-	var ramp_offset: float = platform_size.z / 2.0 + 6.0  # Extend from platform edge
-	var ramp_base: Vector3 = platform_pos + direction_to_center * ramp_offset
-	ramp_base.y = 0.0  # Start at ground level
+	var slope_offset: float = platform_size.z / 2.0 + 5.0
+	var slope_base: Vector3 = platform_pos + direction_to_center * slope_offset
+	slope_base.y = 0.0
 
-	# Create ramp with smooth geometry
-	var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 14.0))
+	# Create slope with smooth geometry
+	var slope_length: float = 12.0 + complexity * 2.0
+	var slope_width: float = 6.0 + complexity
+	var slope_mesh: BoxMesh = create_smooth_box_mesh(Vector3(slope_width, 0.5, slope_length))
 
-	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
-	ramp_instance.mesh = ramp_mesh
-	ramp_instance.name = "RampTo" + str(platform_pos)
+	var slope_instance: MeshInstance3D = MeshInstance3D.new()
+	slope_instance.mesh = slope_mesh
+	slope_instance.name = "SlopeTo" + str(platform_pos)
 
 	# Position at midpoint between ground and platform
-	var ramp_height: float = platform_pos.y / 2.0
-	ramp_instance.position = Vector3(ramp_base.x, ramp_height, ramp_base.z)
+	var slope_height: float = platform_pos.y / 2.0
+	slope_instance.position = Vector3(slope_base.x, slope_height, slope_base.z)
 
-	# Rotate ramp to face center and tilt
+	# Rotate slope to face center and tilt
 	var angle_to_center: float = atan2(-direction_to_center.x, -direction_to_center.z)
-	ramp_instance.rotation = Vector3(-0.4, angle_to_center, 0)  # Tilted slope
+	var tilt_angle: float = atan2(platform_pos.y, slope_length) * 0.8  # Gentle slope
+	slope_instance.rotation = Vector3(-tilt_angle, angle_to_center, 0)
 
-	add_child(ramp_instance)
+	add_child(slope_instance)
 
 	# Add collision
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var shape: BoxShape3D = BoxShape3D.new()
-	shape.size = ramp_mesh.size
+	shape.size = slope_mesh.size
 	collision.shape = shape
 	static_body.add_child(collision)
-	ramp_instance.add_child(static_body)
+	slope_instance.add_child(static_body)
 
-	platforms.append(ramp_instance)
+	platforms.append(slope_instance)
 
 # ============================================================================
 # SIDE ROOMS (Q3 STYLE)
@@ -264,22 +379,25 @@ func generate_ramp_to_platform(platform_pos: Vector3, platform_size: Vector3) ->
 
 func generate_side_rooms() -> void:
 	"""Generate enclosed side rooms with openings - Q3 Arena style"""
-	var room_positions: Array = [
-		Vector3(45, 0, 0),    # East room
-		Vector3(-45, 0, 0),   # West room
-		Vector3(0, 0, 45),    # North room
-		Vector3(0, 0, -45),   # South room
-	]
+	var room_distance: float = arena_size * 0.32
 
-	for i in range(room_positions.size()):
-		var room_pos: Vector3 = room_positions[i]
+	for i in range(room_count):
+		var angle: float = (float(i) / room_count) * TAU
+		var x: float = cos(angle) * room_distance
+		var z: float = sin(angle) * room_distance
+		var room_pos: Vector3 = Vector3(x, 0, z)
+
 		generate_room(room_pos, i)
 
-	print("Generated 4 side rooms")
+	print("Generated %d side rooms" % room_count)
 
 func generate_room(center_pos: Vector3, room_index: int) -> void:
 	"""Generate a single enclosed room with openings"""
-	var room_size: Vector3 = Vector3(16.0, 10.0, 16.0)
+	# Room size scales with complexity
+	var room_width: float = 12.0 + complexity * 2.0
+	var room_height: float = 8.0 + complexity * 1.5
+	var room_depth: float = 12.0 + complexity * 2.0
+	var room_size: Vector3 = Vector3(room_width, room_height, room_depth)
 	var wall_thickness: float = 1.0
 
 	# Floor with smooth geometry
@@ -319,7 +437,7 @@ func generate_room(center_pos: Vector3, room_index: int) -> void:
 	ceiling_instance.add_child(ceiling_body)
 	platforms.append(ceiling_instance)
 
-	# Walls (4 walls with doorway in one wall facing center)
+	# Walls with doorway facing center
 	generate_room_walls(center_pos, room_size, wall_thickness, room_index)
 
 	# Add raised platform inside room (weapon spawn area)
@@ -329,59 +447,60 @@ func generate_room_walls(center_pos: Vector3, room_size: Vector3, wall_thickness
 	"""Generate walls for a room with one opening facing the center arena"""
 
 	# Determine which wall should have the doorway based on room position
-	var has_doorway: Array = [false, false, false, false]  # North, South, East, West
+	var angle_to_center: float = atan2(-center_pos.z, -center_pos.x)
+	var doorway_wall: int = -1
 
-	# Room facing determines doorway position
-	if center_pos.x > 0:  # East room - doorway on west wall
-		has_doorway[3] = true
-	elif center_pos.x < 0:  # West room - doorway on east wall
-		has_doorway[2] = true
-	elif center_pos.z > 0:  # North room - doorway on south wall
-		has_doorway[1] = true
-	else:  # South room - doorway on north wall
-		has_doorway[0] = true
+	# Simplified: doorway on wall closest to center
+	if abs(center_pos.x) > abs(center_pos.z):
+		doorway_wall = 2 if center_pos.x > 0 else 3  # East or West
+	else:
+		doorway_wall = 0 if center_pos.z > 0 else 1  # North or South
 
 	var wall_configs: Array = [
-		{"pos": Vector3(0, room_size.y/2, room_size.z/2), "size": Vector3(room_size.x, room_size.y, wall_thickness), "name": "North"},
-		{"pos": Vector3(0, room_size.y/2, -room_size.z/2), "size": Vector3(room_size.x, room_size.y, wall_thickness), "name": "South"},
-		{"pos": Vector3(room_size.x/2, room_size.y/2, 0), "size": Vector3(wall_thickness, room_size.y, room_size.z), "name": "East"},
-		{"pos": Vector3(-room_size.x/2, room_size.y/2, 0), "size": Vector3(wall_thickness, room_size.y, room_size.z), "name": "West"}
+		{"pos": Vector3(0, room_size.y/2, room_size.z/2), "size": Vector3(room_size.x, room_size.y, wall_thickness), "name": "North", "axis": "x"},
+		{"pos": Vector3(0, room_size.y/2, -room_size.z/2), "size": Vector3(room_size.x, room_size.y, wall_thickness), "name": "South", "axis": "x"},
+		{"pos": Vector3(room_size.x/2, room_size.y/2, 0), "size": Vector3(wall_thickness, room_size.y, room_size.z), "name": "East", "axis": "z"},
+		{"pos": Vector3(-room_size.x/2, room_size.y/2, 0), "size": Vector3(wall_thickness, room_size.y, room_size.z), "name": "West", "axis": "z"}
 	]
 
 	for i in range(wall_configs.size()):
 		var config: Dictionary = wall_configs[i]
 
-		if has_doorway[i]:
+		if i == doorway_wall:
 			# Create wall segments with doorway gap
-			create_wall_with_doorway(center_pos + config.pos, config.size, config.name, room_index, i)
+			create_wall_with_doorway(center_pos + config.pos, config.size, config.name, room_index, config.axis)
 		else:
 			# Create solid wall
 			create_solid_wall(center_pos + config.pos, config.size, config.name + str(room_index))
 
-func create_wall_with_doorway(wall_pos: Vector3, wall_size: Vector3, wall_name: String, room_index: int, wall_dir: int) -> void:
+func create_wall_with_doorway(wall_pos: Vector3, wall_size: Vector3, wall_name: String, room_index: int, axis: String) -> void:
 	"""Create a wall with a doorway opening in the middle"""
-	var doorway_width: float = 6.0
+	var doorway_width: float = 5.0 + complexity * 0.5  # Wider at higher complexity
 
-	# For walls aligned on X-axis (North/South walls)
-	if wall_dir == 0 or wall_dir == 1:
+	if axis == "x":
+		# North/South walls
+		var segment_width: float = (wall_size.x - doorway_width) / 2.0
+		var segment_size: Vector3 = Vector3(segment_width, wall_size.y, wall_size.z)
+
 		# Left segment
-		var left_width: float = (wall_size.x - doorway_width) / 2.0
-		var left_size: Vector3 = Vector3(left_width, wall_size.y, wall_size.z)
-		var left_offset: Vector3 = Vector3(-doorway_width/2 - left_width/2, 0, 0)
-		create_solid_wall(wall_pos + left_offset, left_size, wall_name + str(room_index) + "Left")
+		var left_offset: Vector3 = Vector3(-doorway_width/2 - segment_width/2, 0, 0)
+		create_solid_wall(wall_pos + left_offset, segment_size, wall_name + str(room_index) + "Left")
 
 		# Right segment
-		var right_offset: Vector3 = Vector3(doorway_width/2 + left_width/2, 0, 0)
-		create_solid_wall(wall_pos + right_offset, left_size, wall_name + str(room_index) + "Right")
+		var right_offset: Vector3 = Vector3(doorway_width/2 + segment_width/2, 0, 0)
+		create_solid_wall(wall_pos + right_offset, segment_size, wall_name + str(room_index) + "Right")
 	else:
-		# For walls aligned on Z-axis (East/West walls)
-		var left_depth: float = (wall_size.z - doorway_width) / 2.0
-		var left_size: Vector3 = Vector3(wall_size.x, wall_size.y, left_depth)
-		var left_offset: Vector3 = Vector3(0, 0, -doorway_width/2 - left_depth/2)
-		create_solid_wall(wall_pos + left_offset, left_size, wall_name + str(room_index) + "Left")
+		# East/West walls
+		var segment_depth: float = (wall_size.z - doorway_width) / 2.0
+		var segment_size: Vector3 = Vector3(wall_size.x, wall_size.y, segment_depth)
 
-		var right_offset: Vector3 = Vector3(0, 0, doorway_width/2 + left_depth/2)
-		create_solid_wall(wall_pos + right_offset, left_size, wall_name + str(room_index) + "Right")
+		# Front segment
+		var front_offset: Vector3 = Vector3(0, 0, -doorway_width/2 - segment_depth/2)
+		create_solid_wall(wall_pos + front_offset, segment_size, wall_name + str(room_index) + "Front")
+
+		# Back segment
+		var back_offset: Vector3 = Vector3(0, 0, doorway_width/2 + segment_depth/2)
+		create_solid_wall(wall_pos + back_offset, segment_size, wall_name + str(room_index) + "Back")
 
 func create_solid_wall(pos: Vector3, size: Vector3, wall_name: String) -> void:
 	"""Create a solid wall segment"""
@@ -405,12 +524,13 @@ func create_solid_wall(pos: Vector3, size: Vector3, wall_name: String) -> void:
 
 func generate_room_platform(center_pos: Vector3, room_index: int) -> void:
 	"""Generate a raised platform inside the room for item spawns"""
-	var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(6.0, 1.0, 6.0))
+	var platform_size: float = 4.0 + complexity
+	var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(platform_size, 1.0, platform_size))
 
 	var platform_instance: MeshInstance3D = MeshInstance3D.new()
 	platform_instance.mesh = platform_mesh
 	platform_instance.name = "Room" + str(room_index) + "Platform"
-	platform_instance.position = center_pos + Vector3(0, 2.5, 0)
+	platform_instance.position = center_pos + Vector3(0, 2.0 + complexity * 0.3, 0)
 	add_child(platform_instance)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
@@ -428,27 +548,41 @@ func generate_room_platform(center_pos: Vector3, room_index: int) -> void:
 # ============================================================================
 
 func generate_corridors() -> void:
-	"""Generate connecting corridors between areas"""
-	var corridor_configs: Array = [
-		{"start": Vector3(30, 0, 0), "end": Vector3(45, 0, 0), "width": 6.0},  # To east room
-		{"start": Vector3(-30, 0, 0), "end": Vector3(-45, 0, 0), "width": 6.0},  # To west room
-		{"start": Vector3(0, 0, 30), "end": Vector3(0, 0, 45), "width": 6.0},  # To north room
-		{"start": Vector3(0, 0, -30), "end": Vector3(0, 0, -45), "width": 6.0},  # To south room
-	]
+	"""Generate connecting corridors between main arena and rooms"""
+	var main_floor_edge: float = (arena_size * 0.6) / 2.0
+	var room_distance: float = arena_size * 0.32
 
-	for config in corridor_configs:
-		create_corridor(config.start, config.end, config.width)
+	for i in range(room_count):
+		var angle: float = (float(i) / room_count) * TAU
 
-	print("Generated connecting corridors")
+		# Start from main floor edge
+		var start_x: float = cos(angle) * main_floor_edge
+		var start_z: float = sin(angle) * main_floor_edge
 
-func create_corridor(start_pos: Vector3, end_pos: Vector3, width: float) -> void:
+		# End at room
+		var end_x: float = cos(angle) * room_distance
+		var end_z: float = sin(angle) * room_distance
+
+		create_corridor(Vector3(start_x, 0, start_z), Vector3(end_x, 0, end_z))
+
+	print("Generated %d connecting corridors" % room_count)
+
+func create_corridor(start_pos: Vector3, end_pos: Vector3) -> void:
 	"""Create a corridor between two points"""
 	var direction: Vector3 = (end_pos - start_pos).normalized()
 	var length: float = start_pos.distance_to(end_pos)
 	var mid_point: Vector3 = (start_pos + end_pos) / 2.0
 
-	# Floor with smooth geometry
-	var corridor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(width if abs(direction.x) > 0.5 else length, 1.0, width if abs(direction.z) > 0.5 else length))
+	# Determine corridor orientation
+	var is_x_aligned: bool = abs(direction.x) > abs(direction.z)
+
+	var corridor_size: Vector3
+	if is_x_aligned:
+		corridor_size = Vector3(length, 1.0, corridor_width)
+	else:
+		corridor_size = Vector3(corridor_width, 1.0, length)
+
+	var corridor_mesh: BoxMesh = create_smooth_box_mesh(corridor_size)
 
 	var corridor_instance: MeshInstance3D = MeshInstance3D.new()
 	corridor_instance.mesh = corridor_mesh
@@ -467,32 +601,201 @@ func create_corridor(start_pos: Vector3, end_pos: Vector3, width: float) -> void
 	platforms.append(corridor_instance)
 
 # ============================================================================
-# JUMP PADS
+# CATWALKS (High Complexity Feature)
+# ============================================================================
+
+func generate_catwalks() -> void:
+	"""Generate elevated catwalks connecting platforms (complexity 3+)"""
+	var catwalk_count: int = 2 + complexity
+	var catwalk_height: float = 10.0 + complexity * 2.0
+
+	for i in range(catwalk_count):
+		var angle_start: float = (float(i) / catwalk_count) * TAU
+		var angle_end: float = angle_start + PI / catwalk_count
+
+		var start_dist: float = arena_size * 0.15
+		var end_dist: float = arena_size * 0.25
+
+		var start_pos: Vector3 = Vector3(
+			cos(angle_start) * start_dist,
+			catwalk_height,
+			sin(angle_start) * start_dist
+		)
+		var end_pos: Vector3 = Vector3(
+			cos(angle_end) * end_dist,
+			catwalk_height + randf() * 3.0,
+			sin(angle_end) * end_dist
+		)
+
+		create_catwalk(start_pos, end_pos, i)
+
+	print("Generated %d catwalks at height %.1f" % [catwalk_count, catwalk_height])
+
+func create_catwalk(start_pos: Vector3, end_pos: Vector3, index: int) -> void:
+	"""Create a narrow catwalk between two points"""
+	var direction: Vector3 = (end_pos - start_pos)
+	var length: float = direction.length()
+	var mid_point: Vector3 = (start_pos + end_pos) / 2.0
+
+	# Narrow catwalk
+	var catwalk_width: float = 2.0 + complexity * 0.3
+	var catwalk_mesh: BoxMesh = create_smooth_box_mesh(Vector3(catwalk_width, 0.5, length))
+
+	var catwalk_instance: MeshInstance3D = MeshInstance3D.new()
+	catwalk_instance.mesh = catwalk_mesh
+	catwalk_instance.name = "Catwalk" + str(index)
+	catwalk_instance.position = mid_point
+
+	# Rotate to align with direction
+	var angle: float = atan2(direction.x, direction.z)
+	catwalk_instance.rotation.y = angle
+
+	# Slight tilt if heights differ
+	if abs(end_pos.y - start_pos.y) > 0.1:
+		var tilt: float = atan2(end_pos.y - start_pos.y, length)
+		catwalk_instance.rotation.x = -tilt
+
+	add_child(catwalk_instance)
+
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = catwalk_mesh.size
+	collision.shape = shape
+	static_body.add_child(collision)
+	catwalk_instance.add_child(static_body)
+
+	platforms.append(catwalk_instance)
+
+# ============================================================================
+# TUNNELS (Extreme Complexity Feature)
+# ============================================================================
+
+func generate_tunnels() -> void:
+	"""Generate underground tunnels (complexity 4 only)"""
+	var tunnel_count: int = complexity - 2  # 2 tunnels at complexity 4
+	var tunnel_depth: float = -4.0
+
+	for i in range(tunnel_count):
+		var angle: float = (float(i) / tunnel_count) * TAU + PI / 4
+
+		var start_pos: Vector3 = Vector3(
+			cos(angle) * arena_size * 0.1,
+			tunnel_depth,
+			sin(angle) * arena_size * 0.1
+		)
+		var end_pos: Vector3 = Vector3(
+			cos(angle + PI) * arena_size * 0.1,
+			tunnel_depth,
+			sin(angle + PI) * arena_size * 0.1
+		)
+
+		create_tunnel(start_pos, end_pos, i)
+
+		# Add slope entrances
+		create_tunnel_entrance(start_pos, i * 2)
+		create_tunnel_entrance(end_pos, i * 2 + 1)
+
+	print("Generated %d underground tunnels" % tunnel_count)
+
+func create_tunnel(start_pos: Vector3, end_pos: Vector3, index: int) -> void:
+	"""Create an underground tunnel"""
+	var direction: Vector3 = (end_pos - start_pos)
+	var length: float = direction.length()
+	var mid_point: Vector3 = (start_pos + end_pos) / 2.0
+
+	var tunnel_width: float = 6.0
+	var tunnel_height: float = 4.0
+
+	# Floor
+	var floor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(tunnel_width, 1.0, length))
+	var floor_instance: MeshInstance3D = MeshInstance3D.new()
+	floor_instance.mesh = floor_mesh
+	floor_instance.name = "Tunnel" + str(index) + "Floor"
+	floor_instance.position = mid_point + Vector3(0, -tunnel_height / 2.0, 0)
+	floor_instance.rotation.y = atan2(direction.x, direction.z)
+	add_child(floor_instance)
+
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = floor_mesh.size
+	collision.shape = shape
+	static_body.add_child(collision)
+	floor_instance.add_child(static_body)
+
+	platforms.append(floor_instance)
+
+func create_tunnel_entrance(tunnel_pos: Vector3, index: int) -> void:
+	"""Create a sloped entrance to a tunnel"""
+	var slope_length: float = 8.0
+	var slope_mesh: BoxMesh = create_smooth_box_mesh(Vector3(5.0, 0.5, slope_length))
+
+	var slope_instance: MeshInstance3D = MeshInstance3D.new()
+	slope_instance.mesh = slope_mesh
+	slope_instance.name = "TunnelEntrance" + str(index)
+
+	# Position slope from ground level to tunnel depth
+	var slope_start: Vector3 = Vector3(tunnel_pos.x, 0, tunnel_pos.z)
+	var slope_mid: Vector3 = slope_start + Vector3(0, tunnel_pos.y / 2.0, 0)
+	slope_instance.position = slope_mid
+
+	# Rotate to face outward and tilt down
+	var angle_out: float = atan2(tunnel_pos.x, tunnel_pos.z)
+	slope_instance.rotation.y = angle_out
+	slope_instance.rotation.x = atan2(-tunnel_pos.y, slope_length)
+
+	add_child(slope_instance)
+
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = slope_mesh.size
+	collision.shape = shape
+	static_body.add_child(collision)
+	slope_instance.add_child(static_body)
+
+	platforms.append(slope_instance)
+
+# ============================================================================
+# JUMP PADS (Interactive - uses spacing checks)
 # ============================================================================
 
 func generate_jump_pads() -> void:
 	"""Generate jump pads for quick vertical movement"""
-	var jump_pad_positions: Array = [
-		Vector3(0, 0, 0),      # Center jump pad to upper levels
-		Vector3(30, 0, 30),
-		Vector3(-30, 0, 30),
-		Vector3(30, 0, -30),
-		Vector3(-30, 0, -30),
-	]
+	var floor_radius: float = (arena_size * 0.6) / 2.0
+	var generated: int = 0
+	var max_attempts: int = jump_pad_count * 5
 
-	for i in range(jump_pad_positions.size()):
-		var pos: Vector3 = jump_pad_positions[i]
-		create_jump_pad(pos, i)
+	# Always place one at center
+	if check_interactive_spacing(Vector3.ZERO, 3.0):
+		create_jump_pad(Vector3.ZERO, 0)
+		register_interactive(Vector3.ZERO, 3.0)
+		generated += 1
 
-	print("Generated ", jump_pad_positions.size(), " jump pads")
+	# Generate remaining jump pads
+	for attempt in range(max_attempts):
+		if generated >= jump_pad_count:
+			break
+
+		var angle: float = randf() * TAU
+		var distance: float = randf_range(15.0, floor_radius - 5.0)
+		var pos: Vector3 = Vector3(cos(angle) * distance, 0, sin(angle) * distance)
+
+		if check_interactive_spacing(pos, 3.0):
+			create_jump_pad(pos, generated)
+			register_interactive(pos, 3.0)
+			generated += 1
+
+	print("Generated %d jump pads" % generated)
 
 func create_jump_pad(pos: Vector3, index: int) -> void:
 	"""Create a jump pad (visual platform + Area3D for boost)"""
 
 	# Visual platform
 	var pad_mesh: CylinderMesh = CylinderMesh.new()
-	pad_mesh.top_radius = 2.5
-	pad_mesh.bottom_radius = 2.5
+	pad_mesh.top_radius = 2.0 + complexity * 0.3
+	pad_mesh.bottom_radius = 2.0 + complexity * 0.3
 	pad_mesh.height = 0.5
 
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
@@ -503,17 +806,16 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 
 	# Material for jump pad (bright green - unshaded for GL Compatibility)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright green
-	# Use UNSHADED mode to bypass lighting issues in GL Compatibility mode
+	material.albedo_color = Color(0.3, 1.0, 0.4)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.disable_receive_shadows = true
 	pad_instance.material_override = material
 
-	# Add collision to jump pad so players can stand on it
+	# Add collision
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = 2.5
+	collision_shape.radius = pad_mesh.top_radius
 	collision_shape.height = 0.5
 	collision.shape = collision_shape
 	static_body.add_child(collision)
@@ -526,37 +828,49 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	jump_area.add_to_group("jump_pad")
 	pad_instance.add_child(jump_area)
 
-	# Set collision layers - Layer 8 for pickups/areas
 	jump_area.collision_layer = 8
-	jump_area.collision_mask = 0  # Don't detect anything
-	jump_area.monitorable = true  # Allow players to detect us
-	jump_area.monitoring = false  # We don't need to detect
+	jump_area.collision_mask = 0
+	jump_area.monitorable = true
+	jump_area.monitoring = false
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = 2.5
-	area_shape.height = 3.0  # Taller to catch jumping players
+	area_shape.radius = pad_mesh.top_radius
+	area_shape.height = 3.0
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
 
-	# Don't add to platforms array - jump pads need to keep their custom material
-
 # ============================================================================
-# TELEPORTERS
+# TELEPORTERS (Interactive - uses spacing checks)
 # ============================================================================
 
 func generate_teleporters() -> void:
 	"""Generate teleporter pairs for quick arena traversal"""
-	var teleporter_pairs: Array = [
-		{"from": Vector3(35, 0, 35), "to": Vector3(-35, 0, -35)},
-		{"from": Vector3(-35, 0, 35), "to": Vector3(35, 0, -35)},
-	]
+	var floor_radius: float = (arena_size * 0.6) / 2.0
+	var generated_pairs: int = 0
+	var max_attempts: int = teleporter_pair_count * 10
 
-	for i in range(teleporter_pairs.size()):
-		var pair: Dictionary = teleporter_pairs[i]
-		create_teleporter_pair(pair.from, pair.to, i)
+	for attempt in range(max_attempts):
+		if generated_pairs >= teleporter_pair_count:
+			break
 
-	print("Generated ", teleporter_pairs.size(), " teleporter pairs")
+		# Generate two positions for a pair
+		var angle1: float = randf() * TAU
+		var angle2: float = angle1 + PI + randf_range(-0.5, 0.5)  # Roughly opposite
+		var dist1: float = randf_range(20.0, floor_radius - 5.0)
+		var dist2: float = randf_range(20.0, floor_radius - 5.0)
+
+		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
+		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
+
+		# Check spacing for both positions
+		if check_interactive_spacing(pos1, 4.0) and check_interactive_spacing(pos2, 4.0):
+			create_teleporter_pair(pos1, pos2, generated_pairs)
+			register_interactive(pos1, 4.0)
+			register_interactive(pos2, 4.0)
+			generated_pairs += 1
+
+	print("Generated %d teleporter pairs" % generated_pairs)
 
 func create_teleporter_pair(from_pos: Vector3, to_pos: Vector3, pair_index: int) -> void:
 	"""Create a bidirectional teleporter pair"""
@@ -568,8 +882,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 
 	# Visual platform
 	var teleporter_mesh: CylinderMesh = CylinderMesh.new()
-	teleporter_mesh.top_radius = 3.0
-	teleporter_mesh.bottom_radius = 3.0
+	teleporter_mesh.top_radius = 2.5 + complexity * 0.3
+	teleporter_mesh.bottom_radius = 2.5 + complexity * 0.3
 	teleporter_mesh.height = 0.3
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
@@ -580,17 +894,16 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 
 	# Material for teleporter (blue/purple - unshaded for GL Compatibility)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.4, 1.0)  # Blue-purple
-	# Use UNSHADED mode to bypass lighting issues in GL Compatibility mode
+	material.albedo_color = Color(0.6, 0.4, 1.0)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.disable_receive_shadows = true
 	teleporter_instance.material_override = material
 
-	# Add collision to teleporter so players can stand on it
+	# Add collision
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = 3.0
+	collision_shape.radius = teleporter_mesh.top_radius
 	collision_shape.height = 0.3
 	collision.shape = collision_shape
 	static_body.add_child(collision)
@@ -604,20 +917,18 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	teleport_area.set_meta("destination", destination)
 	teleporter_instance.add_child(teleport_area)
 
-	# Set collision layers - Layer 8 for pickups/areas
 	teleport_area.collision_layer = 8
-	teleport_area.collision_mask = 0  # Don't detect anything
-	teleport_area.monitorable = true  # Allow players to detect us
-	teleport_area.monitoring = false  # We don't need to detect
+	teleport_area.collision_mask = 0
+	teleport_area.monitorable = true
+	teleport_area.monitoring = false
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = 3.0
-	area_shape.height = 5.0  # Tall enough to catch players reliably
+	area_shape.radius = teleporter_mesh.top_radius
+	area_shape.height = 5.0
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
-	# Don't add to platforms array - teleporters need to keep their custom material
 	teleporters.append({"area": teleport_area, "destination": destination})
 
 # ============================================================================
@@ -627,7 +938,7 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 func generate_perimeter_walls() -> void:
 	"""Generate outer perimeter walls"""
 	var wall_distance: float = arena_size * 0.55
-	var wall_height: float = 25.0  # Taller walls for Q3 style
+	var wall_height: float = 20.0 + complexity * 3.0  # Taller at higher complexity
 	var wall_thickness: float = 2.0
 
 	var wall_configs: Array = [
@@ -658,7 +969,7 @@ func generate_perimeter_walls() -> void:
 
 		platforms.append(wall_instance)
 
-	print("Generated perimeter walls")
+	print("Generated perimeter walls (height: %.1f)" % wall_height)
 
 # ============================================================================
 # DEATH ZONE
@@ -701,35 +1012,36 @@ func _on_death_zone_entered(body: Node3D) -> void:
 # ============================================================================
 
 func get_spawn_points() -> PackedVector3Array:
-	"""Generate spawn points throughout the arena - supports up to 8 players total (16+ spawn points available)"""
+	"""Generate spawn points throughout the arena"""
 	var spawns: PackedVector3Array = PackedVector3Array()
+	var floor_radius: float = (arena_size * 0.6) / 2.0
 
 	# Main arena spawns
 	spawns.append(Vector3(0, 2, 0))
-	spawns.append(Vector3(15, 2, 0))
-	spawns.append(Vector3(-15, 2, 0))
-	spawns.append(Vector3(0, 2, 15))
-	spawns.append(Vector3(0, 2, -15))
+
+	# Ring spawns scaled to arena
+	var ring_dist: float = min(15.0, floor_radius * 0.4)
+	spawns.append(Vector3(ring_dist, 2, 0))
+	spawns.append(Vector3(-ring_dist, 2, 0))
+	spawns.append(Vector3(0, 2, ring_dist))
+	spawns.append(Vector3(0, 2, -ring_dist))
 
 	# Room spawns
-	spawns.append(Vector3(45, 3, 0))   # East room
-	spawns.append(Vector3(-45, 3, 0))  # West room
-	spawns.append(Vector3(0, 3, 45))   # North room
-	spawns.append(Vector3(0, 3, -45))  # South room
+	var room_distance: float = arena_size * 0.32
+	for i in range(room_count):
+		var angle: float = (float(i) / room_count) * TAU
+		var x: float = cos(angle) * room_distance
+		var z: float = sin(angle) * room_distance
+		spawns.append(Vector3(x, 3, z))
 
 	# Platform spawns (tier 1)
-	for i in range(4):
+	var base_distance: float = arena_size * 0.18
+	var tier1_height: float = 6.0 + complexity * 1.0
+	for i in range(min(4, tier1_platform_count)):
 		var angle: float = (float(i) / 4) * TAU
-		var x: float = cos(angle) * 25.0
-		var z: float = sin(angle) * 25.0
-		spawns.append(Vector3(x, 10, z))
-
-	# Upper platform spawns (tier 2)
-	for i in range(3):
-		var angle: float = (float(i) / 3) * TAU
-		var x: float = cos(angle) * 20.0
-		var z: float = sin(angle) * 20.0
-		spawns.append(Vector3(x, 17, z))
+		var x: float = cos(angle) * base_distance
+		var z: float = sin(angle) * base_distance
+		spawns.append(Vector3(x, tier1_height + 2, z))
 
 	return spawns
 
