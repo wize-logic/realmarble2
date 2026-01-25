@@ -229,11 +229,7 @@ func generate_platforms() -> void:
 		var platform_size: Vector3 = Vector3(width, height, depth)
 		var platform_pos: Vector3 = Vector3(x, y, z)
 
-		# Check spacing before creating
-		if not check_spacing(platform_pos, platform_size):
-			continue
-
-		# Create platform
+		# Create platform - geometry can overlap/connect to form interesting structures
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
@@ -252,10 +248,6 @@ func generate_platforms() -> void:
 		platform_instance.add_child(static_body)
 
 		platforms.append(platform_instance)
-
-		# Register this geometry for future spacing checks
-		register_geometry(platform_pos, platform_size)
-
 		generated_count += 1
 
 	if OS.is_debug_build():
@@ -296,11 +288,7 @@ func generate_ramps() -> void:
 		var ramp_pos: Vector3 = Vector3(x, y, z)
 		var ramp_rotation: Vector3 = Vector3(ramp_tilt, randf() * 360.0, 0)
 
-		# Check spacing before creating
-		if not check_spacing(ramp_pos, ramp_size * 1.2):  # Extra clearance for rotation
-			continue
-
-		# Create ramp
+		# Create ramp - geometry can overlap/connect
 		var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
@@ -320,10 +308,6 @@ func generate_ramps() -> void:
 		ramp_instance.add_child(static_body)
 
 		platforms.append(ramp_instance)
-
-		# Register this geometry for future spacing checks
-		register_geometry(ramp_pos, ramp_size * 1.2, ramp_rotation)
-
 		generated_count += 1
 
 	if OS.is_debug_build():
@@ -381,11 +365,7 @@ func generate_obstacles() -> void:
 				)
 				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
 
-		# Check spacing before creating
-		if not check_spacing(obstacle_pos, obstacle_size):
-			continue
-
-		# Create obstacle
+		# Create obstacle - geometry can overlap/connect
 		var obstacle_mesh: BoxMesh = create_smooth_box_mesh(obstacle_size)
 
 		var obstacle_instance: MeshInstance3D = MeshInstance3D.new()
@@ -409,8 +389,6 @@ func generate_obstacles() -> void:
 		obstacle_instance.add_child(static_body)
 
 		platforms.append(obstacle_instance)
-		register_geometry(obstacle_pos, obstacle_size)
-
 		generated_count += 1
 
 	if OS.is_debug_build():

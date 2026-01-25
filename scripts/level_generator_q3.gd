@@ -139,40 +139,30 @@ func clear_level() -> void:
 	teleporters.clear()
 	geometry_positions.clear()
 
-func check_spacing(new_pos: Vector3, new_size: Vector3) -> bool:
-	"""Check if a new piece of geometry would have proper spacing from existing geometry.
-	Returns true if the position is valid (has enough spacing), false if it would overlap/touch."""
-	var new_half_size: Vector3 = new_size * 0.5
-
+func check_interactive_object_spacing(new_pos: Vector3, radius: float) -> bool:
+	"""Check if an interactive object (jump pad, teleporter) would clip through geometry.
+	Only checks against registered solid geometry, not other interactive objects.
+	Returns true if position is valid, false if it would clip."""
 	for existing in geometry_positions:
 		var existing_pos: Vector3 = existing.position
 		var existing_size: Vector3 = existing.size
 		var existing_half_size: Vector3 = existing_size * 0.5
 
-		# Simple distance check first (fast rejection)
-		var distance: float = new_pos.distance_to(existing_pos)
-		var combined_radius: float = (new_half_size.length() + existing_half_size.length()) + min_spacing
+		# Check if the interactive object's center is inside or too close to geometry
+		var horizontal_dist: float = Vector2(new_pos.x - existing_pos.x, new_pos.z - existing_pos.z).length()
+		var vertical_dist: float = abs(new_pos.y - existing_pos.y)
 
-		if distance < combined_radius:
-			# More precise AABB check with spacing margin
-			var spacing_margin: float = min_spacing * 0.5
+		# Interactive object would clip if its center is within the geometry bounds (with margin)
+		var margin: float = radius + 1.0
+		if (horizontal_dist < existing_half_size.x + margin and
+			horizontal_dist < existing_half_size.z + margin and
+			vertical_dist < existing_half_size.y + margin):
+			return false  # Would clip
 
-			var new_min: Vector3 = new_pos - new_half_size - Vector3.ONE * spacing_margin
-			var new_max: Vector3 = new_pos + new_half_size + Vector3.ONE * spacing_margin
-
-			var existing_min: Vector3 = existing_pos - existing_half_size - Vector3.ONE * spacing_margin
-			var existing_max: Vector3 = existing_pos + existing_half_size + Vector3.ONE * spacing_margin
-
-			# AABB overlap test
-			if (new_min.x <= existing_max.x and new_max.x >= existing_min.x and
-				new_min.y <= existing_max.y and new_max.y >= existing_min.y and
-				new_min.z <= existing_max.z and new_max.z >= existing_min.z):
-				return false  # Would overlap/touch
-
-	return true  # Valid position with proper spacing
+	return true  # Valid position
 
 func register_geometry(pos: Vector3, size: Vector3) -> void:
-	"""Register a piece of geometry in the spacing tracker"""
+	"""Register solid geometry for interactive object collision checks"""
 	geometry_positions.append({
 		"position": pos,
 		"size": size
@@ -242,10 +232,6 @@ func generate_arena_pillars() -> void:
 			sin(angle) * pillar_distance
 		)
 
-		# Check spacing before creating
-		if not check_spacing(pillar_pos, pillar_size):
-			continue
-
 		# Create tall pillar with smooth geometry
 		var pillar_mesh: BoxMesh = create_smooth_box_mesh(pillar_size)
 
@@ -294,10 +280,6 @@ func generate_cover_objects() -> void:
 			(3.0 + randf() * 2.0) * size_mult
 		)
 		var cover_pos: Vector3 = Vector3(x, cover_size.y / 2.0, z)
-
-		# Check spacing before creating
-		if not check_spacing(cover_pos, cover_size):
-			continue
 
 		var cover_mesh: BoxMesh = create_smooth_box_mesh(cover_size)
 
@@ -372,10 +354,6 @@ func generate_tier_platforms(tier: int, count: int, height: float, distance_from
 		)
 		var platform_pos: Vector3 = Vector3(x, height, z)
 
-		# Check spacing before creating
-		if not check_spacing(platform_pos, platform_size):
-			continue
-
 		# Create platform with smooth geometry
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
@@ -418,10 +396,6 @@ func generate_ramp_to_platform(platform_pos: Vector3, platform_size: Vector3) ->
 	# Position at midpoint between ground and platform
 	var ramp_height: float = platform_pos.y / 2.0
 	var ramp_pos: Vector3 = Vector3(ramp_base.x, ramp_height, ramp_base.z)
-
-	# Check spacing before creating
-	if not check_spacing(ramp_pos, ramp_size):
-		return
 
 	# Create ramp with smooth geometry
 	var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
@@ -812,10 +786,7 @@ func create_catwalk(start_pos: Vector3, end_pos: Vector3, index: int) -> void:
 	var catwalk_width: float = 5.0 * size_factor
 	var catwalk_thickness: float = 0.8 * size_factor
 
-	# Check spacing
 	var catwalk_size: Vector3 = Vector3(catwalk_width, catwalk_thickness, length)
-	if not check_spacing(mid_point, catwalk_size):
-		return
 
 	# Main catwalk walkway
 	var walkway_mesh: BoxMesh = create_smooth_box_mesh(catwalk_size)
@@ -844,9 +815,6 @@ func create_catwalk_support(pos: Vector3, index: int, suffix: String, size_facto
 	var pillar_size: Vector3 = Vector3(pillar_width, pillar_height, pillar_width)
 	var pillar_pos: Vector3 = Vector3(pos.x, pillar_height / 2.0, pos.z)
 
-	if not check_spacing(pillar_pos, pillar_size):
-		return
-
 	var pillar_mesh: BoxMesh = create_smooth_box_mesh(pillar_size)
 	var pillar_instance: MeshInstance3D = MeshInstance3D.new()
 	pillar_instance.mesh = pillar_mesh
@@ -855,7 +823,7 @@ func create_catwalk_support(pos: Vector3, index: int, suffix: String, size_facto
 	add_child(pillar_instance)
 	add_collision_to_mesh(pillar_instance, pillar_size)
 	platforms.append(pillar_instance)
-	register_geometry(pillar_pos, pillar_size)
+	register_geometry(pillar_pos, pillar_size)  # Register for interactive object checks
 
 func create_catwalk_ramp(pos: Vector3, dir: Vector3, index: int, suffix: String, size_factor: float) -> void:
 	"""Create an access ramp to a catwalk"""
@@ -864,10 +832,6 @@ func create_catwalk_ramp(pos: Vector3, dir: Vector3, index: int, suffix: String,
 	var ramp_pos: Vector3 = pos + dir * (ramp_length * 0.5) - Vector3(0, pos.y * 0.5, 0)
 
 	var ramp_size: Vector3 = Vector3(ramp_width, 0.8 * size_factor, ramp_length)
-
-	# Check spacing
-	if not check_spacing(ramp_pos, ramp_size * 1.2):
-		return
 
 	var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
@@ -883,7 +847,7 @@ func create_catwalk_ramp(pos: Vector3, dir: Vector3, index: int, suffix: String,
 	add_child(ramp_instance)
 	add_collision_to_mesh(ramp_instance, ramp_size)
 	platforms.append(ramp_instance)
-	register_geometry(ramp_pos, ramp_size)
+	register_geometry(ramp_pos, ramp_size)  # Register for interactive object checks
 
 # ============================================================================
 # JUMP PADS
@@ -916,17 +880,23 @@ func generate_jump_pads() -> void:
 
 func create_jump_pad(pos: Vector3, index: int) -> void:
 	"""Create a jump pad (visual platform + Area3D for boost)"""
+	var size_factor: float = arena_size / 140.0
+	var pad_radius: float = 2.5 * size_factor
+
+	# Check that jump pad won't clip through geometry
+	if not check_interactive_object_spacing(Vector3(pos.x, 0.25, pos.z), pad_radius):
+		return  # Skip this jump pad if it would clip
 
 	# Visual platform
 	var pad_mesh: CylinderMesh = CylinderMesh.new()
-	pad_mesh.top_radius = 2.5
-	pad_mesh.bottom_radius = 2.5
-	pad_mesh.height = 0.5
+	pad_mesh.top_radius = pad_radius
+	pad_mesh.bottom_radius = pad_radius
+	pad_mesh.height = 0.5 * size_factor
 
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
 	pad_instance.mesh = pad_mesh
 	pad_instance.name = "JumpPad" + str(index)
-	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
+	pad_instance.position = Vector3(pos.x, 0.25 * size_factor, pos.z)
 	add_child(pad_instance)
 
 	# Material for jump pad (bright green - unshaded for GL Compatibility)
@@ -941,8 +911,8 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = 2.5
-	collision_shape.height = 0.5
+	collision_shape.radius = pad_radius
+	collision_shape.height = 0.5 * size_factor
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	pad_instance.add_child(static_body)
@@ -962,7 +932,7 @@ func create_jump_pad(pos: Vector3, index: int) -> void:
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = 2.5
+	area_shape.radius = pad_radius
 	area_shape.height = 3.0  # Taller to catch jumping players
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
@@ -1006,17 +976,23 @@ func create_teleporter_pair(from_pos: Vector3, to_pos: Vector3, pair_index: int)
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	"""Create a single teleporter"""
+	var size_factor: float = arena_size / 140.0
+	var teleporter_radius: float = 3.0 * size_factor
+
+	# Check that teleporter won't clip through geometry
+	if not check_interactive_object_spacing(Vector3(pos.x, 0.15, pos.z), teleporter_radius):
+		return  # Skip this teleporter if it would clip
 
 	# Visual platform
 	var teleporter_mesh: CylinderMesh = CylinderMesh.new()
-	teleporter_mesh.top_radius = 3.0
-	teleporter_mesh.bottom_radius = 3.0
-	teleporter_mesh.height = 0.3
+	teleporter_mesh.top_radius = teleporter_radius
+	teleporter_mesh.bottom_radius = teleporter_radius
+	teleporter_mesh.height = 0.3 * size_factor
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
 	teleporter_instance.mesh = teleporter_mesh
 	teleporter_instance.name = "Teleporter" + str(index)
-	teleporter_instance.position = Vector3(pos.x, 0.15, pos.z)
+	teleporter_instance.position = Vector3(pos.x, 0.15 * size_factor, pos.z)
 	add_child(teleporter_instance)
 
 	# Material for teleporter (blue/purple - unshaded for GL Compatibility)
@@ -1031,8 +1007,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = 3.0
-	collision_shape.height = 0.3
+	collision_shape.radius = teleporter_radius
+	collision_shape.height = 0.3 * size_factor
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	teleporter_instance.add_child(static_body)
@@ -1053,8 +1029,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int) -> void:
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = 3.0
-	area_shape.height = 5.0  # Tall enough to catch players reliably
+	area_shape.radius = teleporter_radius
+	area_shape.height = 5.0 * size_factor  # Tall enough to catch players reliably
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
