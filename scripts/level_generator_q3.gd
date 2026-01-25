@@ -169,8 +169,11 @@ func generate_procedural_structures(budget: int) -> void:
 	"""Generate random structures until budget is spent"""
 	var scale: float = arena_size / 140.0
 	var attempts: int = 0
-	var max_attempts: int = budget * 5
+	var max_attempts: int = budget * 10  # Increased attempts
 	var structures_placed: int = 0
+
+	print("[Q3 DEBUG] Starting structure generation:")
+	print("  Budget: %d, Scale: %.2f, Complexity: %d" % [budget, scale, complexity])
 
 	# Determine available structure types based on complexity
 	var available_types: Array = [StructureType.PILLAR, StructureType.TIERED_PLATFORM]
@@ -181,21 +184,26 @@ func generate_procedural_structures(budget: int) -> void:
 	if complexity >= 4:
 		available_types.append_array([StructureType.SPLIT_LEVEL, StructureType.SNIPER_NEST])
 
+	print("  Available structure types: %d" % available_types.size())
+
+	var floor_extent: float = (arena_size * 0.6) / 2.0 - CELL_SIZE
+	print("  Floor extent for placement: %.1f (cells from %.1f to %.1f)" % [floor_extent, -floor_extent, floor_extent])
+
 	while structures_placed < budget and attempts < max_attempts:
 		attempts += 1
 
 		var pos: Vector3 = get_random_position_in_arena()
 		var struct_type: int = available_types[rng.randi() % available_types.size()]
-
-		# Different structures need different space
 		var cell_radius: int = get_structure_cell_radius(struct_type)
 
 		if is_cell_available(pos, cell_radius):
+			print("  [%d] Placing structure type %d at (%.1f, %.1f)" % [structures_placed, struct_type, pos.x, pos.z])
 			generate_structure(struct_type, pos, scale, structures_placed)
 			mark_cell_occupied(pos, cell_radius)
 			structures_placed += 1
 
-	print("Placed %d structures in %d attempts" % [structures_placed, attempts])
+	print("[Q3 DEBUG] Placed %d/%d structures in %d attempts" % [structures_placed, budget, attempts])
+	print("  Occupied cells: %d" % occupied_cells.size())
 
 func get_structure_cell_radius(type: int) -> int:
 	match type:
@@ -246,6 +254,8 @@ func generate_pillar(pos: Vector3, scale: float, index: int) -> void:
 	"""Generate a tall pillar/column"""
 	var width: float = rng.randf_range(2.0, 4.0) * scale
 	var height: float = rng.randf_range(6.0, 14.0) * scale
+
+	print("    -> Creating pillar: width=%.1f, height=%.1f at (%.1f, %.1f, %.1f)" % [width, height, pos.x, height/2.0, pos.z])
 
 	add_platform_with_collision(
 		Vector3(pos.x, height / 2.0, pos.z),
