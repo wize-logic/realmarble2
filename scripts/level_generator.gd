@@ -215,15 +215,16 @@ func generate_main_floor() -> void:
 
 func generate_platforms() -> void:
 	"""Generate elevated platforms around the arena with proper spacing"""
+	var size_factor: float = arena_size / 120.0
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 	var generated_count: int = 0
 	var max_attempts: int = platform_count * 15
 
-	# Platform parameters scale with complexity
-	var min_height: float = 3.0
-	var max_height: float = platform_height_max
-	var base_platform_size: float = 6.0 + (4 - complexity) * 1.0  # Simpler = bigger platforms
-	var size_range: float = 4.0 * platform_size_variation
+	# Platform parameters scale with arena size and complexity
+	var min_height: float = 3.0 * size_factor
+	var max_height: float = platform_height_max  # Already scaled in configure_from_complexity
+	var base_platform_size: float = (6.0 + (4 - complexity) * 1.0) * size_factor  # Scales with arena
+	var size_range: float = 4.0 * platform_size_variation * size_factor
 
 	for attempt in range(max_attempts):
 		if generated_count >= platform_count:
@@ -231,16 +232,16 @@ func generate_platforms() -> void:
 
 		# Generate random position - keep within floor bounds with margin
 		var angle: float = randf() * TAU
-		var distance: float = randf_range(5.0, floor_radius - 10.0)
+		var distance: float = randf_range(5.0 * size_factor, floor_radius - 10.0 * size_factor)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
 		var y: float = randf_range(min_height, max_height)
 
-		# Random platform size (scales with complexity)
+		# Random platform size (scales with arena and complexity)
 		var width: float = randf_range(base_platform_size, base_platform_size + size_range)
 		var depth: float = randf_range(base_platform_size, base_platform_size + size_range)
-		var height: float = randf_range(1.0, 1.5 + complexity * 0.2)
+		var height: float = randf_range(1.0, 1.5 + complexity * 0.2) * size_factor
 
 		var platform_size: Vector3 = Vector3(width, height, depth)
 		var platform_pos: Vector3 = Vector3(x, y, z)
@@ -279,14 +280,15 @@ func generate_platforms() -> void:
 
 func generate_ramps() -> void:
 	"""Generate ramps/slopes on the stage with proper spacing"""
+	var size_factor: float = arena_size / 120.0
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 	var generated_count: int = 0
 	var max_attempts: int = ramp_count * 15
 
-	# Ramp parameters scale with complexity
-	var ramp_height_max: float = 5.0 + complexity * 2.0
-	var ramp_width_base: float = 8.0 - complexity * 0.5  # Smaller at higher complexity
-	var ramp_length_base: float = 12.0 - complexity * 1.0
+	# Ramp parameters scale with arena size and complexity
+	var ramp_height_max: float = (5.0 + complexity * 2.0) * size_factor
+	var ramp_width_base: float = (8.0 - complexity * 0.5) * size_factor  # Scales with arena
+	var ramp_length_base: float = (12.0 - complexity * 1.0) * size_factor
 	var ramp_angle_max: float = 25 + complexity * 5  # Steeper at higher complexity
 
 	for attempt in range(max_attempts):
@@ -295,18 +297,18 @@ func generate_ramps() -> void:
 
 		# Generate position ON the stage - within floor bounds
 		var angle: float = randf() * TAU
-		var distance: float = randf_range(8.0, floor_radius - 12.0)
+		var distance: float = randf_range(8.0 * size_factor, floor_radius - 12.0 * size_factor)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
-		var y: float = randf_range(0.5, ramp_height_max)
+		var y: float = randf_range(0.5 * size_factor, ramp_height_max)
 
-		# Size and angle vary with complexity
-		var ramp_width: float = ramp_width_base + randf_range(-1.0, 2.0) * platform_size_variation
-		var ramp_length: float = ramp_length_base + randf_range(-2.0, 4.0) * platform_size_variation
+		# Size and angle vary with arena size and complexity
+		var ramp_width: float = ramp_width_base + randf_range(-1.0, 2.0) * platform_size_variation * size_factor
+		var ramp_length: float = ramp_length_base + randf_range(-2.0, 4.0) * platform_size_variation * size_factor
 		var ramp_tilt: float = -randf_range(15, ramp_angle_max)
 
-		var ramp_size: Vector3 = Vector3(ramp_width, 0.5, ramp_length)
+		var ramp_size: Vector3 = Vector3(ramp_width, 0.5 * size_factor, ramp_length)
 		var ramp_pos: Vector3 = Vector3(x, y, z)
 		var ramp_rotation: Vector3 = Vector3(ramp_tilt, randf() * 360.0, 0)
 
@@ -348,6 +350,7 @@ func generate_obstacles() -> void:
 	if obstacle_count <= 0:
 		return
 
+	var size_factor: float = arena_size / 120.0
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 	var generated_count: int = 0
 	var max_attempts: int = obstacle_count * 20
@@ -357,12 +360,12 @@ func generate_obstacles() -> void:
 			break
 
 		var angle: float = randf() * TAU
-		var distance: float = randf_range(10.0, floor_radius - 8.0)
+		var distance: float = randf_range(10.0 * size_factor, floor_radius - 8.0 * size_factor)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
 
-		# Different obstacle types based on complexity
+		# Different obstacle types based on complexity - all sizes scale with arena
 		var obstacle_type: int = randi() % (1 + complexity)  # More variety at higher complexity
 		var obstacle_size: Vector3
 		var obstacle_pos: Vector3
@@ -370,27 +373,27 @@ func generate_obstacles() -> void:
 		match obstacle_type:
 			0:  # Low block/cover
 				obstacle_size = Vector3(
-					randf_range(2.0, 4.0),
-					randf_range(1.5, 3.0),
-					randf_range(2.0, 4.0)
+					randf_range(2.0, 4.0) * size_factor,
+					randf_range(1.5, 3.0) * size_factor,
+					randf_range(2.0, 4.0) * size_factor
 				)
 				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
 			1:  # Tall pillar
-				var pillar_width: float = randf_range(1.5, 3.0)
-				obstacle_size = Vector3(pillar_width, randf_range(6.0, 12.0), pillar_width)
+				var pillar_width: float = randf_range(1.5, 3.0) * size_factor
+				obstacle_size = Vector3(pillar_width, randf_range(6.0, 12.0) * size_factor, pillar_width)
 				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
 			2:  # Wide barrier
 				obstacle_size = Vector3(
-					randf_range(6.0, 10.0),
-					randf_range(2.0, 4.0),
-					randf_range(1.0, 2.0)
+					randf_range(6.0, 10.0) * size_factor,
+					randf_range(2.0, 4.0) * size_factor,
+					randf_range(1.0, 2.0) * size_factor
 				)
 				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
 			_:  # Stepped platform (higher complexity only)
 				obstacle_size = Vector3(
-					randf_range(4.0, 6.0),
-					randf_range(2.0, 5.0),
-					randf_range(4.0, 6.0)
+					randf_range(4.0, 6.0) * size_factor,
+					randf_range(2.0, 5.0) * size_factor,
+					randf_range(4.0, 6.0) * size_factor
 				)
 				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
 
