@@ -2515,10 +2515,10 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	# Size 3: Large - expanded arena with more platforms
 	# Size 4: Huge - massive arena for extended gameplay
 	var size_multipliers: Dictionary = {
-		1: {"arena": 0.7, "platforms": 0.5, "ramps": 0.5},   # Small
-		2: {"arena": 1.0, "platforms": 1.0, "ramps": 1.0},   # Medium (default)
-		3: {"arena": 1.4, "platforms": 1.5, "ramps": 1.5},   # Large
-		4: {"arena": 1.8, "platforms": 2.0, "ramps": 2.0}    # Huge
+		1: {"arena": 0.7, "platforms": 0.5, "ramps": 0.5, "complexity": 2},   # Small
+		2: {"arena": 1.0, "platforms": 1.0, "ramps": 1.0, "complexity": 3},   # Medium (default)
+		3: {"arena": 1.4, "platforms": 1.5, "ramps": 1.5, "complexity": 4},   # Large
+		4: {"arena": 1.8, "platforms": 2.0, "ramps": 2.0, "complexity": 5}    # Huge
 	}
 	var multiplier: Dictionary = size_multipliers.get(level_size, size_multipliers[2])
 
@@ -2540,11 +2540,12 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	level_generator.name = "LevelGenerator"
 
 	if level_type == "B":
-		# Use Quake 3 Arena-style generator
+		# Use Quake 3 Arena-style generator (v2.0 with BSP rooms)
 		level_generator.set_script(LevelGeneratorQ3)
-		# Configure size based on level_size parameter
+		# Configure size and complexity based on level_size parameter
 		level_generator.arena_size = 140.0 * multiplier.arena
-		print("Using Quake 3 Arena-style level generator (arena_size: %.1f)" % level_generator.arena_size)
+		level_generator.complexity = multiplier.complexity
+		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 	else:
 		# Use original generator (Type A)
 		level_generator.set_script(LevelGenerator)
