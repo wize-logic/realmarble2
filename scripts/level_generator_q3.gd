@@ -1,8 +1,14 @@
 extends Node3D
 
-## Quake 3 Arena-Style Level Generator (Type B) - v2.0
+## Quake 3 Arena-Style Level Generator (Type B) - v2.1
 ## Uses BSP for room generation, tunneling for corridors, multi-tier platforms
 ## Fully procedural with size and complexity parameters
+##
+## v2.1 Fixes:
+## - Fixed ramps to allow upward travel (angles were all negative/downward)
+## - Added connectivity infrastructure: stairs, walkways, bridges between rooms/tiers
+## - Fixed teleporter placement to use valid floor surfaces (no wall clipping)
+## - Improved jump pad targeting to connect lower areas to higher platforms
 
 # ============================================================================
 # EXPORTED PARAMETERS
@@ -51,7 +57,7 @@ func generate_level() -> void:
 	rng.seed = level_seed
 
 	print("======================================")
-	print("Generating Q3 Arena Level (v2.0)")
+	print("Generating Q3 Arena Level (v2.1 - Connectivity Fix)")
 	print("  Seed: %d" % level_seed)
 	print("  Arena Size: %.1f" % arena_size)
 	print("  Complexity: %d" % complexity)
@@ -80,6 +86,9 @@ func generate_level() -> void:
 
 	# === PHASE 4: Ramps and Slopes ===
 	generate_ramps_and_slopes()
+
+	# === PHASE 4.5: Connectivity Infrastructure (Stairs, Walkways, Bridges) ===
+	generate_connectivity_infrastructure()
 
 	# === PHASE 5: Jump Pads ===
 	generate_dynamic_jump_pads()
@@ -608,6 +617,184 @@ func _create_corridor_segment(start: Vector3, end: Vector3, width: float, height
 	})
 
 # ============================================================================
+# CONNECTIVITY INFRASTRUCTURE (STAIRS, WALKWAYS, BRIDGES)
+# ============================================================================
+
+func generate_connectivity_infrastructure() -> void:
+	"""Generate stairs, walkways, and bridges to ensure all areas are reachable"""
+	print("Generating connectivity infrastructure...")
+
+	# Phase 1: Connect rooms with height differences via stairs
+	_generate_room_to_room_stairs()
+
+	# Phase 2: Generate tier-connecting stairways from floor to platforms
+	_generate_tier_staircases()
+
+	# Phase 3: Generate walkways connecting nearby platforms
+	_generate_platform_walkways()
+
+	print("Connectivity infrastructure complete")
+
+func _generate_room_to_room_stairs() -> void:
+	"""Create stair connections between rooms at different heights"""
+	if rooms.size() < 2:
+		return
+
+	for i in range(rooms.size()):
+		for j in range(i + 1, rooms.size()):
+			var room_a: Dictionary = rooms[i]
+			var room_b: Dictionary = rooms[j]
+
+			var height_diff: float = abs(room_a.height_offset - room_b.height_offset)
+			var horizontal_dist: float = room_a.center.distance_to(room_b.center)
+
+			# If rooms are connected by corridor but have height difference, add stairs
+			if height_diff > 1.0 and horizontal_dist < arena_size * 0.4:
+				var lower_room: Dictionary = room_a if room_a.height_offset < room_b.height_offset else room_b
+				var higher_room: Dictionary = room_a if room_a.height_offset >= room_b.height_offset else room_b
+
+				# Find the midpoint (where corridor connects)
+				var mid_point: Vector3 = (lower_room.center + higher_room.center) / 2.0
+				var direction: Vector3 = (higher_room.center - lower_room.center).normalized()
+
+				_create_staircase(mid_point, lower_room.height_offset, higher_room.height_offset, direction)
+
+func _generate_tier_staircases() -> void:
+	"""Generate staircases from ground level up to each tier"""
+	var tiers: Array[float] = [4.0, 8.0, 14.0, 20.0]
+	var max_tier: int = mini(complexity + 1, 4)
+	var floor_extent: float = arena_size * 0.35
+
+	# Place 4 main staircases around the arena (cardinal directions)
+	for i in range(4):
+		var angle: float = (float(i) / 4.0) * TAU + PI / 4.0  # Start at 45 degrees
+		var distance: float = floor_extent * 0.6
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+
+		# Create ascending staircase from ground to tier 1
+		var direction: Vector3 = Vector3(cos(angle), 0, sin(angle))
+		_create_staircase(Vector3(x, 0, z), 0.0, tiers[0], direction)
+
+	# Add tier-to-tier connectors if we have multiple tiers
+	if max_tier >= 2:
+		for i in range(2):
+			var angle: float = (float(i) / 2.0) * TAU + PI / 2.0
+			var distance: float = floor_extent * 0.5
+
+			var x: float = cos(angle) * distance
+			var z: float = sin(angle) * distance
+
+			var direction: Vector3 = Vector3(cos(angle), 0, sin(angle))
+			_create_staircase(Vector3(x, tiers[0], z), tiers[0], tiers[1], direction)
+
+func _create_staircase(pos: Vector3, start_height: float, end_height: float, direction: Vector3) -> void:
+	"""Create a staircase connecting two height levels"""
+	var height_diff: float = end_height - start_height
+	if height_diff < 0.5:
+		return
+
+	# Calculate stair parameters
+	var step_height: float = 0.8  # Height per step (marble-friendly)
+	var step_depth: float = 2.0   # Depth per step
+	var step_width: float = 5.0   # Width of staircase
+	var num_steps: int = int(ceil(height_diff / step_height))
+
+	# Ensure direction is normalized and horizontal
+	direction = Vector3(direction.x, 0, direction.z).normalized()
+	if direction.length() < 0.1:
+		direction = Vector3.FORWARD
+
+	for step_i in range(num_steps):
+		var step_y: float = start_height + (step_i * step_height)
+		var step_offset: float = step_i * step_depth
+
+		var step_pos: Vector3 = pos + direction * step_offset
+		step_pos.y = step_y + step_height * 0.5
+
+		var step_mesh: BoxMesh = BoxMesh.new()
+		step_mesh.size = Vector3(step_width, step_height, step_depth)
+
+		var step_instance: MeshInstance3D = MeshInstance3D.new()
+		step_instance.mesh = step_mesh
+		step_instance.name = "Stair_%d" % platforms.size()
+		step_instance.position = step_pos
+
+		# Rotate to face direction
+		var rot_y: float = atan2(direction.x, direction.z)
+		step_instance.rotation.y = rot_y
+
+		add_child(step_instance)
+
+		var static_body: StaticBody3D = StaticBody3D.new()
+		var collision: CollisionShape3D = CollisionShape3D.new()
+		var shape: BoxShape3D = BoxShape3D.new()
+		shape.size = step_mesh.size
+		collision.shape = shape
+		static_body.add_child(collision)
+		step_instance.add_child(static_body)
+
+		platforms.append(step_instance)
+
+func _generate_platform_walkways() -> void:
+	"""Generate walkways connecting nearby platforms at similar heights"""
+	var platform_positions: Array[Dictionary] = []
+
+	# Collect platform positions
+	for platform in platforms:
+		if platform.name.begins_with("Platform_") or platform.name.begins_with("CircPlatform_"):
+			var pos: Vector3 = platform.position
+			platform_positions.append({"pos": pos, "node": platform})
+
+	# Connect platforms that are close and at similar heights
+	for i in range(platform_positions.size()):
+		for j in range(i + 1, platform_positions.size()):
+			var pos_a: Vector3 = platform_positions[i].pos
+			var pos_b: Vector3 = platform_positions[j].pos
+
+			var horizontal_dist: float = Vector2(pos_a.x, pos_a.z).distance_to(Vector2(pos_b.x, pos_b.z))
+			var height_diff: float = abs(pos_a.y - pos_b.y)
+
+			# Connect if close horizontally (8-25 units) and similar height (< 3 units)
+			if horizontal_dist >= 8.0 and horizontal_dist <= 25.0 and height_diff < 3.0:
+				if rng.randf() < 0.4:  # 40% chance to create walkway
+					_create_walkway(pos_a, pos_b)
+
+func _create_walkway(start: Vector3, end: Vector3) -> void:
+	"""Create a walkway/bridge between two points"""
+	var mid_point: Vector3 = (start + end) / 2.0
+	mid_point.y = (start.y + end.y) / 2.0  # Average height
+
+	var direction: Vector3 = end - start
+	var length: float = direction.length()
+	direction = direction.normalized()
+
+	var walkway_mesh: BoxMesh = BoxMesh.new()
+	walkway_mesh.size = Vector3(3.0, 0.5, length)
+
+	var walkway_instance: MeshInstance3D = MeshInstance3D.new()
+	walkway_instance.mesh = walkway_mesh
+	walkway_instance.name = "Walkway_%d" % platforms.size()
+	walkway_instance.position = mid_point
+
+	# Rotate to align with direction
+	var rot_y: float = atan2(direction.x, direction.z)
+	walkway_instance.rotation.y = rot_y
+
+	add_child(walkway_instance)
+
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = walkway_mesh.size
+	collision.shape = shape
+	static_body.add_child(collision)
+	walkway_instance.add_child(static_body)
+
+	platforms.append(walkway_instance)
+
+# ============================================================================
 # MULTI-TIER PLATFORMS
 # ============================================================================
 
@@ -708,33 +895,84 @@ func _create_circular_platform(pos: Vector3, radius: float, tier: int) -> void:
 # ============================================================================
 
 func generate_ramps_and_slopes() -> void:
-	"""Generate ramps connecting different height levels"""
+	"""Generate ramps connecting different height levels - ensuring upward traversal"""
 	var ramp_count: int = 4 + complexity * 2
 	var floor_extent: float = arena_size * 0.35
+	var ramps_generated: int = 0
 
-	for _i in range(ramp_count):
+	# Phase 1: Generate strategic ramps connecting floor to tier 1 platforms
+	var tier1_height: float = 4.0
+	var strategic_ramps: int = mini(4, ramp_count / 2)
+
+	for i in range(strategic_ramps):
+		var angle: float = (float(i) / strategic_ramps) * TAU + rng.randf_range(-0.3, 0.3)
+		var distance: float = rng.randf_range(floor_extent * 0.3, floor_extent * 0.7)
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+
+		var ramp_length: float = rng.randf_range(12.0, 18.0)
+		var ramp_width: float = rng.randf_range(5.0, 8.0)
+		# FIXED: Positive angle slopes UPWARD in the direction the ramp faces
+		var ramp_angle: float = rng.randf_range(0.25, 0.40)  # ~15-23 degrees upward slope
+		# Point ramp toward center for accessibility
+		var rotation_y: float = atan2(-x, -z) + rng.randf_range(-0.3, 0.3)
+
+		# Start at ground level, ramp goes up
+		_create_ramp(Vector3(x, 0, z), ramp_length, ramp_width, ramp_angle, rotation_y)
+		ramps_generated += 1
+
+	# Phase 2: Generate ramps connecting tier 1 to tier 2
+	var tier2_ramps: int = mini(3, (ramp_count - strategic_ramps) / 2)
+	for i in range(tier2_ramps):
+		var angle: float = rng.randf() * TAU
+		var distance: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.8)
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+
+		var ramp_length: float = rng.randf_range(10.0, 14.0)
+		var ramp_width: float = rng.randf_range(4.0, 6.0)
+		var ramp_angle: float = rng.randf_range(0.30, 0.45)  # Steeper for higher tiers
+		var rotation_y: float = rng.randf() * TAU
+
+		# Start at tier 1 height
+		_create_ramp(Vector3(x, tier1_height, z), ramp_length, ramp_width, ramp_angle, rotation_y)
+		ramps_generated += 1
+
+	# Phase 3: Fill remaining with varied placement
+	var remaining_ramps: int = ramp_count - ramps_generated
+	for _i in range(remaining_ramps):
 		var x: float = rng.randf_range(-floor_extent, floor_extent)
 		var z: float = rng.randf_range(-floor_extent, floor_extent)
-		var base_y: float = rng.randf_range(0.0, 6.0)
+		var base_y: float = rng.randf_range(0.0, 8.0)
 
 		var ramp_length: float = rng.randf_range(10.0, 18.0)
 		var ramp_width: float = rng.randf_range(5.0, 8.0)
-		var ramp_angle: float = rng.randf_range(-0.35, -0.5)  # Slope angle in radians
+		# FIXED: Use positive angles for upward slopes
+		var ramp_angle: float = rng.randf_range(0.20, 0.45)  # 11-26 degrees upward
 		var rotation_y: float = rng.randf() * TAU
 
 		_create_ramp(Vector3(x, base_y, z), ramp_length, ramp_width, ramp_angle, rotation_y)
+		ramps_generated += 1
 
-	print("Generated %d ramps" % ramp_count)
+	print("Generated %d ramps (strategic placement for upward travel)" % ramps_generated)
 
 func _create_ramp(pos: Vector3, length: float, width: float, slope_angle: float, rotation_y: float) -> void:
-	"""Create a ramp/slope for marble rolling"""
+	"""Create a ramp/slope for marble rolling - properly positioned for upward travel"""
 	var ramp_mesh: BoxMesh = BoxMesh.new()
 	ramp_mesh.size = Vector3(width, 0.5, length)
 
 	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 	ramp_instance.mesh = ramp_mesh
 	ramp_instance.name = "Ramp_%d" % platforms.size()
-	ramp_instance.position = pos + Vector3(0, length * 0.25 * abs(sin(slope_angle)), 0)
+
+	# Calculate proper ramp positioning:
+	# - The ramp's low end should start at pos.y
+	# - The ramp tilts around its center, so we need to offset Y to keep low end grounded
+	var height_rise: float = length * 0.5 * sin(slope_angle)
+	# Offset position so the bottom edge of the ramp touches the ground at pos.y
+	ramp_instance.position = pos + Vector3(0, height_rise + 0.25, 0)
 	ramp_instance.rotation = Vector3(slope_angle, rotation_y, 0)
 	add_child(ramp_instance)
 
@@ -753,28 +991,79 @@ func _create_ramp(pos: Vector3, length: float, width: float, slope_angle: float,
 # ============================================================================
 
 func generate_dynamic_jump_pads() -> void:
-	"""Generate jump pads at strategic locations"""
+	"""Generate jump pads at strategic locations - positioned to reach higher platforms"""
 	var jump_pad_count: int = rng.randi_range(jump_pad_count_range.x, jump_pad_count_range.y)
 	var floor_extent: float = arena_size * 0.4
+	var tiers: Array[float] = [4.0, 8.0, 14.0, 20.0]
+	var pads_placed: int = 0
 
-	# Always place one in center
-	_create_jump_pad(Vector3(0, 0, 0), 0)
+	# Always place one in center (for reaching tier 1)
+	_create_jump_pad(Vector3(0, 0, 0), pads_placed, tiers[0])
+	pads_placed += 1
 
-	# Place rest randomly on lower areas
-	for i in range(1, jump_pad_count):
-		var x: float = rng.randf_range(-floor_extent, floor_extent)
-		var z: float = rng.randf_range(-floor_extent, floor_extent)
+	# Phase 1: Place jump pads beneath high-tier platforms for vertical access
+	var high_platforms: Array[Dictionary] = []
+	for platform in platforms:
+		if platform.name.begins_with("Platform_T") or platform.name.begins_with("CircPlatform_T"):
+			var pos: Vector3 = platform.position
+			if pos.y >= 8.0:  # Tier 2 and above
+				high_platforms.append({"pos": pos, "node": platform})
 
-		# Avoid placing too close to center
-		if Vector2(x, z).length() < 10.0:
-			continue
+	# Sort by height (highest first)
+	high_platforms.sort_custom(func(a, b): return a.pos.y > b.pos.y)
 
-		_create_jump_pad(Vector3(x, 0, z), i)
+	# Place jump pads beneath the highest platforms
+	var strategic_pads: int = mini(high_platforms.size(), jump_pad_count / 2)
+	for i in range(strategic_pads):
+		if pads_placed >= jump_pad_count:
+			break
 
-	print("Generated %d jump pads" % jump_pad_count)
+		var platform_pos: Vector3 = high_platforms[i].pos
+		# Place jump pad on ground level, slightly offset from directly below
+		var offset_angle: float = rng.randf() * TAU
+		var offset_dist: float = rng.randf_range(2.0, 5.0)
+		var pad_x: float = platform_pos.x + cos(offset_angle) * offset_dist
+		var pad_z: float = platform_pos.z + sin(offset_angle) * offset_dist
 
-func _create_jump_pad(pos: Vector3, index: int) -> void:
-	"""Create a jump pad with visual and Area3D"""
+		# Clamp to arena bounds
+		pad_x = clampf(pad_x, -floor_extent, floor_extent)
+		pad_z = clampf(pad_z, -floor_extent, floor_extent)
+
+		_create_jump_pad(Vector3(pad_x, 0, pad_z), pads_placed, platform_pos.y)
+		pads_placed += 1
+
+	# Phase 2: Place pads at room exits for quick traversal
+	for room_data in rooms:
+		if pads_placed >= jump_pad_count:
+			break
+
+		var center: Vector3 = room_data.center
+		var rect: Rect2 = room_data.rect
+
+		# Place at room edge (doorway area)
+		if rect.size.x > 10.0 and rng.randf() < 0.5:
+			var edge_x: float = center.x + (rect.size.x / 2.0 - 3.0) * (1.0 if rng.randf() < 0.5 else -1.0)
+			_create_jump_pad(Vector3(edge_x, room_data.height_offset, center.z), pads_placed, tiers[1])
+			pads_placed += 1
+
+	# Phase 3: Fill remaining with distributed placement
+	var remaining: int = jump_pad_count - pads_placed
+	for i in range(remaining):
+		var angle: float = (float(i) / remaining) * TAU + rng.randf_range(-0.3, 0.3)
+		var distance: float = rng.randf_range(floor_extent * 0.3, floor_extent * 0.8)
+
+		var x: float = cos(angle) * distance
+		var z: float = sin(angle) * distance
+
+		# Determine target height based on location
+		var target_tier: int = rng.randi_range(0, mini(complexity, 3))
+		_create_jump_pad(Vector3(x, 0, z), pads_placed, tiers[target_tier])
+		pads_placed += 1
+
+	print("Generated %d jump pads (strategically positioned for vertical access)" % pads_placed)
+
+func _create_jump_pad(pos: Vector3, index: int, target_height: float = 10.0) -> void:
+	"""Create a jump pad with visual and Area3D - calibrated to reach target height"""
 	var pad_mesh: CylinderMesh = CylinderMesh.new()
 	pad_mesh.top_radius = 2.5
 	pad_mesh.bottom_radius = 2.5
@@ -783,12 +1072,13 @@ func _create_jump_pad(pos: Vector3, index: int) -> void:
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
 	pad_instance.mesh = pad_mesh
 	pad_instance.name = "JumpPad%d" % index
-	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
+	pad_instance.position = Vector3(pos.x, pos.y + 0.25, pos.z)
 	add_child(pad_instance)
 
-	# Bright green material (unshaded for GL Compatibility)
+	# Color intensity based on target height (brighter = higher boost)
+	var intensity: float = clampf(target_height / 20.0, 0.3, 1.0)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 1.0, 0.4)
+	material.albedo_color = Color(0.2, 0.8 + intensity * 0.2, 0.3 + intensity * 0.2)
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.disable_receive_shadows = true
 	pad_instance.material_override = material
@@ -808,6 +1098,17 @@ func _create_jump_pad(pos: Vector3, index: int) -> void:
 	jump_area.name = "JumpPadArea"
 	jump_area.position = Vector3.ZERO
 	jump_area.add_to_group("jump_pad")
+
+	# Store boost force calibrated to reach target height
+	# Physics: v = sqrt(2 * g * h) where g = gravity, h = height
+	# With marble gravity_scale ~2.5 and base gravity ~9.8, effective gravity ~24.5
+	# Adding margin for air time and horizontal movement
+	var height_to_reach: float = maxf(target_height - pos.y + 3.0, 5.0)
+	var boost_force: float = sqrt(2.0 * 24.5 * height_to_reach) * 1.3  # 30% margin
+	boost_force = clampf(boost_force, 200.0, 500.0)  # Reasonable range
+	jump_area.set_meta("boost_force", boost_force)
+	jump_area.set_meta("target_height", target_height)
+
 	pad_instance.add_child(jump_area)
 
 	jump_area.collision_layer = 8
@@ -827,24 +1128,144 @@ func _create_jump_pad(pos: Vector3, index: int) -> void:
 # ============================================================================
 
 func generate_dynamic_teleporters() -> void:
-	"""Generate teleporter pairs connecting distant areas"""
+	"""Generate teleporter pairs connecting distant areas - placed on valid floor surfaces"""
 	var pair_count: int = rng.randi_range(teleporter_pair_range.x, teleporter_pair_range.y)
-	var floor_extent: float = arena_size * 0.4
 
+	# Collect valid teleporter locations (room centers and corridor midpoints)
+	var valid_locations: Array[Dictionary] = []
+
+	# Add room centers as valid locations (offset from exact center to avoid walls)
+	for room_data in rooms:
+		var center: Vector3 = room_data.center
+		var rect: Rect2 = room_data.rect
+		# Place teleporter in center of room floor with safe margin from walls
+		var safe_margin: float = 5.0
+		if rect.size.x > safe_margin * 2 and rect.size.y > safe_margin * 2:
+			valid_locations.append({
+				"pos": Vector3(center.x, room_data.height_offset, center.z),
+				"type": "room"
+			})
+
+	# Add corridor midpoints as valid locations
+	for corridor_data in corridors:
+		var from_pos: Vector3 = corridor_data.from
+		var to_pos: Vector3 = corridor_data.to
+		var corner: Vector3 = corridor_data.corner
+
+		# Corridor segment midpoints (safer placement)
+		var mid1: Vector3 = (from_pos + corner) / 2.0
+		var mid2: Vector3 = (corner + to_pos) / 2.0
+
+		if mid1.distance_to(Vector3.ZERO) > 10.0:  # Avoid center area
+			valid_locations.append({"pos": Vector3(mid1.x, 0, mid1.z), "type": "corridor"})
+		if mid2.distance_to(Vector3.ZERO) > 10.0:
+			valid_locations.append({"pos": Vector3(mid2.x, 0, mid2.z), "type": "corridor"})
+
+	# If we don't have enough valid locations, add some fallback positions
+	if valid_locations.size() < pair_count * 2:
+		var floor_extent: float = arena_size * 0.3
+		for i in range(pair_count * 2 - valid_locations.size()):
+			var angle: float = rng.randf() * TAU
+			var dist: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.8)
+			var x: float = cos(angle) * dist
+			var z: float = sin(angle) * dist
+			# Verify position is not inside any room wall
+			if _is_valid_teleporter_position(Vector3(x, 0, z)):
+				valid_locations.append({"pos": Vector3(x, 0, z), "type": "fallback"})
+
+	# Shuffle locations and create pairs from distant positions
+	valid_locations.shuffle()
+
+	var used_locations: Array[int] = []
 	for i in range(pair_count):
-		# Generate two distant positions
-		var angle1: float = rng.randf() * TAU
-		var angle2: float = angle1 + PI + rng.randf_range(-0.5, 0.5)  # Roughly opposite
+		if valid_locations.size() < 2:
+			break
 
-		var dist1: float = rng.randf_range(floor_extent * 0.5, floor_extent * 0.9)
-		var dist2: float = rng.randf_range(floor_extent * 0.5, floor_extent * 0.9)
+		# Find two distant locations
+		var best_pair: Array[int] = [-1, -1]
+		var best_distance: float = 0.0
 
-		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
-		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
+		for a in range(valid_locations.size()):
+			if a in used_locations:
+				continue
+			for b in range(a + 1, valid_locations.size()):
+				if b in used_locations:
+					continue
 
-		_create_teleporter_pair(pos1, pos2, i)
+				var pos_a: Vector3 = valid_locations[a].pos
+				var pos_b: Vector3 = valid_locations[b].pos
+				var dist: float = pos_a.distance_to(pos_b)
 
-	print("Generated %d teleporter pairs" % pair_count)
+				# Prefer distant teleporter pairs
+				if dist > best_distance and dist > arena_size * 0.3:
+					best_distance = dist
+					best_pair = [a, b]
+
+		if best_pair[0] >= 0 and best_pair[1] >= 0:
+			var pos1: Vector3 = valid_locations[best_pair[0]].pos
+			var pos2: Vector3 = valid_locations[best_pair[1]].pos
+			_create_teleporter_pair(pos1, pos2, i)
+			used_locations.append(best_pair[0])
+			used_locations.append(best_pair[1])
+
+	print("Generated %d teleporter pairs (placed on valid floor surfaces)" % pair_count)
+
+func _is_valid_teleporter_position(pos: Vector3) -> bool:
+	"""Check if a position is valid for teleporter placement (not inside walls)"""
+	var teleporter_radius: float = 4.0  # Teleporter needs this much clearance
+
+	for room_data in rooms:
+		var rect: Rect2 = room_data.rect
+		var center: Vector3 = room_data.center
+
+		# Check if position is inside the room bounds (valid)
+		if rect.has_point(Vector2(pos.x, pos.z)):
+			# Inside room - check if too close to walls
+			var margin: float = teleporter_radius
+			var inner_rect: Rect2 = Rect2(
+				rect.position.x + margin,
+				rect.position.y + margin,
+				rect.size.x - margin * 2,
+				rect.size.y - margin * 2
+			)
+			if inner_rect.size.x > 0 and inner_rect.size.y > 0:
+				if inner_rect.has_point(Vector2(pos.x, pos.z)):
+					return true  # Safe position inside room
+			return false  # Too close to wall
+
+	# Position is in open area (corridor or arena floor), check corridors
+	for corridor_data in corridors:
+		var from_pos: Vector3 = corridor_data.from
+		var to_pos: Vector3 = corridor_data.to
+		var corner: Vector3 = corridor_data.corner
+
+		# Simple proximity check to corridor paths
+		var dist_to_path1: float = _point_to_line_distance(pos, from_pos, corner)
+		var dist_to_path2: float = _point_to_line_distance(pos, corner, to_pos)
+
+		if dist_to_path1 < 4.0 or dist_to_path2 < 4.0:
+			return true  # Near a corridor
+
+	# Default: if position is in central arena area, it's likely valid
+	var arena_center_extent: float = arena_size * 0.25
+	if abs(pos.x) < arena_center_extent and abs(pos.z) < arena_center_extent:
+		return true
+
+	return false
+
+func _point_to_line_distance(point: Vector3, line_start: Vector3, line_end: Vector3) -> float:
+	"""Calculate distance from a point to a line segment (XZ plane)"""
+	var p: Vector2 = Vector2(point.x, point.z)
+	var a: Vector2 = Vector2(line_start.x, line_start.z)
+	var b: Vector2 = Vector2(line_end.x, line_end.z)
+
+	var ab: Vector2 = b - a
+	var ap: Vector2 = p - a
+
+	var t: float = clampf(ap.dot(ab) / ab.dot(ab), 0.0, 1.0)
+	var closest: Vector2 = a + ab * t
+
+	return p.distance_to(closest)
 
 func _create_teleporter_pair(from_pos: Vector3, to_pos: Vector3, pair_index: int) -> void:
 	"""Create a bidirectional teleporter pair"""

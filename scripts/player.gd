@@ -2160,14 +2160,14 @@ func _on_area_entered(area: Area3D) -> void:
 
 	# Check if this is a jump pad
 	if area.is_in_group("jump_pad"):
-		activate_jump_pad()
+		activate_jump_pad(area)
 
 	# Check if this is a teleporter
 	elif area.is_in_group("teleporter") and area.has_meta("destination"):
 		var destination: Vector3 = area.get_meta("destination")
 		activate_teleporter(destination)
 
-func activate_jump_pad() -> void:
+func activate_jump_pad(area: Area3D = null) -> void:
 	"""Apply jump pad boost to player"""
 	if jump_pad_cooldown > 0.0:
 		return  # Still on cooldown
@@ -2179,8 +2179,14 @@ func activate_jump_pad() -> void:
 	vel.y = 0  # Cancel any downward momentum
 	linear_velocity = vel
 
+	# Get custom boost force from jump pad if available, otherwise use default
+	var boost: float = jump_pad_boost_force
+	if area and area.has_meta("boost_force"):
+		boost = area.get_meta("boost_force")
+		print("Using custom boost force: %.1f (target height: %.1f)" % [boost, area.get_meta("target_height") if area.has_meta("target_height") else 0.0])
+
 	# Apply strong upward impulse
-	apply_central_impulse(Vector3.UP * jump_pad_boost_force)
+	apply_central_impulse(Vector3.UP * boost)
 
 	# Reset bounce state (jump pad interrupts bounce)
 	is_bouncing = false
