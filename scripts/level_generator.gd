@@ -27,10 +27,15 @@ func _ready() -> void:
 
 func configure_from_complexity() -> void:
 	"""Configure all generation parameters based on complexity and arena_size"""
-	# Base values at complexity 2 (Medium) with arena_size 120
+	# Size factor scales object counts with area (arena_size^2)
 	var size_factor: float = arena_size / 120.0
+	var area_factor: float = size_factor * size_factor
 
-	# Complexity affects density and variety
+	# IMPORTANT: min_spacing scales with arena size to maintain proportions
+	# and ensures objects NEVER touch
+	var base_min_spacing: float = 6.0
+
+	# Complexity affects density and variety (independent of size)
 	# Complexity 1: Simple - fewer elements, lower heights, less variety
 	# Complexity 2: Medium - balanced (default)
 	# Complexity 3: Complex - more elements, higher platforms, more variety
@@ -38,48 +43,53 @@ func configure_from_complexity() -> void:
 
 	match complexity:
 		1:  # Simple
-			platform_count = int(15 * size_factor * size_factor)  # Scales with area
-			ramp_count = int(10 * size_factor * size_factor)
-			grind_rail_count = 4
-			vertical_rail_count = 2
+			platform_count = int(12 * area_factor)
+			ramp_count = int(8 * area_factor)
+			grind_rail_count = int(4 * size_factor)
+			vertical_rail_count = int(2 * size_factor)
 			obstacle_count = 0
-			platform_height_max = 6.0
-			platform_size_variation = 0.5  # Less variation, more uniform
-			min_spacing = 8.0  # More spacing
+			platform_height_max = 6.0 * size_factor
+			platform_size_variation = 0.5
+			base_min_spacing = 10.0  # Very generous spacing
 		2:  # Medium (default)
-			platform_count = int(30 * size_factor * size_factor)
-			ramp_count = int(20 * size_factor * size_factor)
-			grind_rail_count = 8
-			vertical_rail_count = 4
-			obstacle_count = int(4 * size_factor)
-			platform_height_max = 10.0
+			platform_count = int(25 * area_factor)
+			ramp_count = int(16 * area_factor)
+			grind_rail_count = int(8 * size_factor)
+			vertical_rail_count = int(4 * size_factor)
+			obstacle_count = int(4 * area_factor)
+			platform_height_max = 10.0 * size_factor
 			platform_size_variation = 1.0
-			min_spacing = 5.0
+			base_min_spacing = 7.0
 		3:  # Complex
-			platform_count = int(50 * size_factor * size_factor)
-			ramp_count = int(35 * size_factor * size_factor)
-			grind_rail_count = 12
-			vertical_rail_count = 6
-			obstacle_count = int(10 * size_factor)
-			platform_height_max = 15.0
-			platform_size_variation = 1.5  # More size variation
-			min_spacing = 4.0  # Tighter spacing
+			platform_count = int(40 * area_factor)
+			ramp_count = int(28 * area_factor)
+			grind_rail_count = int(12 * size_factor)
+			vertical_rail_count = int(6 * size_factor)
+			obstacle_count = int(10 * area_factor)
+			platform_height_max = 15.0 * size_factor
+			platform_size_variation = 1.5
+			base_min_spacing = 6.0
 		4:  # Extreme
-			platform_count = int(80 * size_factor * size_factor)
-			ramp_count = int(50 * size_factor * size_factor)
-			grind_rail_count = 16
-			vertical_rail_count = 8
-			obstacle_count = int(20 * size_factor)
-			platform_height_max = 22.0  # Very tall structures
-			platform_size_variation = 2.0  # Maximum variety
-			min_spacing = 3.0  # Dense layout
+			platform_count = int(60 * area_factor)
+			ramp_count = int(40 * area_factor)
+			grind_rail_count = int(16 * size_factor)
+			vertical_rail_count = int(8 * size_factor)
+			obstacle_count = int(18 * area_factor)
+			platform_height_max = 20.0 * size_factor
+			platform_size_variation = 2.0
+			base_min_spacing = 5.0
 		_:  # Default to medium
 			complexity = 2
 			configure_from_complexity()
+			return
+
+	# Scale minimum spacing with arena size - CRITICAL for preventing overlap
+	min_spacing = base_min_spacing * size_factor
+	min_spacing = max(min_spacing, 4.0)  # Never less than 4 units
 
 	if OS.is_debug_build():
-		print("Level config - Complexity: %d, Arena: %.0f, Platforms: %d, Ramps: %d, Rails: %d" % [
-			complexity, arena_size, platform_count, ramp_count, grind_rail_count
+		print("Level config - Complexity: %d, Arena: %.0f, Platforms: %d, Ramps: %d, Rails: %d, MinSpacing: %.1f" % [
+			complexity, arena_size, platform_count, ramp_count, grind_rail_count, min_spacing
 		])
 
 func generate_level() -> void:

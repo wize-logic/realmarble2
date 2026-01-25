@@ -10,6 +10,7 @@ extends Node3D
 var noise: FastNoiseLite
 var platforms: Array = []
 var teleporters: Array = []  # For potential teleporter pairs
+var geometry_positions: Array[Dictionary] = []  # For spacing checks - stores {position, size}
 var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
 # Calculated parameters based on complexity
@@ -23,6 +24,7 @@ var jump_pad_count: int = 5
 var teleporter_pair_count: int = 2
 var wall_height: float = 25.0
 var room_size: Vector3 = Vector3(16.0, 10.0, 16.0)
+var min_spacing: float = 6.0  # Minimum gap between objects
 
 func _ready() -> void:
 	generate_level()
@@ -30,8 +32,13 @@ func _ready() -> void:
 func configure_from_complexity() -> void:
 	"""Configure all generation parameters based on complexity and arena_size"""
 	var size_factor: float = arena_size / 140.0
+	var area_factor: float = size_factor * size_factor
+
+	# Base min_spacing that scales with arena
+	var base_min_spacing: float = 6.0
 
 	# Complexity affects density, rooms, vertical gameplay, and variety
+	# Size (arena_size) affects how BIG the arena is
 	# Complexity 1: Simple - fewer rooms, lower tiers, less clutter
 	# Complexity 2: Medium - balanced (default Q3 arena)
 	# Complexity 3: Complex - more rooms, more tiers, more interconnection
@@ -40,64 +47,74 @@ func configure_from_complexity() -> void:
 	match complexity:
 		1:  # Simple
 			room_count = 2
-			corridor_width = 8.0  # Wider, easier to navigate
+			corridor_width = 8.0 * size_factor  # Wider, scales with arena
 			tier_count = 2
 			platforms_per_tier = [4, 4, 0]
 			pillar_count = 2
 			cover_count = 4
 			jump_pad_count = 3
 			teleporter_pair_count = 1
-			wall_height = 18.0
-			room_size = Vector3(14.0, 8.0, 14.0)
+			wall_height = 18.0 * size_factor
+			room_size = Vector3(14.0, 8.0, 14.0) * size_factor
+			base_min_spacing = 10.0
 		2:  # Medium (default)
 			room_count = 4
-			corridor_width = 6.0
+			corridor_width = 6.0 * size_factor
 			tier_count = 3
 			platforms_per_tier = [4, 8, 4]
 			pillar_count = 4
 			cover_count = 8
 			jump_pad_count = 5
 			teleporter_pair_count = 2
-			wall_height = 25.0
-			room_size = Vector3(16.0, 10.0, 16.0)
+			wall_height = 25.0 * size_factor
+			room_size = Vector3(16.0, 10.0, 16.0) * size_factor
+			base_min_spacing = 7.0
 		3:  # Complex
 			room_count = 6
-			corridor_width = 5.0
+			corridor_width = 5.0 * size_factor
 			tier_count = 4
 			platforms_per_tier = [6, 10, 8, 4]
 			pillar_count = 8
 			cover_count = 14
 			jump_pad_count = 8
 			teleporter_pair_count = 4
-			wall_height = 32.0
-			room_size = Vector3(18.0, 12.0, 18.0)
+			wall_height = 32.0 * size_factor
+			room_size = Vector3(18.0, 12.0, 18.0) * size_factor
+			base_min_spacing = 6.0
 		4:  # Extreme
 			room_count = 8
-			corridor_width = 4.0
+			corridor_width = 4.0 * size_factor
 			tier_count = 5
 			platforms_per_tier = [8, 12, 10, 8, 4]
 			pillar_count = 12
 			cover_count = 20
 			jump_pad_count = 12
 			teleporter_pair_count = 6
-			wall_height = 40.0
-			room_size = Vector3(20.0, 14.0, 20.0)
+			wall_height = 40.0 * size_factor
+			room_size = Vector3(20.0, 14.0, 20.0) * size_factor
+			base_min_spacing = 5.0
 		_:  # Default to medium
 			complexity = 2
 			configure_from_complexity()
+			return
 
-	# Scale counts by arena size
+	# Scale counts by arena size (bigger arenas = more objects)
 	room_count = int(room_count * size_factor)
 	room_count = max(room_count, 2)  # At least 2 rooms
-	pillar_count = int(pillar_count * size_factor)
-	cover_count = int(cover_count * size_factor * size_factor)
+	pillar_count = int(pillar_count * area_factor)
+	cover_count = int(cover_count * area_factor)
 	jump_pad_count = int(jump_pad_count * size_factor)
+	jump_pad_count = max(jump_pad_count, 2)
 	teleporter_pair_count = int(teleporter_pair_count * size_factor)
 	teleporter_pair_count = max(teleporter_pair_count, 1)
 
+	# Scale minimum spacing with arena size - CRITICAL for preventing overlap
+	min_spacing = base_min_spacing * size_factor
+	min_spacing = max(min_spacing, 4.0)  # Never less than 4 units
+
 	if OS.is_debug_build():
-		print("Q3 Level config - Complexity: %d, Arena: %.0f, Rooms: %d, Tiers: %d, JumpPads: %d" % [
-			complexity, arena_size, room_count, tier_count, jump_pad_count
+		print("Q3 Level config - Complexity: %d, Arena: %.0f, Rooms: %d, Tiers: %d, JumpPads: %d, MinSpacing: %.1f" % [
+			complexity, arena_size, room_count, tier_count, jump_pad_count, min_spacing
 		])
 
 func generate_level() -> void:
@@ -137,6 +154,46 @@ func clear_level() -> void:
 		child.queue_free()
 	platforms.clear()
 	teleporters.clear()
+	geometry_positions.clear()
+
+func check_spacing(new_pos: Vector3, new_size: Vector3) -> bool:
+	"""Check if a new piece of geometry would have proper spacing from existing geometry.
+	Returns true if the position is valid (has enough spacing), false if it would overlap/touch."""
+	var new_half_size: Vector3 = new_size * 0.5
+
+	for existing in geometry_positions:
+		var existing_pos: Vector3 = existing.position
+		var existing_size: Vector3 = existing.size
+		var existing_half_size: Vector3 = existing_size * 0.5
+
+		# Simple distance check first (fast rejection)
+		var distance: float = new_pos.distance_to(existing_pos)
+		var combined_radius: float = (new_half_size.length() + existing_half_size.length()) + min_spacing
+
+		if distance < combined_radius:
+			# More precise AABB check with spacing margin
+			var spacing_margin: float = min_spacing * 0.5
+
+			var new_min: Vector3 = new_pos - new_half_size - Vector3.ONE * spacing_margin
+			var new_max: Vector3 = new_pos + new_half_size + Vector3.ONE * spacing_margin
+
+			var existing_min: Vector3 = existing_pos - existing_half_size - Vector3.ONE * spacing_margin
+			var existing_max: Vector3 = existing_pos + existing_half_size + Vector3.ONE * spacing_margin
+
+			# AABB overlap test
+			if (new_min.x <= existing_max.x and new_max.x >= existing_min.x and
+				new_min.y <= existing_max.y and new_max.y >= existing_min.y and
+				new_min.z <= existing_max.z and new_max.z >= existing_min.z):
+				return false  # Would overlap/touch
+
+	return true  # Valid position with proper spacing
+
+func register_geometry(pos: Vector3, size: Vector3) -> void:
+	"""Register a piece of geometry in the spacing tracker"""
+	geometry_positions.append({
+		"position": pos,
+		"size": size
+	})
 
 func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
 	"""Create a box mesh with smooth appearance"""
@@ -189,24 +246,30 @@ func generate_arena_pillars() -> void:
 	"""Generate decorative pillars around the main arena"""
 	# Generate pillars in a ring pattern based on pillar_count
 	var pillar_distance: float = arena_size * 0.15  # Distance from center
-	var pillar_height: float = 8.0 + complexity * 2.0  # Taller at higher complexity
+	var pillar_height: float = (8.0 + complexity * 2.0) * (arena_size / 140.0)  # Scales with arena
+	var generated_count: int = 0
 
 	for i in range(pillar_count):
 		var angle: float = (float(i) / pillar_count) * TAU
-		var pos: Vector3 = Vector3(
+		var pillar_width: float = (3.0 + randf() * 2.0) * (arena_size / 140.0)
+		var pillar_size: Vector3 = Vector3(pillar_width, pillar_height, pillar_width)
+		var pillar_pos: Vector3 = Vector3(
 			cos(angle) * pillar_distance,
-			0,
+			pillar_height / 2.0,
 			sin(angle) * pillar_distance
 		)
 
+		# Check spacing before creating
+		if not check_spacing(pillar_pos, pillar_size):
+			continue
+
 		# Create tall pillar with smooth geometry
-		var pillar_width: float = 3.0 + randf() * 2.0
-		var pillar_mesh: BoxMesh = create_smooth_box_mesh(Vector3(pillar_width, pillar_height, pillar_width))
+		var pillar_mesh: BoxMesh = create_smooth_box_mesh(pillar_size)
 
 		var pillar_instance: MeshInstance3D = MeshInstance3D.new()
 		pillar_instance.mesh = pillar_mesh
-		pillar_instance.name = "Pillar" + str(i)
-		pillar_instance.position = Vector3(pos.x, pillar_height / 2.0, pos.z)
+		pillar_instance.name = "Pillar" + str(generated_count)
+		pillar_instance.position = pillar_pos
 		add_child(pillar_instance)
 
 		# Add collision
@@ -219,31 +282,46 @@ func generate_arena_pillars() -> void:
 		pillar_instance.add_child(static_body)
 
 		platforms.append(pillar_instance)
+		register_geometry(pillar_pos, pillar_size)
+		generated_count += 1
 
 func generate_cover_objects() -> void:
 	"""Generate small cover boxes scattered in the arena"""
 	# cover_count is set by configure_from_complexity()
 	var cover_distance_max: float = arena_size * 0.2
+	var size_factor: float = arena_size / 140.0
+	var generated_count: int = 0
+	var max_attempts: int = cover_count * 10
 
-	for i in range(cover_count):
-		var angle: float = (float(i) / cover_count) * TAU
-		var distance: float = 10.0 + randf() * cover_distance_max
+	for attempt in range(max_attempts):
+		if generated_count >= cover_count:
+			break
+
+		var angle: float = randf() * TAU
+		var distance: float = 10.0 * size_factor + randf() * cover_distance_max
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
 
-		# Create cover box with smooth geometry - size scales slightly with complexity
-		var size_mult: float = 1.0 - complexity * 0.1  # Smaller covers at higher complexity
-		var cover_mesh: BoxMesh = create_smooth_box_mesh(Vector3(
+		# Create cover box with smooth geometry - scales with arena size
+		var size_mult: float = size_factor * (1.0 - complexity * 0.05)
+		var cover_size: Vector3 = Vector3(
 			(3.0 + randf() * 2.0) * size_mult,
 			(2.0 + randf() * 1.0) * size_mult,
 			(3.0 + randf() * 2.0) * size_mult
-		))
+		)
+		var cover_pos: Vector3 = Vector3(x, cover_size.y / 2.0, z)
+
+		# Check spacing before creating
+		if not check_spacing(cover_pos, cover_size):
+			continue
+
+		var cover_mesh: BoxMesh = create_smooth_box_mesh(cover_size)
 
 		var cover_instance: MeshInstance3D = MeshInstance3D.new()
 		cover_instance.mesh = cover_mesh
-		cover_instance.name = "Cover" + str(i)
-		cover_instance.position = Vector3(x, cover_mesh.size.y / 2.0, z)
+		cover_instance.name = "Cover" + str(generated_count)
+		cover_instance.position = cover_pos
 		add_child(cover_instance)
 
 		# Add collision
@@ -256,6 +334,8 @@ func generate_cover_objects() -> void:
 		cover_instance.add_child(static_body)
 
 		platforms.append(cover_instance)
+		register_geometry(cover_pos, cover_size)
+		generated_count += 1
 
 # ============================================================================
 # UPPER PLATFORMS (MULTI-TIER DESIGN)
