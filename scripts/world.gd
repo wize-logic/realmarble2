@@ -75,6 +75,11 @@ var bot_count_selected: int = 3
 var level_type_dialog_closed: bool = false
 var level_type_selected: String = "A"
 
+# Level configuration dialog state
+var level_config_dialog_closed: bool = false
+var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
+var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
+
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
 
@@ -377,9 +382,18 @@ func _on_practice_button_pressed() -> void:
 		print("Practice mode cancelled")
 		return
 
-	# Now start practice mode with the chosen bot count and level type
-	print("Starting practice mode with %d bots and level type %s..." % [bot_count_choice, level_type_choice])
-	start_practice_mode(bot_count_choice, level_type_choice)
+	# Ask user for level size/complexity and match duration
+	print("Calling ask_level_config()...")
+	var level_config = await ask_level_config()
+	print("ask_level_config() returned: ", level_config)
+	if level_config.is_empty():
+		# User cancelled or error
+		print("Practice mode cancelled")
+		return
+
+	# Now start practice mode with the chosen settings
+	print("Starting practice mode with %d bots, level type %s, size %d, time %.0fs..." % [bot_count_choice, level_type_choice, level_config.size, level_config.time])
+	start_practice_mode(bot_count_choice, level_type_choice, level_config.size, level_config.time)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -742,9 +756,300 @@ func ask_level_type() -> String:
 	print("Level type selected: %s" % level_type_selected)
 	return level_type_selected
 
-func start_practice_mode(bot_count: int, level_type: String = "A") -> void:
-	"""Start practice mode with specified number of bots and level type"""
-	print("Starting practice mode with %d bots and level type %s" % [bot_count, level_type])
+func ask_level_config() -> Dictionary:
+	"""Ask the user for level size/complexity and match duration.
+	Returns a dictionary with 'size' (1-4) and 'time' (seconds), or empty dict if cancelled."""
+
+	# Create a beautiful dialog matching main menu theme
+	var dialog = AcceptDialog.new()
+	dialog.title = "Level Configuration"
+	dialog.dialog_hide_on_ok = false
+	dialog.exclusive = true
+	dialog.unresizable = false
+	dialog.size = Vector2(650, 520)
+
+	# Create custom panel style matching main menu
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_width_left = 3
+	panel_style.border_width_top = 3
+	panel_style.border_width_right = 3
+	panel_style.border_width_bottom = 3
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	dialog.add_theme_stylebox_override("panel", panel_style)
+
+	# Hide default OK button
+	dialog.get_ok_button().hide()
+
+	# Create main panel for contents
+	var main_panel = PanelContainer.new()
+	main_panel.add_theme_stylebox_override("panel", panel_style)
+	dialog.add_child(main_panel)
+
+	# Create margin container
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 40)
+	margin.add_theme_constant_override("margin_right", 40)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	main_panel.add_child(margin)
+
+	# Create VBoxContainer for layout
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 20)
+	margin.add_child(vbox)
+
+	# Add title label
+	var title_label = Label.new()
+	title_label.text = "CONFIGURE YOUR MATCH"
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 26)
+	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	vbox.add_child(title_label)
+
+	# Add separator
+	var separator1 = HSeparator.new()
+	separator1.add_theme_constant_override("separation", 2)
+	vbox.add_child(separator1)
+
+	# Reset instance variables for this dialog
+	level_config_dialog_closed = false
+	level_config_size = 2  # Default: Medium
+	level_config_time = 300.0  # Default: 5 minutes
+
+	# === LEVEL SIZE/COMPLEXITY SECTION ===
+	var size_section = VBoxContainer.new()
+	size_section.add_theme_constant_override("separation", 10)
+	vbox.add_child(size_section)
+
+	var size_title = Label.new()
+	size_title.text = "LEVEL SIZE & COMPLEXITY"
+	size_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	size_title.add_theme_font_size_override("font_size", 18)
+	size_title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	size_section.add_child(size_title)
+
+	# Size slider container
+	var size_slider_container = HBoxContainer.new()
+	size_slider_container.add_theme_constant_override("separation", 15)
+	size_section.add_child(size_slider_container)
+
+	var size_label_left = Label.new()
+	size_label_left.text = "Small"
+	size_label_left.add_theme_font_size_override("font_size", 14)
+	size_label_left.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	size_slider_container.add_child(size_label_left)
+
+	var size_slider = HSlider.new()
+	size_slider.min_value = 1
+	size_slider.max_value = 4
+	size_slider.step = 1
+	size_slider.value = 2  # Medium default
+	size_slider.custom_minimum_size = Vector2(300, 30)
+	size_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# Style the slider
+	var slider_style = StyleBoxFlat.new()
+	slider_style.bg_color = Color(0.2, 0.2, 0.25, 0.9)
+	slider_style.set_corner_radius_all(4)
+	size_slider.add_theme_stylebox_override("slider", slider_style)
+
+	var grabber_style = StyleBoxFlat.new()
+	grabber_style.bg_color = Color(0.3, 0.7, 1, 1)
+	grabber_style.set_corner_radius_all(8)
+	size_slider.add_theme_stylebox_override("grabber_area", grabber_style)
+	size_slider.add_theme_stylebox_override("grabber_area_highlight", grabber_style)
+
+	size_slider_container.add_child(size_slider)
+
+	var size_label_right = Label.new()
+	size_label_right.text = "Huge"
+	size_label_right.add_theme_font_size_override("font_size", 14)
+	size_label_right.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	size_slider_container.add_child(size_label_right)
+
+	# Size value display
+	var size_value_label = Label.new()
+	size_value_label.text = "Medium"
+	size_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	size_value_label.add_theme_font_size_override("font_size", 16)
+	size_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	size_section.add_child(size_value_label)
+
+	# Update size value display when slider changes
+	size_slider.value_changed.connect(func(value: float):
+		level_config_size = int(value)
+		match int(value):
+			1: size_value_label.text = "Small (Compact arena)"
+			2: size_value_label.text = "Medium (Standard arena)"
+			3: size_value_label.text = "Large (Expanded arena)"
+			4: size_value_label.text = "Huge (Massive arena)"
+	)
+
+	# Add separator
+	var separator2 = HSeparator.new()
+	separator2.add_theme_constant_override("separation", 2)
+	vbox.add_child(separator2)
+
+	# === MATCH TIME SECTION ===
+	var time_section = VBoxContainer.new()
+	time_section.add_theme_constant_override("separation", 10)
+	vbox.add_child(time_section)
+
+	var time_title = Label.new()
+	time_title.text = "MATCH DURATION"
+	time_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	time_title.add_theme_font_size_override("font_size", 18)
+	time_title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	time_section.add_child(time_title)
+
+	# Time slider container
+	var time_slider_container = HBoxContainer.new()
+	time_slider_container.add_theme_constant_override("separation", 15)
+	time_section.add_child(time_slider_container)
+
+	var time_label_left = Label.new()
+	time_label_left.text = "1 min"
+	time_label_left.add_theme_font_size_override("font_size", 14)
+	time_label_left.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	time_slider_container.add_child(time_label_left)
+
+	var time_slider = HSlider.new()
+	time_slider.min_value = 1
+	time_slider.max_value = 5
+	time_slider.step = 1
+	time_slider.value = 3  # 5 minutes default (index 3)
+	time_slider.custom_minimum_size = Vector2(300, 30)
+	time_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	time_slider.add_theme_stylebox_override("slider", slider_style)
+	time_slider.add_theme_stylebox_override("grabber_area", grabber_style)
+	time_slider.add_theme_stylebox_override("grabber_area_highlight", grabber_style)
+	time_slider_container.add_child(time_slider)
+
+	var time_label_right = Label.new()
+	time_label_right.text = "10 min"
+	time_label_right.add_theme_font_size_override("font_size", 14)
+	time_label_right.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	time_slider_container.add_child(time_label_right)
+
+	# Time value display
+	var time_value_label = Label.new()
+	time_value_label.text = "5 Minutes"
+	time_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	time_value_label.add_theme_font_size_override("font_size", 16)
+	time_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	time_section.add_child(time_value_label)
+
+	# Time values mapping: slider value to seconds
+	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
+	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+
+	# Update time value display when slider changes
+	time_slider.value_changed.connect(func(value: float):
+		var index: int = int(value) - 1
+		level_config_time = time_values[index]
+		time_value_label.text = time_labels[index]
+	)
+
+	# Add separator
+	var separator3 = HSeparator.new()
+	separator3.add_theme_constant_override("separation", 2)
+	vbox.add_child(separator3)
+
+	# === START BUTTON ===
+	var button_container = CenterContainer.new()
+	vbox.add_child(button_container)
+
+	var start_button = Button.new()
+	start_button.text = "START MATCH"
+	start_button.custom_minimum_size = Vector2(200, 50)
+
+	var start_button_style = StyleBoxFlat.new()
+	start_button_style.bg_color = Color(0.2, 0.5, 0.3, 0.9)
+	start_button_style.set_corner_radius_all(10)
+	start_button_style.border_width_left = 2
+	start_button_style.border_width_top = 2
+	start_button_style.border_width_right = 2
+	start_button_style.border_width_bottom = 2
+	start_button_style.border_color = Color(0.3, 1.0, 0.5, 0.6)
+
+	var start_button_hover = StyleBoxFlat.new()
+	start_button_hover.bg_color = Color(0.3, 0.7, 0.4, 0.95)
+	start_button_hover.set_corner_radius_all(10)
+	start_button_hover.border_width_left = 3
+	start_button_hover.border_width_top = 3
+	start_button_hover.border_width_right = 3
+	start_button_hover.border_width_bottom = 3
+	start_button_hover.border_color = Color(0.3, 1.0, 0.5, 1.0)
+
+	start_button.add_theme_font_size_override("font_size", 20)
+	start_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	start_button.add_theme_stylebox_override("normal", start_button_style)
+	start_button.add_theme_stylebox_override("hover", start_button_hover)
+	start_button.add_theme_stylebox_override("pressed", start_button_hover)
+
+	start_button.pressed.connect(func():
+		print("Start Match button clicked - Size: %d, Time: %.0f seconds" % [level_config_size, level_config_time])
+		level_config_dialog_closed = true
+		dialog.hide()
+	)
+	button_container.add_child(start_button)
+
+	# Add dialog to Menu CanvasLayer
+	if has_node("Menu"):
+		get_node("Menu").add_child(dialog)
+	else:
+		add_child(dialog)
+
+	# Show blur to focus attention on dialog
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
+
+	# Connect close signals to handle cancellation
+	dialog.close_requested.connect(func():
+		level_config_dialog_closed = true
+		level_config_size = -1  # Indicate cancellation
+		print("Level config dialog closed via X button or ESC")
+	)
+
+	# Ensure mouse is visible for dialog interaction
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	dialog.popup_centered()
+	print("Level config dialog shown, waiting for user selection...")
+
+	# Wait for user to confirm or cancel
+	while not level_config_dialog_closed:
+		await get_tree().process_frame
+
+	print("Level config dialog closed, cleaning up...")
+	dialog.queue_free()
+
+	# Hide blur after dialog is closed
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+	# Keep mouse visible (we're still in main menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	# Return configuration or empty dict if cancelled
+	if level_config_size == -1:
+		print("Level config cancelled")
+		return {}
+
+	print("Level config selected - Size: %d, Time: %.0f" % [level_config_size, level_config_time])
+	return {"size": level_config_size, "time": level_config_time}
+
+func start_practice_mode(bot_count: int, level_type: String = "A", level_size: int = 2, match_time: float = 300.0) -> void:
+	"""Start practice mode with specified settings.
+	Args:
+		bot_count: Number of bots to spawn
+		level_type: "A" or "B" for arena type
+		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
+		match_time: Match duration in seconds
+	"""
+	print("Starting practice mode with %d bots, level type %s, size %d, time %.0fs" % [bot_count, level_type, level_size, match_time])
 
 	if main_menu:
 		main_menu.hide()
@@ -767,10 +1072,14 @@ func start_practice_mode(bot_count: int, level_type: String = "A") -> void:
 	if menu_music:
 		menu_music.stop()
 
-	# Regenerate level with selected type
+	# Set match duration based on user selection
+	game_time_remaining = match_time
+	print("Match duration set to %.0f seconds (%.1f minutes)" % [match_time, match_time / 60.0])
+
+	# Regenerate level with selected type and size
 	current_level_type = level_type
-	print("Regenerating level with type %s..." % level_type)
-	await generate_procedural_level(level_type)
+	print("Regenerating level with type %s, size %d..." % [level_type, level_size])
+	await generate_procedural_level(level_type, true, level_size)
 	print("Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -2190,14 +2499,28 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(level_type: String = "A", spawn_collectibles: bool = true) -> void:
+func generate_procedural_level(level_type: String = "A", spawn_collectibles: bool = true, level_size: int = 2) -> void:
 	"""Generate a procedural level with skybox
 	Args:
 		level_type: "A" for original generator, "B" for Quake 3 arena style
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
+		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size and platform count)
 	"""
 	if OS.is_debug_build():
-		print("Generating procedural arena (Type %s)..." % level_type)
+		print("Generating procedural arena (Type %s, Size %d)..." % [level_type, level_size])
+
+	# Calculate arena parameters based on level_size
+	# Size 1: Small - compact arena for quick, close-quarters combat
+	# Size 2: Medium - standard arena (default)
+	# Size 3: Large - expanded arena with more platforms
+	# Size 4: Huge - massive arena for extended gameplay
+	var size_multipliers: Dictionary = {
+		1: {"arena": 0.7, "platforms": 0.5, "ramps": 0.5, "complexity": 2},   # Small
+		2: {"arena": 1.0, "platforms": 1.0, "ramps": 1.0, "complexity": 3},   # Medium (default)
+		3: {"arena": 1.4, "platforms": 1.5, "ramps": 1.5, "complexity": 4},   # Large
+		4: {"arena": 1.8, "platforms": 2.0, "ramps": 2.0, "complexity": 5}    # Huge
+	}
+	var multiplier: Dictionary = size_multipliers.get(level_size, size_multipliers[2])
 
 	# Remove old level generator if it exists
 	if level_generator:
@@ -2217,13 +2540,20 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	level_generator.name = "LevelGenerator"
 
 	if level_type == "B":
-		# Use Quake 3 Arena-style generator
+		# Use Quake 3 Arena-style generator (v2.0 with BSP rooms)
 		level_generator.set_script(LevelGeneratorQ3)
-		print("Using Quake 3 Arena-style level generator")
+		# Configure size and complexity based on level_size parameter
+		level_generator.arena_size = 140.0 * multiplier.arena
+		level_generator.complexity = multiplier.complexity
+		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 	else:
 		# Use original generator (Type A)
 		level_generator.set_script(LevelGenerator)
-		print("Using original level generator")
+		# Configure size based on level_size parameter
+		level_generator.arena_size = 120.0 * multiplier.arena
+		level_generator.platform_count = int(30 * multiplier.platforms)
+		level_generator.ramp_count = int(20 * multiplier.ramps)
+		print("Using original level generator (arena_size: %.1f, platforms: %d, ramps: %d)" % [level_generator.arena_size, level_generator.platform_count, level_generator.ramp_count])
 
 	add_child(level_generator)
 
