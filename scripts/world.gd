@@ -97,6 +97,7 @@ var skybox_generator: Node3D = null
 # "A" = Type A (Original: floating platforms, grind rails, Sonic-style)
 # "B" = Type B (Quake 3 Arena: rooms, corridors, jump pads, teleporters)
 var current_level_type: String = "A"
+var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 
 func _ready() -> void:
 	# Generate procedural level (default to Type A)
@@ -1090,6 +1091,7 @@ func start_practice_mode(bot_count: int, level_type: String = "A", level_size: i
 
 	# Regenerate level with selected type and size
 	current_level_type = level_type
+	current_level_size = level_size  # Store for later use (e.g., start_deathmatch)
 	print("Regenerating level with type %s, size %d..." % [level_type, level_size])
 	await generate_procedural_level(level_type, true, level_size)
 	print("Level regeneration complete!")
@@ -1125,8 +1127,8 @@ func start_practice_mode(bot_count: int, level_type: String = "A", level_size: i
 	pending_bot_count = bot_count
 	print("Will spawn %d bots after countdown completes..." % bot_count)
 
-	# Start the deathmatch
-	start_deathmatch()
+	# Start the deathmatch (skip level regen since we already generated it above)
+	start_deathmatch(true)
 
 func _set_practice_button_disabled(disabled: bool) -> void:
 	"""Disable or enable the practice button to prevent spam during gameplay"""
@@ -1411,10 +1413,13 @@ func upnp_setup() -> void:
 # DEATHMATCH GAME LOGIC
 # ============================================================================
 
-func start_deathmatch() -> void:
-	"""Start a 5-minute deathmatch with countdown"""
+func start_deathmatch(skip_level_regen: bool = false) -> void:
+	"""Start a 5-minute deathmatch with countdown
+	Args:
+		skip_level_regen: If true, don't regenerate the level (practice mode already did)
+	"""
 	print("======================================")
-	print("start_deathmatch() CALLED!")
+	print("start_deathmatch() CALLED! skip_level_regen=%s" % skip_level_regen)
 	print("Stack trace:")
 	print_stack()
 	print("Current game_active: ", game_active)
@@ -1453,15 +1458,15 @@ func start_deathmatch() -> void:
 		gameplay_music.start_playlist()
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
-	# FIXME: For multiplayer, level type should be chosen in lobby
-	if multiplayer.has_multiplayer_peer():
-		# Use current_level_type (don't hardcode, respect what was set)
-		# Default to "A" if somehow not set
+	if not skip_level_regen and multiplayer.has_multiplayer_peer():
+		# Use current_level_type and current_level_size (don't hardcode, respect what was set)
 		if current_level_type == "":
 			current_level_type = "A"
-		print("Regenerating level for multiplayer match (Type %s)..." % current_level_type)
-		await generate_procedural_level(current_level_type)
+		print("Regenerating level for multiplayer match (Type %s, Size %d)..." % [current_level_type, current_level_size])
+		await generate_procedural_level(current_level_type, true, current_level_size)
 		print("Level regeneration complete!")
+	elif skip_level_regen:
+		print("Skipping level regeneration (practice mode already generated level)")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
