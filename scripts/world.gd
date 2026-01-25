@@ -2512,13 +2512,13 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	# Arena size multipliers based on level_size
 	# Size 1: Small - compact arena
 	# Size 2: Medium - standard arena (default)
-	# Size 3: Large - expanded arena
+	# Size 3: Large - noticeably bigger
 	# Size 4: Huge - massive arena
 	var arena_size_multipliers: Dictionary = {
-		1: 0.7,   # Small
-		2: 1.0,   # Medium (default)
-		3: 1.4,   # Large
-		4: 1.8    # Huge
+		1: 0.6,   # Small - 72 units for Type A
+		2: 1.0,   # Medium - 120 units for Type A (default)
+		3: 2.0,   # Large - 240 units for Type A
+		4: 3.5    # Huge - 420 units for Type A
 	}
 	var size_mult: float = arena_size_multipliers.get(level_size, 1.0)
 

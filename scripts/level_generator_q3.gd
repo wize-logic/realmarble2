@@ -29,92 +29,73 @@ var min_spacing: float = 6.0  # Minimum gap between objects
 func _ready() -> void:
 	generate_level()
 
+var tunnel_count: int = 0
+var catwalk_count: int = 0
+
 func configure_from_complexity() -> void:
 	"""Configure all generation parameters based on complexity and arena_size"""
 	var size_factor: float = arena_size / 140.0
-	var area_factor: float = size_factor * size_factor
 
-	# Base min_spacing that scales with arena
-	var base_min_spacing: float = 6.0
-
-	# Complexity affects density, rooms, vertical gameplay, and variety
-	# Size (arena_size) affects how BIG the arena is
-	# Complexity 1: Simple - fewer rooms, lower tiers, less clutter
-	# Complexity 2: Medium - balanced (default Q3 arena)
-	# Complexity 3: Complex - more rooms, more tiers, more interconnection
-	# Complexity 4: Extreme - maximum density, many rooms, very vertical
-
+	# Complexity ONLY controls density/counts
+	# Size (arena_size) controls how big everything is
 	match complexity:
-		1:  # Simple
+		1:  # Simple - open arena, few structures
 			room_count = 2
-			corridor_width = 8.0 * size_factor  # Wider, scales with arena
 			tier_count = 2
-			platforms_per_tier = [4, 4, 0]
-			pillar_count = 2
-			cover_count = 4
+			platforms_per_tier = [3, 3, 0, 0, 0]
+			pillar_count = 4
+			cover_count = 6
 			jump_pad_count = 3
 			teleporter_pair_count = 1
-			wall_height = 18.0 * size_factor
-			room_size = Vector3(14.0, 8.0, 14.0) * size_factor
-			base_min_spacing = 10.0
-		2:  # Medium (default)
+			tunnel_count = 0
+			catwalk_count = 2
+		2:  # Medium (default Q3 arena)
 			room_count = 4
-			corridor_width = 6.0 * size_factor
 			tier_count = 3
-			platforms_per_tier = [4, 8, 4]
-			pillar_count = 4
-			cover_count = 8
+			platforms_per_tier = [4, 6, 4, 0, 0]
+			pillar_count = 6
+			cover_count = 12
 			jump_pad_count = 5
 			teleporter_pair_count = 2
-			wall_height = 25.0 * size_factor
-			room_size = Vector3(16.0, 10.0, 16.0) * size_factor
-			base_min_spacing = 7.0
-		3:  # Complex
+			tunnel_count = 2
+			catwalk_count = 4
+		3:  # Complex - interconnected, vertical
 			room_count = 6
-			corridor_width = 5.0 * size_factor
 			tier_count = 4
-			platforms_per_tier = [6, 10, 8, 4]
-			pillar_count = 8
-			cover_count = 14
-			jump_pad_count = 8
-			teleporter_pair_count = 4
-			wall_height = 32.0 * size_factor
-			room_size = Vector3(18.0, 12.0, 18.0) * size_factor
-			base_min_spacing = 6.0
-		4:  # Extreme
-			room_count = 8
-			corridor_width = 4.0 * size_factor
-			tier_count = 5
-			platforms_per_tier = [8, 12, 10, 8, 4]
-			pillar_count = 12
+			platforms_per_tier = [5, 8, 6, 4, 0]
+			pillar_count = 10
 			cover_count = 20
-			jump_pad_count = 12
-			teleporter_pair_count = 6
-			wall_height = 40.0 * size_factor
-			room_size = Vector3(20.0, 14.0, 20.0) * size_factor
-			base_min_spacing = 5.0
+			jump_pad_count = 8
+			teleporter_pair_count = 3
+			tunnel_count = 4
+			catwalk_count = 6
+		4:  # Extreme - dense, many paths
+			room_count = 8
+			tier_count = 5
+			platforms_per_tier = [6, 10, 8, 6, 4]
+			pillar_count = 14
+			cover_count = 30
+			jump_pad_count = 10
+			teleporter_pair_count = 4
+			tunnel_count = 6
+			catwalk_count = 8
 		_:  # Default to medium
 			complexity = 2
 			configure_from_complexity()
 			return
 
-	# Scale counts by arena size (bigger arenas = more objects)
-	room_count = int(room_count * size_factor)
-	room_count = max(room_count, 2)  # At least 2 rooms
-	pillar_count = int(pillar_count * area_factor)
-	cover_count = int(cover_count * area_factor)
-	jump_pad_count = int(jump_pad_count * size_factor)
-	jump_pad_count = max(jump_pad_count, 2)
-	teleporter_pair_count = int(teleporter_pair_count * size_factor)
-	teleporter_pair_count = max(teleporter_pair_count, 1)
+	# Sizes scale with arena
+	corridor_width = 8.0 * size_factor
+	wall_height = 30.0 * size_factor
+	room_size = Vector3(18.0, 12.0, 18.0) * size_factor
 
-	# Scale minimum spacing with arena size - CRITICAL for preventing overlap
-	min_spacing = base_min_spacing * size_factor
-	min_spacing = max(min_spacing, 4.0)  # Never less than 4 units
+	# Minimum spacing scales with arena size
+	min_spacing = 8.0 * size_factor
+	min_spacing = max(min_spacing, 5.0)
 
 	if OS.is_debug_build():
-		print("Q3 Level config - Complexity: %d, Arena: %.0f, Rooms: %d, Tiers: %d, JumpPads: %d, MinSpacing: %.1f" % [
-			complexity, arena_size, room_count, tier_count, jump_pad_count, min_spacing
+		print("Q3 Level config - Complexity: %d, Arena: %.0f (factor: %.2f), Rooms: %d, Tunnels: %d, Catwalks: %d" % [
+			complexity, arena_size, size_factor, room_count, tunnel_count, catwalk_count
 		])
 
 func generate_level() -> void:
@@ -138,6 +119,8 @@ func generate_level() -> void:
 	generate_upper_platforms()
 	generate_side_rooms()
 	generate_corridors()
+	generate_tunnels()      # Underground passages
+	generate_catwalks()     # Elevated walkways
 	generate_jump_pads()
 	generate_teleporters()
 	generate_perimeter_walls()
@@ -692,6 +675,215 @@ func create_corridor(start_pos: Vector3, end_pos: Vector3, width: float) -> void
 	corridor_instance.add_child(static_body)
 
 	platforms.append(corridor_instance)
+
+# ============================================================================
+# TUNNELS (Underground passages)
+# ============================================================================
+
+func generate_tunnels() -> void:
+	"""Generate underground tunnel passages connecting different areas"""
+	if tunnel_count <= 0:
+		return
+
+	var size_factor: float = arena_size / 140.0
+	var tunnel_half_dist: float = arena_size * 0.35
+
+	for i in range(tunnel_count):
+		# Create tunnels crossing the arena at different angles
+		var angle: float = (float(i) / tunnel_count) * PI + randf() * 0.3
+		var start_pos: Vector3 = Vector3(cos(angle) * tunnel_half_dist, -3.0 * size_factor, sin(angle) * tunnel_half_dist)
+		var end_pos: Vector3 = Vector3(-cos(angle) * tunnel_half_dist, -3.0 * size_factor, -sin(angle) * tunnel_half_dist)
+
+		create_tunnel(start_pos, end_pos, i)
+
+	print("Generated ", tunnel_count, " tunnels")
+
+func create_tunnel(start_pos: Vector3, end_pos: Vector3, index: int) -> void:
+	"""Create an underground tunnel with entrance/exit slopes"""
+	var size_factor: float = arena_size / 140.0
+	var direction: Vector3 = (end_pos - start_pos).normalized()
+	var length: float = start_pos.distance_to(end_pos)
+	var mid_point: Vector3 = (start_pos + end_pos) / 2.0
+
+	var tunnel_width: float = 10.0 * size_factor
+	var tunnel_height: float = 6.0 * size_factor
+
+	# Main tunnel floor
+	var floor_size: Vector3 = Vector3(tunnel_width, 1.0 * size_factor, length)
+	var floor_mesh: BoxMesh = create_smooth_box_mesh(floor_size)
+	var floor_instance: MeshInstance3D = MeshInstance3D.new()
+	floor_instance.mesh = floor_mesh
+	floor_instance.name = "TunnelFloor" + str(index)
+	floor_instance.position = mid_point
+	floor_instance.rotation.y = atan2(direction.x, direction.z)
+	add_child(floor_instance)
+	add_collision_to_mesh(floor_instance, floor_size)
+	platforms.append(floor_instance)
+
+	# Tunnel ceiling
+	var ceiling_pos: Vector3 = mid_point + Vector3(0, tunnel_height, 0)
+	var ceiling_mesh: BoxMesh = create_smooth_box_mesh(floor_size)
+	var ceiling_instance: MeshInstance3D = MeshInstance3D.new()
+	ceiling_instance.mesh = ceiling_mesh
+	ceiling_instance.name = "TunnelCeiling" + str(index)
+	ceiling_instance.position = ceiling_pos
+	ceiling_instance.rotation.y = atan2(direction.x, direction.z)
+	add_child(ceiling_instance)
+	add_collision_to_mesh(ceiling_instance, floor_size)
+	platforms.append(ceiling_instance)
+
+	# Entrance slope (ramp down into tunnel)
+	create_tunnel_entrance(start_pos, direction, index, "Start", size_factor)
+	create_tunnel_entrance(end_pos, -direction, index, "End", size_factor)
+
+func create_tunnel_entrance(pos: Vector3, dir: Vector3, index: int, suffix: String, size_factor: float) -> void:
+	"""Create a sloped entrance into a tunnel"""
+	var ramp_length: float = 12.0 * size_factor
+	var ramp_width: float = 10.0 * size_factor
+	var ramp_pos: Vector3 = pos + dir * (ramp_length * 0.5) + Vector3(0, pos.y * 0.5 + 1.5 * size_factor, 0)
+
+	var ramp_size: Vector3 = Vector3(ramp_width, 1.0 * size_factor, ramp_length)
+	var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
+	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
+	ramp_instance.mesh = ramp_mesh
+	ramp_instance.name = "TunnelRamp" + str(index) + suffix
+	ramp_instance.position = ramp_pos
+
+	# Angle the ramp
+	var angle_y: float = atan2(dir.x, dir.z)
+	ramp_instance.rotation = Vector3(0.35, angle_y, 0)  # Slope down
+
+	add_child(ramp_instance)
+	add_collision_to_mesh(ramp_instance, ramp_size)
+	platforms.append(ramp_instance)
+
+func add_collision_to_mesh(mesh_instance: MeshInstance3D, size: Vector3) -> void:
+	"""Helper to add collision to a mesh instance"""
+	var static_body: StaticBody3D = StaticBody3D.new()
+	var collision: CollisionShape3D = CollisionShape3D.new()
+	var shape: BoxShape3D = BoxShape3D.new()
+	shape.size = size
+	collision.shape = shape
+	static_body.add_child(collision)
+	mesh_instance.add_child(static_body)
+
+# ============================================================================
+# CATWALKS (Elevated pathways)
+# ============================================================================
+
+func generate_catwalks() -> void:
+	"""Generate elevated catwalk pathways connecting platforms"""
+	if catwalk_count <= 0:
+		return
+
+	var size_factor: float = arena_size / 140.0
+	var catwalk_distance: float = arena_size * 0.25
+
+	for i in range(catwalk_count):
+		var angle: float = (float(i) / catwalk_count) * TAU
+		var height: float = (8.0 + (i % 3) * 5.0) * size_factor  # Varied heights
+
+		# Catwalks go from one side to the other at various angles
+		var start_angle: float = angle
+		var end_angle: float = angle + PI * 0.6 + randf() * 0.4
+
+		var start_pos: Vector3 = Vector3(
+			cos(start_angle) * catwalk_distance,
+			height,
+			sin(start_angle) * catwalk_distance
+		)
+		var end_pos: Vector3 = Vector3(
+			cos(end_angle) * catwalk_distance,
+			height,
+			sin(end_angle) * catwalk_distance
+		)
+
+		create_catwalk(start_pos, end_pos, i)
+
+	print("Generated ", catwalk_count, " catwalks")
+
+func create_catwalk(start_pos: Vector3, end_pos: Vector3, index: int) -> void:
+	"""Create an elevated catwalk pathway"""
+	var size_factor: float = arena_size / 140.0
+	var direction: Vector3 = (end_pos - start_pos).normalized()
+	var length: float = start_pos.distance_to(end_pos)
+	var mid_point: Vector3 = (start_pos + end_pos) / 2.0
+
+	var catwalk_width: float = 5.0 * size_factor
+	var catwalk_thickness: float = 0.8 * size_factor
+
+	# Check spacing
+	var catwalk_size: Vector3 = Vector3(catwalk_width, catwalk_thickness, length)
+	if not check_spacing(mid_point, catwalk_size):
+		return
+
+	# Main catwalk walkway
+	var walkway_mesh: BoxMesh = create_smooth_box_mesh(catwalk_size)
+	var walkway_instance: MeshInstance3D = MeshInstance3D.new()
+	walkway_instance.mesh = walkway_mesh
+	walkway_instance.name = "Catwalk" + str(index)
+	walkway_instance.position = mid_point
+	walkway_instance.rotation.y = atan2(direction.x, direction.z)
+	add_child(walkway_instance)
+	add_collision_to_mesh(walkway_instance, catwalk_size)
+	platforms.append(walkway_instance)
+	register_geometry(mid_point, catwalk_size)
+
+	# Add support pillars at each end
+	create_catwalk_support(start_pos, index, "Start", size_factor)
+	create_catwalk_support(end_pos, index, "End", size_factor)
+
+	# Add access ramps at each end
+	create_catwalk_ramp(start_pos, direction, index, "Start", size_factor)
+	create_catwalk_ramp(end_pos, -direction, index, "End", size_factor)
+
+func create_catwalk_support(pos: Vector3, index: int, suffix: String, size_factor: float) -> void:
+	"""Create a support pillar for a catwalk"""
+	var pillar_width: float = 2.0 * size_factor
+	var pillar_height: float = pos.y
+	var pillar_size: Vector3 = Vector3(pillar_width, pillar_height, pillar_width)
+	var pillar_pos: Vector3 = Vector3(pos.x, pillar_height / 2.0, pos.z)
+
+	if not check_spacing(pillar_pos, pillar_size):
+		return
+
+	var pillar_mesh: BoxMesh = create_smooth_box_mesh(pillar_size)
+	var pillar_instance: MeshInstance3D = MeshInstance3D.new()
+	pillar_instance.mesh = pillar_mesh
+	pillar_instance.name = "CatwalkSupport" + str(index) + suffix
+	pillar_instance.position = pillar_pos
+	add_child(pillar_instance)
+	add_collision_to_mesh(pillar_instance, pillar_size)
+	platforms.append(pillar_instance)
+	register_geometry(pillar_pos, pillar_size)
+
+func create_catwalk_ramp(pos: Vector3, dir: Vector3, index: int, suffix: String, size_factor: float) -> void:
+	"""Create an access ramp to a catwalk"""
+	var ramp_length: float = pos.y * 1.5  # Gentle slope
+	var ramp_width: float = 5.0 * size_factor
+	var ramp_pos: Vector3 = pos + dir * (ramp_length * 0.5) - Vector3(0, pos.y * 0.5, 0)
+
+	var ramp_size: Vector3 = Vector3(ramp_width, 0.8 * size_factor, ramp_length)
+
+	# Check spacing
+	if not check_spacing(ramp_pos, ramp_size * 1.2):
+		return
+
+	var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
+	var ramp_instance: MeshInstance3D = MeshInstance3D.new()
+	ramp_instance.mesh = ramp_mesh
+	ramp_instance.name = "CatwalkRamp" + str(index) + suffix
+	ramp_instance.position = ramp_pos
+
+	# Slope angle based on height
+	var slope_angle: float = atan2(pos.y, ramp_length)
+	var angle_y: float = atan2(dir.x, dir.z)
+	ramp_instance.rotation = Vector3(-slope_angle, angle_y, 0)
+
+	add_child(ramp_instance)
+	add_collision_to_mesh(ramp_instance, ramp_size)
+	platforms.append(ramp_instance)
+	register_geometry(ramp_pos, ramp_size)
 
 # ============================================================================
 # JUMP PADS
