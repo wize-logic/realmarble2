@@ -30,33 +30,33 @@ func configure_from_complexity() -> void:
 	# Size factor for scaling objects proportionally with arena
 	var size_factor: float = arena_size / 120.0
 
-	# Complexity ONLY controls object counts (density)
+	# Complexity controls object counts - REDUCED significantly for cleaner levels
 	# Size (arena_size) controls how big everything is
 	match complexity:
-		1:  # Simple - sparse
-			platform_count = 15
-			ramp_count = 10
+		1:  # Simple - very sparse, open arena
+			platform_count = 6
+			ramp_count = 4
 			grind_rail_count = 4
 			vertical_rail_count = 2
 			obstacle_count = 0
-		2:  # Medium (default)
-			platform_count = 30
-			ramp_count = 20
+		2:  # Medium (default) - moderate platforms
+			platform_count = 10
+			ramp_count = 6
+			grind_rail_count = 6
+			vertical_rail_count = 3
+			obstacle_count = 0
+		3:  # Complex - more platforms and rails
+			platform_count = 16
+			ramp_count = 8
 			grind_rail_count = 8
 			vertical_rail_count = 4
-			obstacle_count = 6
-		3:  # Complex - dense
-			platform_count = 50
-			ramp_count = 35
-			grind_rail_count = 12
-			vertical_rail_count = 6
-			obstacle_count = 12
-		4:  # Extreme - very dense
-			platform_count = 75
-			ramp_count = 50
-			grind_rail_count = 16
-			vertical_rail_count = 8
-			obstacle_count = 20
+			obstacle_count = 0
+		4:  # Extreme - dense but playable
+			platform_count = 24
+			ramp_count = 10
+			grind_rail_count = 10
+			vertical_rail_count = 5
+			obstacle_count = 0
 		_:  # Default to medium
 			complexity = 2
 			configure_from_complexity()
@@ -66,13 +66,13 @@ func configure_from_complexity() -> void:
 	platform_height_max = 12.0 * size_factor
 	platform_size_variation = 1.0
 
-	# Minimum spacing scales with arena size - CRITICAL for preventing overlap
+	# Minimum spacing scales with arena size
 	min_spacing = 8.0 * size_factor
 	min_spacing = max(min_spacing, 5.0)  # Never less than 5 units
 
 	if OS.is_debug_build():
-		print("Level config - Complexity: %d, Arena: %.0f (size_factor: %.2f), Platforms: %d, Ramps: %d, MinSpacing: %.1f" % [
-			complexity, arena_size, size_factor, platform_count, ramp_count, min_spacing
+		print("Level config - Complexity: %d, Arena: %.0f (size_factor: %.2f), Platforms: %d, Ramps: %d" % [
+			complexity, arena_size, size_factor, platform_count, ramp_count
 		])
 
 func generate_level() -> void:
@@ -94,8 +94,7 @@ func generate_level() -> void:
 	# Generate level components
 	generate_main_floor()
 	generate_platforms()
-	generate_ramps()
-	generate_obstacles()  # Extra obstacles based on complexity
+	generate_access_ramps()  # Ramps that provide upward access, not block it
 	generate_grind_rails()
 	generate_death_zone()
 
@@ -253,49 +252,47 @@ func generate_platforms() -> void:
 	if OS.is_debug_build():
 		print("Generated ", generated_count, " / ", platform_count, " platforms (", max_attempts, " attempts)")
 
-func generate_ramps() -> void:
-	"""Generate ramps/slopes on the stage with proper spacing"""
+func generate_access_ramps() -> void:
+	"""Generate ramps that provide upward access from ground to elevated areas.
+	Ramps are placed around the perimeter pointing OUTWARD and UP, never blocking."""
 	var size_factor: float = arena_size / 120.0
 	var floor_radius: float = (arena_size * 0.7) / 2.0
-	var generated_count: int = 0
-	var max_attempts: int = ramp_count * 20
 
-	# Ramp sizes scale with arena
-	var ramp_width_min: float = 6.0 * size_factor
-	var ramp_width_max: float = 12.0 * size_factor
-	var ramp_length_min: float = 10.0 * size_factor
-	var ramp_length_max: float = 20.0 * size_factor
-	var ramp_height_max: float = 8.0 * size_factor
+	# Ramp dimensions scale with arena
+	var ramp_width: float = 8.0 * size_factor
+	var ramp_length: float = 16.0 * size_factor
+	var ramp_thickness: float = 0.8 * size_factor
 
-	for attempt in range(max_attempts):
-		if generated_count >= ramp_count:
-			break
+	for i in range(ramp_count):
+		# Place ramps evenly around the perimeter, pointing outward
+		var angle: float = (float(i) / ramp_count) * TAU
 
-		# Generate position on the stage
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(min_spacing, floor_radius - min_spacing)
-
+		# Position ramp near the edge of the floor, pointing outward
+		var distance: float = floor_radius * 0.7
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
-		var y: float = randf_range(1.0 * size_factor, ramp_height_max)
 
-		# Ramp size scales with arena
-		var ramp_width: float = randf_range(ramp_width_min, ramp_width_max)
-		var ramp_length: float = randf_range(ramp_length_min, ramp_length_max)
-		var ramp_tilt: float = -randf_range(15, 35)
+		# Ramp goes from ground level up to a moderate height
+		var target_height: float = (4.0 + (i % 3) * 3.0) * size_factor  # Varied heights
+		var ramp_center_height: float = target_height * 0.5
 
-		var ramp_size: Vector3 = Vector3(ramp_width, 1.0 * size_factor, ramp_length)
-		var ramp_pos: Vector3 = Vector3(x, y, z)
-		var ramp_rotation: Vector3 = Vector3(ramp_tilt, randf() * 360.0, 0)
+		var ramp_size: Vector3 = Vector3(ramp_width, ramp_thickness, ramp_length)
+		var ramp_pos: Vector3 = Vector3(x, ramp_center_height, z)
 
-		# Create ramp - geometry can overlap/connect
+		# Calculate slope angle based on target height and ramp length
+		var slope_angle: float = atan2(target_height, ramp_length * 0.8)
+
+		# Ramp faces outward from center (rotation around Y axis)
+		var facing_angle: float = angle
+
 		var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 		ramp_instance.mesh = ramp_mesh
-		ramp_instance.name = "Ramp" + str(generated_count)
+		ramp_instance.name = "AccessRamp" + str(i)
 		ramp_instance.position = ramp_pos
-		ramp_instance.rotation_degrees = ramp_rotation
+		# Rotate: first tilt up (X rotation), then face outward (Y rotation)
+		ramp_instance.rotation = Vector3(-slope_angle, facing_angle, 0)
 		add_child(ramp_instance)
 
 		# Add collision
@@ -308,91 +305,9 @@ func generate_ramps() -> void:
 		ramp_instance.add_child(static_body)
 
 		platforms.append(ramp_instance)
-		generated_count += 1
 
 	if OS.is_debug_build():
-		print("Generated ", generated_count, " / ", ramp_count, " ramps (", max_attempts, " attempts)")
-
-func generate_obstacles() -> void:
-	"""Generate extra obstacles based on complexity (pillars, blocks, barriers)"""
-	if obstacle_count <= 0:
-		return
-
-	var size_factor: float = arena_size / 120.0
-	var floor_radius: float = (arena_size * 0.7) / 2.0
-	var generated_count: int = 0
-	var max_attempts: int = obstacle_count * 20
-
-	for attempt in range(max_attempts):
-		if generated_count >= obstacle_count:
-			break
-
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(min_spacing, floor_radius - min_spacing)
-
-		var x: float = cos(angle) * distance
-		var z: float = sin(angle) * distance
-
-		# Obstacle sizes scale with arena
-		var obstacle_type: int = randi() % 4
-		var obstacle_size: Vector3
-		var obstacle_pos: Vector3
-
-		match obstacle_type:
-			0:  # Low block/cover
-				obstacle_size = Vector3(
-					randf_range(3.0, 6.0) * size_factor,
-					randf_range(2.0, 4.0) * size_factor,
-					randf_range(3.0, 6.0) * size_factor
-				)
-				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
-			1:  # Tall pillar
-				var pillar_width: float = randf_range(2.0, 4.0) * size_factor
-				obstacle_size = Vector3(pillar_width, randf_range(8.0, 15.0) * size_factor, pillar_width)
-				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
-			2:  # Wide barrier
-				obstacle_size = Vector3(
-					randf_range(8.0, 14.0) * size_factor,
-					randf_range(3.0, 5.0) * size_factor,
-					randf_range(2.0, 3.0) * size_factor
-				)
-				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
-			_:  # Large platform block
-				obstacle_size = Vector3(
-					randf_range(5.0, 8.0) * size_factor,
-					randf_range(3.0, 6.0) * size_factor,
-					randf_range(5.0, 8.0) * size_factor
-				)
-				obstacle_pos = Vector3(x, obstacle_size.y / 2.0, z)
-
-		# Create obstacle - geometry can overlap/connect
-		var obstacle_mesh: BoxMesh = create_smooth_box_mesh(obstacle_size)
-
-		var obstacle_instance: MeshInstance3D = MeshInstance3D.new()
-		obstacle_instance.mesh = obstacle_mesh
-		obstacle_instance.name = "Obstacle" + str(generated_count)
-		obstacle_instance.position = obstacle_pos
-
-		# Random rotation for some variety
-		if obstacle_type >= 2:
-			obstacle_instance.rotation_degrees.y = randf() * 360.0
-
-		add_child(obstacle_instance)
-
-		# Add collision
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = obstacle_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		obstacle_instance.add_child(static_body)
-
-		platforms.append(obstacle_instance)
-		generated_count += 1
-
-	if OS.is_debug_build():
-		print("Generated ", generated_count, " / ", obstacle_count, " obstacles")
+		print("Generated ", ramp_count, " access ramps")
 
 func generate_grind_rails() -> void:
 	"""Generate grinding rails around the arena perimeter (Sonic style)"""
