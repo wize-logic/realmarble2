@@ -2,29 +2,25 @@ extends Node3D
 
 ## Procedural Level Generator (Type A - Sonic-Style Speedrun Arena)
 ## Creates open, flowing arenas optimized for high-speed marble gameplay
-## Features: floating platforms, ramps, grind rails, and vertical rails
+## Features: open central area, perimeter platforms, grind rails, and speed ramps
 
 # ============================================================================
 # EXPORTED PARAMETERS
 # ============================================================================
 
 @export var level_seed: int = 0
-@export var arena_size: float = 120.0  # Base arena size (scaled by size setting)
+@export var arena_size: float = 120.0  # Base arena size - THIS CONTROLS ACTUAL SIZE
 @export var complexity: int = 2  # 1=Low, 2=Medium, 3=High, 4=Extreme
 
 # Calculated counts (set by configure_for_complexity)
-var platform_count: int = 15
-var ramp_count: int = 10
+var platform_count: int = 12
+var ramp_count: int = 8
 var grind_rail_count: int = 6
 var vertical_rail_count: int = 3
-var obstacle_count: int = 4
-
-# Internal parameters
-var min_spacing: float = 3.0  # Minimum gap for interactive objects only
 
 var noise: FastNoiseLite
 var platforms: Array = []
-var interactive_positions: Array[Dictionary] = []  # Only track interactive objects (jump pads, etc.)
+var geometry_bounds: Array[Dictionary] = []  # Track all geometry for interactive placement
 var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
 
 # ============================================================================
@@ -36,33 +32,25 @@ func _ready() -> void:
 	generate_level()
 
 func configure_for_complexity() -> void:
-	"""Configure all parameters based on complexity and arena size.
-	Complexity affects density and variety, while arena_size affects scale.
-	Larger arenas need MORE geometry to fill the space properly."""
+	"""Configure parameters based on complexity. Arena size is set externally."""
 
-	# Calculate arena scale factor (how much bigger than default 120.0)
-	var scale_factor: float = arena_size / 120.0
-	# For larger arenas, we need dramatically more geometry
-	var area_multiplier: float = scale_factor * scale_factor  # Quadratic scaling for area
-
-	# Base counts for complexity levels (at default arena size)
-	var base_platforms: Dictionary = {1: 8, 2: 15, 3: 22, 4: 30}
-	var base_ramps: Dictionary = {1: 5, 2: 10, 3: 15, 4: 20}
+	# Complexity affects DENSITY, not size
+	# Keep counts LOW for Sonic-style open arenas
+	var base_platforms: Dictionary = {1: 6, 2: 10, 3: 14, 4: 18}
+	var base_ramps: Dictionary = {1: 4, 2: 6, 3: 8, 4: 10}
 	var base_grind_rails: Dictionary = {1: 4, 2: 6, 3: 8, 4: 10}
-	var base_vertical_rails: Dictionary = {1: 2, 2: 3, 3: 4, 4: 6}
-	var base_obstacles: Dictionary = {1: 2, 2: 4, 3: 6, 4: 8}
+	var base_vertical_rails: Dictionary = {1: 2, 2: 3, 3: 4, 4: 5}
 
-	# Apply complexity base and scale by arena size
-	var clamped_complexity: int = clampi(complexity, 1, 4)
-	platform_count = int(base_platforms[clamped_complexity] * area_multiplier)
-	ramp_count = int(base_ramps[clamped_complexity] * area_multiplier)
-	grind_rail_count = int(base_grind_rails[clamped_complexity] * sqrt(scale_factor))  # Linear scaling for rails
-	vertical_rail_count = int(base_vertical_rails[clamped_complexity] * sqrt(scale_factor))
-	obstacle_count = int(base_obstacles[clamped_complexity] * area_multiplier)
+	var c: int = clampi(complexity, 1, 4)
+	platform_count = base_platforms[c]
+	ramp_count = base_ramps[c]
+	grind_rail_count = base_grind_rails[c]
+	vertical_rail_count = base_vertical_rails[c]
 
-	if OS.is_debug_build():
-		print("Level configured - Complexity: %d, Arena Size: %.1f, Scale: %.2f" % [complexity, arena_size, scale_factor])
-		print("  Platforms: %d, Ramps: %d, Rails: %d, Vertical: %d, Obstacles: %d" % [platform_count, ramp_count, grind_rail_count, vertical_rail_count, obstacle_count])
+	print("=== SONIC LEVEL CONFIG ===")
+	print("Arena Size: %.1f (floor will be %.1f x %.1f)" % [arena_size, arena_size * 0.7, arena_size * 0.7])
+	print("Complexity: %d" % complexity)
+	print("Platforms: %d, Ramps: %d, Rails: %d" % [platform_count, ramp_count, grind_rail_count])
 
 # ============================================================================
 # LEVEL GENERATION
@@ -70,70 +58,59 @@ func configure_for_complexity() -> void:
 
 func generate_level() -> void:
 	"""Generate a complete procedural level"""
-	if OS.is_debug_build():
-		print("Generating Sonic-style speedrun level with seed: ", level_seed)
+	print("Generating Sonic-style speedrun level...")
+	print("Arena size parameter: %.1f" % arena_size)
 
-	# Initialize noise for variation
 	noise = FastNoiseLite.new()
 	noise.seed = level_seed if level_seed != 0 else randi()
 	noise.frequency = 0.05
 
-	# Clear any existing geometry
 	clear_level()
 
-	# Generate level components (order matters for layering)
+	# Generate in order - floor first, then perimeter elements
 	generate_main_floor()
-	generate_platforms()
-	generate_ramps()
-	generate_obstacles()
-	generate_grind_rails()
+	generate_perimeter_platforms()  # Platforms around the EDGES
+	generate_speed_ramps()          # Ramps pointing toward center
+	generate_grind_rails()          # Rails around perimeter
 	generate_death_zone()
 
-	# Apply beautiful procedural materials
 	apply_procedural_textures()
-
-	print("Level generation complete!")
+	print("Level generation complete! Floor size: %.1f" % (arena_size * 0.7))
 
 func clear_level() -> void:
-	"""Remove all existing level geometry"""
 	for child in get_children():
 		child.queue_free()
 	platforms.clear()
-	interactive_positions.clear()
+	geometry_bounds.clear()
 
-# ============================================================================
-# SPACING CHECKS (Only for interactive objects)
-# ============================================================================
-
-func check_interactive_spacing(new_pos: Vector3, new_radius: float) -> bool:
-	"""Check if a new interactive object has proper spacing from other interactive objects.
-	This is ONLY used for jump pads, teleporters, etc. - NOT for geometry.
-	Returns true if the position is valid."""
-
-	for existing in interactive_positions:
-		var existing_pos: Vector3 = existing.position
-		var existing_radius: float = existing.radius
-		var distance: float = new_pos.distance_to(existing_pos)
-		var min_dist: float = new_radius + existing_radius + min_spacing
-
-		if distance < min_dist:
-			return false
-
-	return true
-
-func register_interactive(pos: Vector3, radius: float) -> void:
-	"""Register an interactive object for spacing checks"""
-	interactive_positions.append({
+func register_geometry(pos: Vector3, size: Vector3) -> void:
+	"""Register geometry bounds for interactive object placement"""
+	geometry_bounds.append({
 		"position": pos,
-		"radius": radius
+		"size": size
 	})
 
+func is_position_clear(pos: Vector3, radius: float, check_height: bool = true) -> bool:
+	"""Check if a position is clear of geometry"""
+	for geo in geometry_bounds:
+		var geo_pos: Vector3 = geo.position
+		var geo_size: Vector3 = geo.size
+
+		# Simple AABB check with margin
+		var margin: float = radius + 2.0
+		if abs(pos.x - geo_pos.x) < (geo_size.x / 2.0 + margin) and \
+		   abs(pos.z - geo_pos.z) < (geo_size.z / 2.0 + margin):
+			if check_height and abs(pos.y - geo_pos.y) < (geo_size.y / 2.0 + margin):
+				return false
+			elif not check_height:
+				return false
+	return true
+
 # ============================================================================
-# UTILITY FUNCTIONS
+# UTILITY
 # ============================================================================
 
 func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
-	"""Create a box mesh with smooth appearance"""
 	var mesh = BoxMesh.new()
 	mesh.size = size
 	mesh.subdivide_width = 2
@@ -142,12 +119,14 @@ func create_smooth_box_mesh(size: Vector3) -> BoxMesh:
 	return mesh
 
 # ============================================================================
-# MAIN FLOOR
+# MAIN FLOOR - This is what determines actual arena size
 # ============================================================================
 
 func generate_main_floor() -> void:
-	"""Generate the main arena floor"""
+	"""Generate the main arena floor - SIZE SCALES WITH arena_size"""
 	var floor_size: float = arena_size * 0.7
+
+	print("Creating main floor: %.1f x %.1f" % [floor_size, floor_size])
 
 	var floor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(floor_size, 2.0, floor_size))
 
@@ -157,7 +136,6 @@ func generate_main_floor() -> void:
 	floor_instance.position = Vector3(0, -1, 0)
 	add_child(floor_instance)
 
-	# Add collision
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var shape: BoxShape3D = BoxShape3D.new()
@@ -167,42 +145,45 @@ func generate_main_floor() -> void:
 	floor_instance.add_child(static_body)
 
 	platforms.append(floor_instance)
-
-	if OS.is_debug_build():
-		print("Generated main floor: ", floor_size, "x", floor_size)
+	# Don't register floor as blocking geometry
 
 # ============================================================================
-# PLATFORMS
+# PERIMETER PLATFORMS - Around the edges, NOT in the center
 # ============================================================================
 
-func generate_platforms() -> void:
-	"""Generate elevated platforms - complexity affects count, height range, and size variation"""
+func generate_perimeter_platforms() -> void:
+	"""Generate elevated platforms around the PERIMETER of the arena"""
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
-	# Complexity affects height range and size variation
-	var max_height: float = 6.0 + complexity * 3.0  # 9, 12, 15, 18
-	var min_height: float = 2.0 + complexity * 0.5   # 2.5, 3, 3.5, 4
-	var size_variation: float = 1.0 + complexity * 0.3  # More variation at higher complexity
+	# Platforms go in the OUTER 40% of the arena (60-100% of radius)
+	var inner_limit: float = floor_radius * 0.6
+	var outer_limit: float = floor_radius * 0.95
+
+	# Heights scale with arena size
+	var base_height: float = arena_size * 0.04  # ~5 at default, ~10 at huge
+	var max_height: float = arena_size * 0.12   # ~15 at default, ~30 at huge
+
+	print("Placing %d platforms between radius %.1f and %.1f" % [platform_count, inner_limit, outer_limit])
 
 	for i in range(platform_count):
-		# Distribute platforms across the arena
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(8.0, floor_radius - 5.0)
+		# Distribute evenly around perimeter with some randomness
+		var base_angle: float = (float(i) / platform_count) * TAU
+		var angle: float = base_angle + randf_range(-0.2, 0.2)
+		var distance: float = randf_range(inner_limit, outer_limit)
 
 		var x: float = cos(angle) * distance
 		var z: float = sin(angle) * distance
-		var y: float = randf_range(min_height, max_height)
+		var y: float = randf_range(base_height, max_height)
 
-		# Platform size varies with complexity
-		var base_size: float = 5.0 + randf() * 4.0 * size_variation
-		var width: float = base_size + randf() * 3.0
-		var depth: float = base_size + randf() * 3.0
+		# Platform size scales with arena
+		var size_scale: float = arena_size / 120.0
+		var width: float = (5.0 + randf() * 4.0) * size_scale
+		var depth: float = (5.0 + randf() * 4.0) * size_scale
 		var height: float = 0.8 + randf() * 0.7
 
 		var platform_size: Vector3 = Vector3(width, height, depth)
 		var platform_pos: Vector3 = Vector3(x, y, z)
 
-		# Create platform (no spacing checks - geometry can overlap slightly)
 		var platform_mesh: BoxMesh = create_smooth_box_mesh(platform_size)
 
 		var platform_instance: MeshInstance3D = MeshInstance3D.new()
@@ -211,7 +192,6 @@ func generate_platforms() -> void:
 		platform_instance.position = platform_pos
 		add_child(platform_instance)
 
-		# Add collision
 		var static_body: StaticBody3D = StaticBody3D.new()
 		var collision: CollisionShape3D = CollisionShape3D.new()
 		var shape: BoxShape3D = BoxShape3D.new()
@@ -221,53 +201,51 @@ func generate_platforms() -> void:
 		platform_instance.add_child(static_body)
 
 		platforms.append(platform_instance)
+		register_geometry(platform_pos, platform_size)
 
-	if OS.is_debug_build():
-		print("Generated ", platform_count, " platforms (height range: %.1f-%.1f)" % [min_height, max_height])
+	print("Generated %d perimeter platforms" % platform_count)
 
 # ============================================================================
-# RAMPS (Slopes for Speed)
+# SPEED RAMPS - At edges, pointing toward center for speed boosts
 # ============================================================================
 
-func generate_ramps() -> void:
-	"""Generate ramps/slopes - complexity affects count, angles, and sizes"""
+func generate_speed_ramps() -> void:
+	"""Generate ramps at the perimeter pointing toward center"""
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
-	# Complexity affects ramp steepness and size
-	var max_angle: float = 20.0 + complexity * 5.0  # Steeper at higher complexity
-	var min_angle: float = 10.0 + complexity * 2.0
-	var ramp_scale: float = 1.0 + complexity * 0.2
+	# Ramps at the outer edge
+	var ramp_distance: float = floor_radius * 0.75
+
+	print("Placing %d speed ramps at distance %.1f" % [ramp_count, ramp_distance])
 
 	for i in range(ramp_count):
-		# Position ramps across the arena floor
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(5.0, floor_radius - 8.0)
+		var angle: float = (float(i) / ramp_count) * TAU + randf_range(-0.1, 0.1)
 
-		var x: float = cos(angle) * distance
-		var z: float = sin(angle) * distance
-		var y: float = randf_range(0.3, 3.0 + complexity)  # Higher ramps at higher complexity
+		var x: float = cos(angle) * ramp_distance
+		var z: float = sin(angle) * ramp_distance
 
-		# Ramp size scales with complexity
-		var ramp_length: float = (8.0 + randf() * 6.0) * ramp_scale
-		var ramp_width: float = (6.0 + randf() * 4.0) * ramp_scale
+		# Ramp size scales with arena
+		var size_scale: float = arena_size / 120.0
+		var ramp_length: float = (10.0 + randf() * 4.0) * size_scale
+		var ramp_width: float = (6.0 + randf() * 2.0) * size_scale
 		var ramp_size: Vector3 = Vector3(ramp_width, 0.5, ramp_length)
-		var ramp_pos: Vector3 = Vector3(x, y, z)
 
-		# Random rotation with complexity-based tilt
-		var tilt_angle: float = randf_range(min_angle, max_angle)
-		var ramp_rotation: Vector3 = Vector3(-tilt_angle, randf() * 360.0, 0)
+		# Ramp sits on ground, tilted toward center
+		var ramp_pos: Vector3 = Vector3(x, ramp_length * 0.15, z)  # Slight elevation based on tilt
 
-		# Create ramp (no spacing checks for geometry)
+		# Rotate to face center
+		var angle_to_center: float = atan2(-x, -z)
+		var tilt: float = 15.0 + randf() * 10.0  # 15-25 degree tilt
+
 		var ramp_mesh: BoxMesh = create_smooth_box_mesh(ramp_size)
 
 		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
 		ramp_instance.mesh = ramp_mesh
 		ramp_instance.name = "Ramp" + str(i)
 		ramp_instance.position = ramp_pos
-		ramp_instance.rotation_degrees = ramp_rotation
+		ramp_instance.rotation_degrees = Vector3(-tilt, rad_to_deg(angle_to_center), 0)
 		add_child(ramp_instance)
 
-		# Add collision
 		var static_body: StaticBody3D = StaticBody3D.new()
 		var collision: CollisionShape3D = CollisionShape3D.new()
 		var shape: BoxShape3D = BoxShape3D.new()
@@ -277,81 +255,33 @@ func generate_ramps() -> void:
 		ramp_instance.add_child(static_body)
 
 		platforms.append(ramp_instance)
+		register_geometry(ramp_pos, ramp_size * 1.5)  # Larger bounds due to rotation
 
-	if OS.is_debug_build():
-		print("Generated ", ramp_count, " ramps (angle range: %.1f-%.1f)" % [min_angle, max_angle])
-
-# ============================================================================
-# OBSTACLES (Low obstacles that don't block upward movement)
-# ============================================================================
-
-func generate_obstacles() -> void:
-	"""Generate small obstacles - kept LOW to not impede upward progression"""
-	var floor_radius: float = (arena_size * 0.7) / 2.0
-
-	for i in range(obstacle_count):
-		var angle: float = randf() * TAU
-		var distance: float = randf_range(10.0, floor_radius - 10.0)
-
-		var x: float = cos(angle) * distance
-		var z: float = sin(angle) * distance
-
-		# IMPORTANT: Keep obstacles LOW so they don't block upward movement
-		var obstacle_height: float = 1.0 + randf() * 1.5  # Max 2.5 units tall
-		var obstacle_width: float = 2.0 + randf() * 3.0
-		var obstacle_depth: float = 2.0 + randf() * 3.0
-
-		var obstacle_size: Vector3 = Vector3(obstacle_width, obstacle_height, obstacle_depth)
-		var obstacle_pos: Vector3 = Vector3(x, obstacle_height / 2.0, z)
-
-		var obstacle_mesh: BoxMesh = create_smooth_box_mesh(obstacle_size)
-
-		var obstacle_instance: MeshInstance3D = MeshInstance3D.new()
-		obstacle_instance.mesh = obstacle_mesh
-		obstacle_instance.name = "Obstacle" + str(i)
-		obstacle_instance.position = obstacle_pos
-		add_child(obstacle_instance)
-
-		# Add collision
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = obstacle_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		obstacle_instance.add_child(static_body)
-
-		platforms.append(obstacle_instance)
-
-	if OS.is_debug_build():
-		print("Generated ", obstacle_count, " obstacles (kept low for upward progression)")
+	print("Generated %d speed ramps" % ramp_count)
 
 # ============================================================================
-# GRIND RAILS
+# GRIND RAILS - The signature Sonic element
 # ============================================================================
 
 func generate_grind_rails() -> void:
-	"""Generate grinding rails around the arena perimeter (Sonic style)"""
-	# Position around the arena perimeter
-	var rail_distance: float = arena_size * 0.55
+	"""Generate grinding rails around the arena perimeter"""
+	var rail_distance: float = arena_size * 0.45  # Outside the main floor
 
-	# Complexity affects rail height variation and arc coverage
-	var height_variation: float = 1.0 + complexity * 0.5
-	var arc_coverage: float = 0.6 + complexity * 0.05  # More coverage at higher complexity
+	# Rail heights scale with arena size
+	var base_rail_height: float = arena_size * 0.025  # ~3 at default, ~6 at huge
+
+	print("Placing %d grind rails at distance %.1f" % [grind_rail_count, rail_distance])
 
 	for i in range(grind_rail_count):
 		var angle_start: float = (float(i) / grind_rail_count) * TAU
-		var angle_end: float = angle_start + (TAU / grind_rail_count) * arc_coverage
+		var angle_end: float = angle_start + (TAU / grind_rail_count) * 0.7
 
-		# Create a curved rail using Path3D and Curve3D
 		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
 		rail.name = "GrindRail" + str(i)
 		rail.curve = Curve3D.new()
 
-		# Varied heights based on complexity
-		var base_height: float = 2.5 + (i % 3) * (2.0 + complexity * 0.5)
+		var height: float = base_rail_height + (i % 3) * (arena_size * 0.02)
 
-		# Create curve points along the arc
 		var num_points: int = 10 + complexity * 2
 		for j in range(num_points):
 			var t: float = float(j) / (num_points - 1)
@@ -359,47 +289,37 @@ func generate_grind_rails() -> void:
 
 			var x: float = cos(angle) * rail_distance
 			var z: float = sin(angle) * rail_distance
-
-			# Height variation increases with complexity
-			var height_offset: float = sin(t * PI) * height_variation
-			var y: float = base_height + height_offset
+			var height_offset: float = sin(t * PI) * (arena_size * 0.01)
+			var y: float = height + height_offset
 
 			rail.curve.add_point(Vector3(x, y, z))
 
-		# Set smooth tangent handles
 		_set_rail_tangents(rail)
-
 		add_child(rail)
 		create_rail_visual(rail)
 
-	# Add vertical connecting rails
 	generate_vertical_rails()
-
-	if OS.is_debug_build():
-		print("Generated ", grind_rail_count, " grind rails around perimeter")
+	print("Generated %d grind rails" % grind_rail_count)
 
 func generate_vertical_rails() -> void:
-	"""Generate vertical/diagonal rails connecting different heights"""
-	var rail_distance: float = arena_size * 0.50
-
-	# Complexity affects end height and spiral tightness
-	var end_height: float = 8.0 + complexity * 3.0
-	var spiral_amount: float = PI * (0.3 + complexity * 0.1)
+	"""Generate vertical/diagonal rails for height transitions"""
+	var rail_distance: float = arena_size * 0.40
+	var end_height: float = arena_size * 0.08 + complexity * (arena_size * 0.02)
 
 	for i in range(vertical_rail_count):
-		var angle: float = (float(i) / vertical_rail_count) * TAU + (TAU / vertical_rail_count * 0.5)
+		var angle: float = (float(i) / vertical_rail_count) * TAU + PI / vertical_rail_count
 
 		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
 		rail.name = "VerticalRail" + str(i)
 		rail.curve = Curve3D.new()
 
-		var start_y: float = 1.5
-
+		var start_y: float = arena_size * 0.015
 		var num_points: int = 6 + complexity
+
 		for j in range(num_points):
 			var t: float = float(j) / (num_points - 1)
-			var current_angle: float = angle + t * spiral_amount
-			var current_distance: float = lerp(rail_distance, rail_distance * 0.8, t)
+			var current_angle: float = angle + t * PI * 0.4
+			var current_distance: float = lerp(rail_distance, rail_distance * 0.85, t)
 
 			var x: float = cos(current_angle) * current_distance
 			var z: float = sin(current_angle) * current_distance
@@ -408,18 +328,12 @@ func generate_vertical_rails() -> void:
 			rail.curve.add_point(Vector3(x, y, z))
 
 		_set_rail_tangents(rail)
-
 		add_child(rail)
 		create_rail_visual(rail)
 
-	if OS.is_debug_build():
-		print("Generated ", vertical_rail_count, " vertical rails (max height: %.1f)" % end_height)
-
 func _set_rail_tangents(rail: Path3D) -> void:
-	"""Calculate and set proper tangent handles for smooth rail curves"""
 	for j in range(rail.curve.point_count):
 		var tangent: Vector3
-
 		if j == 0:
 			tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
 		elif j == rail.curve.point_count - 1:
@@ -429,12 +343,10 @@ func _set_rail_tangents(rail: Path3D) -> void:
 			var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
 			tangent = (prev_to_curr + curr_to_next).normalized()
 
-		var handle_length: float = 0.5
-		rail.curve.set_point_in(j, -tangent * handle_length)
-		rail.curve.set_point_out(j, tangent * handle_length)
+		rail.curve.set_point_in(j, -tangent * 0.5)
+		rail.curve.set_point_out(j, tangent * 0.5)
 
 func create_rail_visual(rail: Path3D) -> void:
-	"""Create visual representation of a rail using a 3D cylindrical tube"""
 	if not rail.curve or rail.curve.get_baked_length() == 0:
 		return
 
@@ -493,7 +405,6 @@ func create_rail_visual(rail: Path3D) -> void:
 			immediate_mesh.surface_add_vertex(v3)
 
 	immediate_mesh.surface_end()
-
 	rail.add_child(rail_visual)
 
 # ============================================================================
@@ -501,7 +412,6 @@ func create_rail_visual(rail: Path3D) -> void:
 # ============================================================================
 
 func generate_death_zone() -> void:
-	"""Generate death zone below the arena"""
 	var death_zone: Area3D = Area3D.new()
 	death_zone.name = "DeathZone"
 	death_zone.position = Vector3(0, -50, 0)
@@ -518,58 +428,34 @@ func generate_death_zone() -> void:
 
 	death_zone.body_entered.connect(_on_death_zone_entered)
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated death zone")
-
 func _on_death_zone_entered(body: Node3D) -> void:
-	"""Handle player falling into death zone"""
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Death zone entered by: %s (type: %s)" % [body.name, body.get_class()])
 	if body.has_method("fall_death"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling fall_death() on %s" % body.name)
 		body.fall_death()
 	elif body.has_method("respawn"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling respawn() directly on %s" % body.name)
 		body.respawn()
-	else:
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: %s has neither fall_death() nor respawn() method!" % body.name)
 
 # ============================================================================
-# MATERIALS
+# MATERIALS & SPAWNS
 # ============================================================================
 
 func apply_procedural_textures() -> void:
-	"""Apply procedurally generated textures to all platforms"""
 	material_manager.apply_materials_to_level(self)
 
-# ============================================================================
-# SPAWN POINTS
-# ============================================================================
-
 func get_spawn_points() -> PackedVector3Array:
-	"""Generate spawn points on platforms - supports up to 8 players total"""
 	var spawns: PackedVector3Array = PackedVector3Array()
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
-	# Main floor spawns - scaled with arena size
-	spawns.append(Vector3(0, 2, 0))  # Center
+	# Center spawn
+	spawns.append(Vector3(0, 2, 0))
 
-	# Ring spawns scaled to arena size
-	var ring1_dist: float = min(10.0, floor_radius * 0.25)
-	var ring2_dist: float = min(20.0, floor_radius * 0.5)
+	# Ring spawns that SCALE with arena size
+	var ring1_dist: float = floor_radius * 0.25
+	var ring2_dist: float = floor_radius * 0.5
 
-	spawns.append(Vector3(ring1_dist, 2, 0))
-	spawns.append(Vector3(-ring1_dist, 2, 0))
-	spawns.append(Vector3(0, 2, ring1_dist))
-	spawns.append(Vector3(0, 2, -ring1_dist))
-
-	spawns.append(Vector3(ring1_dist, 2, ring1_dist))
-	spawns.append(Vector3(-ring1_dist, 2, ring1_dist))
-	spawns.append(Vector3(ring1_dist, 2, -ring1_dist))
-	spawns.append(Vector3(-ring1_dist, 2, -ring1_dist))
-
-	spawns.append(Vector3(ring2_dist, 2, 0))
-	spawns.append(Vector3(-ring2_dist, 2, 0))
-	spawns.append(Vector3(0, 2, ring2_dist))
-	spawns.append(Vector3(0, 2, -ring2_dist))
+	for i in range(4):
+		var angle: float = (float(i) / 4) * TAU
+		spawns.append(Vector3(cos(angle) * ring1_dist, 2, sin(angle) * ring1_dist))
+		spawns.append(Vector3(cos(angle) * ring2_dist, 2, sin(angle) * ring2_dist))
 
 	# Platform spawns
 	for platform in platforms:
@@ -581,32 +467,18 @@ func get_spawn_points() -> PackedVector3Array:
 	return spawns
 
 # ============================================================================
-# MID-ROUND EXPANSION SYSTEM
+# EXPANSION SYSTEM (for mid-round expansion)
 # ============================================================================
 
 func generate_secondary_map(offset: Vector3) -> void:
-	"""Generate a secondary map at the specified offset position"""
 	print("Generating secondary map at offset: ", offset)
-
 	var secondary_seed: int = noise.seed + 1000
 	var old_seed: int = noise.seed
 	noise.seed = secondary_seed
 
-	generate_secondary_floor(offset)
-	generate_secondary_platforms(offset)
-	generate_secondary_ramps(offset)
-	generate_secondary_rails(offset)
-
-	noise.seed = old_seed
-
-	print("Secondary map generation complete at offset: ", offset)
-
-func generate_secondary_floor(offset: Vector3) -> void:
-	"""Generate floor for secondary map"""
+	# Secondary floor
 	var floor_size: float = arena_size * 0.7
-
 	var floor_mesh: BoxMesh = create_smooth_box_mesh(Vector3(floor_size, 2.0, floor_size))
-
 	var floor_instance: MeshInstance3D = MeshInstance3D.new()
 	floor_instance.mesh = floor_mesh
 	floor_instance.name = "SecondaryFloor"
@@ -620,107 +492,12 @@ func generate_secondary_floor(offset: Vector3) -> void:
 	collision.shape = shape
 	static_body.add_child(collision)
 	floor_instance.add_child(static_body)
-
 	platforms.append(floor_instance)
 
-func generate_secondary_platforms(offset: Vector3) -> void:
-	"""Generate platforms for secondary map"""
-	var radius: float = arena_size * 0.4
-
-	for i in range(platform_count):
-		var angle: float = (float(i) / platform_count) * TAU
-		var distance: float = radius * (0.6 + randf() * 0.4)
-
-		var x: float = cos(angle) * distance
-		var z: float = sin(angle) * distance
-		var y: float = 3.0 + randf() * 8.0
-
-		var width: float = 6.0 + randf() * 6.0
-		var depth: float = 6.0 + randf() * 6.0
-		var height: float = 1.0 + randf() * 1.0
-
-		var platform_mesh: BoxMesh = create_smooth_box_mesh(Vector3(width, height, depth))
-
-		var platform_instance: MeshInstance3D = MeshInstance3D.new()
-		platform_instance.mesh = platform_mesh
-		platform_instance.name = "SecondaryPlatform" + str(i)
-		platform_instance.position = offset + Vector3(x, y, z)
-		add_child(platform_instance)
-
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = platform_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		platform_instance.add_child(static_body)
-
-		platforms.append(platform_instance)
-
-func generate_secondary_ramps(offset: Vector3) -> void:
-	"""Generate ramps for secondary map"""
-	for i in range(ramp_count):
-		var angle: float = (float(i) / ramp_count) * TAU + (TAU / ramp_count * 0.5)
-		var distance: float = arena_size * 0.3
-
-		var x: float = cos(angle) * distance
-		var z: float = sin(angle) * distance
-		var y: float = 0.0
-
-		var ramp_mesh: BoxMesh = create_smooth_box_mesh(Vector3(8.0, 0.5, 12.0))
-
-		var ramp_instance: MeshInstance3D = MeshInstance3D.new()
-		ramp_instance.mesh = ramp_mesh
-		ramp_instance.name = "SecondaryRamp" + str(i)
-		ramp_instance.position = offset + Vector3(x, y + 3, z)
-		ramp_instance.rotation_degrees = Vector3(-25, rad_to_deg(angle), 0)
-		add_child(ramp_instance)
-
-		var static_body: StaticBody3D = StaticBody3D.new()
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var shape: BoxShape3D = BoxShape3D.new()
-		shape.size = ramp_mesh.size
-		collision.shape = shape
-		static_body.add_child(collision)
-		ramp_instance.add_child(static_body)
-
-		platforms.append(ramp_instance)
-
-func generate_secondary_rails(offset: Vector3) -> void:
-	"""Generate rails for secondary map"""
-	var rail_distance: float = arena_size * 0.54
-
-	for i in range(grind_rail_count):
-		var angle_start: float = (float(i) / grind_rail_count) * TAU
-		var angle_end: float = angle_start + (TAU / grind_rail_count) * 0.7
-
-		var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
-		rail.name = "SecondaryGrindRail" + str(i)
-		rail.curve = Curve3D.new()
-
-		var base_height: float = 3.0 + (i % 3) * 2.5
-
-		var num_points: int = 12
-		for j in range(num_points):
-			var t: float = float(j) / (num_points - 1)
-			var angle: float = lerp(angle_start, angle_end, t)
-
-			var x: float = cos(angle) * rail_distance
-			var z: float = sin(angle) * rail_distance
-			var height_offset: float = sin(t * PI) * 1.0
-			var y: float = base_height + height_offset
-
-			rail.curve.add_point(offset + Vector3(x, y, z))
-
-		_set_rail_tangents(rail)
-
-		add_child(rail)
-		create_rail_visual(rail)
+	noise.seed = old_seed
+	print("Secondary map generation complete")
 
 func generate_connecting_rail(start_pos: Vector3, end_pos: Vector3) -> void:
-	"""Generate a long connecting rail between two map areas"""
-	print("Generating connecting rail from ", start_pos, " to ", end_pos)
-
 	var rail: Path3D = preload("res://scripts/grind_rail.gd").new()
 	rail.name = "ConnectingRail"
 	rail.curve = Curve3D.new()
@@ -731,15 +508,9 @@ func generate_connecting_rail(start_pos: Vector3, end_pos: Vector3) -> void:
 	for i in range(num_points):
 		var t: float = float(i) / (num_points - 1)
 		var pos: Vector3 = start_pos.lerp(end_pos, t)
-		var arc_height: float = 15.0
-		var height_offset: float = sin(t * PI) * arc_height
-		pos.y += height_offset
-
+		pos.y += sin(t * PI) * 15.0
 		rail.curve.add_point(pos)
 
 	_set_rail_tangents(rail)
-
 	add_child(rail)
 	create_rail_visual(rail)
-
-	print("Connecting rail created with ", num_points, " points")
