@@ -1456,66 +1456,53 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 func generate_grind_rails() -> void:
 	## Generate strategic grind rails - sparingly placed to avoid clutter
-	## Rails connect elevated areas or span across open spaces
+	## Rails span across the arena at elevated height
 	var scale: float = arena_size / 140.0
 	var floor_extent: float = (arena_size * 0.6) / 2.0
 
 	rail_positions.clear()
 
-	# Sparse rail count that scales slightly with complexity
-	# 1 rail at complexity 1, 2 rails at complexity 2-4
+	# Sparse rail count: 1-2 rails total
 	var num_target_rails: int = 1 if complexity == 1 else 2
 	var rails_created: int = 0
-	var attempts: int = 0
-	var max_attempts: int = num_target_rails * 50  # More attempts for better placement
 
-	while rails_created < num_target_rails and attempts < max_attempts:
-		attempts += 1
+	# Fixed height that works well across arena sizes (high enough to clear most structures)
+	var rail_height: float = 12.0 * scale
 
-		# Strategy: Create rails that span across open areas at elevated height
-		# This provides strategic shortcuts without cluttering ground space
-		var start_pos: Vector3 = _find_strategic_rail_endpoint(floor_extent, scale)
-		if start_pos == Vector3.ZERO:
-			continue
+	# Create rails that span across the arena
+	for rail_index in range(num_target_rails):
+		# Distribute rails evenly around the arena
+		var base_angle: float = (float(rail_index) / num_target_rails) * PI + rng.randf_range(-0.3, 0.3)
 
-		# Find an endpoint on the opposite side of the arena for strategic value
-		var end_pos: Vector3 = _find_opposing_rail_endpoint(start_pos, floor_extent, scale)
-		if end_pos == Vector3.ZERO:
-			continue
+		# Start point on one side
+		var start_dist: float = floor_extent * rng.randf_range(0.4, 0.7)
+		var start_pos: Vector3 = Vector3(
+			cos(base_angle) * start_dist,
+			rail_height,
+			sin(base_angle) * start_dist
+		)
 
-		# Validate the rail path - scale max_length with arena size
+		# End point on opposite side
+		var end_angle: float = base_angle + PI + rng.randf_range(-0.4, 0.4)
+		var end_dist: float = floor_extent * rng.randf_range(0.4, 0.7)
+		var end_pos: Vector3 = Vector3(
+			cos(end_angle) * end_dist,
+			rail_height + rng.randf_range(-2.0, 2.0) * scale,  # Slight height variation
+			sin(end_angle) * end_dist
+		)
+
+		# Check distance - should be reasonable
 		var distance: float = start_pos.distance_to(end_pos)
-		var min_length: float = 20.0  # Minimum useful length (in world units)
-		var max_length: float = floor_extent * 2.0  # Can span most of arena
-
-		if distance < min_length or distance > max_length:
+		if distance < 15.0:
 			continue
 
-		# Check distance to other rails to avoid clustering
-		var too_close_to_rail: bool = false
-		for existing in rail_positions:
-			if start_pos.distance_to(existing) < 20.0 * scale or end_pos.distance_to(existing) < 20.0 * scale:
-				too_close_to_rail = true
-				break
-		if too_close_to_rail:
-			continue
-
-		# Check distance to jump pads and teleporters
-		var too_close_to_interactive: bool = false
+		# Check distance to jump pads and teleporters (simplified check)
+		var too_close: bool = false
 		for pad_pos in jump_pad_positions:
-			if start_pos.distance_to(pad_pos) < 10.0 * scale or end_pos.distance_to(pad_pos) < 10.0 * scale:
-				too_close_to_interactive = true
+			if start_pos.distance_to(pad_pos) < 8.0 or end_pos.distance_to(pad_pos) < 8.0:
+				too_close = true
 				break
-		for tele_pos in teleporter_positions:
-			if start_pos.distance_to(tele_pos) < 10.0 * scale or end_pos.distance_to(tele_pos) < 10.0 * scale:
-				too_close_to_interactive = true
-				break
-
-		if too_close_to_interactive:
-			continue
-
-		# Validate the rail path has clearance from geometry along its entire length
-		if not _validate_rail_clearance(start_pos, end_pos, scale):
+		if too_close:
 			continue
 
 		# Create the rail
@@ -1525,103 +1512,6 @@ func generate_grind_rails() -> void:
 		rails_created += 1
 
 	print("Generated %d strategic grind rails" % rails_created)
-
-func _find_strategic_rail_endpoint(floor_extent: float, scale: float) -> Vector3:
-	## Find a strategic endpoint for a rail - elevated and clear of geometry
-	## Returns Vector3.ZERO if no valid position found
-
-	# Rails should be high enough to pass over most structures
-	var rail_height: float = rng.randf_range(8.0, 14.0) * scale
-
-	for _attempt in range(15):
-		# Place near arena edges for strategic cross-arena rails
-		var angle: float = rng.randf() * TAU
-		var dist: float = floor_extent * rng.randf_range(0.5, 0.8)
-
-		var pos: Vector3 = Vector3(
-			cos(angle) * dist,
-			rail_height,
-			sin(angle) * dist
-		)
-
-		# Ensure this position has clearance from structures below
-		if _has_vertical_clearance(pos, scale):
-			return pos
-
-	return Vector3.ZERO
-
-func _find_opposing_rail_endpoint(start_pos: Vector3, floor_extent: float, scale: float) -> Vector3:
-	## Find an endpoint roughly opposite to start_pos for strategic value
-	## Returns Vector3.ZERO if no valid position found
-
-	var start_angle: float = atan2(start_pos.z, start_pos.x)
-	var rail_height: float = rng.randf_range(8.0, 14.0) * scale
-
-	for _attempt in range(15):
-		# Aim for roughly opposite side with some variation
-		var angle_offset: float = PI + rng.randf_range(-0.6, 0.6)  # ~180 degrees opposite
-		var angle: float = start_angle + angle_offset
-		var dist: float = floor_extent * rng.randf_range(0.5, 0.8)
-
-		var pos: Vector3 = Vector3(
-			cos(angle) * dist,
-			rail_height,
-			sin(angle) * dist
-		)
-
-		# Ensure this position has clearance from structures below
-		if _has_vertical_clearance(pos, scale):
-			return pos
-
-	return Vector3.ZERO
-
-func _has_vertical_clearance(pos: Vector3, scale: float) -> bool:
-	## Check if a position has enough clearance from structures below
-	var min_clearance: float = 5.0 * scale
-
-	# Check the cell at ground level - if occupied, we need more height
-	var ground_pos: Vector3 = Vector3(pos.x, 0, pos.z)
-	if not is_cell_available(ground_pos, 1):
-		# There's a structure here - ensure we're high enough above it
-		# Estimate structure height based on complexity
-		var estimated_structure_height: float = (4.0 + complexity * 2.0) * scale
-		if pos.y < estimated_structure_height + min_clearance:
-			return false
-
-	return true
-
-func _validate_rail_clearance(start: Vector3, end: Vector3, scale: float) -> bool:
-	## Validate that the rail path has sufficient clearance from geometry
-	## Samples points along the rail path to check for obstructions
-
-	var min_clearance: float = 4.0 * scale
-	var num_samples: int = 10
-	var distance: float = start.distance_to(end)
-
-	# Calculate arc height for this rail (same as in create_grind_rail)
-	# Note: distance is already in world units, so don't multiply by scale again
-	var arc_height: float = distance * 0.12
-
-	for i in range(num_samples):
-		var t: float = float(i) / (num_samples - 1)
-		var sample_pos: Vector3 = start.lerp(end, t)
-
-		# Add the arc height
-		sample_pos.y += sin(t * PI) * arc_height
-
-		# Check ground cell occupancy
-		var ground_pos: Vector3 = Vector3(sample_pos.x, 0, sample_pos.z)
-		if not is_cell_available(ground_pos, 1):
-			# Structure below - check clearance
-			var estimated_structure_height: float = (4.0 + complexity * 2.0) * scale
-			if sample_pos.y < estimated_structure_height + min_clearance:
-				return false
-
-		# Also check if rail goes too low (below reasonable height)
-		if sample_pos.y < 3.0 * scale:
-			return false
-
-	return true
 
 func create_grind_rail(start: Vector3, end: Vector3, index: int, _scale: float) -> void:
 	## Create a grind rail between two points with a smooth arc
