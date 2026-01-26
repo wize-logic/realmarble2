@@ -943,11 +943,9 @@ func _on_regenerate_level_pressed() -> void:
 	"""Regenerate the procedural level using current settings"""
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("generate_procedural_level"):
-		# Get current level type and size from world
-		var level_type: String = world.get("current_level_type") if "current_level_type" in world else "A"
 		var level_size: int = world.get("current_level_size") if "current_level_size" in world else 2
-		print("Regenerating level (Type: %s, Size: %d)..." % [level_type, level_size])
-		world.generate_procedural_level(level_type, true, level_size)
+		print("Regenerating level (Size: %d)..." % level_size)
+		world.generate_procedural_level(true, level_size)
 
 func _on_change_skybox_pressed() -> void:
 	"""Change skybox color palette"""
