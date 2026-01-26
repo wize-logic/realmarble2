@@ -1633,12 +1633,12 @@ func _create_rail_visual(rail: Path3D) -> void:
 
 	rail_visual.mesh = surface_tool.commit()
 
-	# Compatibility renderer safe material - unshaded with emission like jump pads
+	# Compatibility renderer safe material - dark grey with subtle sheen
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.9, 0.6, 0.2)  # Orange-yellow
+	material.albedo_color = Color(0.25, 0.25, 0.28)  # Dark grey
 	material.emission_enabled = true
-	material.emission = Color(0.7, 0.4, 0.1)  # Orange glow
-	material.emission_energy_multiplier = 1.5
+	material.emission = Color(0.15, 0.15, 0.18)  # Subtle grey glow for visibility
+	material.emission_energy_multiplier = 0.8
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rail_visual.set_surface_override_material(0, material)
 

@@ -2101,22 +2101,21 @@ func stop_grinding() -> void:
 	current_rail = null
 	is_grinding = false
 
+	# Always reset these states for safety, even if we weren't grinding
+	# This ensures we never get stuck in a bad state
+	is_bouncing = false
+
+	# Restore normal physics damping
+	linear_damp = 0.5
+
 	if not was_grinding:
 		return
 
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding!", false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding! jump_count: %d" % jump_count, false, get_entity_id())
 
-	# Restore normal physics
-	linear_damp = 0.5
-
-	# IMPORTANT: Ensure player has recovery jump available after leaving rail
-	# This prevents getting stuck in AIR state with no way to recover
-	# Give player at least one jump for recovery
-	if jump_count >= max_jumps:
-		jump_count = max_jumps - 1
-
-	# Reset bounce state in case it was active before grinding
-	is_bouncing = false
+	# IMPORTANT: Always give player recovery jumps after leaving rail
+	# Reset to 0 so they have full double jump available for recovery
+	jump_count = 0
 
 	# Stop spark particles
 	if grind_particles:
@@ -2128,10 +2127,7 @@ func launch_from_rail(velocity: Vector3) -> void:
 		return
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
-	stop_grinding()
-
-	# Reset jump_count to 0 - player was launched, not jumping, so they get full double jump
-	jump_count = 0
+	stop_grinding()  # This resets jump_count to 0
 
 	# Player already has velocity from physics, just add upward boost
 	apply_central_impulse(Vector3.UP * 15.0)
