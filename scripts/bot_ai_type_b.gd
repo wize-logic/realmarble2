@@ -83,8 +83,8 @@ func refresh_jump_pad_cache() -> void:
 	if not world:
 		return
 
-	# Find jump pads in scene (in "jump_pads" group)
-	var all_jump_pads: Array = get_tree().get_nodes_in_group("jump_pads")
+	# Find jump pads in scene
+	var all_jump_pads: Array = get_tree().get_nodes_in_group("jump_pad")
 	var bot_pos: Vector3 = bot.global_position
 
 	# Filter by distance and validity
@@ -241,8 +241,8 @@ func refresh_teleporter_cache() -> void:
 	if not world:
 		return
 
-	# Find teleporters in scene (in "teleporters" group)
-	var all_teleporters: Array = get_tree().get_nodes_in_group("teleporters")
+	# Find teleporters in scene
+	var all_teleporters: Array = get_tree().get_nodes_in_group("teleporter")
 
 	# Filter by validity and add to cache
 	for teleporter in all_teleporters:

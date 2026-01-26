@@ -1,18 +1,19 @@
 @tool
 extends Node3D
 
-## Quake 3 Arena Map Generator
-## Procedurally generates Q3-style arenas using Binary Space Partitioning (BSP)
-## Supports both runtime Godot scene generation and .map file export for Q3 compilation
+## Procedural Arena Level Generator (Godot Native)
+## Generates arena-style levels using Binary Space Partitioning (BSP)
+## Optimized for Godot's Compatibility renderer
 ##
 ## Features:
 ## - BSP-based layout generation for natural room/corridor layouts
-## - Runtime mesh generation with collisions for Godot gameplay
-## - .map file export with proper brush definitions
-## - Entity placement (spawns, weapons, health, armor, lights)
+## - Runtime mesh generation with collisions
+## - NavigationRegion3D for AI pathfinding
+## - OmniLight3D placement for dynamic lighting
+## - OccluderInstance3D for performance optimization
 ## - Multi-level support with ramps and stairs
-## - Advanced features: organic noise, ASCII art import, jump pads, teleporters
-## - q3map2 compilation integration
+## - Jump pads and teleporters
+## - Hazard zones (lava/slime)
 
 # ============================================================================
 # EXPORTED PARAMETERS
@@ -24,39 +25,54 @@ extends Node3D
 @export var complexity: int = 2  ## 1=Low, 2=Medium, 3=High, 4=Extreme
 
 @export_group("BSP Generation")
-@export var use_bsp_layout: bool = false  ## Use BSP for room layout vs procedural structures (disabled by default for arena gameplay)
+@export var use_bsp_layout: bool = false  ## Use BSP for room layout vs procedural structures
 @export var min_room_size: float = 20.0  ## Minimum room dimension in Godot units
+@export var dynamic_room_scaling: bool = true  ## Scale min_room_size based on arena_size
+@export var dynamic_room_scale_factor: float = 0.15  ## Factor for dynamic scaling
 @export var max_bsp_depth: int = 4  ## Maximum BSP subdivision depth
 @export var room_inset_min: float = 0.75  ## Room inset factor minimum (75%)
 @export var room_inset_max: float = 0.90  ## Room inset factor maximum (90%)
+@export var enable_symmetry: bool = false  ## Mirror map for competitive balance
+@export var symmetry_axis: int = 0  ## 0 = X-axis, 1 = Z-axis
 
-@export_group("Map Export")
-@export var export_map_file: bool = false  ## Also export .map file when generating
-@export var map_name: String = "generated"
-@export var output_path: String = "res://generated_maps/"
-@export var room_height: float = 256.0  ## Height of rooms in .map units
-@export var wall_thickness: float = 16.0
+@export_group("Geometry")
+@export var room_height: float = 12.0  ## Height of rooms in Godot units
+@export var wall_thickness: float = 1.0  ## Wall thickness in Godot units
+@export var generate_ceiling: bool = true  ## Generate ceiling geometry
+@export var generate_walls: bool = true  ## Generate perimeter walls
 
 @export_group("Multi-Level")
 @export var num_levels: int = 1  ## Number of vertical levels
 @export var level_height_offset: float = 20.0  ## Height between levels in Godot units
 
 @export_group("Corridor Settings")
-@export var corridor_width_min: float = 4.0  ## Minimum corridor width in Godot units
-@export var corridor_width_max: float = 8.0  ## Maximum corridor width in Godot units
+@export var corridor_width_min: float = 4.0  ## Minimum corridor width
+@export var corridor_width_max: float = 8.0  ## Maximum corridor width
 
-@export_group("Textures (for .map export)")
-@export var floor_texture: String = "gothic_floor/largeblock3b"
-@export var ceiling_texture: String = "gothic_ceiling/woodceiling1a"
-@export var wall_texture: String = "gothic_wall/skull4"
-@export var corridor_texture: String = "gothic_block/blocks18c"
-@export var caulk_texture: String = "common/caulk"
+@export_group("Lighting")
+@export var generate_lights: bool = true  ## Add OmniLight3D to rooms
+@export var light_energy: float = 1.0  ## Base light energy
+@export var light_range: float = 20.0  ## Light range in units
+@export var light_color: Color = Color(1.0, 0.95, 0.9)  ## Warm white default
+@export var ambient_light_energy: float = 0.3  ## Ambient/fill light level
 
-@export_group("Entities")
+@export_group("Spawn Points")
 @export var target_spawn_points: int = 16
-@export var weapons_per_room: float = 0.5
-@export var health_per_room: float = 0.3
-@export var armor_per_room: float = 0.2
+
+@export_group("Hazards")
+@export var enable_hazards: bool = false  ## Add lava/slime hazard zones
+@export var hazard_count: int = 2  ## Number of hazard zones
+@export var hazard_type: int = 0  ## 0 = lava, 1 = slime
+@export var hazard_damage: float = 25.0  ## Damage per second
+
+@export_group("Navigation & AI")
+@export var generate_navmesh: bool = true  ## Generate NavigationRegion3D
+@export var navmesh_cell_size: float = 0.25  ## Navigation mesh cell size
+@export var navmesh_agent_radius: float = 0.5  ## Agent radius for pathfinding
+
+@export_group("Performance")
+@export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
+@export var use_static_batching: bool = true  ## Batch static geometry
 
 # ============================================================================
 # BSP NODE CLASS
@@ -96,317 +112,6 @@ class BSPNode:
 		return Vector3(center_2d.x, height_offset + 1.0, center_2d.y)
 
 # ============================================================================
-# BRUSH GENERATOR CLASS (for .map file export)
-# ============================================================================
-
-class BrushGenerator:
-	## Generates brush strings in Quake 3 .map file format
-	## Each brush is a convex solid defined by 4-6+ planes
-
-	static func create_box_brush(mins: Vector3, maxs: Vector3, textures: Dictionary) -> String:
-		## Creates a 6-sided box brush with specified textures
-		## textures dict keys: top, bottom, north, south, east, west
-
-		var brush: String = "{\n"
-
-		# Get texture names with caulk defaults for hidden faces
-		var tex_top: String = textures.get("top", "common/caulk")
-		var tex_bottom: String = textures.get("bottom", "common/caulk")
-		var tex_north: String = textures.get("north", "common/caulk")
-		var tex_south: String = textures.get("south", "common/caulk")
-		var tex_east: String = textures.get("east", "common/caulk")
-		var tex_west: String = textures.get("west", "common/caulk")
-
-		# Top face (Y+) - three points define plane, winding order matters
-		brush += _plane_string(
-			Vector3(mins.x, maxs.y, mins.z),
-			Vector3(mins.x, maxs.y, maxs.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_top
-		)
-
-		# Bottom face (Y-)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(mins.x, mins.y, mins.z),
-			Vector3(maxs.x, mins.y, mins.z),
-			tex_bottom
-		)
-
-		# North face (Z+)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(maxs.x, mins.y, maxs.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_north
-		)
-
-		# South face (Z-)
-		brush += _plane_string(
-			Vector3(maxs.x, mins.y, mins.z),
-			Vector3(mins.x, mins.y, mins.z),
-			Vector3(mins.x, maxs.y, mins.z),
-			tex_south
-		)
-
-		# East face (X+)
-		brush += _plane_string(
-			Vector3(maxs.x, mins.y, mins.z),
-			Vector3(maxs.x, maxs.y, mins.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_east
-		)
-
-		# West face (X-)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(mins.x, maxs.y, maxs.z),
-			Vector3(mins.x, maxs.y, mins.z),
-			tex_west
-		)
-
-		brush += "}\n"
-		return brush
-
-	static func _plane_string(p1: Vector3, p2: Vector3, p3: Vector3, texture: String) -> String:
-		## Format a plane definition: ( x1 y1 z1 ) ( x2 y2 z2 ) ( x3 y3 z3 ) texture params
-		return "( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s 0 0 0 0.5 0.5 0 0 0\n" % [
-			int(p1.x), int(p1.y), int(p1.z),
-			int(p2.x), int(p2.y), int(p2.z),
-			int(p3.x), int(p3.y), int(p3.z),
-			texture
-		]
-
-	static func create_bevel_brush(corner: Vector3, size: float, direction: Vector3, texture: String) -> String:
-		## Creates a small bevel/chamfer brush at edges to prevent BSP glitches
-		## These are small triangular prisms that smooth out sharp corners
-
-		var brush: String = "{\n"
-		var half: float = size / 2.0
-
-		# Create a small pyramid-like shape
-		var base1: Vector3 = corner
-		var base2: Vector3 = corner + Vector3(size, 0, 0)
-		var base3: Vector3 = corner + Vector3(0, 0, size)
-		var apex: Vector3 = corner + Vector3(half, size, half)
-
-		# Bottom face
-		brush += _plane_string(base1, base3, base2, texture)
-		# Front face
-		brush += _plane_string(base1, base2, apex, texture)
-		# Left face
-		brush += _plane_string(base1, apex, base3, texture)
-		# Right face
-		brush += _plane_string(base2, base3, apex, texture)
-
-		brush += "}\n"
-		return brush
-
-	static func create_room_brushes(room: Rect2, floor_z: float, height: float,
-			wall_thick: float, textures: Dictionary, add_bevels: bool = true) -> Array[String]:
-		## Creates complete room geometry: floor, ceiling, and 4 walls
-		## Optionally adds bevel brushes at corners
-
-		var brushes: Array[String] = []
-		var mins_2d: Vector2 = room.position
-		var maxs_2d: Vector2 = room.position + room.size
-
-		# Floor brush - visible top face
-		var floor_textures: Dictionary = {
-			"top": textures.get("floor", "gothic_floor/largeblock3b"),
-			"bottom": textures.get("caulk", "common/caulk"),
-			"north": textures.get("caulk", "common/caulk"),
-			"south": textures.get("caulk", "common/caulk"),
-			"east": textures.get("caulk", "common/caulk"),
-			"west": textures.get("caulk", "common/caulk")
-		}
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z - wall_thick, mins_2d.y),
-			Vector3(maxs_2d.x, floor_z, maxs_2d.y),
-			floor_textures
-		))
-
-		# Ceiling brush - visible bottom face
-		var ceil_textures: Dictionary = {
-			"bottom": textures.get("ceiling", "gothic_ceiling/woodceiling1a"),
-			"top": textures.get("caulk", "common/caulk"),
-			"north": textures.get("caulk", "common/caulk"),
-			"south": textures.get("caulk", "common/caulk"),
-			"east": textures.get("caulk", "common/caulk"),
-			"west": textures.get("caulk", "common/caulk")
-		}
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z + height, mins_2d.y),
-			Vector3(maxs_2d.x, floor_z + height + wall_thick, maxs_2d.y),
-			ceil_textures
-		))
-
-		var wall_tex: String = textures.get("wall", "gothic_wall/skull4")
-		var caulk: String = textures.get("caulk", "common/caulk")
-
-		# North wall (Z+) - interior face is south-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z, maxs_2d.y),
-			Vector3(maxs_2d.x, floor_z + height, maxs_2d.y + wall_thick),
-			{"south": wall_tex, "north": caulk, "top": caulk, "bottom": caulk, "east": caulk, "west": caulk}
-		))
-
-		# South wall (Z-) - interior face is north-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z, mins_2d.y - wall_thick),
-			Vector3(maxs_2d.x, floor_z + height, mins_2d.y),
-			{"north": wall_tex, "south": caulk, "top": caulk, "bottom": caulk, "east": caulk, "west": caulk}
-		))
-
-		# East wall (X+) - interior face is west-facing
-		brushes.append(create_box_brush(
-			Vector3(maxs_2d.x, floor_z, mins_2d.y),
-			Vector3(maxs_2d.x + wall_thick, floor_z + height, maxs_2d.y),
-			{"west": wall_tex, "east": caulk, "top": caulk, "bottom": caulk, "north": caulk, "south": caulk}
-		))
-
-		# West wall (X-) - interior face is east-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x - wall_thick, floor_z, mins_2d.y),
-			Vector3(mins_2d.x, floor_z + height, maxs_2d.y),
-			{"east": wall_tex, "west": caulk, "top": caulk, "bottom": caulk, "north": caulk, "south": caulk}
-		))
-
-		# Add bevel brushes at corners to prevent BSP errors
-		if add_bevels:
-			var bevel_size: float = 8.0
-			var corners: Array = [
-				Vector3(mins_2d.x, floor_z, mins_2d.y),
-				Vector3(maxs_2d.x - bevel_size, floor_z, mins_2d.y),
-				Vector3(mins_2d.x, floor_z, maxs_2d.y - bevel_size),
-				Vector3(maxs_2d.x - bevel_size, floor_z, maxs_2d.y - bevel_size)
-			]
-			for corner in corners:
-				brushes.append(create_bevel_brush(corner, bevel_size, Vector3.UP, caulk))
-
-		return brushes
-
-	static func create_corridor_brushes(rect: Rect2, floor_z: float, height: float,
-			wall_thick: float, textures: Dictionary) -> Array[String]:
-		## Creates floor and ceiling for a corridor segment (walls are implicit from room layout)
-
-		var brushes: Array[String] = []
-		var mins: Vector2 = rect.position
-		var maxs: Vector2 = rect.position + rect.size
-
-		var corridor_tex: String = textures.get("corridor", "gothic_block/blocks18c")
-		var caulk: String = textures.get("caulk", "common/caulk")
-
-		# Floor
-		brushes.append(create_box_brush(
-			Vector3(mins.x, floor_z - wall_thick, mins.y),
-			Vector3(maxs.x, floor_z, maxs.y),
-			{"top": corridor_tex, "bottom": caulk, "north": caulk, "south": caulk, "east": caulk, "west": caulk}
-		))
-
-		# Ceiling
-		brushes.append(create_box_brush(
-			Vector3(mins.x, floor_z + height, mins.y),
-			Vector3(maxs.x, floor_z + height + wall_thick, maxs.y),
-			{"bottom": corridor_tex, "top": caulk, "north": caulk, "south": caulk, "east": caulk, "west": caulk}
-		))
-
-		return brushes
-
-	static func create_ramp_brush(start: Vector3, end: Vector3, width: float, texture: String) -> String:
-		## Creates a sloped ramp brush connecting two heights
-
-		var dir: Vector3 = (end - start).normalized()
-		var length: float = start.distance_to(end)
-		var height_diff: float = end.y - start.y
-
-		# Calculate perpendicular direction for width
-		var perp: Vector3 = dir.cross(Vector3.UP).normalized() * (width / 2.0)
-
-		var brush: String = "{\n"
-
-		# Define the 8 corners of the ramp
-		var b1: Vector3 = start - perp
-		var b2: Vector3 = start + perp
-		var b3: Vector3 = Vector3(end.x, start.y, end.z) + perp
-		var b4: Vector3 = Vector3(end.x, start.y, end.z) - perp
-		var t1: Vector3 = Vector3(start.x, start.y + 16, start.z) - perp
-		var t2: Vector3 = Vector3(start.x, start.y + 16, start.z) + perp
-		var t3: Vector3 = end + perp
-		var t4: Vector3 = end - perp
-
-		# Bottom face
-		brush += _plane_string(b1, b2, b3, "common/caulk")
-		# Top sloped face
-		brush += _plane_string(t1, t4, t3, texture)
-		# Front face
-		brush += _plane_string(b3, b4, t4, "common/caulk")
-		# Back face
-		brush += _plane_string(b1, t1, t2, "common/caulk")
-		# Left face
-		brush += _plane_string(b1, b4, t4, "common/caulk")
-		# Right face
-		brush += _plane_string(b2, t2, t3, "common/caulk")
-
-		brush += "}\n"
-		return brush
-
-# ============================================================================
-# ENTITY PLACER CLASS
-# ============================================================================
-
-class EntityPlacer:
-	## Generates entity strings for Quake 3 .map file format
-
-	static func point_entity(classname: String, origin: Vector3, properties: Dictionary = {}) -> String:
-		## Creates a point entity with specified class and properties
-		var entity: String = "{\n"
-		entity += "\"classname\" \"%s\"\n" % classname
-		entity += "\"origin\" \"%d %d %d\"\n" % [int(origin.x), int(origin.y), int(origin.z)]
-
-		for key in properties:
-			entity += "\"%s\" \"%s\"\n" % [key, str(properties[key])]
-
-		entity += "}\n"
-		return entity
-
-	static func spawn_point(origin: Vector3, angle: float = 0.0) -> String:
-		return point_entity("info_player_deathmatch", origin, {"angle": str(int(angle))})
-
-	static func weapon(weapon_type: String, origin: Vector3) -> String:
-		return point_entity(weapon_type, origin)
-
-	static func item(item_type: String, origin: Vector3) -> String:
-		return point_entity(item_type, origin)
-
-	static func light(origin: Vector3, intensity: int = 300, color: Color = Color.WHITE) -> String:
-		var props: Dictionary = {
-			"light": str(intensity),
-			"_color": "%.2f %.2f %.2f" % [color.r, color.g, color.b]
-		}
-		return point_entity("light", origin, props)
-
-	static func ambient_light(origin: Vector3, intensity: int = 100) -> String:
-		return point_entity("light", origin, {
-			"light": str(intensity),
-			"_deviance": "64",
-			"_samples": "4"
-		})
-
-	static func func_static(origin: Vector3, model: String) -> String:
-		return point_entity("misc_model", origin, {"model": model})
-
-	static func trigger_push(origin: Vector3, size: Vector3, target: String) -> String:
-		return point_entity("trigger_push", origin, {
-			"target": target,
-			"mins": "%d %d %d" % [int(-size.x/2), int(-size.y/2), int(-size.z/2)],
-			"maxs": "%d %d %d" % [int(size.x/2), int(size.y/2), int(size.z/2)]
-		})
-
-	static func target_position(name: String, origin: Vector3) -> String:
-		return point_entity("target_position", origin, {"targetname": name})
-
-# ============================================================================
 # STRUCTURE TYPES
 # ============================================================================
 
@@ -436,15 +141,23 @@ var teleporters: Array[Dictionary] = []
 var clear_positions: Array[Vector3] = []  # Valid spawn positions
 var occupied_cells: Dictionary = {}  # Grid-based collision
 
-# For .map export
-var map_brushes: Array[String] = []
-var map_entities: Array[String] = []
+# Godot scene nodes
+var navigation_region: NavigationRegion3D = null
+var lights: Array[OmniLight3D] = []
+var occluders: Array[OccluderInstance3D] = []
+var spawn_markers: Array[Marker3D] = []
 
 # Grid system for structure placement
 const CELL_SIZE: float = 8.0
 
-# Material manager for runtime textures
-var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
+# Material cache for Compatibility renderer
+var _floor_material: StandardMaterial3D
+var _wall_material: StandardMaterial3D
+var _ceiling_material: StandardMaterial3D
+var _hazard_material: StandardMaterial3D
+
+# Material manager for runtime textures (if available)
+var material_manager = null
 
 # ============================================================================
 # INITIALIZATION
@@ -461,12 +174,15 @@ func generate_level() -> void:
 	rng = RandomNumberGenerator.new()
 	rng.seed = level_seed if level_seed != 0 else int(Time.get_unix_time_from_system())
 
-	print("=== Q3 ARENA LEVEL GENERATOR ===")
+	print("=== PROCEDURAL ARENA GENERATOR ===")
 	print("Seed: %d" % rng.seed)
 	print("Arena Size: %.1f" % arena_size)
 	print("Complexity: %d" % complexity)
 	print("BSP Layout: %s" % ("Enabled" if use_bsp_layout else "Disabled"))
 	print("Levels: %d" % num_levels)
+
+	# Initialize materials for Compatibility renderer
+	setup_materials()
 
 	# Clear previous data
 	clear_level()
@@ -478,23 +194,43 @@ func generate_level() -> void:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
 
-	# Add interactive elements
-	generate_jump_pads()
+	# Add interactive elements (teleporters first - they need more space)
 	generate_teleporters()
+	generate_jump_pads()
+
+	# Add hazard zones if enabled
+	if enable_hazards:
+		generate_hazard_zones()
 
 	# Boundaries
 	generate_perimeter_walls()
 	generate_death_zone()
 
-	# Apply materials
+	# Connectivity check
+	if use_bsp_layout:
+		var leak_result: Dictionary = check_for_leaks()
+		if leak_result.has_leak:
+			print("WARNING: %s" % leak_result.details)
+
+	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
 
-	# Export .map file if enabled
-	if export_map_file:
-		export_to_map_file()
+	# Godot-specific features
+	if generate_lights:
+		generate_room_lights()
+
+	if generate_navmesh:
+		generate_navigation_mesh()
+
+	if generate_occluders:
+		generate_occlusion_culling()
+
+	# Create spawn point markers
+	generate_spawn_markers()
 
 	print("=== GENERATION COMPLETE ===")
 	print("Rooms: %d, Corridors: %d, Platforms: %d" % [bsp_rooms.size(), corridors.size(), platforms.size()])
+	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
 	print("Spawn positions: %d" % clear_positions.size())
 
 func clear_level() -> void:
@@ -508,10 +244,14 @@ func clear_level() -> void:
 	occupied_cells.clear()
 	bsp_rooms.clear()
 	corridors.clear()
-	map_brushes.clear()
-	map_entities.clear()
 	jump_pad_positions.clear()
 	teleporter_positions.clear()
+
+	# Clear Godot-specific nodes
+	lights.clear()
+	occluders.clear()
+	spawn_markers.clear()
+	navigation_region = null
 	bsp_root = null
 
 # ============================================================================
@@ -521,13 +261,18 @@ func clear_level() -> void:
 func generate_bsp_level() -> void:
 	## Generate level layout using Binary Space Partitioning
 
-	var scale: float = arena_size / 140.0
-	var map_size: float = arena_size * 0.8  # Actual playable area
+	# Use arena_size directly for BSP root - room insets handle margins
+	# This ensures consistent scaling regardless of arena_size
+	var map_size: float = arena_size  # Full arena bounds
 
 	# Generate BSP tree for each level
 	for level_idx in range(num_levels):
 		var level_z: float = level_idx * level_height_offset
 		generate_bsp_for_level(level_idx, level_z, map_size)
+
+	# Apply symmetry to BSP rooms if enabled (mirrors rooms before corridor gen)
+	if enable_symmetry:
+		apply_bsp_symmetry()
 
 	# Generate connections between levels
 	if num_levels > 1:
@@ -572,8 +317,14 @@ func generate_bsp_for_level(level_idx: int, level_z: float, map_size: float) -> 
 func subdivide_bsp(node: BSPNode, depth: int) -> void:
 	## Recursively subdivide a BSP node
 
-	# Adjust min room size based on arena size
-	var effective_min_size: float = min_room_size * (arena_size / 140.0)
+	# Calculate effective minimum room size
+	var effective_min_size: float
+	if dynamic_room_scaling:
+		# Dynamic scaling ties min_room_size to arena_size for better proportions
+		effective_min_size = maxf(arena_size * dynamic_room_scale_factor, min_room_size * 0.5)
+	else:
+		# Traditional scaling
+		effective_min_size = min_room_size * (arena_size / 140.0)
 
 	var can_split_h: bool = node.bounds.size.y >= effective_min_size * 2.2
 	var can_split_v: bool = node.bounds.size.x >= effective_min_size * 2.2
@@ -715,6 +466,43 @@ func generate_room_geometry(node: BSPNode) -> void:
 			room.position.y + raised_offset.y
 		))
 
+func apply_bsp_symmetry() -> void:
+	## Mirror all BSP rooms across the symmetry axis
+	## This creates a balanced arena layout for competitive play
+
+	print("Applying BSP symmetry across %s axis..." % ("X" if symmetry_axis == 0 else "Z"))
+
+	var original_rooms: Array[BSPNode] = bsp_rooms.duplicate()
+	var next_room_id: int = bsp_rooms.size()
+
+	for room in original_rooms:
+		# Create mirrored room
+		var mirrored: BSPNode = BSPNode.new(
+			mirror_rect2(room.bounds),
+			room.level,
+			room.height_offset
+		)
+		mirrored.room = mirror_rect2(room.room)
+		mirrored.room_id = next_room_id
+		mirrored.is_leaf = true
+
+		# Skip if mirrored room overlaps with original (center rooms)
+		var center_dist: float
+		if symmetry_axis == 0:
+			center_dist = absf(room.get_center().x)
+		else:
+			center_dist = absf(room.get_center().y)
+
+		if center_dist < room.room.size.length() * 0.3:
+			continue  # Too close to center, skip mirroring
+
+		# Generate geometry for mirrored room
+		generate_room_geometry(mirrored)
+		bsp_rooms.append(mirrored)
+		next_room_id += 1
+
+	print("  Mirrored %d rooms (total: %d)" % [bsp_rooms.size() - original_rooms.size(), bsp_rooms.size()])
+
 func generate_bsp_corridors(node: BSPNode, level_z: float) -> void:
 	## Generate corridors connecting BSP sibling rooms
 
@@ -845,6 +633,7 @@ func create_corridor_geometry(from_room: BSPNode, to_room: BSPNode, level_z: flo
 
 func generate_level_ramps() -> void:
 	## Generate ramps connecting different vertical levels
+	## Enhanced: Creates multiple connection points for better accessibility
 
 	for level_idx in range(num_levels - 1):
 		# Find rooms on each level
@@ -860,11 +649,41 @@ func generate_level_ramps() -> void:
 		if lower_rooms.is_empty() or upper_rooms.is_empty():
 			continue
 
-		# Connect random rooms with ramp/stairs
-		var lower_room: BSPNode = lower_rooms[rng.randi() % lower_rooms.size()]
-		var upper_room: BSPNode = upper_rooms[rng.randi() % upper_rooms.size()]
+		# Calculate how many ramps to create based on room count
+		var min_rooms: int = mini(lower_rooms.size(), upper_rooms.size())
+		var num_ramps: int = maxi(1, mini(min_rooms / 2, 3))  # 1-3 ramps per level pair
 
-		create_ramp_geometry(lower_room, upper_room)
+		# Track which rooms have been connected
+		var connected_lower: Array[int] = []
+		var connected_upper: Array[int] = []
+
+		for ramp_idx in range(num_ramps):
+			# Find closest unconnected pair
+			var best_lower: BSPNode = null
+			var best_upper: BSPNode = null
+			var best_dist: float = INF
+
+			for lower in lower_rooms:
+				if lower.room_id in connected_lower:
+					continue
+				for upper in upper_rooms:
+					if upper.room_id in connected_upper:
+						continue
+					var dist: float = lower.get_center().distance_to(upper.get_center())
+					if dist < best_dist:
+						best_dist = dist
+						best_lower = lower
+						best_upper = upper
+
+			if best_lower != null and best_upper != null:
+				create_ramp_geometry(best_lower, best_upper)
+				connected_lower.append(best_lower.room_id)
+				connected_upper.append(best_upper.room_id)
+				best_lower.connected_to.append(best_upper.room_id)
+				best_upper.connected_to.append(best_lower.room_id)
+
+	# Also add ramps for height variations within rooms (raised sections)
+	generate_intra_room_ramps()
 
 func create_ramp_geometry(lower_room: BSPNode, upper_room: BSPNode) -> void:
 	## Create ramp or stairs connecting two levels
@@ -899,6 +718,54 @@ func create_ramp_geometry(lower_room: BSPNode, upper_room: BSPNode) -> void:
 	var mid_idx: int = num_steps / 2
 	var mid_pos: Vector2 = start_pos + dir * (mid_idx * step_depth)
 	clear_positions.append(Vector3(mid_pos.x, lower_center.y + height_diff / 2.0 + 2.0, mid_pos.y))
+
+func generate_intra_room_ramps() -> void:
+	## Generate small ramps for height variations within larger rooms
+	## This adds accessibility to raised sections created during room generation
+
+	var scale: float = arena_size / 140.0
+	var height_threshold: float = 1.5 * scale  # Minimum height diff to warrant a ramp
+
+	for platform in platforms:
+		if not platform.name.contains("Raised"):
+			continue
+
+		var raised_pos: Vector3 = platform.position
+		var raised_height: float = raised_pos.y
+
+		# Skip if too low to need a ramp
+		if raised_height < height_threshold:
+			continue
+
+		# Find the nearest floor level
+		var floor_y: float = 0.0
+		for room in bsp_rooms:
+			if Vector2(raised_pos.x, raised_pos.z).distance_to(room.get_center()) < room.room.size.length() / 2.0:
+				floor_y = room.height_offset
+				break
+
+		var height_diff: float = raised_height - floor_y
+		if height_diff < height_threshold:
+			continue
+
+		# Create a small access ramp
+		var ramp_width: float = 3.0 * scale
+		var ramp_length: float = height_diff * 2.5
+		var ramp_dir: Vector2 = Vector2(rng.randf_range(-1, 1), rng.randf_range(-1, 1)).normalized()
+
+		var num_steps: int = maxi(2, int(height_diff / (1.5 * scale)))
+		var step_height: float = height_diff / num_steps
+		var step_depth: float = ramp_length / num_steps
+
+		for i in range(num_steps):
+			var step_y: float = floor_y + i * step_height + step_height / 2.0
+			var step_pos: Vector2 = Vector2(raised_pos.x, raised_pos.z) + ramp_dir * (i * step_depth + ramp_length * 0.3)
+
+			add_platform_with_collision(
+				Vector3(step_pos.x, step_y, step_pos.y),
+				Vector3(ramp_width, step_height, step_depth * 1.2),
+				"IntraRamp_%s_Step%d" % [platform.name, i]
+			)
 
 # ============================================================================
 # PROCEDURAL STRUCTURE GENERATION (Alternative to BSP)
@@ -1390,10 +1257,14 @@ func generate_jump_pads() -> void:
 		if not is_cell_available(pad_pos, 1):
 			continue
 
-		# Check distance to other jump pads
+		# Check distance to other jump pads and teleporters
 		var too_close: bool = false
 		for existing in jump_pad_positions:
 			if pad_pos.distance_to(existing) < 10.0 * scale:
+				too_close = true
+				break
+		for tele_pos in teleporter_positions:
+			if pad_pos.distance_to(tele_pos) < 6.0 * scale:
 				too_close = true
 				break
 
@@ -1686,553 +1557,399 @@ func add_platform_with_collision(pos: Vector3, size: Vector3, name_prefix: Strin
 func apply_procedural_textures() -> void:
 	material_manager.apply_materials_to_level(self)
 
-func get_spawn_points() -> PackedVector3Array:
-	var spawns: PackedVector3Array = PackedVector3Array()
+# ============================================================================
+# GEOMETRY HELPER FUNCTIONS
+# ============================================================================
+
+func mirror_rect2(rect: Rect2) -> Rect2:
+	## Mirror a Rect2 across the specified axis
+	if symmetry_axis == 0:  # X-axis mirror
+		return Rect2(
+			Vector2(-rect.position.x - rect.size.x, rect.position.y),
+			rect.size
+		)
+	else:  # Z-axis mirror
+		return Rect2(
+			Vector2(rect.position.x, -rect.position.y - rect.size.y),
+			rect.size
+		)
+
+func mirror_vector3(vec: Vector3) -> Vector3:
+	## Mirror a Vector3 across the specified axis
+	if symmetry_axis == 0:  # X-axis mirror
+		return Vector3(-vec.x, vec.y, vec.z)
+	else:  # Z-axis mirror
+		return Vector3(vec.x, vec.y, -vec.z)
+
+# ============================================================================
+# HAZARD ZONES
+# ============================================================================
+
+func generate_hazard_zones() -> void:
+	## Generate lava or slime hazard zones
+
+	if not enable_hazards:
+		return
+
+	print("Generating %d hazard zones..." % hazard_count)
+
 	var scale: float = arena_size / 140.0
-	var min_dist_jump: float = 4.0 * scale  # Stay away from jump pads
-	var min_dist_tele: float = 5.0 * scale  # Stay away from teleporters
+	var floor_extent: float = (arena_size * 0.6) / 2.0
 
-	# Add clear positions that aren't near interactive elements
-	for pos in clear_positions:
-		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
-			spawns.append(pos)
+	for i in range(hazard_count):
+		var attempts: int = 0
+		var placed: bool = false
 
-	# Add floor fallback spawns if they're valid
-	var floor_radius: float = (arena_size * 0.6) / 2.0 * 0.5
-	var fallback_spawns: Array[Vector3] = [
-		Vector3(0, 2, 0),
-		Vector3(floor_radius, 2, 0),
-		Vector3(-floor_radius, 2, 0),
-		Vector3(0, 2, floor_radius),
-		Vector3(0, 2, -floor_radius)
+		while attempts < 20 and not placed:
+			attempts += 1
+
+			var pos: Vector3 = Vector3(
+				rng.randf_range(-floor_extent * 0.5, floor_extent * 0.5),
+				-0.5,
+				rng.randf_range(-floor_extent * 0.5, floor_extent * 0.5)
+			)
+
+			# Check if position is clear of other structures
+			if not is_cell_available(pos, 2):
+				continue
+
+			var hazard_size: Vector3 = Vector3(
+				rng.randf_range(6.0, 12.0) * scale,
+				1.0,
+				rng.randf_range(6.0, 12.0) * scale
+			)
+
+			create_hazard_zone(pos, hazard_size, i)
+			mark_cell_occupied(pos, 2)
+			placed = true
+
+	print("  Hazard zones created: %d" % hazard_count)
+
+func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
+	## Create a hazard zone (lava/slime) at the specified position
+
+	var hazard_mesh: BoxMesh = BoxMesh.new()
+	hazard_mesh.size = size
+
+	var hazard_instance: MeshInstance3D = MeshInstance3D.new()
+	hazard_instance.mesh = hazard_mesh
+	hazard_instance.name = "Hazard%d_%s" % [index, "Lava" if hazard_type == 0 else "Slime"]
+	hazard_instance.position = pos
+	add_child(hazard_instance)
+
+	# Create hazard material
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	if hazard_type == 0:  # Lava
+		material.albedo_color = Color(1.0, 0.3, 0.0)
+		material.emission_enabled = true
+		material.emission = Color(1.0, 0.4, 0.1)
+		material.emission_energy_multiplier = 3.0
+	else:  # Slime
+		material.albedo_color = Color(0.2, 0.8, 0.2)
+		material.emission_enabled = true
+		material.emission = Color(0.1, 0.5, 0.1)
+		material.emission_energy_multiplier = 1.5
+
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hazard_instance.set_surface_override_material(0, material)
+
+	# Create damage area
+	var damage_area: Area3D = Area3D.new()
+	damage_area.name = "HazardDamageArea"
+	damage_area.add_to_group("hazard_damage")
+	damage_area.set_meta("damage_type", "lava" if hazard_type == 0 else "slime")
+	damage_area.set_meta("damage_per_second", 50 if hazard_type == 0 else 25)
+	damage_area.collision_layer = 8
+	damage_area.collision_mask = 0
+	damage_area.monitorable = true
+	hazard_instance.add_child(damage_area)
+
+	var area_collision: CollisionShape3D = CollisionShape3D.new()
+	var area_shape: BoxShape3D = BoxShape3D.new()
+	area_shape.size = size + Vector3(0, 2.0, 0)  # Extend upward
+	area_collision.shape = area_shape
+	area_collision.position.y = 1.0
+	damage_area.add_child(area_collision)
+
+	platforms.append(hazard_instance)
+
+# ============================================================================
+# GODOT-SPECIFIC FEATURES
+# ============================================================================
+
+func setup_materials() -> void:
+	## Initialize materials optimized for Compatibility renderer
+	## Uses simple StandardMaterial3D with no advanced features
+
+	# Floor material - basic diffuse
+	_floor_material = StandardMaterial3D.new()
+	_floor_material.albedo_color = Color(0.4, 0.4, 0.45)
+	_floor_material.roughness = 0.8
+	_floor_material.metallic = 0.0
+	# Compatibility renderer: avoid fancy shading
+	_floor_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Wall material
+	_wall_material = StandardMaterial3D.new()
+	_wall_material.albedo_color = Color(0.5, 0.45, 0.4)
+	_wall_material.roughness = 0.9
+	_wall_material.metallic = 0.0
+	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Ceiling material
+	_ceiling_material = StandardMaterial3D.new()
+	_ceiling_material.albedo_color = Color(0.35, 0.35, 0.4)
+	_ceiling_material.roughness = 0.85
+	_ceiling_material.metallic = 0.0
+	_ceiling_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Try to load material manager if available
+	if ResourceLoader.exists("res://scripts/procedural_material_manager.gd"):
+		var manager_script = load("res://scripts/procedural_material_manager.gd")
+		if manager_script:
+			material_manager = manager_script.new()
+
+func generate_room_lights() -> void:
+	## Generate OmniLight3D nodes for each room
+	## Uses simple point lights compatible with all renderers
+
+	print("Generating room lights...")
+
+	for room in bsp_rooms:
+		var room_center: Vector3 = room.get_center_3d(room_height)
+		room_center.y = room.height_offset + room_height * 0.8  # Near ceiling
+
+		var light: OmniLight3D = OmniLight3D.new()
+		light.name = "RoomLight_%d" % room.room_id
+		light.position = room_center
+		light.light_color = light_color
+		light.light_energy = light_energy
+
+		# Scale range based on room size
+		var room_size: float = maxf(room.room.size.x, room.room.size.y)
+		light.omni_range = maxf(light_range, room_size * 0.8)
+
+		# Compatibility renderer friendly settings
+		light.omni_attenuation = 1.0  # Linear falloff
+		light.shadow_enabled = false  # Shadows are expensive
+
+		add_child(light)
+		lights.append(light)
+
+	# Add corridor lights
+	for corridor_data in corridors:
+		for segment in corridor_data.segments:
+			var seg_center: Vector2 = segment.position + segment.size / 2.0
+			var level_z: float = corridor_data.level * level_height_offset
+
+			var light: OmniLight3D = OmniLight3D.new()
+			light.name = "CorridorLight_%d" % corridor_data.from_room
+			light.position = Vector3(seg_center.x, level_z + room_height * 0.7, seg_center.y)
+			light.light_color = light_color
+			light.light_energy = light_energy * 0.7  # Slightly dimmer
+			light.omni_range = light_range * 0.6
+			light.omni_attenuation = 1.0
+			light.shadow_enabled = false
+
+			add_child(light)
+			lights.append(light)
+
+	print("  Created %d lights" % lights.size())
+
+func generate_navigation_mesh() -> void:
+	## Generate NavigationRegion3D for AI pathfinding
+
+	print("Generating navigation mesh...")
+
+	navigation_region = NavigationRegion3D.new()
+	navigation_region.name = "NavigationRegion"
+	add_child(navigation_region)
+
+	var navmesh: NavigationMesh = NavigationMesh.new()
+
+	# Configure navmesh for arena gameplay
+	navmesh.cell_size = navmesh_cell_size
+	navmesh.cell_height = navmesh_cell_size
+	navmesh.agent_radius = navmesh_agent_radius
+	navmesh.agent_height = 2.0
+	navmesh.agent_max_climb = 0.5
+	navmesh.agent_max_slope = 45.0
+
+	# Set geometry source - parse child meshes
+	navmesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+
+	navigation_region.navigation_mesh = navmesh
+
+	# Bake the navmesh (deferred to avoid blocking)
+	navigation_region.bake_navigation_mesh.call_deferred()
+
+	print("  Navigation mesh configured (will bake asynchronously)")
+
+func generate_occlusion_culling() -> void:
+	## Generate OccluderInstance3D nodes for performance optimization
+	## Creates box occluders for large solid geometry
+
+	print("Generating occlusion culling...")
+
+	# Create occluders for perimeter walls
+	var wall_distance: float = arena_size * 0.55
+	var scale: float = arena_size / 140.0
+	var occ_wall_height: float = 25.0 * scale
+
+	var wall_configs: Array = [
+		{"pos": Vector3(0, occ_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, occ_wall_height, 2.0)},
+		{"pos": Vector3(0, occ_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, occ_wall_height, 2.0)},
+		{"pos": Vector3(wall_distance, occ_wall_height / 2.0, 0), "size": Vector3(2.0, occ_wall_height, arena_size * 1.2)},
+		{"pos": Vector3(-wall_distance, occ_wall_height / 2.0, 0), "size": Vector3(2.0, occ_wall_height, arena_size * 1.2)}
 	]
 
-	for pos in fallback_spawns:
-		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
-			spawns.append(pos)
+	for i in range(wall_configs.size()):
+		var config: Dictionary = wall_configs[i]
+		var occluder: OccluderInstance3D = OccluderInstance3D.new()
+		occluder.name = "WallOccluder_%d" % i
+		occluder.position = config.pos
 
-	# Ensure we have at least some spawn points
+		var box_occluder: BoxOccluder3D = BoxOccluder3D.new()
+		box_occluder.size = config.size
+		occluder.occluder = box_occluder
+
+		add_child(occluder)
+		occluders.append(occluder)
+
+	# Create occluders for large structures (pillars, bunkers)
+	for platform in platforms:
+		if not is_instance_valid(platform):
+			continue
+		if not platform.mesh is BoxMesh:
+			continue
+
+		var box_mesh: BoxMesh = platform.mesh as BoxMesh
+		# Only create occluders for tall structures
+		if box_mesh.size.y < 5.0:
+			continue
+
+		var occluder: OccluderInstance3D = OccluderInstance3D.new()
+		occluder.name = "StructureOccluder_%s" % platform.name
+		occluder.position = platform.position
+
+		var box_occluder: BoxOccluder3D = BoxOccluder3D.new()
+		box_occluder.size = box_mesh.size * 0.9  # Slightly smaller to avoid z-fighting
+		occluder.occluder = box_occluder
+
+		add_child(occluder)
+		occluders.append(occluder)
+
+	print("  Created %d occluders" % occluders.size())
+
+func generate_spawn_markers() -> void:
+	## Create Marker3D nodes at spawn positions for game integration
+
+	print("Generating spawn markers...")
+
+	var spawn_idx: int = 0
+	for pos in clear_positions:
+		if spawn_idx >= target_spawn_points:
+			break
+
+		var marker: Marker3D = Marker3D.new()
+		marker.name = "SpawnPoint_%d" % spawn_idx
+		marker.position = pos
+		marker.add_to_group("spawn_points")
+
+		add_child(marker)
+		spawn_markers.append(marker)
+		spawn_idx += 1
+
+	print("  Created %d spawn markers" % spawn_markers.size())
+
+func get_spawn_points() -> PackedVector3Array:
+	## Return spawn points for game integration
+	var spawns: PackedVector3Array = PackedVector3Array()
+
+	for marker in spawn_markers:
+		if is_instance_valid(marker):
+			spawns.append(marker.global_position)
+
+	# Fallback to clear_positions if no markers
 	if spawns.is_empty():
-		# Emergency fallback - find any safe spot
-		for i in range(8):
-			var angle: float = i * TAU / 8.0
-			var dist: float = floor_radius * 0.7
-			var pos: Vector3 = Vector3(cos(angle) * dist, 2, sin(angle) * dist)
-			if is_spawn_valid(pos, min_dist_jump * 0.5, min_dist_tele * 0.5):
-				spawns.append(pos)
+		for pos in clear_positions:
+			spawns.append(pos)
 
 	return spawns
 
-func is_spawn_valid(pos: Vector3, min_dist_jump: float, min_dist_tele: float) -> bool:
-	## Check if a spawn position is far enough from interactive elements
-	for jump_pos in jump_pad_positions:
-		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(jump_pos.x, jump_pos.z))
-		if h_dist < min_dist_jump:
-			return false
-
-	for tele_pos in teleporter_positions:
-		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(tele_pos.x, tele_pos.z))
-		if h_dist < min_dist_tele:
-			return false
-
-	return true
+func get_random_spawn_point() -> Vector3:
+	## Get a random spawn point for respawning
+	var spawns: PackedVector3Array = get_spawn_points()
+	if spawns.is_empty():
+		return Vector3.ZERO
+	return spawns[rng.randi() % spawns.size()]
 
 # ============================================================================
-# .MAP FILE EXPORT
+# LEAK DETECTION
 # ============================================================================
 
-func export_to_map_file() -> void:
-	## Export the current level to a Quake 3 .map file
+func check_for_leaks() -> Dictionary:
+	## Pre-export leak detection via graph connectivity analysis
+	## Returns {has_leak: bool, details: String, disconnected_rooms: Array}
 
-	print("=== Exporting to .map file ===")
-
-	map_brushes.clear()
-	map_entities.clear()
-
-	# Generate brushes for all BSP rooms
-	var textures: Dictionary = {
-		"floor": floor_texture,
-		"ceiling": ceiling_texture,
-		"wall": wall_texture,
-		"corridor": corridor_texture,
-		"caulk": caulk_texture
-	}
-
-	# Export BSP rooms
-	for room in bsp_rooms:
-		var room_brushes: Array[String] = BrushGenerator.create_room_brushes(
-			room.room, room.height_offset, room_height, wall_thickness, textures
-		)
-		map_brushes.append_array(room_brushes)
-
-	# Export corridors
-	for corridor_data in corridors:
-		var corridor_level: int = corridor_data.level
-		var level_z: float = corridor_level * level_height_offset
-		for segment in corridor_data.segments:
-			var corridor_brushes: Array[String] = BrushGenerator.create_corridor_brushes(
-				segment, level_z, room_height * 0.75, wall_thickness, textures
-			)
-			map_brushes.append_array(corridor_brushes)
-
-	# Generate entities
-	generate_map_entities()
-
-	# Write the file
-	write_map_file()
-
-func generate_map_entities() -> void:
-	## Generate entity strings for .map export
-
-	# Spawn points at room centers
-	var spawns_placed: int = 0
-	var shuffled_rooms: Array[BSPNode] = bsp_rooms.duplicate()
-	shuffled_rooms.shuffle()
-
-	for room in shuffled_rooms:
-		if spawns_placed >= target_spawn_points:
-			break
-
-		var pos: Vector3 = room.get_floor_center_3d()
-		pos.y += 32.0  # Slightly above floor
-		var angle: float = rng.randf_range(0, 360)
-
-		map_entities.append(EntityPlacer.spawn_point(pos, angle))
-		spawns_placed += 1
-
-	print("  Placed %d spawn points" % spawns_placed)
-
-	# Weapons
-	var weapon_types: Array[String] = [
-		"weapon_rocketlauncher", "weapon_railgun", "weapon_plasmagun",
-		"weapon_lightning", "weapon_shotgun", "weapon_grenadelauncher"
-	]
-
-	var weapons_placed: int = 0
-	for room in bsp_rooms:
-		if rng.randf() < weapons_per_room:
-			var pos: Vector3 = room.get_floor_center_3d()
-			pos.x += rng.randf_range(-room.room.size.x * 0.3, room.room.size.x * 0.3)
-			pos.z += rng.randf_range(-room.room.size.y * 0.3, room.room.size.y * 0.3)
-			pos.y += 32.0
-
-			var weapon: String = weapon_types[rng.randi() % weapon_types.size()]
-			map_entities.append(EntityPlacer.weapon(weapon, pos))
-			weapons_placed += 1
-
-	# Weapons at corridor junctions
-	for corridor_data in corridors:
-		if rng.randf() < 0.3:
-			var segment: Rect2 = corridor_data.segments[0]
-			var level_z: float = corridor_data.level * level_height_offset
-			var pos: Vector3 = Vector3(
-				segment.position.x + segment.size.x / 2.0,
-				level_z + 32.0,
-				segment.position.y + segment.size.y / 2.0
-			)
-			var weapon: String = weapon_types[rng.randi() % weapon_types.size()]
-			map_entities.append(EntityPlacer.weapon(weapon, pos))
-			weapons_placed += 1
-
-	print("  Placed %d weapons" % weapons_placed)
-
-	# Health and armor items
-	var health_items: Array[String] = ["item_health", "item_health_large", "item_health_mega"]
-	var armor_items: Array[String] = ["item_armor_shard", "item_armor_combat", "item_armor_body"]
-
-	var items_placed: int = 0
-	for room in bsp_rooms:
-		var base_y: float = room.height_offset + 32.0
-
-		if rng.randf() < health_per_room:
-			var pos: Vector3 = Vector3(
-				room.room.position.x + rng.randf_range(32, room.room.size.x - 32),
-				base_y,
-				room.room.position.y + rng.randf_range(32, room.room.size.y - 32)
-			)
-			var health_type: String = health_items[rng.randi() % health_items.size()]
-			map_entities.append(EntityPlacer.item(health_type, pos))
-			items_placed += 1
-
-		if rng.randf() < armor_per_room:
-			var pos: Vector3 = Vector3(
-				room.room.position.x + rng.randf_range(32, room.room.size.x - 32),
-				base_y,
-				room.room.position.y + rng.randf_range(32, room.room.size.y - 32)
-			)
-			var armor_type: String = armor_items[rng.randi() % armor_items.size()]
-			map_entities.append(EntityPlacer.item(armor_type, pos))
-			items_placed += 1
-
-	print("  Placed %d items" % items_placed)
-
-	# Lights
-	var lights_placed: int = 0
-	for room in bsp_rooms:
-		var center: Vector3 = room.get_center_3d(room_height)
-		center.y = room.height_offset + room_height - 32.0
-
-		var intensity: int = int(rng.randf_range(200, 400))
-		var color: Color = Color(
-			rng.randf_range(0.8, 1.0),
-			rng.randf_range(0.7, 1.0),
-			rng.randf_range(0.6, 1.0)
-		)
-		map_entities.append(EntityPlacer.light(center, intensity, color))
-		lights_placed += 1
-
-		# Corner lights for larger rooms
-		if room.room.size.x > 300 or room.room.size.y > 300:
-			var corners: Array[Vector2] = [
-				room.room.position + Vector2(64, 64),
-				room.room.position + Vector2(room.room.size.x - 64, 64),
-				room.room.position + Vector2(64, room.room.size.y - 64),
-				room.room.position + Vector2(room.room.size.x - 64, room.room.size.y - 64)
-			]
-			for corner in corners:
-				var corner_pos: Vector3 = Vector3(corner.x, center.y, corner.y)
-				map_entities.append(EntityPlacer.light(corner_pos, 150))
-				lights_placed += 1
-
-	# Corridor lights
-	for corridor_data in corridors:
-		for segment in corridor_data.segments:
-			var level_z: float = corridor_data.level * level_height_offset
-			var center: Vector3 = Vector3(
-				segment.position.x + segment.size.x / 2.0,
-				level_z + room_height * 0.75 - 16.0,
-				segment.position.y + segment.size.y / 2.0
-			)
-			map_entities.append(EntityPlacer.light(center, 150))
-			lights_placed += 1
-
-	print("  Placed %d lights" % lights_placed)
-
-func write_map_file() -> void:
-	## Write the complete .map file to disk
-
-	# Ensure output directory exists
-	var dir: DirAccess = DirAccess.open("res://")
-	if dir and not dir.dir_exists(output_path):
-		dir.make_dir_recursive(output_path)
-
-	var file_path: String = output_path + map_name + ".map"
-	var file: FileAccess = FileAccess.open(file_path, FileAccess.WRITE)
-
-	if file == null:
-		push_error("Failed to open file for writing: %s" % file_path)
-		print("ERROR: Could not write .map file to %s" % file_path)
-		return
-
-	# Header
-	file.store_string("// Quake 3 Arena Map - Generated by Godot Q3 Map Generator\n")
-	file.store_string("// Seed: %d\n" % rng.seed)
-	file.store_string("// Rooms: %d, Corridors: %d, Brushes: %d, Entities: %d\n" % [
-		bsp_rooms.size(), corridors.size(), map_brushes.size(), map_entities.size()
-	])
-	file.store_string("Version 29\n")
-	file.store_string("\n")
-
-	# Worldspawn entity containing all brushes
-	file.store_string("{\n")
-	file.store_string("\"classname\" \"worldspawn\"\n")
-	file.store_string("\"message\" \"Generated Q3 Arena Map\"\n")
-	file.store_string("\"_ambient\" \"10\"\n")
-	file.store_string("\"_color\" \"1 1 1\"\n")
-	file.store_string("\"gridsize\" \"64 64 128\"\n")
-
-	for brush in map_brushes:
-		file.store_string(brush)
-
-	file.store_string("}\n")
-
-	# Point entities
-	for entity in map_entities:
-		file.store_string(entity)
-
-	file.close()
-	print("Map written to: %s" % file_path)
-	print("  Brushes: %d" % map_brushes.size())
-	print("  Entities: %d" % map_entities.size())
-
-# ============================================================================
-# Q3MAP2 COMPILATION
-# ============================================================================
-
-func compile_map(q3map2_path: String, game_path: String = "") -> Dictionary:
-	## Compile the .map file using q3map2
-	## Returns a dictionary with success status and any error messages
-
-	var map_file: String = ProjectSettings.globalize_path(output_path + map_name + ".map")
 	var result: Dictionary = {
-		"success": false,
-		"bsp_result": -1,
-		"vis_result": -1,
-		"light_result": -1,
-		"errors": []
+		"has_leak": false,
+		"details": "",
+		"disconnected_rooms": []
 	}
 
-	print("=== Compiling map with q3map2 ===")
-	print("Map file: %s" % map_file)
-	print("q3map2 path: %s" % q3map2_path)
-
-	# Verify q3map2 exists
-	if not FileAccess.file_exists(q3map2_path):
-		result.errors.append("q3map2 not found at: %s" % q3map2_path)
-		push_error(result.errors[-1])
+	if bsp_rooms.is_empty():
+		result.details = "No rooms to analyze"
 		return result
 
-	# Build base arguments
-	var base_args: Array = []
-	if game_path != "":
-		base_args.append_array(["-game", game_path])
+	# Build connectivity graph
+	var visited: Dictionary = {}
+	var to_visit: Array[int] = [bsp_rooms[0].room_id]
+	visited[bsp_rooms[0].room_id] = true
 
-	# BSP compile
-	print("  [1/3] Running BSP compile...")
-	var bsp_args: Array = base_args.duplicate()
-	bsp_args.append_array(["-v", "-meta", map_file])
+	# BFS traversal
+	while not to_visit.is_empty():
+		var current_id: int = to_visit.pop_front()
+		var current_room: BSPNode = null
 
-	var bsp_output: Array = []
-	result.bsp_result = OS.execute(q3map2_path, bsp_args, bsp_output, true)
+		for room in bsp_rooms:
+			if room.room_id == current_id:
+				current_room = room
+				break
 
-	if result.bsp_result != 0:
-		var error_msg: String = "BSP compile failed with code: %d" % result.bsp_result
-		result.errors.append(error_msg)
-		push_error(error_msg)
+		if current_room == null:
+			continue
 
-		# Check for leak
-		for line in bsp_output:
-			if "leak" in str(line).to_lower():
-				result.errors.append("MAP LEAK DETECTED - Check .lin file for leak location")
-				print("WARNING: Map has a leak! The .lin file shows the leak path.")
+		for connected_id in current_room.connected_to:
+			if not visited.has(connected_id):
+				visited[connected_id] = true
+				to_visit.append(connected_id)
 
-		return result
+	# Check if all rooms are reachable
+	for room in bsp_rooms:
+		if not visited.has(room.room_id):
+			result.has_leak = true
+			result.disconnected_rooms.append(room.room_id)
 
-	print("  BSP compile successful")
-
-	# Visibility compile
-	print("  [2/3] Running VIS compile...")
-	var vis_args: Array = base_args.duplicate()
-	vis_args.append_array(["-vis", "-saveprt", map_file])
-
-	var vis_output: Array = []
-	result.vis_result = OS.execute(q3map2_path, vis_args, vis_output, true)
-
-	if result.vis_result != 0:
-		var warning: String = "VIS compile failed with code: %d (non-fatal)" % result.vis_result
-		result.errors.append(warning)
-		push_warning(warning)
+	if result.has_leak:
+		result.details = "Disconnected rooms detected: %s" % str(result.disconnected_rooms)
+		print("WARNING: Potential map leak - %d disconnected room(s)" % result.disconnected_rooms.size())
 	else:
-		print("  VIS compile successful")
+		result.details = "All %d rooms are connected" % bsp_rooms.size()
 
-	# Light compile
-	print("  [3/3] Running LIGHT compile...")
-	var light_args: Array = base_args.duplicate()
-	light_args.append_array(["-light", "-fast", "-bounce", "2", "-patchshadows", map_file])
+	# Also check for rooms extending beyond arena bounds
+	var max_extent: float = arena_size * 0.6
+	for room in bsp_rooms:
+		if absf(room.room.position.x) > max_extent or absf(room.room.position.y) > max_extent:
+			result.has_leak = true
+			result.details += "\nRoom %d extends beyond arena bounds" % room.room_id
 
-	var light_output: Array = []
-	result.light_result = OS.execute(q3map2_path, light_args, light_output, true)
-
-	if result.light_result != 0:
-		var warning: String = "LIGHT compile failed with code: %d (non-fatal)" % result.light_result
-		result.errors.append(warning)
-		push_warning(warning)
-	else:
-		print("  LIGHT compile successful")
-
-	result.success = result.bsp_result == 0
-
-	if result.success:
-		print("=== Compilation complete! ===")
-		print("BSP file: %s.bsp" % map_file.get_basename())
+		var room_end: Vector2 = room.room.position + room.room.size
+		if absf(room_end.x) > max_extent or absf(room_end.y) > max_extent:
+			result.has_leak = true
+			result.details += "\nRoom %d end extends beyond arena bounds" % room.room_id
 
 	return result
-
-func package_to_pk3(pk3_name: String = "", include_files: Array[String] = []) -> bool:
-	## Package the compiled map into a .pk3 file (ZIP format)
-	## include_files: Additional files to include (textures, sounds, etc.)
-
-	if pk3_name == "":
-		pk3_name = map_name
-
-	var bsp_file: String = output_path + map_name + ".bsp"
-	var pk3_path: String = output_path + pk3_name + ".pk3"
-
-	print("=== Packaging to .pk3 ===")
-
-	# Check if BSP exists
-	if not FileAccess.file_exists(bsp_file):
-		push_error("BSP file not found: %s - Run compile_map() first" % bsp_file)
-		return false
-
-	# For .pk3 creation, we need to use an external zip tool or implement ZIP writing
-	# Godot doesn't have built-in ZIP creation, so we'll use OS commands
-
-	var global_output: String = ProjectSettings.globalize_path(output_path)
-	var global_pk3: String = ProjectSettings.globalize_path(pk3_path)
-	var global_bsp: String = ProjectSettings.globalize_path(bsp_file)
-
-	# Create maps directory structure
-	var temp_dir: String = global_output + "pk3_temp/"
-	var maps_dir: String = temp_dir + "maps/"
-
-	# Use OS commands to create the pk3
-	var zip_result: int = -1
-
-	if OS.get_name() == "Windows":
-		# Windows - use PowerShell's Compress-Archive
-		var ps_script: String = """
-		$tempDir = '%s'
-		$mapsDir = '%s'
-		$bspFile = '%s'
-		$pk3File = '%s'
-
-		New-Item -ItemType Directory -Force -Path $mapsDir | Out-Null
-		Copy-Item $bspFile -Destination ($mapsDir + '%s.bsp')
-		Compress-Archive -Path ($tempDir + '*') -DestinationPath $pk3File -Force
-		Remove-Item -Recurse -Force $tempDir
-		""" % [temp_dir, maps_dir, global_bsp, global_pk3, map_name]
-
-		zip_result = OS.execute("powershell", ["-Command", ps_script])
-	else:
-		# Linux/Mac - use zip command
-		var commands: String = """
-		mkdir -p '%s' && \
-		cp '%s' '%s%s.bsp' && \
-		cd '%s' && \
-		zip -r '%s' maps/ && \
-		rm -rf '%s'
-		""" % [maps_dir, global_bsp, maps_dir, map_name, temp_dir, global_pk3, temp_dir]
-
-		zip_result = OS.execute("bash", ["-c", commands])
-
-	if zip_result == 0:
-		print("PK3 created: %s" % pk3_path)
-		return true
-	else:
-		push_error("Failed to create PK3 file")
-		print("TIP: You can manually create the .pk3 by:")
-		print("  1. Create a 'maps' folder")
-		print("  2. Copy %s.bsp into maps/")
-		print("  3. Zip the maps folder and rename to .pk3")
-		return false
-
-# ============================================================================
-# ASCII ART PARSER
-# ============================================================================
-
-func parse_ascii_art(file_path: String, cell_scale: float = 64.0, extrude_height: float = 128.0, floor_z: float = 0.0) -> Array[String]:
-	## Parse ASCII art from a text file and extrude into brushes
-	## '#' and 'X' characters become walls
-	## '.' and ' ' are empty space
-	## Returns array of brush strings for .map export
-
-	var result: Array[String] = []
-
-	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
-	if file == null:
-		push_error("Failed to open ASCII art file: %s" % file_path)
-		return result
-
-	var content: String = file.get_as_text()
-	file.close()
-
-	var lines: PackedStringArray = content.split("\n")
-	var textures: Dictionary = {
-		"top": wall_texture,
-		"bottom": wall_texture,
-		"north": wall_texture,
-		"south": wall_texture,
-		"east": wall_texture,
-		"west": wall_texture
-	}
-
-	print("Parsing ASCII art: %d lines" % lines.size())
-
-	for y in range(lines.size()):
-		var line: String = lines[y]
-		for x in range(line.length()):
-			var char: String = line[x]
-
-			# Wall characters
-			if char == "#" or char == "X" or char == "*":
-				var mins: Vector3 = Vector3(x * cell_scale, floor_z, y * cell_scale)
-				var maxs: Vector3 = Vector3((x + 1) * cell_scale, floor_z + extrude_height, (y + 1) * cell_scale)
-				result.append(BrushGenerator.create_box_brush(mins, maxs, textures))
-
-				# Also create runtime geometry
-				if not Engine.is_editor_hint():
-					add_platform_with_collision(
-						Vector3(mins.x + cell_scale/2, floor_z + extrude_height/2, mins.y + cell_scale/2),
-						Vector3(cell_scale, extrude_height, cell_scale),
-						"ASCIIWall_%d_%d" % [x, y]
-					)
-
-	print("Generated %d brushes from ASCII art" % result.size())
-	return result
-
-func load_ascii_layout(file_path: String, cell_scale: float = 8.0, wall_height: float = 10.0) -> void:
-	## Load an ASCII art file and generate runtime geometry
-	## This is simpler alternative to parse_ascii_art that only generates runtime meshes
-
-	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
-	if file == null:
-		push_error("Failed to open ASCII layout file: %s" % file_path)
-		return
-
-	var content: String = file.get_as_text()
-	file.close()
-
-	var lines: PackedStringArray = content.split("\n")
-	var center_offset_x: float = 0.0
-	var center_offset_z: float = 0.0
-
-	# Calculate center offset
-	if lines.size() > 0:
-		center_offset_z = lines.size() * cell_scale / 2.0
-		center_offset_x = lines[0].length() * cell_scale / 2.0
-
-	for y in range(lines.size()):
-		var line: String = lines[y]
-		for x in range(line.length()):
-			var char: String = line[x]
-			var world_x: float = x * cell_scale - center_offset_x
-			var world_z: float = y * cell_scale - center_offset_z
-
-			match char:
-				"#", "X", "*":  # Wall
-					add_platform_with_collision(
-						Vector3(world_x, wall_height / 2.0, world_z),
-						Vector3(cell_scale, wall_height, cell_scale),
-						"ASCIIWall_%d_%d" % [x, y]
-					)
-				".", " ":  # Floor
-					add_platform_with_collision(
-						Vector3(world_x, -0.5, world_z),
-						Vector3(cell_scale, 1.0, cell_scale),
-						"ASCIIFloor_%d_%d" % [x, y]
-					)
-					clear_positions.append(Vector3(world_x, 2.0, world_z))
-				"S":  # Spawn point
-					add_platform_with_collision(
-						Vector3(world_x, -0.5, world_z),
-						Vector3(cell_scale, 1.0, cell_scale),
-						"ASCIISpawn_%d_%d" % [x, y]
-					)
-					clear_positions.append(Vector3(world_x, 2.0, world_z))
-				"J":  # Jump pad location
-					add_platform_with_collision(
-						Vector3(world_x, -0.5, world_z),
-						Vector3(cell_scale, 1.0, cell_scale),
-						"ASCIIJumpPad_%d_%d" % [x, y]
-					)
-					create_jump_pad(Vector3(world_x, 0, world_z), x * 100 + y, arena_size / 140.0)
-				"T":  # Teleporter (needs pair)
-					add_platform_with_collision(
-						Vector3(world_x, -0.5, world_z),
-						Vector3(cell_scale, 1.0, cell_scale),
-						"ASCIITeleporter_%d_%d" % [x, y]
-					)
 
 # ============================================================================
 # ADVANCED: NOISE PERTURBATION
@@ -2259,6 +1976,121 @@ func apply_organic_noise_to_room(room: Rect2, noise_strength: float = 8.0) -> Re
 # EDITOR INTEGRATION
 # ============================================================================
 
+@export_group("Editor Preview")
+@export var show_bsp_preview: bool = false  ## Show BSP room outlines in editor
+@export var preview_room_color: Color = Color(0.2, 0.6, 1.0, 0.3)  ## Color for room previews
+@export var preview_corridor_color: Color = Color(0.2, 1.0, 0.4, 0.3)  ## Color for corridor previews
+
+var _preview_meshes: Array[MeshInstance3D] = []
+
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint() and show_bsp_preview:
+		update_editor_preview()
+
+func update_editor_preview() -> void:
+	## Update editor preview meshes for BSP layout visualization
+
+	# Only update if BSP rooms exist
+	if bsp_rooms.is_empty() and not use_bsp_layout:
+		clear_editor_preview()
+		return
+
+	# Generate preview if we don't have any
+	if _preview_meshes.is_empty() and use_bsp_layout:
+		generate_editor_preview()
+
+func generate_editor_preview() -> void:
+	## Generate preview meshes for BSP rooms and corridors in editor
+
+	clear_editor_preview()
+
+	# Create preview for arena bounds
+	var arena_preview: MeshInstance3D = create_preview_box(
+		Vector3(0, 0, 0),
+		Vector3(arena_size, 1.0, arena_size),
+		Color(0.5, 0.5, 0.5, 0.1)
+	)
+	arena_preview.name = "ArenaPreview"
+	_preview_meshes.append(arena_preview)
+
+	# Generate room previews if BSP rooms exist
+	for room in bsp_rooms:
+		var room_center: Vector2 = room.get_center()
+		var room_preview: MeshInstance3D = create_preview_box(
+			Vector3(room_center.x, room.height_offset + 2.0, room_center.y),
+			Vector3(room.room.size.x, 4.0, room.room.size.y),
+			preview_room_color
+		)
+		room_preview.name = "RoomPreview_%d" % room.room_id
+		_preview_meshes.append(room_preview)
+
+	# Generate corridor previews
+	for corridor_data in corridors:
+		var level_z: float = corridor_data.level * level_height_offset
+		for i in range(corridor_data.segments.size()):
+			var segment: Rect2 = corridor_data.segments[i]
+			var seg_center: Vector2 = segment.position + segment.size / 2.0
+			var corridor_preview: MeshInstance3D = create_preview_box(
+				Vector3(seg_center.x, level_z + 2.0, seg_center.y),
+				Vector3(segment.size.x, 3.0, segment.size.y),
+				preview_corridor_color
+			)
+			corridor_preview.name = "CorridorPreview_%d_%d" % [corridor_data.from_room, i]
+			_preview_meshes.append(corridor_preview)
+
+	# Show symmetry axis if enabled
+	if enable_symmetry:
+		var axis_length: float = arena_size * 1.2
+		var axis_color: Color = Color(1.0, 0.2, 0.2, 0.5)
+		var axis_preview: MeshInstance3D
+		if symmetry_axis == 0:  # X-axis
+			axis_preview = create_preview_box(
+				Vector3(0, 5, 0),
+				Vector3(0.5, 10.0, axis_length),
+				axis_color
+			)
+		else:  # Z-axis
+			axis_preview = create_preview_box(
+				Vector3(0, 5, 0),
+				Vector3(axis_length, 10.0, 0.5),
+				axis_color
+			)
+		axis_preview.name = "SymmetryAxisPreview"
+		_preview_meshes.append(axis_preview)
+
+	print("Editor Preview: %d rooms, %d corridors, symmetry=%s" % [
+		bsp_rooms.size(), corridors.size(), "on" if enable_symmetry else "off"
+	])
+
+func create_preview_box(pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
+	## Create a transparent preview box for editor visualization
+
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = size
+
+	var instance: MeshInstance3D = MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.position = pos
+	instance.name = "PreviewBox"
+
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = color
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	instance.set_surface_override_material(0, material)
+
+	add_child(instance)
+	return instance
+
+func clear_editor_preview() -> void:
+	## Remove all preview meshes
+
+	for mesh in _preview_meshes:
+		if is_instance_valid(mesh):
+			mesh.queue_free()
+	_preview_meshes.clear()
+
 func _get_configuration_warnings() -> PackedStringArray:
 	var warnings: PackedStringArray = []
 
@@ -2270,6 +2102,10 @@ func _get_configuration_warnings() -> PackedStringArray:
 		warnings.append("More than 3 levels may cause performance issues")
 	if target_spawn_points < 2:
 		warnings.append("Deathmatch maps should have at least 2 spawn points")
+	if enable_symmetry and not use_bsp_layout:
+		warnings.append("Symmetry works best with BSP layout enabled")
+	if enable_hazards and hazard_count > 4:
+		warnings.append("Many hazard zones may make the arena too dangerous")
 
 	return warnings
 

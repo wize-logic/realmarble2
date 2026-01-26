@@ -944,7 +944,7 @@ class EntityPlacer:
 		var jump_area: Area3D = Area3D.new()
 		jump_area.name = "SpringBounceArea"
 		jump_area.add_to_group("spring")
-		jump_area.add_to_group("jump_pad")  # Compatible with Q3 jump pad system
+		jump_area.add_to_group("jump_pad")
 		jump_area.collision_layer = 8
 		jump_area.collision_mask = 2
 		jump_area.monitorable = true
