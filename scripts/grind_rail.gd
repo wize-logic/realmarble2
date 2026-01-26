@@ -242,7 +242,16 @@ func _process(_delta: float) -> void:
 	# Iterate backwards to avoid duplication when removing items
 	for i in range(active_grinders.size() - 1, -1, -1):
 		var grinder = active_grinders[i]
-		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
+		if not is_instance_valid(grinder):
+			# Handle freed objects directly without calling _remove_grinder
+			# (can't pass freed object to typed function parameter)
+			var data = grinder_data.get(grinder)
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			active_grinders.remove_at(i)
+			grinder_data.erase(grinder)
+			continue
+		if not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 
 
@@ -252,8 +261,18 @@ func _physics_process(delta: float) -> void:
 
 	# Iterate backwards to avoid duplication when removing items
 	for i in range(active_grinders.size() - 1, -1, -1):
-		var grinder: RigidBody3D = active_grinders[i]
-		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
+		var grinder = active_grinders[i]  # No type hint to handle freed objects
+		if not is_instance_valid(grinder):
+			# Handle freed objects directly without calling _remove_grinder
+			# (can't pass freed object to typed function parameter)
+			var data = grinder_data.get(grinder)
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			active_grinders.remove_at(i)
+			grinder_data.erase(grinder)
+			continue
+
+		if not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 			continue
 
@@ -261,7 +280,7 @@ func _physics_process(delta: float) -> void:
 		# Clean them up from our tracking to prevent state issues
 		if grinder.get("current_rail") != self:
 			var data = grinder_data[grinder]
-			if data and data.rope_visual:
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
 				data.rope_visual.queue_free()
 			active_grinders.erase(grinder)
 			grinder_data.erase(grinder)
