@@ -1239,8 +1239,9 @@ func generate_jump_pads() -> void:
 
 	jump_pad_positions.clear()
 
-	# Try to place jump pads, checking for collisions with structures
-	var num_target_pads: int = 3 + complexity
+	# Match jump pad count to teleporter count for balance
+	# Teleporters generate (2 + complexity + 1) / 2 pairs = that many * 2 teleporters
+	var num_target_pads: int = ((2 + complexity + 1) / 2) * 2
 	var attempts: int = 0
 	var max_attempts: int = num_target_pads * 20
 
@@ -1344,7 +1345,9 @@ func generate_teleporters() -> void:
 
 	teleporter_positions.clear()
 
-	var num_pairs: int = 1 + complexity / 2
+	# Generate balanced count: (2 + complexity) rounded up to even number via pairs
+	# This ensures equal teleporter and jump pad counts
+	var num_pairs: int = (2 + complexity + 1) / 2  # Integer division rounds down, +1 rounds up
 	var pairs_created: int = 0
 	var attempts: int = 0
 	var max_attempts: int = num_pairs * 30
