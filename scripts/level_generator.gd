@@ -440,46 +440,126 @@ class PlatformBuilder:
 		return mesh_instance
 
 	func create_loop(center: Vector3, radius: float, name_prefix: String, index: int) -> Node3D:
-		"""Create a toroidal loop for momentum tricks (Sonic-style).
-		Uses CSGTorus3D for visual with full collision coverage for player contact."""
+		"""Create a half-pipe style loop for momentum tricks (skatepark-style).
+		Uses ArrayMesh for curved U-shaped ramp with full collision coverage."""
 		var loop_node: Node3D = Node3D.new()
 		loop_node.name = name_prefix + str(index)
 		loop_node.position = center
 		parent_node.add_child(loop_node)
 
-		# Create outer torus using CSGTorus3D
-		# inner_radius = hole size, outer_radius = tube thickness
-		var outer_torus: CSGTorus3D = CSGTorus3D.new()
-		outer_torus.name = "OuterTorus"
-		outer_torus.inner_radius = radius
-		outer_torus.outer_radius = radius + 8.0  # 8 unit thick tube for player to run through
-		outer_torus.sides = 24  # Ring smoothness
-		outer_torus.ring_sides = 16  # Tube cross-section smoothness
-		# Rotate to stand vertically (loop plane perpendicular to ground)
-		outer_torus.rotation_degrees = Vector3(90, 0, 0)
-		loop_node.add_child(outer_torus)
+		# Half-pipe dimensions
+		var pipe_width: float = radius * 1.5  # Width of the half-pipe
+		var pipe_height: float = radius  # Height of the curved walls
+		var pipe_length: float = radius * 2.5  # Length of the half-pipe
+		var wall_thickness: float = 2.0  # Thickness of the pipe walls
 
-		# Add static body for FULL loop collision (not just bottom arc)
+		# Create the half-pipe mesh
+		var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+		mesh_instance.name = "HalfPipeVisual"
+		mesh_instance.mesh = _create_half_pipe_mesh(pipe_width, pipe_height, pipe_length, wall_thickness)
+		loop_node.add_child(mesh_instance)
+
+		# Apply material
+		var pipe_material: StandardMaterial3D = StandardMaterial3D.new()
+		pipe_material.albedo_color = Color(0.4, 0.45, 0.5)  # Concrete gray
+		pipe_material.metallic = 0.1
+		pipe_material.roughness = 0.7
+		mesh_instance.material_override = pipe_material
+
+		# Add static body for collision
 		var static_body: StaticBody3D = StaticBody3D.new()
-		static_body.name = "LoopCollision"
+		static_body.name = "HalfPipeCollision"
 		loop_node.add_child(static_body)
 
-		# Create collision segments around the ENTIRE loop (16 segments for full coverage)
-		# This prevents players from clipping through any part of the loop
-		var num_segments: int = 16
-		for i in range(num_segments):
-			var angle: float = (float(i) / num_segments) * TAU  # Full 360 degrees
-			var collision: CollisionShape3D = CollisionShape3D.new()
-			var box: BoxShape3D = BoxShape3D.new()
-			# Box size: width=tube thickness, height=segment arc, depth=track width
-			box.size = Vector3(10.0, 4.0, 12.0)
-			collision.shape = box
-			# Position on the tube surface (inside of torus where player runs)
-			collision.position = Vector3(0, cos(angle) * radius, sin(angle) * radius)
-			collision.rotation = Vector3(angle, 0, 0)
-			static_body.add_child(collision)
+		# Create collision for the curved surfaces (both sides of half-pipe)
+		var num_segments: int = 8  # Collision segments per side
+		for side in [-1, 1]:  # Left and right walls
+			for i in range(num_segments):
+				var angle: float = (float(i) / num_segments) * PI  # 0 to 180 degrees (half circle)
+				var collision: CollisionShape3D = CollisionShape3D.new()
+				var box: BoxShape3D = BoxShape3D.new()
+				# Box matches segment of the curved wall
+				box.size = Vector3(wall_thickness + 1.0, pipe_length / num_segments + 1.0, pipe_height / num_segments + 2.0)
+				collision.shape = box
+
+				# Position along the curve
+				var curve_x: float = side * (pipe_width / 2.0 - cos(angle) * (pipe_height * 0.5))
+				var curve_y: float = sin(angle) * pipe_height
+				collision.position = Vector3(curve_x, curve_y, (float(i) / num_segments - 0.5) * pipe_length)
+				collision.rotation = Vector3(0, 0, angle * side)
+				static_body.add_child(collision)
+
+		# Floor collision (the flat bottom of the half-pipe)
+		var floor_collision: CollisionShape3D = CollisionShape3D.new()
+		var floor_shape: BoxShape3D = BoxShape3D.new()
+		floor_shape.size = Vector3(pipe_width * 0.6, 1.0, pipe_length)
+		floor_collision.shape = floor_shape
+		floor_collision.position = Vector3(0, 0.5, 0)
+		static_body.add_child(floor_collision)
+
+		# Entry ramps on both ends
+		for end in [-1, 1]:
+			var ramp_collision: CollisionShape3D = CollisionShape3D.new()
+			var ramp_shape: BoxShape3D = BoxShape3D.new()
+			ramp_shape.size = Vector3(pipe_width, 1.0, 4.0)
+			ramp_collision.shape = ramp_shape
+			ramp_collision.position = Vector3(0, -0.5, end * (pipe_length / 2.0 + 2.0))
+			ramp_collision.rotation = Vector3(end * 0.2, 0, 0)
+			static_body.add_child(ramp_collision)
 
 		return loop_node
+
+	func _create_half_pipe_mesh(width: float, height: float, length: float, thickness: float) -> ArrayMesh:
+		"""Create a half-pipe (U-shaped) mesh for skatepark-style loops."""
+		var mesh: ArrayMesh = ArrayMesh.new()
+		var surface_tool: SurfaceTool = SurfaceTool.new()
+		surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+		var segments_around: int = 12  # Curve smoothness
+		var segments_length: int = 8  # Length subdivisions
+
+		# Generate the curved U-shape
+		for l in range(segments_length):
+			var z0: float = (float(l) / segments_length - 0.5) * length
+			var z1: float = (float(l + 1) / segments_length - 0.5) * length
+			var v0: float = float(l) / segments_length
+			var v1: float = float(l + 1) / segments_length
+
+			for s in range(segments_around):
+				# Angle goes from -PI/2 to PI/2 (left wall, floor, right wall)
+				var angle0: float = (float(s) / segments_around - 0.5) * PI
+				var angle1: float = (float(s + 1) / segments_around - 0.5) * PI
+				var u0: float = float(s) / segments_around
+				var u1: float = float(s + 1) / segments_around
+
+				# Inner surface (where player rides)
+				var inner_radius: float = width / 2.0
+				var x00: float = sin(angle0) * inner_radius
+				var y00: float = cos(angle0) * height + height
+				var x01: float = sin(angle1) * inner_radius
+				var y01: float = cos(angle1) * height + height
+
+				# Vertices for this quad
+				var v00: Vector3 = Vector3(x00, y00, z0)
+				var v10: Vector3 = Vector3(x01, y01, z0)
+				var v01: Vector3 = Vector3(x00, y00, z1)
+				var v11: Vector3 = Vector3(x01, y01, z1)
+
+				# Calculate normal (pointing inward toward center of half-pipe)
+				var normal: Vector3 = Vector3(-sin((angle0 + angle1) / 2.0), -cos((angle0 + angle1) / 2.0), 0).normalized()
+
+				# Add triangles with UVs
+				surface_tool.set_normal(normal)
+				surface_tool.set_uv(Vector2(u0, v0)); surface_tool.add_vertex(v00)
+				surface_tool.set_uv(Vector2(u0, v1)); surface_tool.add_vertex(v01)
+				surface_tool.set_uv(Vector2(u1, v0)); surface_tool.add_vertex(v10)
+
+				surface_tool.set_uv(Vector2(u1, v0)); surface_tool.add_vertex(v10)
+				surface_tool.set_uv(Vector2(u0, v1)); surface_tool.add_vertex(v01)
+				surface_tool.set_uv(Vector2(u1, v1)); surface_tool.add_vertex(v11)
+
+		surface_tool.generate_normals()
+		return surface_tool.commit()
 
 # =============================================================================
 # RAIL GENERATOR CLASS
@@ -593,7 +673,7 @@ class RailGenerator:
 			rail.curve.set_point_out(j, tangent * 0.5)
 
 	func _create_rail_visual(rail: Path3D) -> void:
-		"""Create visual mesh for the rail using ImmediateMesh for tube geometry.
+		"""Create visual mesh for the rail using ArrayMesh for proper material support.
 		Handles edge cases: short rails, flat segments, and near-vertical sections."""
 		if not rail.curve or rail.curve.get_baked_length() < 1.0:
 			return  # Skip rails too short to render
@@ -601,18 +681,9 @@ class RailGenerator:
 		var rail_visual: MeshInstance3D = MeshInstance3D.new()
 		rail_visual.name = "RailVisual"
 
-		var immediate_mesh: ImmediateMesh = ImmediateMesh.new()
-		rail_visual.mesh = immediate_mesh
-
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = Color(0.7, 0.75, 0.85)  # Steel blue-gray
-		material.metallic = 0.85
-		material.roughness = 0.3
-		material.emission_enabled = true
-		material.emission = Color(0.3, 0.35, 0.45)  # Subtle glow
-		material.emission_energy_multiplier = 0.3
-
-		immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
+		# Use SurfaceTool for better material handling than ImmediateMesh
+		var surface_tool: SurfaceTool = SurfaceTool.new()
+		surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 
 		var radial_segments: int = 8
 		var rail_length: float = rail.curve.get_baked_length()
@@ -624,10 +695,10 @@ class RailGenerator:
 		var last_up: Vector3 = Vector3.UP
 
 		for i in range(length_segments):
-			var offset: float = (float(i) / length_segments) * rail_length
+			var offset_dist: float = (float(i) / length_segments) * rail_length
 			var next_offset: float = (float(i + 1) / length_segments) * rail_length
 
-			var pos: Vector3 = rail.curve.sample_baked(offset)
+			var pos: Vector3 = rail.curve.sample_baked(offset_dist)
 			var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
 
 			var forward: Vector3 = (next_pos - pos)
@@ -650,27 +721,67 @@ class RailGenerator:
 			last_right = right
 			last_up = up
 
+			var u_offset: float = float(i) / length_segments
+			var u_next: float = float(i + 1) / length_segments
+
 			for j in range(radial_segments):
 				var angle_curr: float = (float(j) / radial_segments) * TAU
 				var angle_next: float = (float(j + 1) / radial_segments) * TAU
+				var v_curr: float = float(j) / radial_segments
+				var v_next: float = float(j + 1) / radial_segments
 
 				var offset_curr: Vector3 = (right * cos(angle_curr) + up * sin(angle_curr)) * RAIL_RADIUS
-				var offset_next: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * RAIL_RADIUS
+				var offset_next_rad: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * RAIL_RADIUS
 
 				var v1: Vector3 = pos + offset_curr
-				var v2: Vector3 = pos + offset_next
+				var v2: Vector3 = pos + offset_next_rad
 				var v3: Vector3 = next_pos + offset_curr
-				var v4: Vector3 = next_pos + offset_next
+				var v4: Vector3 = next_pos + offset_next_rad
 
-				immediate_mesh.surface_add_vertex(v1)
-				immediate_mesh.surface_add_vertex(v2)
-				immediate_mesh.surface_add_vertex(v3)
+				# Calculate normals for proper lighting
+				var n1: Vector3 = offset_curr.normalized()
+				var n2: Vector3 = offset_next_rad.normalized()
 
-				immediate_mesh.surface_add_vertex(v2)
-				immediate_mesh.surface_add_vertex(v4)
-				immediate_mesh.surface_add_vertex(v3)
+				# Triangle 1
+				surface_tool.set_normal(n1)
+				surface_tool.set_uv(Vector2(u_offset, v_curr))
+				surface_tool.add_vertex(v1)
 
-		immediate_mesh.surface_end()
+				surface_tool.set_normal(n2)
+				surface_tool.set_uv(Vector2(u_offset, v_next))
+				surface_tool.add_vertex(v2)
+
+				surface_tool.set_normal(n1)
+				surface_tool.set_uv(Vector2(u_next, v_curr))
+				surface_tool.add_vertex(v3)
+
+				# Triangle 2
+				surface_tool.set_normal(n2)
+				surface_tool.set_uv(Vector2(u_offset, v_next))
+				surface_tool.add_vertex(v2)
+
+				surface_tool.set_normal(n2)
+				surface_tool.set_uv(Vector2(u_next, v_next))
+				surface_tool.add_vertex(v4)
+
+				surface_tool.set_normal(n1)
+				surface_tool.set_uv(Vector2(u_next, v_curr))
+				surface_tool.add_vertex(v3)
+
+		# Commit mesh and apply material
+		rail_visual.mesh = surface_tool.commit()
+
+		# Create proper material with steel appearance
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		material.albedo_color = Color(0.5, 0.55, 0.65)  # Steel blue-gray
+		material.metallic = 0.9
+		material.roughness = 0.25
+		material.emission_enabled = true
+		material.emission = Color(0.2, 0.25, 0.35)  # Subtle glow
+		material.emission_energy_multiplier = 0.4
+		# Use surface override for reliable material application
+		rail_visual.set_surface_override_material(0, material)
+
 		rail.add_child(rail_visual)
 
 # =============================================================================
@@ -742,48 +853,6 @@ class EntityPlacer:
 		parent_node.add_child(spawn)
 		return spawn
 
-	func create_ring(position: Vector3, index: int) -> Area3D:
-		"""Create a collectible ring as Area3D with coin-like mesh."""
-		var ring: Area3D = Area3D.new()
-		ring.name = "Ring" + str(index)
-		ring.position = position
-		ring.collision_layer = 0
-		ring.collision_mask = 2
-		ring.add_to_group("collectible")
-		ring.add_to_group("ring")
-		parent_node.add_child(ring)
-
-		# Create torus mesh for ring
-		var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-		var torus: TorusMesh = TorusMesh.new()
-		torus.inner_radius = 0.3
-		torus.outer_radius = 0.6
-		mesh_instance.mesh = torus
-		mesh_instance.rotation_degrees = Vector3(90, 0, 0)
-		ring.add_child(mesh_instance)
-
-		# Gold material
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = Color(1.0, 0.85, 0.0)
-		material.metallic = 1.0
-		material.roughness = 0.2
-		material.emission_enabled = true
-		material.emission = Color(1.0, 0.8, 0.0)
-		material.emission_energy_multiplier = 0.5
-		mesh_instance.material_override = material
-
-		# Collision
-		var collision: CollisionShape3D = CollisionShape3D.new()
-		var sphere: SphereShape3D = SphereShape3D.new()
-		sphere.radius = 0.8
-		collision.shape = sphere
-		ring.add_child(collision)
-
-		# Attach ring collection script
-		ring.set_script(_create_ring_script())
-
-		return ring
-
 	func create_powerup(position: Vector3, powerup_type: String, index: int) -> Area3D:
 		"""Create a power-up (e.g., speed shoes) as Area3D with temporary buff."""
 		var powerup: Area3D = Area3D.new()
@@ -831,17 +900,21 @@ class EntityPlacer:
 
 		return powerup
 
-	func create_spring(position: Vector3, impulse_strength: float, index: int) -> Area3D:
-		"""Create a spring pad for jump impulses (Sonic-style bouncy mechanic)."""
-		var spring: Area3D = Area3D.new()
-		spring.name = "Spring" + str(index)
-		spring.position = position
-		spring.collision_layer = 0
-		spring.collision_mask = 2
-		spring.add_to_group("spring")
-		parent_node.add_child(spring)
+	func create_spring(position: Vector3, impulse_strength: float, index: int) -> Node3D:
+		"""Create a spring pad for jump impulses (Sonic-style bouncy mechanic).
+		Uses proper StaticBody3D collision like Q3 jump pads for solid ground contact."""
+		# Root node for the spring assembly
+		var spring_root: Node3D = Node3D.new()
+		spring_root.name = "Spring" + str(index)
+		spring_root.position = position
+		parent_node.add_child(spring_root)
 
-		# Base platform
+		# Create the visual mesh
+		var mesh_instance: MeshInstance3D = MeshInstance3D.new()
+		mesh_instance.name = "SpringVisual"
+		spring_root.add_child(mesh_instance)
+
+		# Base platform mesh
 		var base: MeshInstance3D = MeshInstance3D.new()
 		var cylinder: CylinderMesh = CylinderMesh.new()
 		cylinder.top_radius = 2.0
@@ -849,7 +922,7 @@ class EntityPlacer:
 		cylinder.height = 0.5
 		base.mesh = cylinder
 		base.position = Vector3(0, 0.25, 0)
-		spring.add_child(base)
+		spring_root.add_child(base)
 
 		# Spring coil (simplified as cylinder)
 		var coil: MeshInstance3D = MeshInstance3D.new()
@@ -859,9 +932,9 @@ class EntityPlacer:
 		coil_mesh.height = 1.5
 		coil.mesh = coil_mesh
 		coil.position = Vector3(0, 1.25, 0)
-		spring.add_child(coil)
+		spring_root.add_child(coil)
 
-		# Top cap
+		# Top cap (the bounce surface)
 		var cap: MeshInstance3D = MeshInstance3D.new()
 		var cap_mesh: CylinderMesh = CylinderMesh.new()
 		cap_mesh.top_radius = 2.0
@@ -869,13 +942,16 @@ class EntityPlacer:
 		cap_mesh.height = 0.3
 		cap.mesh = cap_mesh
 		cap.position = Vector3(0, 2.15, 0)
-		spring.add_child(cap)
+		spring_root.add_child(cap)
 
-		# Materials
+		# Materials with emission for visibility
 		var red_mat: StandardMaterial3D = StandardMaterial3D.new()
 		red_mat.albedo_color = Color(1.0, 0.2, 0.2)
 		red_mat.metallic = 0.5
 		red_mat.roughness = 0.4
+		red_mat.emission_enabled = true
+		red_mat.emission = Color(0.5, 0.1, 0.1)
+		red_mat.emission_energy_multiplier = 0.5
 		base.material_override = red_mat
 		cap.material_override = red_mat
 
@@ -883,24 +959,51 @@ class EntityPlacer:
 		yellow_mat.albedo_color = Color(1.0, 0.9, 0.0)
 		yellow_mat.metallic = 0.8
 		yellow_mat.roughness = 0.2
+		yellow_mat.emission_enabled = true
+		yellow_mat.emission = Color(0.6, 0.5, 0.0)
+		yellow_mat.emission_energy_multiplier = 0.8
 		coil.material_override = yellow_mat
 
-		# Collision
+		# PROPER COLLISION: StaticBody3D for solid ground contact (like Q3 jump pads)
+		var static_body: StaticBody3D = StaticBody3D.new()
+		static_body.name = "SpringCollision"
+		spring_root.add_child(static_body)
+
 		var collision: CollisionShape3D = CollisionShape3D.new()
-		var cyl_shape: CylinderShape3D = CylinderShape3D.new()
-		cyl_shape.radius = 2.5
-		cyl_shape.height = 2.5
-		collision.shape = cyl_shape
-		collision.position = Vector3(0, 1.25, 0)
-		spring.add_child(collision)
+		var collision_shape: CylinderShape3D = CylinderShape3D.new()
+		collision_shape.radius = 2.5
+		collision_shape.height = 2.3
+		collision.shape = collision_shape
+		collision.position = Vector3(0, 1.15, 0)
+		static_body.add_child(collision)
+
+		# BOUNCE AREA: Area3D for detecting when player steps on spring
+		var jump_area: Area3D = Area3D.new()
+		jump_area.name = "SpringBounceArea"
+		jump_area.add_to_group("spring")
+		jump_area.add_to_group("jump_pad")  # Compatible with Q3 jump pad system
+		jump_area.collision_layer = 8
+		jump_area.collision_mask = 2
+		jump_area.monitorable = true
+		jump_area.monitoring = true
+		spring_root.add_child(jump_area)
+
+		# Bounce detection area (sits on top of the spring)
+		var area_collision: CollisionShape3D = CollisionShape3D.new()
+		var area_shape: CylinderShape3D = CylinderShape3D.new()
+		area_shape.radius = 2.0
+		area_shape.height = 1.0
+		area_collision.shape = area_shape
+		area_collision.position = Vector3(0, 2.8, 0)  # Above the cap
+		jump_area.add_child(area_collision)
 
 		# Store impulse strength as metadata
-		spring.set_meta("impulse_strength", impulse_strength)
+		jump_area.set_meta("impulse_strength", impulse_strength)
 
-		# Attach spring script
-		spring.set_script(_create_spring_script())
+		# Attach spring script to the Area3D
+		jump_area.set_script(_create_spring_script())
 
-		return spring
+		return spring_root
 
 	func create_enemy_placeholder(position: Vector3, enemy_type: String, index: int) -> CharacterBody3D:
 		"""Create an enemy placeholder (Badnik-style) as CharacterBody3D."""
@@ -934,32 +1037,6 @@ class EntityPlacer:
 		enemy.add_child(collision)
 
 		return enemy
-
-	func _create_ring_script() -> GDScript:
-		"""Create inline script for ring collection."""
-		var script: GDScript = GDScript.new()
-		script.source_code = """
-extends Area3D
-
-var rotation_speed: float = 2.0
-var bob_speed: float = 3.0
-var bob_amount: float = 0.3
-var initial_y: float = 0.0
-
-func _ready() -> void:
-	initial_y = position.y
-	body_entered.connect(_on_body_entered)
-
-func _process(delta: float) -> void:
-	rotation.y += rotation_speed * delta
-	position.y = initial_y + sin(Time.get_ticks_msec() / 1000.0 * bob_speed) * bob_amount
-
-func _on_body_entered(body: Node3D) -> void:
-	if body.has_method("collect_ring"):
-		body.collect_ring()
-	queue_free()
-"""
-		return script
 
 	func _create_spring_script() -> GDScript:
 		"""Create inline script for spring impulse."""
@@ -1001,7 +1078,7 @@ func configure_for_complexity() -> void:
 	var base_vertical_rails: Dictionary = {1: 2, 2: 3, 3: 4, 4: 5}
 	var base_loops: Dictionary = {1: 1, 2: 2, 3: 3, 4: 4}
 	var base_springs: Dictionary = {1: 4, 2: 8, 3: 12, 4: 16}
-	var base_rings: Dictionary = {1: 16, 2: 24, 3: 32, 4: 48}
+	var base_rings: Dictionary = {1: 0, 2: 0, 3: 0, 4: 0}  # Rings disabled
 	var base_powerups: Dictionary = {1: 2, 2: 4, 3: 6, 4: 8}
 
 	var c: int = clampi(complexity, 1, 4)
@@ -1017,8 +1094,8 @@ func configure_for_complexity() -> void:
 	print("=== SONIC BSP ARENA CONFIG ===")
 	print("Arena Size: %.1f (BSP root: %.1f x %.1f)" % [arena_size, arena_size * 8.0, arena_size * 8.0])
 	print("Complexity: %d" % complexity)
-	print("Platforms: %d, Ramps: %d, Rails: %d, Loops: %d" % [platform_count, ramp_count, grind_rail_count, loop_count])
-	print("Springs: %d, Rings: %d, PowerUps: %d" % [spring_count, ring_count, powerup_count])
+	print("Platforms: %d, Ramps: %d, Rails: %d, HalfPipes: %d" % [platform_count, ramp_count, grind_rail_count, loop_count])
+	print("Springs: %d, PowerUps: %d" % [spring_count, powerup_count])
 
 # =============================================================================
 # LEVEL GENERATION
@@ -1056,7 +1133,7 @@ func generate_level() -> void:
 
 	# Phase 5: Place entities
 	_generate_player_spawns(rng)
-	_generate_collectibles(rng)
+	# Rings disabled - they were pointless
 	_generate_powerups(rng)
 
 	# Phase 6: Environment
@@ -1379,56 +1456,126 @@ func _generate_grind_rails(rng: RandomNumberGenerator) -> void:
 # =============================================================================
 
 func _generate_loops(rng: RandomNumberGenerator) -> void:
-	"""Generate toroidal loops for momentum tricks."""
+	"""Generate half-pipe style loops for momentum tricks (skatepark-style)."""
 	var builder: PlatformBuilder = PlatformBuilder.new(self, noise, geometry_bounds)
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
-	print("Generating %d loops" % loop_count)
+	print("Generating %d half-pipe loops" % loop_count)
 
 	for i in range(loop_count):
 		var angle: float = (float(i) / loop_count) * TAU + TAU / (loop_count * 2)
-		var distance: float = floor_radius * 0.6
+		var distance: float = floor_radius * 0.5
 
+		# Position at ground level for proper entry
 		var center: Vector3 = Vector3(
 			cos(angle) * distance,
-			15.0 + rng.randf_range(0, 10),
+			0.0,  # Ground level - half-pipes sit on the floor
 			sin(angle) * distance
 		)
 
-		var loop_radius: float = 12.0 + rng.randf_range(0, 8)
-		builder.create_loop(center, loop_radius, "Loop", i)
+		# Scale based on arena size
+		var pipe_radius: float = (10.0 + rng.randf_range(0, 6)) * (arena_size / 120.0)
+		var loop_node: Node3D = builder.create_loop(center, pipe_radius, "HalfPipe", i)
 
-	print("Loop generation complete")
+		# Rotate to face center of arena for natural entry
+		loop_node.rotation.y = angle + PI / 2
+
+		# Register geometry bounds
+		register_geometry(center, Vector3(pipe_radius * 2, pipe_radius, pipe_radius * 3))
+
+	print("Half-pipe loop generation complete")
 
 func _generate_springs(rng: RandomNumberGenerator) -> void:
-	"""Generate spring pads for jump impulses."""
+	"""Generate spring pads for jump impulses on valid flat surfaces only."""
 	var placer: EntityPlacer = EntityPlacer.new(self, rng, bsp_leaves)
 	placer.geometry_bounds_ref = geometry_bounds  # Enable ground snapping
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
 	print("Generating %d springs" % spring_count)
 
-	for i in range(spring_count):
-		# Distribute springs around arena with slight angular randomization (±0.2 rad)
-		var angle: float = (float(i) / spring_count) * TAU + rng.randf_range(-0.2, 0.2)
-		# Distance 30-80% of floor radius: avoids center clutter and edge clipping
-		var distance: float = rng.randf_range(floor_radius * 0.3, floor_radius * 0.8)
+	var springs_placed: int = 0
+	var max_attempts: int = spring_count * 10  # Allow multiple attempts per spring
+	var attempts: int = 0
 
-		var pos: Vector3 = Vector3(
+	while springs_placed < spring_count and attempts < max_attempts:
+		attempts += 1
+
+		# Distribute springs around arena with randomization
+		var angle: float = rng.randf() * TAU
+		# Distance 20-70% of floor radius: keeps springs in playable area
+		var distance: float = rng.randf_range(floor_radius * 0.2, floor_radius * 0.7)
+
+		var test_pos: Vector3 = Vector3(
 			cos(angle) * distance,
-			50.0,  # Start high for ground snapping
+			0.0,
 			sin(angle) * distance
 		)
 
-		# Snap spring to ground surface
-		pos = placer.snap_to_ground(pos, 0.0)
+		# Find the best ground surface for this position
+		var ground_info: Dictionary = _find_flat_ground_for_spring(test_pos)
+
+		if not ground_info.valid:
+			continue  # No valid ground found, try another position
+
+		var pos: Vector3 = ground_info.position
+
+		# Check if position is clear of other springs (minimum 8 unit spacing)
+		var too_close: bool = false
+		for child in get_children():
+			if child.name.begins_with("Spring"):
+				if pos.distance_to(child.position) < 8.0:
+					too_close = true
+					break
+
+		if too_close:
+			continue
 
 		# Impulse strength: base 200 + random 0-150 + 30 per complexity level
-		# Results in: C1=200-380, C2=230-410, C3=260-440, C4=290-470
 		var impulse: float = 200.0 + rng.randf_range(0, 150) + complexity * 30.0
-		placer.create_spring(pos, impulse, i)
+		placer.create_spring(pos, impulse, springs_placed)
 
-	print("Spring generation complete")
+		# Register geometry for the spring
+		register_geometry(pos, Vector3(5.0, 3.0, 5.0))
+		springs_placed += 1
+
+	print("Spring generation complete: placed %d/%d springs" % [springs_placed, spring_count])
+
+func _find_flat_ground_for_spring(pos: Vector3) -> Dictionary:
+	"""Find a valid flat ground position for spring placement.
+	Returns {valid: bool, position: Vector3} - avoids slopes, ramps, and floating."""
+	var result: Dictionary = {"valid": false, "position": Vector3.ZERO}
+
+	# Check main floor first (always flat, at Y=0)
+	var floor_size: float = arena_size * 0.7
+	var half_floor: float = floor_size / 2.0
+
+	if abs(pos.x) < half_floor and abs(pos.z) < half_floor:
+		# On main floor - valid flat surface
+		result.valid = true
+		result.position = Vector3(pos.x, 0.0, pos.z)
+		return result
+
+	# Check platforms (only non-ramps, which are flat)
+	for geo in geometry_bounds:
+		var geo_pos: Vector3 = geo.get("position", Vector3.ZERO)
+		var geo_size: Vector3 = geo.get("size", Vector3.ONE)
+
+		# Skip if this is likely a ramp (height/length ratio indicates slope)
+		if geo_size.y > 2.0 and geo_size.z > geo_size.y * 2:
+			continue  # Likely a ramp, skip
+
+		# Check if pos is within horizontal bounds
+		if abs(pos.x - geo_pos.x) < geo_size.x / 2.0 - 2.0 and \
+		   abs(pos.z - geo_pos.z) < geo_size.z / 2.0 - 2.0:
+			# Calculate top surface height
+			var surface_y: float = geo_pos.y + geo_size.y / 2.0
+			# Only use if it's a reasonably flat platform (not too tall)
+			if surface_y > 0 and surface_y < 30.0:
+				result.valid = true
+				result.position = Vector3(pos.x, surface_y, pos.z)
+				return result
+
+	return result
 
 # =============================================================================
 # ENTITY PLACEMENT
@@ -1457,34 +1604,6 @@ func _generate_player_spawns(rng: RandomNumberGenerator) -> void:
 		var spawn_pos: Vector3 = zone.center * (arena_size / 480.0)  # Scale to arena
 		spawn_pos.y = zone.height_offset * 0.1 + 3.0
 		placer.create_player_spawn(spawn_pos, i + 9)
-
-func _generate_collectibles(rng: RandomNumberGenerator) -> void:
-	"""Generate collectible rings scattered throughout arena."""
-	var placer: EntityPlacer = EntityPlacer.new(self, rng, bsp_leaves)
-	placer.geometry_bounds_ref = geometry_bounds  # Enable ground snapping
-	var floor_radius: float = (arena_size * 0.7) / 2.0
-
-	print("Generating %d rings" % ring_count)
-
-	for i in range(ring_count):
-		var angle: float = rng.randf() * TAU
-		var distance: float = rng.randf_range(5.0, floor_radius * 0.9)
-		# Rings float above ground: height above surface (2-8 units)
-		var float_height: float = rng.randf_range(2.0, 8.0)
-
-		var pos: Vector3 = Vector3(
-			cos(angle) * distance,
-			50.0,  # Start high for ground snapping
-			sin(angle) * distance
-		)
-
-		# Snap to ground then add float height
-		pos = placer.snap_to_ground(pos, 0.0)
-		pos.y += float_height
-
-		# Check if position is clear
-		if is_position_clear(pos, 2.0):
-			placer.create_ring(pos, i)
 
 func _generate_powerups(rng: RandomNumberGenerator) -> void:
 	"""Generate power-ups at strategic chokepoints."""
