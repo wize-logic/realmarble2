@@ -1239,8 +1239,9 @@ func generate_jump_pads() -> void:
 
 	jump_pad_positions.clear()
 
-	# Try to place jump pads, checking for collisions with structures
-	var num_target_pads: int = 3 + complexity
+	# Match jump pad count to teleporter count for balance
+	# Teleporters generate (2 + complexity + 1) / 2 pairs = that many * 2 teleporters
+	var num_target_pads: int = ((2 + complexity + 1) / 2) * 2
 	var attempts: int = 0
 	var max_attempts: int = num_target_pads * 20
 
@@ -1255,6 +1256,10 @@ func generate_jump_pads() -> void:
 
 		# Check if position is clear of structures
 		if not is_cell_available(pad_pos, 1):
+			continue
+
+		# Ensure position has overhead clearance (not under geometry)
+		if not has_overhead_clearance(pad_pos):
 			continue
 
 		# Check distance to other jump pads and teleporters
@@ -1340,7 +1345,9 @@ func generate_teleporters() -> void:
 
 	teleporter_positions.clear()
 
-	var num_pairs: int = 1 + complexity / 2
+	# Generate balanced count: (2 + complexity) rounded up to even number via pairs
+	# This ensures equal teleporter and jump pad counts
+	var num_pairs: int = (2 + complexity + 1) / 2  # Integer division rounds down, +1 rounds up
 	var pairs_created: int = 0
 	var attempts: int = 0
 	var max_attempts: int = num_pairs * 30
@@ -1356,8 +1363,8 @@ func generate_teleporters() -> void:
 		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
 		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
 
-		# Check if both positions are clear
-		if not is_cell_available(pos1, 1) or not is_cell_available(pos2, 1):
+		# Ensure both positions have overhead clearance (not under geometry)
+		if not has_overhead_clearance(pos1) or not has_overhead_clearance(pos2):
 			continue
 
 		# Check distance to other teleporters and jump pads
@@ -1525,6 +1532,37 @@ func get_random_arena_position() -> Vector3:
 		0,
 		rng.randf_range(-floor_extent, floor_extent)
 	)
+
+func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
+	## Check if a position has enough vertical clearance above it.
+	## Used to prevent spawning teleporters/jump pads under geometry.
+	## required_height: minimum clearance needed (default 3.0 for player height)
+
+	for platform in platforms:
+		if platform == null or platform.mesh == null:
+			continue
+
+		var plat_pos: Vector3 = platform.position
+		var plat_size: Vector3 = platform.mesh.size if platform.mesh is BoxMesh else Vector3(4, 4, 4)
+
+		# Calculate platform bounds in X/Z
+		var half_x: float = plat_size.x / 2.0
+		var half_z: float = plat_size.z / 2.0
+
+		# Check if position is within platform's X/Z footprint
+		if pos.x < plat_pos.x - half_x or pos.x > plat_pos.x + half_x:
+			continue
+		if pos.z < plat_pos.z - half_z or pos.z > plat_pos.z + half_z:
+			continue
+
+		# Position is under this platform's footprint - check height
+		var platform_bottom: float = plat_pos.y - plat_size.y / 2.0
+
+		# If platform bottom is above pos but within required_height, it blocks
+		if platform_bottom > pos.y and platform_bottom < pos.y + required_height:
+			return false
+
+	return true
 
 # ============================================================================
 # MESH/PLATFORM HELPER FUNCTIONS
