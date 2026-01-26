@@ -1568,57 +1568,6 @@ func add_platform_with_collision(pos: Vector3, size: Vector3, name_prefix: Strin
 func apply_procedural_textures() -> void:
 	material_manager.apply_materials_to_level(self)
 
-func get_spawn_points() -> PackedVector3Array:
-	var spawns: PackedVector3Array = PackedVector3Array()
-	var scale: float = arena_size / 140.0
-	var min_dist_jump: float = 4.0 * scale  # Stay away from jump pads
-	var min_dist_tele: float = 5.0 * scale  # Stay away from teleporters
-
-	# Add clear positions that aren't near interactive elements
-	for pos in clear_positions:
-		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
-			spawns.append(pos)
-
-	# Add floor fallback spawns if they're valid
-	var floor_radius: float = (arena_size * 0.6) / 2.0 * 0.5
-	var fallback_spawns: Array[Vector3] = [
-		Vector3(0, 2, 0),
-		Vector3(floor_radius, 2, 0),
-		Vector3(-floor_radius, 2, 0),
-		Vector3(0, 2, floor_radius),
-		Vector3(0, 2, -floor_radius)
-	]
-
-	for pos in fallback_spawns:
-		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
-			spawns.append(pos)
-
-	# Ensure we have at least some spawn points
-	if spawns.is_empty():
-		# Emergency fallback - find any safe spot
-		for i in range(8):
-			var angle: float = i * TAU / 8.0
-			var dist: float = floor_radius * 0.7
-			var pos: Vector3 = Vector3(cos(angle) * dist, 2, sin(angle) * dist)
-			if is_spawn_valid(pos, min_dist_jump * 0.5, min_dist_tele * 0.5):
-				spawns.append(pos)
-
-	return spawns
-
-func is_spawn_valid(pos: Vector3, min_dist_jump: float, min_dist_tele: float) -> bool:
-	## Check if a spawn position is far enough from interactive elements
-	for jump_pos in jump_pad_positions:
-		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(jump_pos.x, jump_pos.z))
-		if h_dist < min_dist_jump:
-			return false
-
-	for tele_pos in teleporter_positions:
-		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(tele_pos.x, tele_pos.z))
-		if h_dist < min_dist_tele:
-			return false
-
-	return true
-
 # ============================================================================
 # GEOMETRY HELPER FUNCTIONS
 # ============================================================================
