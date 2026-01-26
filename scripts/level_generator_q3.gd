@@ -915,9 +915,12 @@ func generate_procedural_level() -> void:
 
 func get_structure_budget() -> int:
 	## Calculate number of structures based on complexity and size
-	var base_count: int = 6 + complexity * 3  # 9, 12, 15, 18
-	var size_bonus: int = int((arena_size - 140.0) / 30.0)
-	return base_count + size_bonus
+	## Complexity 1-4 gives base counts of 9, 12, 15, 18
+	## Size multiplies this - smaller arenas get fewer structures
+	var base_count: int = 6 + complexity * 3
+	var size_scale: float = arena_size / 140.0
+	var scaled_count: int = int(base_count * size_scale)
+	return maxi(3, scaled_count)  # Minimum 3 structures
 
 func generate_main_arena() -> void:
 	## Generate main floor platform
