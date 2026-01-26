@@ -283,13 +283,16 @@ func _physics_process(delta: float) -> void:
 			continue
 
 		# If grinder's current_rail doesn't match us, they've been detached elsewhere
-		# Clean them up from our tracking to prevent state issues
+		# Clean them up from our tracking AND ensure their state is reset
 		if grinder.get("current_rail") != self:
 			var data = grinder_data[grinder]
 			if data and data.rope_visual and is_instance_valid(data.rope_visual):
 				data.rope_visual.queue_free()
 			active_grinders.erase(grinder)
 			grinder_data.erase(grinder)
+			# Always call stop_grinding to ensure player state is properly reset
+			if grinder.has_method("stop_grinding"):
+				grinder.stop_grinding()
 			continue
 
 		_update_active_grinder(grinder, delta, current_time)

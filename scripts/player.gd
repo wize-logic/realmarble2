@@ -2134,12 +2134,29 @@ func launch_from_rail(velocity: Vector3) -> void:
 
 func jump_off_rail() -> void:
 	"""Player manually jumps off the rail"""
-	if not is_grinding or not current_rail:
-		return
+	# Store reference before clearing state
+	var rail_ref = current_rail
+	var was_grinding = is_grinding
 
-	# Detach from rail (maintains current velocity)
-	current_rail.detach_grinder(self)
+	# If we have a rail reference, detach from it
+	if rail_ref and is_instance_valid(rail_ref):
+		rail_ref.detach_grinder(self)
+
+	# Always call stop_grinding to ensure clean state
 	stop_grinding()
+
+	# If we weren't actually grinding, just do a normal jump instead
+	if not was_grinding:
+		if jump_count < max_jumps:
+			var vel: Vector3 = linear_velocity
+			vel.y = 0
+			linear_velocity = vel
+			apply_central_impulse(Vector3.UP * current_jump_impulse)
+			jump_count += 1
+			if jump_sound and jump_sound.stream:
+				play_jump_sound.rpc()
+			spawn_jump_bounce_effect(1.0)
+		return
 
 	# Set jump_count to 1 - the rail jump counts as first jump, leaving double jump available
 	jump_count = 1
