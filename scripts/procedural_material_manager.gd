@@ -97,6 +97,26 @@ const MATERIAL_PRESETS = {
 		"pattern_mix": 0.5,
 		"detail_strength": 0.35,
 		"wear_amount": 0.3
+	},
+	"halfpipe": {
+		"base_color": Color(0.45, 0.48, 0.52),  # Smooth concrete
+		"accent_color": Color(0.35, 0.38, 0.42),
+		"roughness": 0.6,
+		"metallic": 0.1,
+		"scale": 4.0,
+		"pattern_mix": 0.3,
+		"detail_strength": 0.25,
+		"wear_amount": 0.2
+	},
+	"spring": {
+		"base_color": Color(0.8, 0.2, 0.2),  # Red base
+		"accent_color": Color(0.6, 0.1, 0.1),
+		"roughness": 0.4,
+		"metallic": 0.5,
+		"scale": 2.0,
+		"pattern_mix": 0.2,
+		"detail_strength": 0.3,
+		"wear_amount": 0.1
 	}
 }
 
@@ -139,32 +159,39 @@ func apply_material_by_name(mesh_instance: MeshInstance3D) -> void:
 	if not mesh_instance:
 		return
 
-	var name = mesh_instance.name.to_lower()
+	var mesh_name = mesh_instance.name.to_lower()
+	# Also check parent name for nested meshes
+	var parent_name = ""
+	if mesh_instance.get_parent():
+		parent_name = mesh_instance.get_parent().name.to_lower()
+
 	var material: ShaderMaterial
 
-	# Determine material type from name
-	if name.contains("floor") or name.contains("mainarena"):
-		if name.contains("room") or name.contains("secondary"):
+	# Determine material type from name (check both mesh and parent names)
+	if mesh_name.contains("floor") or mesh_name.contains("mainarena"):
+		if mesh_name.contains("room") or mesh_name.contains("secondary"):
 			material = create_material("room_floor", 0.05)
 		else:
 			material = create_material("floor", 0.05)
-	elif name.contains("wall"):
-		if name.contains("room") or name.contains("wall_"):
+	elif mesh_name.contains("wall"):
+		if mesh_name.contains("room") or mesh_name.contains("wall_"):
 			material = create_material("room_wall", 0.03)
 		else:
 			material = create_material("wall", 0.03)
-	elif name.contains("platform"):
+	elif mesh_name.contains("platform"):
 		material = create_material("platform", 0.08)
-	elif name.contains("ramp"):
+	elif mesh_name.contains("ramp"):
 		material = create_material("ramp", 0.06)
-	elif name.contains("pillar"):
+	elif mesh_name.contains("pillar"):
 		material = create_material("pillar", 0.04)
-	elif name.contains("cover"):
+	elif mesh_name.contains("cover"):
 		material = create_material("cover", 0.07)
-	elif name.contains("corridor"):
+	elif mesh_name.contains("corridor"):
 		material = create_material("corridor", 0.04)
-	elif name.contains("ceiling"):
+	elif mesh_name.contains("ceiling"):
 		material = create_material("room_wall", 0.05)
+	elif mesh_name.contains("halfpipe") or parent_name.contains("halfpipe"):
+		material = create_material("halfpipe", 0.04)
 	else:
 		# Default material with variation
 		material = create_material("floor", 0.1)
@@ -176,14 +203,28 @@ func apply_materials_to_level(level_generator: Node3D) -> void:
 	if not level_generator:
 		return
 
+	var applied_count = _apply_materials_recursive(level_generator)
+	print("Applied procedural materials to %d objects" % applied_count)
+
+func _apply_materials_recursive(node: Node, depth: int = 0) -> int:
+	"""Recursively apply materials to all MeshInstance3D children"""
 	var applied_count = 0
 
-	# Recursively find all MeshInstance3D nodes
-	for child in level_generator.get_children():
+	for child in node.get_children():
 		if child is MeshInstance3D:
-			# Skip special meshes (jump pads, teleporters have custom materials)
-			if not child.name.contains("JumpPad") and not child.name.contains("Teleporter"):
+			var child_name = child.name.to_lower()
+			# Skip special meshes that have custom materials
+			# (jump pads, teleporters, springs, rails have their own materials)
+			if not child_name.contains("jumppad") and \
+			   not child_name.contains("teleporter") and \
+			   not child_name.contains("spring") and \
+			   not child_name.contains("rail") and \
+			   not child.material_override:  # Don't override existing materials
 				apply_material_by_name(child)
 				applied_count += 1
 
-	print("Applied procedural materials to %d objects" % applied_count)
+		# Recursively process children (e.g., for HalfPipe nodes with nested meshes)
+		if child.get_child_count() > 0 and depth < 5:  # Limit recursion depth
+			applied_count += _apply_materials_recursive(child, depth + 1)
+
+	return applied_count

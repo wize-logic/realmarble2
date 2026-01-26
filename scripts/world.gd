@@ -64,16 +64,13 @@ var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds
 var bot_counter: int = 0
 var pending_bot_count: int = 0  # Bots to spawn when game becomes active
 # Bot AI scripts loaded dynamically based on level type
-const BotAI_TypeA = preload("res://scripts/bot_ai_type_a.gd")
 const BotAI_TypeB = preload("res://scripts/bot_ai_type_b.gd")
 
 # Bot count selection dialog state (instance variables for proper closure sharing)
 var bot_count_dialog_closed: bool = false
 var bot_count_selected: int = 3
 
-# Level type selection dialog state
-var level_type_dialog_closed: bool = false
-var level_type_selected: String = "A"
+# Level type selection removed - Q3 is the only generator now
 
 # Level configuration dialog state
 var level_config_dialog_closed: bool = false
@@ -86,22 +83,18 @@ const DebugMenu = preload("res://debug_menu.tscn")
 # Scoreboard
 const Scoreboard = preload("res://scoreboard.tscn")
 
-# Procedural level generation
-const LevelGenerator = preload("res://scripts/level_generator.gd")
+# Procedural level generation - Q3 generator only
 const LevelGeneratorQ3 = preload("res://scripts/level_generator_q3.gd")
 const SkyboxGenerator = preload("res://scripts/skybox_generator.gd")
 var level_generator: Node3D = null
 var skybox_generator: Node3D = null
 
-# GAME STATE: Current arena type (accessible from other scripts)
-# "A" = Type A (Original: floating platforms, grind rails, Sonic-style)
-# "B" = Type B (Quake 3 Arena: rooms, corridors, jump pads, teleporters)
-var current_level_type: String = "A"
+# GAME STATE
 var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 
 func _ready() -> void:
-	# Generate procedural level (default to Type A)
-	generate_procedural_level("A")
+	# Generate procedural level (Q3 style)
+	generate_procedural_level()
 
 	# Initialize debug menu
 	var debug_menu_instance: Control = DebugMenu.instantiate()
@@ -238,20 +231,16 @@ func _process(delta: float) -> void:
 # ============================================================================
 
 func get_current_level_type() -> String:
-	"""Get the current arena type being played
-	Returns:
-		"A" - Type A arena (Original: floating platforms, grind rails)
-		"B" - Type B arena (Quake 3: rooms, corridors, jump pads, teleporters)
-	"""
-	return current_level_type
+	"""Get the current arena type being played (always Q3 style now)"""
+	return "Q3"
 
 func is_type_a_arena() -> bool:
-	"""Check if currently playing on Type A arena (original style)"""
-	return current_level_type == "A"
+	"""Type A arena removed - always returns false"""
+	return false
 
 func is_type_b_arena() -> bool:
-	"""Check if currently playing on Type B arena (Quake 3 style)"""
-	return current_level_type == "B"
+	"""Check if currently playing on Q3 arena (always true now)"""
+	return true
 
 # ============================================================================
 # MENU FUNCTIONS
@@ -374,15 +363,6 @@ func _on_practice_button_pressed() -> void:
 		print("Practice mode cancelled")
 		return
 
-	# Ask user which level type they want (Type A or Type B)
-	print("Calling ask_level_type()...")
-	var level_type_choice = await ask_level_type()
-	print("ask_level_type() returned: ", level_type_choice)
-	if level_type_choice == "":
-		# User cancelled or error
-		print("Practice mode cancelled")
-		return
-
 	# Ask user for level size/complexity and match duration
 	print("Calling ask_level_config()...")
 	var level_config = await ask_level_config()
@@ -392,9 +372,9 @@ func _on_practice_button_pressed() -> void:
 		print("Practice mode cancelled")
 		return
 
-	# Now start practice mode with the chosen settings
-	print("Starting practice mode with %d bots, level type %s, size %d, time %.0fs..." % [bot_count_choice, level_type_choice, level_config.size, level_config.time])
-	start_practice_mode(bot_count_choice, level_type_choice, level_config.size, level_config.time)
+	# Now start practice mode with the chosen settings (Q3 generator only)
+	print("Starting practice mode with %d bots, size %d, time %.0fs..." % [bot_count_choice, level_config.size, level_config.time])
+	start_practice_mode(bot_count_choice, level_config.size, level_config.time)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -565,197 +545,6 @@ func ask_bot_count() -> int:
 
 	print("Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
-
-func ask_level_type() -> String:
-	"""Ask the user which level generation type they want (Type A or Type B)"""
-	# Create a beautiful dialog matching main menu theme
-	var dialog = AcceptDialog.new()
-	dialog.title = "Select Level Type"
-	dialog.dialog_hide_on_ok = false
-	dialog.exclusive = true
-	dialog.unresizable = false
-	dialog.size = Vector2(600, 400)
-
-	# Create custom panel style matching main menu
-	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0, 0, 0, 0.85)
-	panel_style.set_corner_radius_all(12)
-	panel_style.border_width_left = 3
-	panel_style.border_width_top = 3
-	panel_style.border_width_right = 3
-	panel_style.border_width_bottom = 3
-	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
-	dialog.add_theme_stylebox_override("panel", panel_style)
-
-	# Hide default OK button
-	dialog.get_ok_button().hide()
-
-	# Create VBoxContainer for layout
-	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 20)
-	dialog.add_child(vbox)
-
-	# Add title label
-	var title_label = Label.new()
-	title_label.text = "Choose Your Arena Style"
-	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title_label.add_theme_font_size_override("font_size", 24)
-	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
-	vbox.add_child(title_label)
-
-	# Add separator
-	var separator = HSeparator.new()
-	separator.add_theme_constant_override("separation", 2)
-	vbox.add_child(separator)
-
-	# Reset instance variables for this dialog
-	level_type_dialog_closed = false
-	level_type_selected = "A"  # Default
-
-	# Create centered container for buttons
-	var center_container = CenterContainer.new()
-	vbox.add_child(center_container)
-
-	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 30)
-	center_container.add_child(hbox)
-
-	# Type A Button
-	var type_a_button = Button.new()
-	type_a_button.text = "Type A\nOriginal Arena"
-	type_a_button.custom_minimum_size = Vector2(200, 120)
-
-	var button_style_a = StyleBoxFlat.new()
-	button_style_a.bg_color = Color(0.15, 0.15, 0.2, 0.9)
-	button_style_a.set_corner_radius_all(10)
-	button_style_a.border_width_left = 2
-	button_style_a.border_width_top = 2
-	button_style_a.border_width_right = 2
-	button_style_a.border_width_bottom = 2
-	button_style_a.border_color = Color(0.3, 0.7, 1, 0.5)
-
-	var button_hover_style_a = StyleBoxFlat.new()
-	button_hover_style_a.bg_color = Color(0.25, 0.35, 0.5, 0.95)
-	button_hover_style_a.set_corner_radius_all(10)
-	button_hover_style_a.border_width_left = 3
-	button_hover_style_a.border_width_top = 3
-	button_hover_style_a.border_width_right = 3
-	button_hover_style_a.border_width_bottom = 3
-	button_hover_style_a.border_color = Color(0.3, 0.7, 1, 1)
-
-	type_a_button.add_theme_font_size_override("font_size", 18)
-	type_a_button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
-	type_a_button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
-	type_a_button.add_theme_stylebox_override("normal", button_style_a)
-	type_a_button.add_theme_stylebox_override("hover", button_hover_style_a)
-	type_a_button.add_theme_stylebox_override("pressed", button_hover_style_a)
-
-	type_a_button.pressed.connect(func():
-		print("Type A button clicked")
-		level_type_selected = "A"
-		level_type_dialog_closed = true
-		dialog.hide()
-	)
-	hbox.add_child(type_a_button)
-
-	# Type B Button
-	var type_b_button = Button.new()
-	type_b_button.text = "Type B\nQuake 3 Arena"
-	type_b_button.custom_minimum_size = Vector2(200, 120)
-
-	var button_style_b = StyleBoxFlat.new()
-	button_style_b.bg_color = Color(0.15, 0.15, 0.2, 0.9)
-	button_style_b.set_corner_radius_all(10)
-	button_style_b.border_width_left = 2
-	button_style_b.border_width_top = 2
-	button_style_b.border_width_right = 2
-	button_style_b.border_width_bottom = 2
-	button_style_b.border_color = Color(1, 0.5, 0.2, 0.5)  # Orange border for Q3
-
-	var button_hover_style_b = StyleBoxFlat.new()
-	button_hover_style_b.bg_color = Color(0.5, 0.25, 0.15, 0.95)
-	button_hover_style_b.set_corner_radius_all(10)
-	button_hover_style_b.border_width_left = 3
-	button_hover_style_b.border_width_top = 3
-	button_hover_style_b.border_width_right = 3
-	button_hover_style_b.border_width_bottom = 3
-	button_hover_style_b.border_color = Color(1, 0.5, 0.2, 1)  # Orange border
-
-	type_b_button.add_theme_font_size_override("font_size", 18)
-	type_b_button.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9, 1))
-	type_b_button.add_theme_color_override("font_hover_color", Color(1, 1, 1, 1))
-	type_b_button.add_theme_stylebox_override("normal", button_style_b)
-	type_b_button.add_theme_stylebox_override("hover", button_hover_style_b)
-	type_b_button.add_theme_stylebox_override("pressed", button_hover_style_b)
-
-	type_b_button.pressed.connect(func():
-		print("Type B button clicked")
-		level_type_selected = "B"
-		level_type_dialog_closed = true
-		dialog.hide()
-	)
-	hbox.add_child(type_b_button)
-
-	# Add descriptions
-	var desc_container = VBoxContainer.new()
-	desc_container.add_theme_constant_override("separation", 10)
-	vbox.add_child(desc_container)
-
-	var desc_a = Label.new()
-	desc_a.text = "Type A: Floating platforms, ramps, and Sonic-style grind rails"
-	desc_a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_a.add_theme_font_size_override("font_size", 14)
-	desc_a.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
-	desc_a.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_container.add_child(desc_a)
-
-	var desc_b = Label.new()
-	desc_b.text = "Type B: Multi-tier arena with rooms, corridors, jump pads, and teleporters"
-	desc_b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	desc_b.add_theme_font_size_override("font_size", 14)
-	desc_b.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
-	desc_b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_container.add_child(desc_b)
-
-	# Add dialog to Menu CanvasLayer so it renders after blur (not blurred itself)
-	if has_node("Menu"):
-		get_node("Menu").add_child(dialog)
-	else:
-		add_child(dialog)
-
-	# Show blur to focus attention on dialog
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
-
-	# Connect close signals to handle cancellation
-	dialog.close_requested.connect(func():
-		level_type_dialog_closed = true
-		level_type_selected = ""  # Indicate cancellation
-		print("Dialog closed via X button or ESC")
-	)
-
-	# Ensure mouse is visible for dialog interaction
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-	dialog.popup_centered()
-	print("Level type dialog shown, waiting for user selection...")
-
-	# Wait for user to select an option
-	while not level_type_dialog_closed:
-		await get_tree().process_frame
-
-	print("Level type dialog closed, cleaning up...")
-	dialog.queue_free()
-
-	# Hide blur after dialog is closed
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
-
-	# Keep mouse visible (we're still in main menu)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-	print("Level type selected: %s" % level_type_selected)
-	return level_type_selected
 
 func ask_level_config() -> Dictionary:
 	"""Ask the user for level size/complexity and match duration.
@@ -1054,15 +843,14 @@ func _on_time_slider_changed(value: float, label: Label) -> void:
 	label.text = time_labels[index]
 	print("[SLIDER] Time changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
-func start_practice_mode(bot_count: int, level_type: String = "A", level_size: int = 2, match_time: float = 300.0) -> void:
+func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
 	Args:
 		bot_count: Number of bots to spawn
-		level_type: "A" or "B" for arena type
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
 		match_time: Match duration in seconds
 	"""
-	print("Starting practice mode with %d bots, level type %s, size %d, time %.0fs" % [bot_count, level_type, level_size, match_time])
+	print("Starting practice mode with %d bots, size %d, time %.0fs" % [bot_count, level_size, match_time])
 
 	if main_menu:
 		main_menu.hide()
@@ -1089,11 +877,10 @@ func start_practice_mode(bot_count: int, level_type: String = "A", level_size: i
 	game_time_remaining = match_time
 	print("Match duration set to %.0f seconds (%.1f minutes)" % [match_time, match_time / 60.0])
 
-	# Regenerate level with selected type and size
-	current_level_type = level_type
-	current_level_size = level_size  # Store for later use (e.g., start_deathmatch)
-	print("Regenerating level with type %s, size %d..." % [level_type, level_size])
-	await generate_procedural_level(level_type, true, level_size)
+	# Regenerate level with selected size
+	current_level_size = level_size
+	print("Regenerating level with size %d..." % level_size)
+	await generate_procedural_level(true, level_size)
 	print("Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -1459,11 +1246,8 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
 	if not skip_level_regen and multiplayer.has_multiplayer_peer():
-		# Use current_level_type and current_level_size (don't hardcode, respect what was set)
-		if current_level_type == "":
-			current_level_type = "A"
-		print("Regenerating level for multiplayer match (Type %s, Size %d)..." % [current_level_type, current_level_size])
-		await generate_procedural_level(current_level_type, true, current_level_size)
+		print("Regenerating level for multiplayer match (Size %d)..." % current_level_size)
+		await generate_procedural_level(true, current_level_size)
 		print("Level regeneration complete!")
 	elif skip_level_regen:
 		print("Skipping level regeneration (practice mode already generated level)")
@@ -1654,9 +1438,9 @@ func return_to_main_menu() -> void:
 	# Wait a frame for all queue_free() calls to complete
 	await get_tree().process_frame
 
-	# CRITICAL FIX: Regenerate map with Type A for menu preview (without spawning collectibles)
-	print("[MENU] Regenerating map preview with Type A")
-	await generate_procedural_level("A", false)
+	# Regenerate map for menu preview (without spawning collectibles)
+	print("[MENU] Regenerating map preview")
+	await generate_procedural_level(false)
 
 	# Recreate marble preview after level regeneration
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Recreating marble preview for main menu")
@@ -1909,15 +1693,11 @@ func spawn_bot() -> void:
 			bot.global_position = spawn_points[spawn_index]
 			DebugLogger.dlog(DebugLogger.Category.WORLD, "Bot %d spawned at position %d: %s" % [bot_id, spawn_index, bot.global_position])
 
-	# Add AI controller to bot - select correct type based on level
-	var ai: Node
-	if current_level_type == "A":
-		ai = BotAI_TypeA.new()
-	else:  # Type B
-		ai = BotAI_TypeB.new()
+	# Add AI controller to bot (Q3 style only)
+	var ai: Node = BotAI_TypeB.new()
 	ai.name = "BotAI"
 	bot.add_child(ai)
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Added %s to bot %d for level type %s" % ["BotAI_TypeA" if current_level_type == "A" else "BotAI_TypeB", bot_id, current_level_type])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Added BotAI_TypeB to bot %d" % bot_id)
 
 	# Add bot to players group
 	bot.add_to_group("players")
@@ -2516,22 +2296,19 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(level_type: String = "A", spawn_collectibles: bool = true, level_size: int = 2) -> void:
-	"""Generate a procedural level with skybox
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2) -> void:
+	"""Generate a procedural Q3-style level with skybox
 	Args:
-		level_type: "A" for original generator, "B" for Quake 3 arena style
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 	"""
 	print("======================================")
 	print("[LEVEL GEN] RECEIVED PARAMETERS:")
-	print("  level_type: %s" % level_type)
 	print("  level_size: %d" % level_size)
 	print("  spawn_collectibles: %s" % spawn_collectibles)
 	print("======================================")
 
 	# Size multipliers for arena dimensions
-	# Larger arenas get DRAMATICALLY more space
 	var arena_multipliers: Dictionary = {
 		1: 0.7,   # Small - compact arena
 		2: 1.0,   # Medium - standard arena (default)
@@ -2553,24 +2330,13 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	# Wait a frame for cleanup
 	await get_tree().process_frame
 
-	# Create level generator based on selected type
+	# Create Q3-style level generator
 	level_generator = Node3D.new()
 	level_generator.name = "LevelGenerator"
-
-	if level_type == "B":
-		# Use Quake 3 Arena-style generator
-		level_generator.set_script(LevelGeneratorQ3)
-		# Set arena size and complexity - generator handles all internal scaling
-		level_generator.arena_size = 140.0 * arena_mult
-		level_generator.complexity = level_size  # Use size setting as complexity
-		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
-	else:
-		# Use original generator (Type A - Sonic-style speedrun)
-		level_generator.set_script(LevelGenerator)
-		# Set arena size and complexity - generator handles all internal scaling
-		level_generator.arena_size = 120.0 * arena_mult
-		level_generator.complexity = level_size  # Use size setting as complexity
-		print("Using Sonic-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
+	level_generator.set_script(LevelGeneratorQ3)
+	level_generator.arena_size = 140.0 * arena_mult
+	level_generator.complexity = level_size
+	print("Using Q3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
 	add_child(level_generator)
 
