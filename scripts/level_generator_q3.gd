@@ -1782,53 +1782,47 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 	return true
 
 func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
-	## Check if a position is too close to any geometry (platforms, walls, structures).
-	## Returns true if position is within min_distance of any geometry.
-	## Checks all MeshInstance3D children, not just tracked platforms.
+	## Check if a position is too close to smaller structures/platforms.
+	## Returns true if position is within min_distance of blocking geometry.
+	## Skips large floor meshes and only checks structures that could clip.
 
-	# Check tracked platforms first
-	for platform in platforms:
-		if platform == null or platform.mesh == null:
+	for child in get_children():
+		if not child is MeshInstance3D or child.mesh == null:
 			continue
 
-		var plat_pos: Vector3 = platform.position
-		var plat_size: Vector3 = platform.mesh.size if platform.mesh is BoxMesh else Vector3(4, 4, 4)
+		var mesh_pos: Vector3 = child.position
+		var mesh_size: Vector3 = Vector3(4, 4, 4)  # Default size
 
-		# Calculate expanded bounds (platform + min_distance buffer)
-		var half_x: float = plat_size.x / 2.0 + min_distance
-		var half_z: float = plat_size.z / 2.0 + min_distance
+		if child.mesh is BoxMesh:
+			mesh_size = child.mesh.size
+		elif child.mesh is CylinderMesh:
+			var cyl: CylinderMesh = child.mesh
+			mesh_size = Vector3(cyl.top_radius * 2, cyl.height, cyl.top_radius * 2)
+		else:
+			continue  # Skip unknown mesh types
 
-		# Check if position is within expanded footprint
-		if pos.x >= plat_pos.x - half_x and pos.x <= plat_pos.x + half_x:
-			if pos.z >= plat_pos.z - half_z and pos.z <= plat_pos.z + half_z:
-				# Within horizontal bounds - check if platform is at or near ground level
-				var platform_bottom: float = plat_pos.y - plat_size.y / 2.0
-				if platform_bottom < 3.0:  # Platform is at or near ground level
-					return true
+		# Skip very large meshes (main floor, perimeter walls)
+		# These are either floors we can place on, or walls at the edge
+		if mesh_size.x > 50.0 or mesh_size.z > 50.0:
+			continue
 
-	# Also check all MeshInstance3D children that might not be in platforms array
-	for child in get_children():
-		if child is MeshInstance3D and child.mesh != null:
-			var mesh_pos: Vector3 = child.position
-			var mesh_size: Vector3 = Vector3(4, 4, 4)  # Default size
+		# Skip meshes that are clearly elevated (not at ground level)
+		var mesh_bottom: float = mesh_pos.y - mesh_size.y / 2.0
+		if mesh_bottom > 1.0:
+			continue  # This is elevated, won't clip with ground-level elements
 
-			if child.mesh is BoxMesh:
-				mesh_size = child.mesh.size
-			elif child.mesh is CylinderMesh:
-				var cyl: CylinderMesh = child.mesh
-				mesh_size = Vector3(cyl.top_radius * 2, cyl.height, cyl.top_radius * 2)
+		# Skip very thin/flat meshes (likely floor tiles or decorations)
+		if mesh_size.y < 0.5:
+			continue
 
-			# Calculate expanded bounds
-			var half_x: float = mesh_size.x / 2.0 + min_distance
-			var half_z: float = mesh_size.z / 2.0 + min_distance
+		# Calculate expanded bounds for collision check
+		var half_x: float = mesh_size.x / 2.0 + min_distance
+		var half_z: float = mesh_size.z / 2.0 + min_distance
 
-			# Check horizontal proximity
-			if pos.x >= mesh_pos.x - half_x and pos.x <= mesh_pos.x + half_x:
-				if pos.z >= mesh_pos.z - half_z and pos.z <= mesh_pos.z + half_z:
-					# Check if geometry is at ground level (could block placement)
-					var mesh_bottom: float = mesh_pos.y - mesh_size.y / 2.0
-					if mesh_bottom < 3.0:
-						return true
+		# Check horizontal proximity
+		if pos.x >= mesh_pos.x - half_x and pos.x <= mesh_pos.x + half_x:
+			if pos.z >= mesh_pos.z - half_z and pos.z <= mesh_pos.z + half_z:
+				return true
 
 	return false
 
