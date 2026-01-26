@@ -1,18 +1,20 @@
 @tool
 extends Node3D
 
-## Quake 3 Arena Map Generator
-## Procedurally generates Q3-style arenas using Binary Space Partitioning (BSP)
-## Supports both runtime Godot scene generation and .map file export for Q3 compilation
+## Procedural Arena Level Generator (Godot Native)
+## Generates arena-style levels using Binary Space Partitioning (BSP)
+## Optimized for Godot's Compatibility renderer
 ##
 ## Features:
 ## - BSP-based layout generation for natural room/corridor layouts
-## - Runtime mesh generation with collisions for Godot gameplay
-## - .map file export with proper brush definitions
-## - Entity placement (spawns, weapons, health, armor, lights)
+## - Runtime mesh generation with collisions
+## - NavigationRegion3D for AI pathfinding
+## - OmniLight3D placement for dynamic lighting
+## - OccluderInstance3D for performance optimization
+## - Item/weapon pickup placement
 ## - Multi-level support with ramps and stairs
-## - Advanced features: organic noise, ASCII art import, jump pads, teleporters
-## - q3map2 compilation integration
+## - Jump pads and teleporters
+## - Scene export (.tscn)
 
 # ============================================================================
 # EXPORTED PARAMETERS
@@ -24,39 +26,38 @@ extends Node3D
 @export var complexity: int = 2  ## 1=Low, 2=Medium, 3=High, 4=Extreme
 
 @export_group("BSP Generation")
-@export var use_bsp_layout: bool = false  ## Use BSP for room layout vs procedural structures (disabled by default for arena gameplay)
+@export var use_bsp_layout: bool = false  ## Use BSP for room layout vs procedural structures
 @export var min_room_size: float = 20.0  ## Minimum room dimension in Godot units
-@export var dynamic_room_scaling: bool = true  ## Scale min_room_size based on arena_size (recommended)
-@export var dynamic_room_scale_factor: float = 0.15  ## Factor for dynamic scaling: min_room = arena_size * factor
+@export var dynamic_room_scaling: bool = true  ## Scale min_room_size based on arena_size
+@export var dynamic_room_scale_factor: float = 0.15  ## Factor for dynamic scaling
 @export var max_bsp_depth: int = 4  ## Maximum BSP subdivision depth
 @export var room_inset_min: float = 0.75  ## Room inset factor minimum (75%)
 @export var room_inset_max: float = 0.90  ## Room inset factor maximum (90%)
 @export var enable_symmetry: bool = false  ## Mirror map for competitive balance
 @export var symmetry_axis: int = 0  ## 0 = X-axis, 1 = Z-axis
 
-@export_group("Map Export")
-@export var export_map_file: bool = false  ## Also export .map file when generating
-@export var map_name: String = "generated"
-@export var output_path: String = "res://generated_maps/"
-@export var room_height: float = 256.0  ## Height of rooms in .map units
-@export var wall_thickness: float = 16.0
+@export_group("Geometry")
+@export var room_height: float = 12.0  ## Height of rooms in Godot units
+@export var wall_thickness: float = 1.0  ## Wall thickness in Godot units
+@export var generate_ceiling: bool = true  ## Generate ceiling geometry
+@export var generate_walls: bool = true  ## Generate perimeter walls
 
 @export_group("Multi-Level")
 @export var num_levels: int = 1  ## Number of vertical levels
 @export var level_height_offset: float = 20.0  ## Height between levels in Godot units
 
 @export_group("Corridor Settings")
-@export var corridor_width_min: float = 4.0  ## Minimum corridor width in Godot units
-@export var corridor_width_max: float = 8.0  ## Maximum corridor width in Godot units
+@export var corridor_width_min: float = 4.0  ## Minimum corridor width
+@export var corridor_width_max: float = 8.0  ## Maximum corridor width
 
-@export_group("Textures (for .map export)")
-@export var floor_texture: String = "gothic_floor/largeblock3b"
-@export var ceiling_texture: String = "gothic_ceiling/woodceiling1a"
-@export var wall_texture: String = "gothic_wall/skull4"
-@export var corridor_texture: String = "gothic_block/blocks18c"
-@export var caulk_texture: String = "common/caulk"
+@export_group("Lighting")
+@export var generate_lights: bool = true  ## Add OmniLight3D to rooms
+@export var light_energy: float = 1.0  ## Base light energy
+@export var light_range: float = 20.0  ## Light range in units
+@export var light_color: Color = Color(1.0, 0.95, 0.9)  ## Warm white default
+@export var ambient_light_energy: float = 0.3  ## Ambient/fill light level
 
-@export_group("Entities")
+@export_group("Spawns & Items")
 @export var target_spawn_points: int = 16
 @export var weapons_per_room: float = 0.5
 @export var health_per_room: float = 0.3
@@ -64,15 +65,23 @@ extends Node3D
 
 @export_group("Hazards")
 @export var enable_hazards: bool = false  ## Add lava/slime hazard zones
-@export var hazard_count: int = 2  ## Number of hazard zones to place
+@export var hazard_count: int = 2  ## Number of hazard zones
 @export var hazard_type: int = 0  ## 0 = lava, 1 = slime
-@export var lava_texture: String = "liquids/lavahell"
-@export var slime_texture: String = "liquids/slime1"
+@export var hazard_damage: float = 25.0  ## Damage per second
 
-@export_group("Advanced Export")
-@export var add_vis_hints: bool = true  ## Add hint brushes for VIS optimization
-@export var always_add_bevels: bool = true  ## Always add corner bevels (recommended for Q3 compatibility)
-@export var validate_brushes: bool = true  ## Validate brush planes before export
+@export_group("Navigation & AI")
+@export var generate_navmesh: bool = true  ## Generate NavigationRegion3D
+@export var navmesh_cell_size: float = 0.25  ## Navigation mesh cell size
+@export var navmesh_agent_radius: float = 0.5  ## Agent radius for pathfinding
+
+@export_group("Performance")
+@export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
+@export var use_static_batching: bool = true  ## Batch static geometry
+
+@export_group("Scene Export")
+@export var auto_save_scene: bool = false  ## Save generated level as .tscn
+@export var scene_name: String = "generated_level"
+@export var output_path: String = "res://generated_levels/"
 
 # ============================================================================
 # BSP NODE CLASS
@@ -112,413 +121,6 @@ class BSPNode:
 		return Vector3(center_2d.x, height_offset + 1.0, center_2d.y)
 
 # ============================================================================
-# BRUSH GENERATOR CLASS (for .map file export)
-# ============================================================================
-
-class BrushGenerator:
-	## Generates brush strings in Quake 3 .map file format
-	## Each brush is a convex solid defined by 4-6+ planes
-
-	static func create_box_brush(mins: Vector3, maxs: Vector3, textures: Dictionary) -> String:
-		## Creates a 6-sided box brush with specified textures
-		## textures dict keys: top, bottom, north, south, east, west
-
-		var brush: String = "{\n"
-
-		# Get texture names with caulk defaults for hidden faces
-		var tex_top: String = textures.get("top", "common/caulk")
-		var tex_bottom: String = textures.get("bottom", "common/caulk")
-		var tex_north: String = textures.get("north", "common/caulk")
-		var tex_south: String = textures.get("south", "common/caulk")
-		var tex_east: String = textures.get("east", "common/caulk")
-		var tex_west: String = textures.get("west", "common/caulk")
-
-		# Top face (Y+) - three points define plane, winding order matters
-		brush += _plane_string(
-			Vector3(mins.x, maxs.y, mins.z),
-			Vector3(mins.x, maxs.y, maxs.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_top
-		)
-
-		# Bottom face (Y-)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(mins.x, mins.y, mins.z),
-			Vector3(maxs.x, mins.y, mins.z),
-			tex_bottom
-		)
-
-		# North face (Z+)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(maxs.x, mins.y, maxs.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_north
-		)
-
-		# South face (Z-)
-		brush += _plane_string(
-			Vector3(maxs.x, mins.y, mins.z),
-			Vector3(mins.x, mins.y, mins.z),
-			Vector3(mins.x, maxs.y, mins.z),
-			tex_south
-		)
-
-		# East face (X+)
-		brush += _plane_string(
-			Vector3(maxs.x, mins.y, mins.z),
-			Vector3(maxs.x, maxs.y, mins.z),
-			Vector3(maxs.x, maxs.y, maxs.z),
-			tex_east
-		)
-
-		# West face (X-)
-		brush += _plane_string(
-			Vector3(mins.x, mins.y, maxs.z),
-			Vector3(mins.x, maxs.y, maxs.z),
-			Vector3(mins.x, maxs.y, mins.z),
-			tex_west
-		)
-
-		brush += "}\n"
-		return brush
-
-	static func _plane_string(p1: Vector3, p2: Vector3, p3: Vector3, texture: String) -> String:
-		## Format a plane definition: ( x1 y1 z1 ) ( x2 y2 z2 ) ( x3 y3 z3 ) texture params
-		return "( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s 0 0 0 0.5 0.5 0 0 0\n" % [
-			int(p1.x), int(p1.y), int(p1.z),
-			int(p2.x), int(p2.y), int(p2.z),
-			int(p3.x), int(p3.y), int(p3.z),
-			texture
-		]
-
-	static func create_bevel_brush(corner: Vector3, size: float, direction: Vector3, texture: String) -> String:
-		## Creates a small bevel/chamfer brush at edges to prevent BSP glitches
-		## These are small triangular prisms that smooth out sharp corners
-
-		var brush: String = "{\n"
-		var half: float = size / 2.0
-
-		# Create a small pyramid-like shape
-		var base1: Vector3 = corner
-		var base2: Vector3 = corner + Vector3(size, 0, 0)
-		var base3: Vector3 = corner + Vector3(0, 0, size)
-		var apex: Vector3 = corner + Vector3(half, size, half)
-
-		# Bottom face
-		brush += _plane_string(base1, base3, base2, texture)
-		# Front face
-		brush += _plane_string(base1, base2, apex, texture)
-		# Left face
-		brush += _plane_string(base1, apex, base3, texture)
-		# Right face
-		brush += _plane_string(base2, base3, apex, texture)
-
-		brush += "}\n"
-		return brush
-
-	static func validate_plane_normal(p1: Vector3, p2: Vector3, p3: Vector3) -> bool:
-		## Validates that three points define a valid plane with non-degenerate normal
-		## Returns true if the plane is valid for Q3 brush compilation
-
-		var v1: Vector3 = p2 - p1
-		var v2: Vector3 = p3 - p1
-		var normal: Vector3 = v1.cross(v2)
-
-		# Check for degenerate plane (collinear points)
-		if normal.length_squared() < 0.001:
-			return false
-
-		return true
-
-	static func get_plane_normal(p1: Vector3, p2: Vector3, p3: Vector3) -> Vector3:
-		## Calculate the normal vector for a plane defined by three points
-		var v1: Vector3 = p2 - p1
-		var v2: Vector3 = p3 - p1
-		return v1.cross(v2).normalized()
-
-	static func create_validated_box_brush(mins: Vector3, maxs: Vector3, textures: Dictionary, validate: bool = true) -> Dictionary:
-		## Creates a box brush with optional validation
-		## Returns {brush: String, valid: bool, errors: Array[String]}
-
-		var result: Dictionary = {
-			"brush": "",
-			"valid": true,
-			"errors": []
-		}
-
-		# Validate box dimensions
-		if maxs.x <= mins.x or maxs.y <= mins.y or maxs.z <= mins.z:
-			result.valid = false
-			result.errors.append("Invalid box dimensions: maxs must be greater than mins")
-			return result
-
-		result.brush = create_box_brush(mins, maxs, textures)
-
-		if validate:
-			# Validate each face's plane
-			var faces: Array = [
-				[Vector3(mins.x, maxs.y, mins.z), Vector3(mins.x, maxs.y, maxs.z), Vector3(maxs.x, maxs.y, maxs.z)],  # Top
-				[Vector3(mins.x, mins.y, maxs.z), Vector3(mins.x, mins.y, mins.z), Vector3(maxs.x, mins.y, mins.z)],  # Bottom
-				[Vector3(mins.x, mins.y, maxs.z), Vector3(maxs.x, mins.y, maxs.z), Vector3(maxs.x, maxs.y, maxs.z)],  # North
-				[Vector3(maxs.x, mins.y, mins.z), Vector3(mins.x, mins.y, mins.z), Vector3(mins.x, maxs.y, mins.z)],  # South
-				[Vector3(maxs.x, mins.y, mins.z), Vector3(maxs.x, maxs.y, mins.z), Vector3(maxs.x, maxs.y, maxs.z)],  # East
-				[Vector3(mins.x, mins.y, maxs.z), Vector3(mins.x, maxs.y, maxs.z), Vector3(mins.x, maxs.y, mins.z)]   # West
-			]
-
-			for i in range(faces.size()):
-				var face: Array = faces[i]
-				if not validate_plane_normal(face[0], face[1], face[2]):
-					result.valid = false
-					result.errors.append("Invalid plane normal on face %d" % i)
-
-		return result
-
-	static func create_room_brushes(room: Rect2, floor_z: float, height: float,
-			wall_thick: float, textures: Dictionary, add_bevels: bool = true) -> Array[String]:
-		## Creates complete room geometry: floor, ceiling, and 4 walls
-		## Optionally adds bevel brushes at corners
-
-		var brushes: Array[String] = []
-		var mins_2d: Vector2 = room.position
-		var maxs_2d: Vector2 = room.position + room.size
-
-		# Floor brush - visible top face
-		var floor_textures: Dictionary = {
-			"top": textures.get("floor", "gothic_floor/largeblock3b"),
-			"bottom": textures.get("caulk", "common/caulk"),
-			"north": textures.get("caulk", "common/caulk"),
-			"south": textures.get("caulk", "common/caulk"),
-			"east": textures.get("caulk", "common/caulk"),
-			"west": textures.get("caulk", "common/caulk")
-		}
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z - wall_thick, mins_2d.y),
-			Vector3(maxs_2d.x, floor_z, maxs_2d.y),
-			floor_textures
-		))
-
-		# Ceiling brush - visible bottom face
-		var ceil_textures: Dictionary = {
-			"bottom": textures.get("ceiling", "gothic_ceiling/woodceiling1a"),
-			"top": textures.get("caulk", "common/caulk"),
-			"north": textures.get("caulk", "common/caulk"),
-			"south": textures.get("caulk", "common/caulk"),
-			"east": textures.get("caulk", "common/caulk"),
-			"west": textures.get("caulk", "common/caulk")
-		}
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z + height, mins_2d.y),
-			Vector3(maxs_2d.x, floor_z + height + wall_thick, maxs_2d.y),
-			ceil_textures
-		))
-
-		var wall_tex: String = textures.get("wall", "gothic_wall/skull4")
-		var caulk: String = textures.get("caulk", "common/caulk")
-
-		# North wall (Z+) - interior face is south-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z, maxs_2d.y),
-			Vector3(maxs_2d.x, floor_z + height, maxs_2d.y + wall_thick),
-			{"south": wall_tex, "north": caulk, "top": caulk, "bottom": caulk, "east": caulk, "west": caulk}
-		))
-
-		# South wall (Z-) - interior face is north-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x, floor_z, mins_2d.y - wall_thick),
-			Vector3(maxs_2d.x, floor_z + height, mins_2d.y),
-			{"north": wall_tex, "south": caulk, "top": caulk, "bottom": caulk, "east": caulk, "west": caulk}
-		))
-
-		# East wall (X+) - interior face is west-facing
-		brushes.append(create_box_brush(
-			Vector3(maxs_2d.x, floor_z, mins_2d.y),
-			Vector3(maxs_2d.x + wall_thick, floor_z + height, maxs_2d.y),
-			{"west": wall_tex, "east": caulk, "top": caulk, "bottom": caulk, "north": caulk, "south": caulk}
-		))
-
-		# West wall (X-) - interior face is east-facing
-		brushes.append(create_box_brush(
-			Vector3(mins_2d.x - wall_thick, floor_z, mins_2d.y),
-			Vector3(mins_2d.x, floor_z + height, maxs_2d.y),
-			{"east": wall_tex, "west": caulk, "top": caulk, "bottom": caulk, "north": caulk, "south": caulk}
-		))
-
-		# Add bevel brushes at corners to prevent BSP errors
-		if add_bevels:
-			var bevel_size: float = 8.0
-			var corners: Array = [
-				Vector3(mins_2d.x, floor_z, mins_2d.y),
-				Vector3(maxs_2d.x - bevel_size, floor_z, mins_2d.y),
-				Vector3(mins_2d.x, floor_z, maxs_2d.y - bevel_size),
-				Vector3(maxs_2d.x - bevel_size, floor_z, maxs_2d.y - bevel_size)
-			]
-			for corner in corners:
-				brushes.append(create_bevel_brush(corner, bevel_size, Vector3.UP, caulk))
-
-		return brushes
-
-	static func create_corridor_brushes(rect: Rect2, floor_z: float, height: float,
-			wall_thick: float, textures: Dictionary) -> Array[String]:
-		## Creates floor and ceiling for a corridor segment (walls are implicit from room layout)
-
-		var brushes: Array[String] = []
-		var mins: Vector2 = rect.position
-		var maxs: Vector2 = rect.position + rect.size
-
-		var corridor_tex: String = textures.get("corridor", "gothic_block/blocks18c")
-		var caulk: String = textures.get("caulk", "common/caulk")
-
-		# Floor
-		brushes.append(create_box_brush(
-			Vector3(mins.x, floor_z - wall_thick, mins.y),
-			Vector3(maxs.x, floor_z, maxs.y),
-			{"top": corridor_tex, "bottom": caulk, "north": caulk, "south": caulk, "east": caulk, "west": caulk}
-		))
-
-		# Ceiling
-		brushes.append(create_box_brush(
-			Vector3(mins.x, floor_z + height, mins.y),
-			Vector3(maxs.x, floor_z + height + wall_thick, maxs.y),
-			{"bottom": corridor_tex, "top": caulk, "north": caulk, "south": caulk, "east": caulk, "west": caulk}
-		))
-
-		return brushes
-
-	static func create_ramp_brush(start: Vector3, end: Vector3, width: float, texture: String) -> String:
-		## Creates a sloped ramp brush connecting two heights (6-plane version)
-
-		var dir: Vector3 = (end - start).normalized()
-		var length: float = start.distance_to(end)
-		var height_diff: float = end.y - start.y
-
-		# Calculate perpendicular direction for width
-		var perp: Vector3 = dir.cross(Vector3.UP).normalized() * (width / 2.0)
-
-		var brush: String = "{\n"
-
-		# Define the 8 corners of the ramp
-		var b1: Vector3 = start - perp
-		var b2: Vector3 = start + perp
-		var b3: Vector3 = Vector3(end.x, start.y, end.z) + perp
-		var b4: Vector3 = Vector3(end.x, start.y, end.z) - perp
-		var t1: Vector3 = Vector3(start.x, start.y + 16, start.z) - perp
-		var t2: Vector3 = Vector3(start.x, start.y + 16, start.z) + perp
-		var t3: Vector3 = end + perp
-		var t4: Vector3 = end - perp
-
-		# Bottom face
-		brush += _plane_string(b1, b2, b3, "common/caulk")
-		# Top sloped face
-		brush += _plane_string(t1, t4, t3, texture)
-		# Front face
-		brush += _plane_string(b3, b4, t4, "common/caulk")
-		# Back face
-		brush += _plane_string(b1, t1, t2, "common/caulk")
-		# Left face
-		brush += _plane_string(b1, b4, t4, "common/caulk")
-		# Right face
-		brush += _plane_string(b2, t2, t3, "common/caulk")
-
-		brush += "}\n"
-		return brush
-
-	static func create_wedge_ramp_brush(start: Vector3, end: Vector3, width: float, thickness: float, texture: String) -> String:
-		## Creates a true 5-plane wedge/prism ramp brush (more efficient for Q3 BSP)
-		## This is a triangular prism extruded along the width axis
-
-		var dir_2d: Vector2 = Vector2(end.x - start.x, end.z - start.z).normalized()
-		var perp_2d: Vector2 = Vector2(-dir_2d.y, dir_2d.x) * (width / 2.0)
-
-		var brush: String = "{\n"
-
-		# 5 vertices of the wedge:
-		# Bottom-back-left, Bottom-back-right (at start, floor level)
-		# Bottom-front-left, Bottom-front-right (at end, floor level)
-		# Top-front-left, Top-front-right (at end, raised)
-		var bbl: Vector3 = Vector3(start.x - perp_2d.x, start.y, start.z - perp_2d.y)
-		var bbr: Vector3 = Vector3(start.x + perp_2d.x, start.y, start.z + perp_2d.y)
-		var bfl: Vector3 = Vector3(end.x - perp_2d.x, start.y, end.z - perp_2d.y)
-		var bfr: Vector3 = Vector3(end.x + perp_2d.x, start.y, end.z + perp_2d.y)
-		var tfl: Vector3 = Vector3(end.x - perp_2d.x, end.y + thickness, end.z - perp_2d.y)
-		var tfr: Vector3 = Vector3(end.x + perp_2d.x, end.y + thickness, end.z + perp_2d.y)
-		var tbl: Vector3 = Vector3(start.x - perp_2d.x, start.y + thickness, start.z - perp_2d.y)
-		var tbr: Vector3 = Vector3(start.x + perp_2d.x, start.y + thickness, start.z + perp_2d.y)
-
-		# 5 planes for the wedge:
-		# 1. Bottom face (flat)
-		brush += _plane_string(bbl, bfr, bfl, "common/caulk")
-		# 2. Top sloped face (the ramp surface)
-		brush += _plane_string(tbl, tfl, tfr, texture)
-		# 3. Back face (vertical at start)
-		brush += _plane_string(bbl, tbr, bbr, "common/caulk")
-		# 4. Left side face
-		brush += _plane_string(bbl, bfl, tfl, "common/caulk")
-		# 5. Right side face
-		brush += _plane_string(bbr, tfr, bfr, "common/caulk")
-		# 6. Front face (vertical at end) - needed for closed brush
-		brush += _plane_string(bfl, bfr, tfr, "common/caulk")
-
-		brush += "}\n"
-		return brush
-
-# ============================================================================
-# ENTITY PLACER CLASS
-# ============================================================================
-
-class EntityPlacer:
-	## Generates entity strings for Quake 3 .map file format
-
-	static func point_entity(classname: String, origin: Vector3, properties: Dictionary = {}) -> String:
-		## Creates a point entity with specified class and properties
-		var entity: String = "{\n"
-		entity += "\"classname\" \"%s\"\n" % classname
-		entity += "\"origin\" \"%d %d %d\"\n" % [int(origin.x), int(origin.y), int(origin.z)]
-
-		for key in properties:
-			entity += "\"%s\" \"%s\"\n" % [key, str(properties[key])]
-
-		entity += "}\n"
-		return entity
-
-	static func spawn_point(origin: Vector3, angle: float = 0.0) -> String:
-		return point_entity("info_player_deathmatch", origin, {"angle": str(int(angle))})
-
-	static func weapon(weapon_type: String, origin: Vector3) -> String:
-		return point_entity(weapon_type, origin)
-
-	static func item(item_type: String, origin: Vector3) -> String:
-		return point_entity(item_type, origin)
-
-	static func light(origin: Vector3, intensity: int = 300, color: Color = Color.WHITE) -> String:
-		var props: Dictionary = {
-			"light": str(intensity),
-			"_color": "%.2f %.2f %.2f" % [color.r, color.g, color.b]
-		}
-		return point_entity("light", origin, props)
-
-	static func ambient_light(origin: Vector3, intensity: int = 100) -> String:
-		return point_entity("light", origin, {
-			"light": str(intensity),
-			"_deviance": "64",
-			"_samples": "4"
-		})
-
-	static func func_static(origin: Vector3, model: String) -> String:
-		return point_entity("misc_model", origin, {"model": model})
-
-	static func trigger_push(origin: Vector3, size: Vector3, target: String) -> String:
-		return point_entity("trigger_push", origin, {
-			"target": target,
-			"mins": "%d %d %d" % [int(-size.x/2), int(-size.y/2), int(-size.z/2)],
-			"maxs": "%d %d %d" % [int(size.x/2), int(size.y/2), int(size.z/2)]
-		})
-
-	static func target_position(name: String, origin: Vector3) -> String:
-		return point_entity("target_position", origin, {"targetname": name})
-
-# ============================================================================
 # STRUCTURE TYPES
 # ============================================================================
 
@@ -548,15 +150,24 @@ var teleporters: Array[Dictionary] = []
 var clear_positions: Array[Vector3] = []  # Valid spawn positions
 var occupied_cells: Dictionary = {}  # Grid-based collision
 
-# For .map export
-var map_brushes: Array[String] = []
-var map_entities: Array[String] = []
+# Godot scene nodes
+var navigation_region: NavigationRegion3D = null
+var lights: Array[OmniLight3D] = []
+var occluders: Array[OccluderInstance3D] = []
+var spawn_markers: Array[Marker3D] = []
+var item_pickups: Array[Area3D] = []
 
 # Grid system for structure placement
 const CELL_SIZE: float = 8.0
 
-# Material manager for runtime textures
-var material_manager = preload("res://scripts/procedural_material_manager.gd").new()
+# Material cache for Compatibility renderer
+var _floor_material: StandardMaterial3D
+var _wall_material: StandardMaterial3D
+var _ceiling_material: StandardMaterial3D
+var _hazard_material: StandardMaterial3D
+
+# Material manager for runtime textures (if available)
+var material_manager = null
 
 # ============================================================================
 # INITIALIZATION
@@ -573,12 +184,15 @@ func generate_level() -> void:
 	rng = RandomNumberGenerator.new()
 	rng.seed = level_seed if level_seed != 0 else int(Time.get_unix_time_from_system())
 
-	print("=== Q3 ARENA LEVEL GENERATOR ===")
+	print("=== PROCEDURAL ARENA GENERATOR ===")
 	print("Seed: %d" % rng.seed)
 	print("Arena Size: %.1f" % arena_size)
 	print("Complexity: %d" % complexity)
 	print("BSP Layout: %s" % ("Enabled" if use_bsp_layout else "Disabled"))
 	print("Levels: %d" % num_levels)
+
+	# Initialize materials for Compatibility renderer
+	setup_materials()
 
 	# Clear previous data
 	clear_level()
@@ -602,21 +216,35 @@ func generate_level() -> void:
 	generate_perimeter_walls()
 	generate_death_zone()
 
-	# Pre-export leak check
+	# Connectivity check
 	if use_bsp_layout:
 		var leak_result: Dictionary = check_for_leaks()
 		if leak_result.has_leak:
 			print("WARNING: %s" % leak_result.details)
 
-	# Apply materials
+	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
 
-	# Export .map file if enabled
-	if export_map_file:
-		export_to_map_file()
+	# Godot-specific features
+	if generate_lights:
+		generate_room_lights()
+
+	if generate_navmesh:
+		generate_navigation_mesh()
+
+	if generate_occluders:
+		generate_occlusion_culling()
+
+	# Create spawn point markers
+	generate_spawn_markers()
+
+	# Save scene if requested
+	if auto_save_scene:
+		save_level_scene()
 
 	print("=== GENERATION COMPLETE ===")
 	print("Rooms: %d, Corridors: %d, Platforms: %d" % [bsp_rooms.size(), corridors.size(), platforms.size()])
+	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
 	print("Spawn positions: %d" % clear_positions.size())
 
 func clear_level() -> void:
@@ -630,10 +258,15 @@ func clear_level() -> void:
 	occupied_cells.clear()
 	bsp_rooms.clear()
 	corridors.clear()
-	map_brushes.clear()
-	map_entities.clear()
 	jump_pad_positions.clear()
 	teleporter_positions.clear()
+
+	# Clear Godot-specific nodes
+	lights.clear()
+	occluders.clear()
+	spawn_markers.clear()
+	item_pickups.clear()
+	navigation_region = null
 	bsp_root = null
 
 # ============================================================================
@@ -2803,6 +2436,240 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 	damage_area.add_child(area_collision)
 
 	platforms.append(hazard_instance)
+
+# ============================================================================
+# GODOT-SPECIFIC FEATURES
+# ============================================================================
+
+func setup_materials() -> void:
+	## Initialize materials optimized for Compatibility renderer
+	## Uses simple StandardMaterial3D with no advanced features
+
+	# Floor material - basic diffuse
+	_floor_material = StandardMaterial3D.new()
+	_floor_material.albedo_color = Color(0.4, 0.4, 0.45)
+	_floor_material.roughness = 0.8
+	_floor_material.metallic = 0.0
+	# Compatibility renderer: avoid fancy shading
+	_floor_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Wall material
+	_wall_material = StandardMaterial3D.new()
+	_wall_material.albedo_color = Color(0.5, 0.45, 0.4)
+	_wall_material.roughness = 0.9
+	_wall_material.metallic = 0.0
+	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Ceiling material
+	_ceiling_material = StandardMaterial3D.new()
+	_ceiling_material.albedo_color = Color(0.35, 0.35, 0.4)
+	_ceiling_material.roughness = 0.85
+	_ceiling_material.metallic = 0.0
+	_ceiling_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+	# Try to load material manager if available
+	if ResourceLoader.exists("res://scripts/procedural_material_manager.gd"):
+		var manager_script = load("res://scripts/procedural_material_manager.gd")
+		if manager_script:
+			material_manager = manager_script.new()
+
+func generate_room_lights() -> void:
+	## Generate OmniLight3D nodes for each room
+	## Uses simple point lights compatible with all renderers
+
+	print("Generating room lights...")
+
+	for room in bsp_rooms:
+		var room_center: Vector3 = room.get_center_3d(room_height)
+		room_center.y = room.height_offset + room_height * 0.8  # Near ceiling
+
+		var light: OmniLight3D = OmniLight3D.new()
+		light.name = "RoomLight_%d" % room.room_id
+		light.position = room_center
+		light.light_color = light_color
+		light.light_energy = light_energy
+
+		# Scale range based on room size
+		var room_size: float = maxf(room.room.size.x, room.room.size.y)
+		light.omni_range = maxf(light_range, room_size * 0.8)
+
+		# Compatibility renderer friendly settings
+		light.omni_attenuation = 1.0  # Linear falloff
+		light.shadow_enabled = false  # Shadows are expensive
+
+		add_child(light)
+		lights.append(light)
+
+	# Add corridor lights
+	for corridor_data in corridors:
+		for segment in corridor_data.segments:
+			var seg_center: Vector2 = segment.position + segment.size / 2.0
+			var level_z: float = corridor_data.level * level_height_offset
+
+			var light: OmniLight3D = OmniLight3D.new()
+			light.name = "CorridorLight_%d" % corridor_data.from_room
+			light.position = Vector3(seg_center.x, level_z + room_height * 0.7, seg_center.y)
+			light.light_color = light_color
+			light.light_energy = light_energy * 0.7  # Slightly dimmer
+			light.omni_range = light_range * 0.6
+			light.omni_attenuation = 1.0
+			light.shadow_enabled = false
+
+			add_child(light)
+			lights.append(light)
+
+	print("  Created %d lights" % lights.size())
+
+func generate_navigation_mesh() -> void:
+	## Generate NavigationRegion3D for AI pathfinding
+
+	print("Generating navigation mesh...")
+
+	navigation_region = NavigationRegion3D.new()
+	navigation_region.name = "NavigationRegion"
+	add_child(navigation_region)
+
+	var navmesh: NavigationMesh = NavigationMesh.new()
+
+	# Configure navmesh for arena gameplay
+	navmesh.cell_size = navmesh_cell_size
+	navmesh.cell_height = navmesh_cell_size
+	navmesh.agent_radius = navmesh_agent_radius
+	navmesh.agent_height = 2.0
+	navmesh.agent_max_climb = 0.5
+	navmesh.agent_max_slope = 45.0
+
+	# Set geometry source - parse child meshes
+	navmesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+
+	navigation_region.navigation_mesh = navmesh
+
+	# Bake the navmesh (deferred to avoid blocking)
+	navigation_region.bake_navigation_mesh.call_deferred()
+
+	print("  Navigation mesh configured (will bake asynchronously)")
+
+func generate_occlusion_culling() -> void:
+	## Generate OccluderInstance3D nodes for performance optimization
+	## Creates box occluders for large solid geometry
+
+	print("Generating occlusion culling...")
+
+	# Create occluders for perimeter walls
+	var wall_distance: float = arena_size * 0.55
+	var scale: float = arena_size / 140.0
+	var occ_wall_height: float = 25.0 * scale
+
+	var wall_configs: Array = [
+		{"pos": Vector3(0, occ_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, occ_wall_height, 2.0)},
+		{"pos": Vector3(0, occ_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, occ_wall_height, 2.0)},
+		{"pos": Vector3(wall_distance, occ_wall_height / 2.0, 0), "size": Vector3(2.0, occ_wall_height, arena_size * 1.2)},
+		{"pos": Vector3(-wall_distance, occ_wall_height / 2.0, 0), "size": Vector3(2.0, occ_wall_height, arena_size * 1.2)}
+	]
+
+	for i in range(wall_configs.size()):
+		var config: Dictionary = wall_configs[i]
+		var occluder: OccluderInstance3D = OccluderInstance3D.new()
+		occluder.name = "WallOccluder_%d" % i
+		occluder.position = config.pos
+
+		var box_occluder: BoxOccluder3D = BoxOccluder3D.new()
+		box_occluder.size = config.size
+		occluder.occluder = box_occluder
+
+		add_child(occluder)
+		occluders.append(occluder)
+
+	# Create occluders for large structures (pillars, bunkers)
+	for platform in platforms:
+		if not is_instance_valid(platform):
+			continue
+		if not platform.mesh is BoxMesh:
+			continue
+
+		var box_mesh: BoxMesh = platform.mesh as BoxMesh
+		# Only create occluders for tall structures
+		if box_mesh.size.y < 5.0:
+			continue
+
+		var occluder: OccluderInstance3D = OccluderInstance3D.new()
+		occluder.name = "StructureOccluder_%s" % platform.name
+		occluder.position = platform.position
+
+		var box_occluder: BoxOccluder3D = BoxOccluder3D.new()
+		box_occluder.size = box_mesh.size * 0.9  # Slightly smaller to avoid z-fighting
+		occluder.occluder = box_occluder
+
+		add_child(occluder)
+		occluders.append(occluder)
+
+	print("  Created %d occluders" % occluders.size())
+
+func generate_spawn_markers() -> void:
+	## Create Marker3D nodes at spawn positions for game integration
+
+	print("Generating spawn markers...")
+
+	var spawn_idx: int = 0
+	for pos in clear_positions:
+		if spawn_idx >= target_spawn_points:
+			break
+
+		var marker: Marker3D = Marker3D.new()
+		marker.name = "SpawnPoint_%d" % spawn_idx
+		marker.position = pos
+		marker.add_to_group("spawn_points")
+
+		add_child(marker)
+		spawn_markers.append(marker)
+		spawn_idx += 1
+
+	print("  Created %d spawn markers" % spawn_markers.size())
+
+func save_level_scene() -> void:
+	## Save the generated level as a .tscn file
+
+	# Ensure output directory exists
+	var dir: DirAccess = DirAccess.open("res://")
+	if dir and not dir.dir_exists(output_path):
+		dir.make_dir_recursive(output_path)
+
+	var scene_path: String = output_path + scene_name + ".tscn"
+
+	# Create a packed scene from this node
+	var packed_scene: PackedScene = PackedScene.new()
+	var result: int = packed_scene.pack(self)
+
+	if result == OK:
+		var save_result: int = ResourceSaver.save(packed_scene, scene_path)
+		if save_result == OK:
+			print("Level saved to: %s" % scene_path)
+		else:
+			push_error("Failed to save scene to: %s" % scene_path)
+	else:
+		push_error("Failed to pack scene")
+
+func get_spawn_points() -> PackedVector3Array:
+	## Return spawn points for game integration
+	var spawns: PackedVector3Array = PackedVector3Array()
+
+	for marker in spawn_markers:
+		if is_instance_valid(marker):
+			spawns.append(marker.global_position)
+
+	# Fallback to clear_positions if no markers
+	if spawns.is_empty():
+		for pos in clear_positions:
+			spawns.append(pos)
+
+	return spawns
+
+func get_random_spawn_point() -> Vector3:
+	## Get a random spawn point for respawning
+	var spawns: PackedVector3Array = get_spawn_points()
+	if spawns.is_empty():
+		return Vector3.ZERO
+	return spawns[rng.randi() % spawns.size()]
 
 # ============================================================================
 # LEAK DETECTION
