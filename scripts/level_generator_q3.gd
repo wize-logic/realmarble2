@@ -1247,55 +1247,45 @@ func generate_jump_pads() -> void:
 
 	jump_pad_positions.clear()
 
-	# 60% of total interactive elements are jump pads (vs 40% teleporters)
-	# Base count: 4 + complexity, then take 60%
-	var total_elements: int = 4 + complexity * 2
-	var num_target_pads: int = int(ceil(total_elements * 0.6))
+	# 60% ratio: Generate 3-6 jump pads based on complexity
+	var num_target_pads: int = 3 + complexity
 	var attempts: int = 0
-	var max_attempts: int = num_target_pads * 25
+	var max_attempts: int = num_target_pads * 40
 
 	while jump_pad_positions.size() < num_target_pads and attempts < max_attempts:
 		attempts += 1
 
 		var pad_pos: Vector3 = Vector3(
-			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7),
+			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8),
 			0,
-			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7)
+			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8)
 		)
 
-		# Extra geometry protection: check larger radius around position
-		if not is_cell_available(pad_pos, 2):
+		# Simple check: ensure position has overhead clearance
+		if not has_overhead_clearance(pad_pos, 3.0):
 			continue
 
-		# Ensure position has overhead clearance (not under geometry)
-		if not has_overhead_clearance(pad_pos, 4.0):
-			continue
-
-		# Additional check: ensure we're not too close to any platform edges
-		if is_near_platform_geometry(pad_pos, pad_radius * 2.5):
-			continue
-
-		# Check distance to other jump pads and teleporters
+		# Check distance to other jump pads (not too close)
 		var too_close: bool = false
 		for existing in jump_pad_positions:
-			if pad_pos.distance_to(existing) < 12.0 * scale:
+			if pad_pos.distance_to(existing) < 15.0:
 				too_close = true
 				break
+		# Check distance to teleporters
 		for tele_pos in teleporter_positions:
-			if pad_pos.distance_to(tele_pos) < 8.0 * scale:
+			if pad_pos.distance_to(tele_pos) < 10.0:
 				too_close = true
 				break
 
 		if not too_close:
 			jump_pad_positions.append(pad_pos)
-			mark_cell_occupied(pad_pos, 2)  # Mark larger area as occupied
 
 	# Create the jump pads
 	for i in range(jump_pad_positions.size()):
 		create_jump_pad(jump_pad_positions[i], i, scale)
 
 	# Remove spawn positions that are too close to jump pads
-	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.5)
+	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.0)
 
 	print("Generated %d jump pads" % jump_pad_positions.size())
 
@@ -1358,62 +1348,51 @@ func generate_teleporters() -> void:
 
 	teleporter_positions.clear()
 
-	# 40% of total interactive elements are teleporters (vs 60% jump pads)
-	# Base count: 4 + complexity * 2, then take 40% and divide by 2 for pairs
-	var total_elements: int = 4 + complexity * 2
-	var num_teleporters: int = int(floor(total_elements * 0.4))
-	var num_pairs: int = max(1, num_teleporters / 2)  # At least 1 pair
+	# 40% ratio: Generate 1-2 teleporter pairs based on complexity
+	# Strategic placement: opposite ends of the arena for quick traversal
+	var num_pairs: int = 1 if complexity <= 2 else 2
 	var pairs_created: int = 0
-	var attempts: int = 0
-	var max_attempts: int = num_pairs * 40
 
-	while pairs_created < num_pairs and attempts < max_attempts:
-		attempts += 1
+	# Place teleporter pairs at strategic positions (opposite ends of arena)
+	for pair_index in range(num_pairs):
+		# Distribute pairs around the arena
+		var base_angle: float = (float(pair_index) / num_pairs) * PI + rng.randf_range(-0.2, 0.2)
 
-		var angle1: float = rng.randf() * TAU
-		var angle2: float = angle1 + PI + rng.randf_range(-0.5, 0.5)
-		var dist1: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
-		var dist2: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
+		# Position 1: Near one edge of the arena
+		var dist1: float = floor_extent * rng.randf_range(0.6, 0.85)
+		var pos1: Vector3 = Vector3(
+			cos(base_angle) * dist1,
+			0,
+			sin(base_angle) * dist1
+		)
 
-		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
-		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
+		# Position 2: Opposite side for strategic advantage
+		var opposite_angle: float = base_angle + PI + rng.randf_range(-0.3, 0.3)
+		var dist2: float = floor_extent * rng.randf_range(0.6, 0.85)
+		var pos2: Vector3 = Vector3(
+			cos(opposite_angle) * dist2,
+			0,
+			sin(opposite_angle) * dist2
+		)
 
-		# Extra geometry protection: check larger radius around positions
-		if not is_cell_available(pos1, 2) or not is_cell_available(pos2, 2):
-			continue
+		# Simple overhead clearance check
+		if not has_overhead_clearance(pos1, 3.0) or not has_overhead_clearance(pos2, 3.0):
+			# Try adjusting positions slightly
+			pos1.x += rng.randf_range(-5.0, 5.0)
+			pos1.z += rng.randf_range(-5.0, 5.0)
+			pos2.x += rng.randf_range(-5.0, 5.0)
+			pos2.z += rng.randf_range(-5.0, 5.0)
 
-		# Ensure both positions have overhead clearance (not under geometry)
-		if not has_overhead_clearance(pos1, 4.0) or not has_overhead_clearance(pos2, 4.0):
-			continue
-
-		# Additional check: ensure we're not too close to any platform edges
-		if is_near_platform_geometry(pos1, teleporter_radius * 2.5) or is_near_platform_geometry(pos2, teleporter_radius * 2.5):
-			continue
-
-		# Check distance to other teleporters and jump pads
-		var valid: bool = true
-		for existing in teleporter_positions:
-			if pos1.distance_to(existing) < 10.0 * scale or pos2.distance_to(existing) < 10.0 * scale:
-				valid = false
-				break
-		for jump_pos in jump_pad_positions:
-			if pos1.distance_to(jump_pos) < 8.0 * scale or pos2.distance_to(jump_pos) < 8.0 * scale:
-				valid = false
-				break
-
-		if valid:
-			teleporter_positions.append(pos1)
-			teleporter_positions.append(pos2)
-			mark_cell_occupied(pos1, 2)
-			mark_cell_occupied(pos2, 2)
-			create_teleporter(pos1, pos2, pairs_created * 2, scale)
-			create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
-			pairs_created += 1
+		teleporter_positions.append(pos1)
+		teleporter_positions.append(pos2)
+		create_teleporter(pos1, pos2, pairs_created * 2, scale)
+		create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
+		pairs_created += 1
 
 	# Remove spawn positions that are too close to teleporters
-	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.5)
+	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.0)
 
-	print("Generated %d teleporters" % (pairs_created * 2))
+	print("Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
 	var teleporter_radius: float = 2.5 * scale
