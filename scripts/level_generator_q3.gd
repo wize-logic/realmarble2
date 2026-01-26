@@ -1311,7 +1311,8 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 
 	var jump_area: Area3D = Area3D.new()
 	jump_area.name = "JumpPadArea"
-	jump_area.add_to_group("jump_pad")
+	jump_area.add_to_group("jump_pad")   # For player detection
+	jump_area.add_to_group("jump_pads")  # For bot AI detection
 	jump_area.collision_layer = 8
 	jump_area.collision_mask = 0
 	jump_area.monitorable = true
@@ -1415,7 +1416,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 	var teleport_area: Area3D = Area3D.new()
 	teleport_area.name = "TeleportArea"
-	teleport_area.add_to_group("teleporter")
+	teleport_area.add_to_group("teleporter")   # For player detection
+	teleport_area.add_to_group("teleporters")  # For bot AI detection
 	teleport_area.set_meta("destination", destination + Vector3(0, 1.0, 0))
 	teleport_area.collision_layer = 8
 	teleport_area.collision_mask = 0
