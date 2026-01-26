@@ -1052,7 +1052,13 @@ func _physics_process(delta: float) -> void:
 	# Don't apply movement force while grinding - rail physics handles everything
 	# But we still calculated movement_input_direction above for the rail to use
 	if is_grinding:
-		return
+		# Safety check: ensure rail is still valid to prevent getting stuck
+		if not is_instance_valid(current_rail):
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Rail became invalid while grinding - forcing stop_grinding()", false, get_entity_id())
+			stop_grinding()
+			jump_count = 0  # Give full recovery jumps
+		else:
+			return
 
 	# Apply movement force if there's input
 	if input_dir != Vector2.ZERO:
@@ -2089,6 +2095,15 @@ func stop_grinding() -> void:
 	# Restore normal physics
 	linear_damp = 0.5
 
+	# IMPORTANT: Ensure player has recovery jump available after leaving rail
+	# This prevents getting stuck in AIR state with no way to recover
+	# Set to 1 so player has one jump remaining (the double jump)
+	if jump_count > 1:
+		jump_count = 1
+
+	# Reset bounce state in case it was active before grinding
+	is_bouncing = false
+
 	# Stop spark particles
 	if grind_particles:
 		grind_particles.emitting = false
@@ -2100,6 +2115,9 @@ func launch_from_rail(velocity: Vector3) -> void:
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
 	stop_grinding()
+
+	# Reset jump_count to 0 - player was launched, not jumping, so they get full double jump
+	jump_count = 0
 
 	# Player already has velocity from physics, just add upward boost
 	apply_central_impulse(Vector3.UP * 15.0)
@@ -2113,6 +2131,9 @@ func jump_off_rail() -> void:
 	current_rail.detach_grinder(self)
 	stop_grinding()
 
+	# Set jump_count to 1 - the rail jump counts as first jump, leaving double jump available
+	jump_count = 1
+
 	# Apply jump impulse upward (player keeps their grinding momentum)
 	var jump_strength: float = current_jump_impulse * 1.2  # Bonus for rail jump
 	apply_central_impulse(Vector3.UP * jump_strength)
@@ -2124,7 +2145,7 @@ func jump_off_rail() -> void:
 	# Spawn jump particle effect
 	spawn_jump_bounce_effect(1.2)
 
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s" % linear_velocity, false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s, jump_count: %d" % [linear_velocity, jump_count], false, get_entity_id())
 
 # ============================================================================
 # JUMP PAD & TELEPORTER SYSTEM (Q3 ARENA STYLE)

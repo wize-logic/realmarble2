@@ -159,6 +159,11 @@ var _hazard_material: StandardMaterial3D
 # Material manager for runtime textures (if available)
 var material_manager = null
 
+# Grind rail system
+var GrindRailScript = preload("res://scripts/grind_rail.gd")
+var rail_positions: Array[Vector3] = []  # Track rail start positions to avoid overlap
+const RAIL_RADIUS: float = 0.3  # Visual radius for rail tubes
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -197,6 +202,7 @@ func generate_level() -> void:
 	# Add interactive elements (teleporters first - they need more space)
 	generate_teleporters()
 	generate_jump_pads()
+	generate_grind_rails()
 
 	# Add hazard zones if enabled
 	if enable_hazards:
@@ -229,7 +235,7 @@ func generate_level() -> void:
 	generate_spawn_markers()
 
 	print("=== GENERATION COMPLETE ===")
-	print("Rooms: %d, Corridors: %d, Platforms: %d" % [bsp_rooms.size(), corridors.size(), platforms.size()])
+	print("Rooms: %d, Corridors: %d, Platforms: %d, Rails: %d" % [bsp_rooms.size(), corridors.size(), platforms.size(), rail_positions.size() / 2])
 	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
 	print("Spawn positions: %d" % clear_positions.size())
 
@@ -240,6 +246,7 @@ func clear_level() -> void:
 
 	platforms.clear()
 	teleporters.clear()
+	rail_positions.clear()
 	clear_positions.clear()
 	occupied_cells.clear()
 	bsp_rooms.clear()
@@ -1442,6 +1449,257 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 	teleport_area.add_child(area_collision)
 
 	teleporters.append({"area": teleport_area, "destination": destination})
+
+# ============================================================================
+# GRIND RAILS (Strategic placement - sparse to avoid clutter)
+# ============================================================================
+
+func generate_grind_rails() -> void:
+	## Generate strategic grind rails - sparingly placed to avoid clutter
+	## Rails connect elevated areas or provide shortcuts across the arena
+	var scale: float = arena_size / 140.0
+	var floor_extent: float = (arena_size * 0.6) / 2.0
+
+	rail_positions.clear()
+
+	# Sparse rail count: 1-2 at low complexity, up to 4 at high complexity
+	# This keeps rails feeling special and strategic rather than cluttered
+	var num_target_rails: int = 1 + (complexity / 2)  # 1, 1, 2, 2 for complexity 1-4
+	var rails_created: int = 0
+	var attempts: int = 0
+	var max_attempts: int = num_target_rails * 15
+
+	# Generate elevated connector rails between platforms
+	while rails_created < num_target_rails and attempts < max_attempts:
+		attempts += 1
+
+		# Find two elevated positions to connect with a rail
+		var start_pos: Vector3 = find_elevated_rail_anchor(floor_extent, scale)
+		if start_pos == Vector3.ZERO:
+			continue
+
+		var end_pos: Vector3 = find_elevated_rail_anchor(floor_extent, scale)
+		if end_pos == Vector3.ZERO:
+			continue
+
+		# Ensure rails are long enough to be useful and not too long
+		var distance: float = start_pos.distance_to(end_pos)
+		var min_length: float = 15.0 * scale
+		var max_length: float = 50.0 * scale
+
+		if distance < min_length or distance > max_length:
+			continue
+
+		# Check distance to other rails to avoid clustering
+		var too_close_to_rail: bool = false
+		for existing in rail_positions:
+			if start_pos.distance_to(existing) < 12.0 * scale:
+				too_close_to_rail = true
+				break
+		if too_close_to_rail:
+			continue
+
+		# Check distance to jump pads and teleporters
+		var too_close_to_interactive: bool = false
+		for pad_pos in jump_pad_positions:
+			if start_pos.distance_to(pad_pos) < 8.0 * scale or end_pos.distance_to(pad_pos) < 8.0 * scale:
+				too_close_to_interactive = true
+				break
+		for tele_pos in teleporter_positions:
+			if start_pos.distance_to(tele_pos) < 8.0 * scale or end_pos.distance_to(tele_pos) < 8.0 * scale:
+				too_close_to_interactive = true
+				break
+
+		if too_close_to_interactive:
+			continue
+
+		# Create the rail
+		create_grind_rail(start_pos, end_pos, rails_created, scale)
+		rail_positions.append(start_pos)
+		rail_positions.append(end_pos)
+		rails_created += 1
+
+	print("Generated %d strategic grind rails" % rails_created)
+
+func find_elevated_rail_anchor(floor_extent: float, scale: float) -> Vector3:
+	## Find a valid elevated position for a rail anchor point
+	## Returns Vector3.ZERO if no valid position found
+
+	# Try to place on elevated structures or platform edges
+	var rail_height: float = rng.randf_range(3.0, 8.0) * scale  # Elevated but not too high
+
+	for _attempt in range(10):
+		# Random position within arena bounds
+		var pos: Vector3 = Vector3(
+			rng.randf_range(-floor_extent * 0.65, floor_extent * 0.65),
+			rail_height,
+			rng.randf_range(-floor_extent * 0.65, floor_extent * 0.65)
+		)
+
+		# Ensure position doesn't overlap with structures (using cell check at ground level)
+		var ground_pos: Vector3 = Vector3(pos.x, 0, pos.z)
+		if not is_cell_available(ground_pos, 0):
+			# Position is near a structure - good for rail anchoring
+			return pos
+
+		# Also accept positions near the edge of the arena (perimeter rails)
+		var dist_from_center: float = Vector2(pos.x, pos.z).length()
+		if dist_from_center > floor_extent * 0.5:
+			return pos
+
+	return Vector3.ZERO
+
+func create_grind_rail(start: Vector3, end: Vector3, index: int, scale: float) -> void:
+	## Create a grind rail between two points with a curved arc
+	var rail: Path3D = GrindRailScript.new()
+	rail.name = "GrindRail%d" % index
+	rail.curve = Curve3D.new()
+
+	var distance: float = start.distance_to(end)
+	var num_points: int = max(8, int(distance / 3.0))  # More points for smoother curves
+
+	# Calculate arc height - higher for longer rails
+	var arc_height: float = distance * 0.15 * scale
+
+	for i in range(num_points):
+		var t: float = float(i) / (num_points - 1)
+		var pos: Vector3 = start.lerp(end, t)
+
+		# Add arc using sine curve (highest at middle)
+		pos.y += sin(t * PI) * arc_height
+
+		# Add slight lateral variation for visual interest
+		var perpendicular: Vector3 = (end - start).cross(Vector3.UP).normalized()
+		var lateral_offset: float = sin(t * PI * 2.0) * rng.randf_range(-1.0, 1.0) * scale
+		pos += perpendicular * lateral_offset
+
+		rail.curve.add_point(pos)
+
+	# Set smooth tangents for better grinding physics
+	_set_rail_tangents(rail)
+
+	add_child(rail)
+
+	# Create visual mesh for the rail
+	_create_rail_visual(rail)
+
+func _set_rail_tangents(rail: Path3D) -> void:
+	## Set smooth tangents for rail curves
+	for j in range(rail.curve.point_count):
+		var tangent: Vector3
+		if j == 0:
+			tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+		elif j == rail.curve.point_count - 1:
+			tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+		else:
+			var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+			var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+			tangent = (prev_to_curr + curr_to_next).normalized()
+
+		rail.curve.set_point_in(j, -tangent * 0.5)
+		rail.curve.set_point_out(j, tangent * 0.5)
+
+func _create_rail_visual(rail: Path3D) -> void:
+	## Create visual mesh for the rail
+	if not rail.curve or rail.curve.get_baked_length() < 1.0:
+		return
+
+	var rail_visual: MeshInstance3D = MeshInstance3D.new()
+	rail_visual.name = "RailVisual"
+
+	var surface_tool: SurfaceTool = SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var radial_segments: int = 8
+	var rail_length: float = rail.curve.get_baked_length()
+	var length_segments: int = clampi(int(rail_length * 0.5), 4, 100)
+
+	var last_right: Vector3 = Vector3.RIGHT
+	var last_up: Vector3 = Vector3.UP
+
+	for i in range(length_segments):
+		var offset_dist: float = (float(i) / length_segments) * rail_length
+		var next_offset: float = (float(i + 1) / length_segments) * rail_length
+
+		var pos: Vector3 = rail.curve.sample_baked(offset_dist)
+		var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
+
+		var forward: Vector3 = (next_pos - pos)
+		if forward.length_squared() < 0.001:
+			continue
+		forward = forward.normalized()
+
+		var right: Vector3 = forward.cross(Vector3.UP)
+		if right.length_squared() < 0.01:
+			right = forward.cross(last_right)
+			if right.length_squared() < 0.01:
+				right = forward.cross(Vector3.RIGHT)
+		right = right.normalized()
+		var up: Vector3 = right.cross(forward).normalized()
+
+		last_right = right
+		last_up = up
+
+		var u_offset: float = float(i) / length_segments
+		var u_next: float = float(i + 1) / length_segments
+
+		for j in range(radial_segments):
+			var angle_curr: float = (float(j) / radial_segments) * TAU
+			var angle_next: float = (float(j + 1) / radial_segments) * TAU
+			var v_curr: float = float(j) / radial_segments
+			var v_next: float = float(j + 1) / radial_segments
+
+			var offset_curr: Vector3 = (right * cos(angle_curr) + up * sin(angle_curr)) * RAIL_RADIUS
+			var offset_next_rad: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * RAIL_RADIUS
+
+			var v1: Vector3 = pos + offset_curr
+			var v2: Vector3 = pos + offset_next_rad
+			var v3: Vector3 = next_pos + offset_curr
+			var v4: Vector3 = next_pos + offset_next_rad
+
+			var n1: Vector3 = offset_curr.normalized()
+			var n2: Vector3 = offset_next_rad.normalized()
+
+			# Triangle 1
+			surface_tool.set_normal(n1)
+			surface_tool.set_uv(Vector2(u_offset, v_curr))
+			surface_tool.add_vertex(v1)
+
+			surface_tool.set_normal(n2)
+			surface_tool.set_uv(Vector2(u_offset, v_next))
+			surface_tool.add_vertex(v2)
+
+			surface_tool.set_normal(n1)
+			surface_tool.set_uv(Vector2(u_next, v_curr))
+			surface_tool.add_vertex(v3)
+
+			# Triangle 2
+			surface_tool.set_normal(n2)
+			surface_tool.set_uv(Vector2(u_offset, v_next))
+			surface_tool.add_vertex(v2)
+
+			surface_tool.set_normal(n2)
+			surface_tool.set_uv(Vector2(u_next, v_next))
+			surface_tool.add_vertex(v4)
+
+			surface_tool.set_normal(n1)
+			surface_tool.set_uv(Vector2(u_next, v_curr))
+			surface_tool.add_vertex(v3)
+
+	rail_visual.mesh = surface_tool.commit()
+
+	# Create a metallic orange material for rails (distinct from other elements)
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.9, 0.5, 0.1)  # Orange
+	material.metallic = 0.8
+	material.metallic_specular = 0.6
+	material.roughness = 0.3
+	material.emission_enabled = true
+	material.emission = Color(0.6, 0.3, 0.05)  # Subtle orange glow
+	material.emission_energy_multiplier = 0.5
+	rail_visual.set_surface_override_material(0, material)
+
+	rail.add_child(rail_visual)
 
 # ============================================================================
 # PERIMETER & DEATH ZONE
