@@ -1246,11 +1246,12 @@ func generate_jump_pads() -> void:
 
 	jump_pad_positions.clear()
 
-	# Match jump pad count to teleporter count for balance
-	# Teleporters generate (2 + complexity + 1) / 2 pairs = that many * 2 teleporters
-	var num_target_pads: int = ((2 + complexity + 1) / 2) * 2
+	# 60% of total interactive elements are jump pads (vs 40% teleporters)
+	# Base count: 4 + complexity, then take 60%
+	var total_elements: int = 4 + complexity * 2
+	var num_target_pads: int = int(ceil(total_elements * 0.6))
 	var attempts: int = 0
-	var max_attempts: int = num_target_pads * 20
+	var max_attempts: int = num_target_pads * 25
 
 	while jump_pad_positions.size() < num_target_pads and attempts < max_attempts:
 		attempts += 1
@@ -1261,35 +1262,39 @@ func generate_jump_pads() -> void:
 			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7)
 		)
 
-		# Check if position is clear of structures
-		if not is_cell_available(pad_pos, 1):
+		# Extra geometry protection: check larger radius around position
+		if not is_cell_available(pad_pos, 2):
 			continue
 
 		# Ensure position has overhead clearance (not under geometry)
-		if not has_overhead_clearance(pad_pos):
+		if not has_overhead_clearance(pad_pos, 4.0):
+			continue
+
+		# Additional check: ensure we're not too close to any platform edges
+		if is_near_platform_geometry(pad_pos, pad_radius * 2.5):
 			continue
 
 		# Check distance to other jump pads and teleporters
 		var too_close: bool = false
 		for existing in jump_pad_positions:
-			if pad_pos.distance_to(existing) < 10.0 * scale:
+			if pad_pos.distance_to(existing) < 12.0 * scale:
 				too_close = true
 				break
 		for tele_pos in teleporter_positions:
-			if pad_pos.distance_to(tele_pos) < 6.0 * scale:
+			if pad_pos.distance_to(tele_pos) < 8.0 * scale:
 				too_close = true
 				break
 
 		if not too_close:
 			jump_pad_positions.append(pad_pos)
-			mark_cell_occupied(pad_pos, 1)  # Mark cell as occupied
+			mark_cell_occupied(pad_pos, 2)  # Mark larger area as occupied
 
 	# Create the jump pads
 	for i in range(jump_pad_positions.size()):
 		create_jump_pad(jump_pad_positions[i], i, scale)
 
 	# Remove spawn positions that are too close to jump pads
-	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.0)
+	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.5)
 
 	print("Generated %d jump pads" % jump_pad_positions.size())
 
@@ -1352,12 +1357,14 @@ func generate_teleporters() -> void:
 
 	teleporter_positions.clear()
 
-	# Generate balanced count: (2 + complexity) rounded up to even number via pairs
-	# This ensures equal teleporter and jump pad counts
-	var num_pairs: int = (2 + complexity + 1) / 2  # Integer division rounds down, +1 rounds up
+	# 40% of total interactive elements are teleporters (vs 60% jump pads)
+	# Base count: 4 + complexity * 2, then take 40% and divide by 2 for pairs
+	var total_elements: int = 4 + complexity * 2
+	var num_teleporters: int = int(floor(total_elements * 0.4))
+	var num_pairs: int = max(1, num_teleporters / 2)  # At least 1 pair
 	var pairs_created: int = 0
 	var attempts: int = 0
-	var max_attempts: int = num_pairs * 30
+	var max_attempts: int = num_pairs * 40
 
 	while pairs_created < num_pairs and attempts < max_attempts:
 		attempts += 1
@@ -1370,32 +1377,40 @@ func generate_teleporters() -> void:
 		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
 		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
 
+		# Extra geometry protection: check larger radius around positions
+		if not is_cell_available(pos1, 2) or not is_cell_available(pos2, 2):
+			continue
+
 		# Ensure both positions have overhead clearance (not under geometry)
-		if not has_overhead_clearance(pos1) or not has_overhead_clearance(pos2):
+		if not has_overhead_clearance(pos1, 4.0) or not has_overhead_clearance(pos2, 4.0):
+			continue
+
+		# Additional check: ensure we're not too close to any platform edges
+		if is_near_platform_geometry(pos1, teleporter_radius * 2.5) or is_near_platform_geometry(pos2, teleporter_radius * 2.5):
 			continue
 
 		# Check distance to other teleporters and jump pads
 		var valid: bool = true
 		for existing in teleporter_positions:
-			if pos1.distance_to(existing) < 8.0 * scale or pos2.distance_to(existing) < 8.0 * scale:
+			if pos1.distance_to(existing) < 10.0 * scale or pos2.distance_to(existing) < 10.0 * scale:
 				valid = false
 				break
 		for jump_pos in jump_pad_positions:
-			if pos1.distance_to(jump_pos) < 6.0 * scale or pos2.distance_to(jump_pos) < 6.0 * scale:
+			if pos1.distance_to(jump_pos) < 8.0 * scale or pos2.distance_to(jump_pos) < 8.0 * scale:
 				valid = false
 				break
 
 		if valid:
 			teleporter_positions.append(pos1)
 			teleporter_positions.append(pos2)
-			mark_cell_occupied(pos1, 1)
-			mark_cell_occupied(pos2, 1)
+			mark_cell_occupied(pos1, 2)
+			mark_cell_occupied(pos2, 2)
 			create_teleporter(pos1, pos2, pairs_created * 2, scale)
 			create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
 			pairs_created += 1
 
 	# Remove spawn positions that are too close to teleporters
-	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.0)
+	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.5)
 
 	print("Generated %d teleporters" % (pairs_created * 2))
 
@@ -1764,6 +1779,31 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 			return false
 
 	return true
+
+func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
+	## Check if a position is too close to any platform geometry.
+	## Returns true if position is within min_distance of any platform.
+
+	for platform in platforms:
+		if platform == null or platform.mesh == null:
+			continue
+
+		var plat_pos: Vector3 = platform.position
+		var plat_size: Vector3 = platform.mesh.size if platform.mesh is BoxMesh else Vector3(4, 4, 4)
+
+		# Calculate expanded bounds (platform + min_distance buffer)
+		var half_x: float = plat_size.x / 2.0 + min_distance
+		var half_z: float = plat_size.z / 2.0 + min_distance
+
+		# Check if position is within expanded footprint
+		if pos.x >= plat_pos.x - half_x and pos.x <= plat_pos.x + half_x:
+			if pos.z >= plat_pos.z - half_z and pos.z <= plat_pos.z + half_z:
+				# Within horizontal bounds - check if platform is at ground level
+				var platform_bottom: float = plat_pos.y - plat_size.y / 2.0
+				if platform_bottom < 2.0:  # Platform is at or near ground level
+					return true
+
+	return false
 
 # ============================================================================
 # MESH/PLATFORM HELPER FUNCTIONS
