@@ -387,7 +387,7 @@ class BrushGenerator:
 		return brushes
 
 	static func create_ramp_brush(start: Vector3, end: Vector3, width: float, texture: String) -> String:
-		## Creates a sloped ramp brush connecting two heights
+		## Creates a sloped ramp brush connecting two heights (6-plane version)
 
 		var dir: Vector3 = (end - start).normalized()
 		var length: float = start.distance_to(end)
@@ -420,6 +420,45 @@ class BrushGenerator:
 		brush += _plane_string(b1, b4, t4, "common/caulk")
 		# Right face
 		brush += _plane_string(b2, t2, t3, "common/caulk")
+
+		brush += "}\n"
+		return brush
+
+	static func create_wedge_ramp_brush(start: Vector3, end: Vector3, width: float, thickness: float, texture: String) -> String:
+		## Creates a true 5-plane wedge/prism ramp brush (more efficient for Q3 BSP)
+		## This is a triangular prism extruded along the width axis
+
+		var dir_2d: Vector2 = Vector2(end.x - start.x, end.z - start.z).normalized()
+		var perp_2d: Vector2 = Vector2(-dir_2d.y, dir_2d.x) * (width / 2.0)
+
+		var brush: String = "{\n"
+
+		# 5 vertices of the wedge:
+		# Bottom-back-left, Bottom-back-right (at start, floor level)
+		# Bottom-front-left, Bottom-front-right (at end, floor level)
+		# Top-front-left, Top-front-right (at end, raised)
+		var bbl: Vector3 = Vector3(start.x - perp_2d.x, start.y, start.z - perp_2d.y)
+		var bbr: Vector3 = Vector3(start.x + perp_2d.x, start.y, start.z + perp_2d.y)
+		var bfl: Vector3 = Vector3(end.x - perp_2d.x, start.y, end.z - perp_2d.y)
+		var bfr: Vector3 = Vector3(end.x + perp_2d.x, start.y, end.z + perp_2d.y)
+		var tfl: Vector3 = Vector3(end.x - perp_2d.x, end.y + thickness, end.z - perp_2d.y)
+		var tfr: Vector3 = Vector3(end.x + perp_2d.x, end.y + thickness, end.z + perp_2d.y)
+		var tbl: Vector3 = Vector3(start.x - perp_2d.x, start.y + thickness, start.z - perp_2d.y)
+		var tbr: Vector3 = Vector3(start.x + perp_2d.x, start.y + thickness, start.z + perp_2d.y)
+
+		# 5 planes for the wedge:
+		# 1. Bottom face (flat)
+		brush += _plane_string(bbl, bfr, bfl, "common/caulk")
+		# 2. Top sloped face (the ramp surface)
+		brush += _plane_string(tbl, tfl, tfr, texture)
+		# 3. Back face (vertical at start)
+		brush += _plane_string(bbl, tbr, bbr, "common/caulk")
+		# 4. Left side face
+		brush += _plane_string(bbl, bfl, tfl, "common/caulk")
+		# 5. Right side face
+		brush += _plane_string(bbr, tfr, bfr, "common/caulk")
+		# 6. Front face (vertical at end) - needed for closed brush
+		brush += _plane_string(bfl, bfr, tfr, "common/caulk")
 
 		brush += "}\n"
 		return brush
@@ -604,13 +643,18 @@ func clear_level() -> void:
 func generate_bsp_level() -> void:
 	## Generate level layout using Binary Space Partitioning
 
-	var scale: float = arena_size / 140.0
-	var map_size: float = arena_size * 0.8  # Actual playable area
+	# Use arena_size directly for BSP root - room insets handle margins
+	# This ensures consistent scaling regardless of arena_size
+	var map_size: float = arena_size  # Full arena bounds
 
 	# Generate BSP tree for each level
 	for level_idx in range(num_levels):
 		var level_z: float = level_idx * level_height_offset
 		generate_bsp_for_level(level_idx, level_z, map_size)
+
+	# Apply symmetry to BSP rooms if enabled (mirrors rooms before corridor gen)
+	if enable_symmetry:
+		apply_bsp_symmetry()
 
 	# Generate connections between levels
 	if num_levels > 1:
@@ -803,6 +847,43 @@ func generate_room_geometry(node: BSPNode) -> void:
 			floor_y + raised_height + 2.0,
 			room.position.y + raised_offset.y
 		))
+
+func apply_bsp_symmetry() -> void:
+	## Mirror all BSP rooms across the symmetry axis
+	## This creates a balanced arena layout for competitive play
+
+	print("Applying BSP symmetry across %s axis..." % ("X" if symmetry_axis == 0 else "Z"))
+
+	var original_rooms: Array[BSPNode] = bsp_rooms.duplicate()
+	var next_room_id: int = bsp_rooms.size()
+
+	for room in original_rooms:
+		# Create mirrored room
+		var mirrored: BSPNode = BSPNode.new(
+			mirror_rect2(room.bounds),
+			room.level,
+			room.height_offset
+		)
+		mirrored.room = mirror_rect2(room.room)
+		mirrored.room_id = next_room_id
+		mirrored.is_leaf = true
+
+		# Skip if mirrored room overlaps with original (center rooms)
+		var center_dist: float
+		if symmetry_axis == 0:
+			center_dist = absf(room.get_center().x)
+		else:
+			center_dist = absf(room.get_center().y)
+
+		if center_dist < room.room.size.length() * 0.3:
+			continue  # Too close to center, skip mirroring
+
+		# Generate geometry for mirrored room
+		generate_room_geometry(mirrored)
+		bsp_rooms.append(mirrored)
+		next_room_id += 1
+
+	print("  Mirrored %d rooms (total: %d)" % [bsp_rooms.size() - original_rooms.size(), bsp_rooms.size()])
 
 func generate_bsp_corridors(node: BSPNode, level_z: float) -> void:
 	## Generate corridors connecting BSP sibling rooms
@@ -1934,12 +2015,13 @@ func export_to_map_file() -> void:
 			room.room, room.height_offset, room_height, wall_thickness, textures, always_add_bevels
 		)
 
-		# Validate brushes if enabled
+		# Validate brushes if enabled - full cross-product plane normal check
 		if validate_brushes:
-			for brush in room_brushes:
-				# Simple validation - check brush isn't empty
-				if brush.strip_edges().length() < 10:
-					validation_errors += 1
+			var room_validation: Dictionary = validate_room_brushes(room)
+			if not room_validation.valid:
+				validation_errors += room_validation.errors.size()
+				for error in room_validation.errors:
+					print("  Brush validation error in room %d: %s" % [room.room_id, error])
 
 		map_brushes.append_array(room_brushes)
 
@@ -1953,6 +2035,10 @@ func export_to_map_file() -> void:
 	# Add VIS optimization hints
 	var vis_hints: Array[String] = generate_vis_hints()
 	map_brushes.append_array(vis_hints)
+
+	# Add areaportal brushes for VIS culling
+	var areaportals: Array[String] = generate_areaportals()
+	map_entities.append_array(areaportals)  # Areaportals are entities, not worldspawn brushes
 
 	# Export corridors
 	for corridor_data in corridors:
@@ -1991,11 +2077,20 @@ func generate_map_entities() -> void:
 
 	print("  Placed %d spawn points" % spawns_placed)
 
-	# Weapons
-	var weapon_types: Array[String] = [
-		"weapon_rocketlauncher", "weapon_railgun", "weapon_plasmagun",
-		"weapon_lightning", "weapon_shotgun", "weapon_grenadelauncher"
+	# Weapons with weighted distribution for balance
+	# Power weapons (rare): rocket, rail, lightning
+	# Common weapons (frequent): shotgun, plasma, grenade
+	var power_weapons: Array[String] = [
+		"weapon_rocketlauncher", "weapon_railgun", "weapon_lightning"
 	]
+	var common_weapons: Array[String] = [
+		"weapon_shotgun", "weapon_plasmagun", "weapon_grenadelauncher",
+		"weapon_machinegun"
+	]
+
+	# Track placed weapon types for variety
+	var placed_power: int = 0
+	var max_power: int = maxi(1, bsp_rooms.size() / 4)  # Limit power weapons
 
 	var weapons_placed: int = 0
 	for room in bsp_rooms:
@@ -2005,11 +2100,18 @@ func generate_map_entities() -> void:
 			pos.z += rng.randf_range(-room.room.size.y * 0.3, room.room.size.y * 0.3)
 			pos.y += 32.0
 
-			var weapon: String = weapon_types[rng.randi() % weapon_types.size()]
+			# Weighted selection: 25% power weapons (if limit not reached), 75% common
+			var weapon: String
+			if placed_power < max_power and rng.randf() < 0.25:
+				weapon = power_weapons[rng.randi() % power_weapons.size()]
+				placed_power += 1
+			else:
+				weapon = common_weapons[rng.randi() % common_weapons.size()]
+
 			map_entities.append(EntityPlacer.weapon(weapon, pos))
 			weapons_placed += 1
 
-	# Weapons at corridor junctions
+	# Weapons at corridor junctions - prefer common weapons
 	for corridor_data in corridors:
 		if rng.randf() < 0.3:
 			var segment: Rect2 = corridor_data.segments[0]
@@ -2019,9 +2121,11 @@ func generate_map_entities() -> void:
 				level_z + 32.0,
 				segment.position.y + segment.size.y / 2.0
 			)
-			var weapon: String = weapon_types[rng.randi() % weapon_types.size()]
+			var weapon: String = common_weapons[rng.randi() % common_weapons.size()]
 			map_entities.append(EntityPlacer.weapon(weapon, pos))
 			weapons_placed += 1
+
+	print("  Placed %d weapons (%d power, %d common)" % [weapons_placed, placed_power, weapons_placed - placed_power])
 
 	print("  Placed %d weapons" % weapons_placed)
 
@@ -2175,6 +2279,60 @@ func mirror_entities() -> void:
 
 	map_entities.append_array(mirrored)
 	print("  Mirrored %d entities (total: %d)" % [mirrored.size(), map_entities.size()])
+
+func validate_room_brushes(room: BSPNode) -> Dictionary:
+	## Validate all brush planes for a room using cross-product normal checks
+	## Returns {valid: bool, errors: Array[String]}
+
+	var result: Dictionary = {
+		"valid": true,
+		"errors": []
+	}
+
+	var mins_2d: Vector2 = room.room.position
+	var maxs_2d: Vector2 = room.room.position + room.room.size
+	var floor_z: float = room.height_offset
+
+	# Validate floor brush planes (6 faces)
+	var floor_faces: Array = [
+		# Top face - CCW winding for outward normal (Y+)
+		[Vector3(mins_2d.x, floor_z, mins_2d.y),
+		 Vector3(mins_2d.x, floor_z, maxs_2d.y),
+		 Vector3(maxs_2d.x, floor_z, maxs_2d.y)],
+		# Bottom face - CCW for Y-
+		[Vector3(mins_2d.x, floor_z - wall_thickness, maxs_2d.y),
+		 Vector3(mins_2d.x, floor_z - wall_thickness, mins_2d.y),
+		 Vector3(maxs_2d.x, floor_z - wall_thickness, mins_2d.y)]
+	]
+
+	for i in range(floor_faces.size()):
+		var face: Array = floor_faces[i]
+		var v1: Vector3 = face[1] - face[0]
+		var v2: Vector3 = face[2] - face[0]
+		var normal: Vector3 = v1.cross(v2)
+
+		# Check for degenerate plane (collinear points)
+		if normal.length_squared() < 0.001:
+			result.valid = false
+			result.errors.append("Degenerate plane on floor face %d (collinear points)" % i)
+			continue
+
+		# Check normal direction (should point outward)
+		normal = normal.normalized()
+		var expected_dir: Vector3 = Vector3.UP if i == 0 else Vector3.DOWN
+		if normal.dot(expected_dir) < 0:
+			result.errors.append("Inverted normal on floor face %d (winding issue)" % i)
+
+	# Validate wall brushes - check for zero-thickness
+	if maxs_2d.x - mins_2d.x < 1.0 or maxs_2d.y - mins_2d.y < 1.0:
+		result.valid = false
+		result.errors.append("Room too small: dimensions below 1 unit")
+
+	# Check room height
+	if room_height < 32.0:
+		result.errors.append("Room height %.1f may be too low for Q3 player" % room_height)
+
+	return result
 
 func write_map_file() -> void:
 	## Write the complete .map file to disk
@@ -2786,6 +2944,118 @@ func create_hint_brush(mins: Vector3, maxs: Vector3) -> String:
 	return BrushGenerator.create_box_brush(mins, maxs, textures)
 
 # ============================================================================
+# AREAPORTAL GENERATION
+# ============================================================================
+
+@export var add_areaportals: bool = false  ## Add areaportal brushes at doorways for VIS culling
+
+func generate_areaportals() -> Array[String]:
+	## Generate areaportal brushes at corridor entrances
+	## Areaportals create visibility boundaries that speed up rendering
+
+	var portals: Array[String] = []
+
+	if not add_areaportals:
+		return portals
+
+	# Create areaportals at corridor-room connections
+	for corridor_data in corridors:
+		var level_z: float = corridor_data.level * level_height_offset
+		var first_seg: Rect2 = corridor_data.segments[0]
+		var last_seg: Rect2 = corridor_data.segments[-1]
+
+		# Portal at corridor entrance (from first room)
+		var entrance_portal: Dictionary = calculate_portal_dimensions(
+			corridor_data.from_room, first_seg, level_z
+		)
+		if entrance_portal.valid:
+			portals.append(create_areaportal_brush(
+				entrance_portal.mins, entrance_portal.maxs
+			))
+
+		# Portal at corridor exit (to second room)
+		var exit_portal: Dictionary = calculate_portal_dimensions(
+			corridor_data.to_room, last_seg, level_z
+		)
+		if exit_portal.valid:
+			portals.append(create_areaportal_brush(
+				exit_portal.mins, exit_portal.maxs
+			))
+
+	print("  Generated %d areaportal brushes" % portals.size())
+	return portals
+
+func calculate_portal_dimensions(room_id: int, corridor_seg: Rect2, level_z: float) -> Dictionary:
+	## Calculate portal brush dimensions at corridor-room boundary
+
+	var result: Dictionary = {"valid": false, "mins": Vector3.ZERO, "maxs": Vector3.ZERO}
+
+	# Find the room
+	var room: BSPNode = null
+	for r in bsp_rooms:
+		if r.room_id == room_id:
+			room = r
+			break
+
+	if room == null:
+		return result
+
+	# Determine if corridor connects on X or Z axis
+	var room_center: Vector2 = room.get_center()
+	var corridor_center: Vector2 = corridor_seg.position + corridor_seg.size / 2.0
+
+	var is_x_connection: bool = absf(room_center.x - corridor_center.x) > absf(room_center.y - corridor_center.y)
+
+	# Portal dimensions - thin brush at doorway
+	var portal_width: float = minf(corridor_seg.size.x, corridor_seg.size.y)
+	var portal_thickness: float = 2.0
+
+	if is_x_connection:
+		# Portal on X boundary
+		var portal_x: float
+		if corridor_center.x > room_center.x:
+			portal_x = room.room.position.x + room.room.size.x
+		else:
+			portal_x = room.room.position.x
+
+		result.mins = Vector3(portal_x - portal_thickness / 2, level_z, corridor_center.y - portal_width / 2)
+		result.maxs = Vector3(portal_x + portal_thickness / 2, level_z + room_height, corridor_center.y + portal_width / 2)
+	else:
+		# Portal on Z boundary
+		var portal_z: float
+		if corridor_center.y > room_center.y:
+			portal_z = room.room.position.y + room.room.size.y
+		else:
+			portal_z = room.room.position.y
+
+		result.mins = Vector3(corridor_center.x - portal_width / 2, level_z, portal_z - portal_thickness / 2)
+		result.maxs = Vector3(corridor_center.x + portal_width / 2, level_z + room_height, portal_z + portal_thickness / 2)
+
+	result.valid = true
+	return result
+
+func create_areaportal_brush(mins: Vector3, maxs: Vector3) -> String:
+	## Create an areaportal brush
+	## Uses common/areaportal texture for VIS culling
+
+	var textures: Dictionary = {
+		"top": "common/areaportal",
+		"bottom": "common/areaportal",
+		"north": "common/areaportal",
+		"south": "common/areaportal",
+		"east": "common/areaportal",
+		"west": "common/areaportal"
+	}
+
+	# Areaportal needs to be part of a func_areaportal entity
+	var brush_str: String = "{\n"
+	brush_str += "\"classname\" \"func_areaportal\"\n"
+	brush_str += BrushGenerator.create_box_brush(mins, maxs, textures)
+	brush_str += "}\n"
+
+	return brush_str
+
+# ============================================================================
 # ADVANCED: NOISE PERTURBATION
 # ============================================================================
 
@@ -2834,20 +3104,9 @@ func update_editor_preview() -> void:
 		generate_editor_preview()
 
 func generate_editor_preview() -> void:
-	## Generate preview meshes for BSP rooms in editor
+	## Generate preview meshes for BSP rooms and corridors in editor
 
 	clear_editor_preview()
-
-	if not use_bsp_layout:
-		return
-
-	# Generate BSP layout for preview (without runtime geometry)
-	var temp_rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	temp_rng.seed = level_seed if level_seed != 0 else 12345
-
-	var map_size: float = arena_size * 0.8
-	var half_size: float = map_size / 2.0
-	var root_rect: Rect2 = Rect2(-half_size, -half_size, map_size, map_size)
 
 	# Create preview for arena bounds
 	var arena_preview: MeshInstance3D = create_preview_box(
@@ -2858,8 +3117,54 @@ func generate_editor_preview() -> void:
 	arena_preview.name = "ArenaPreview"
 	_preview_meshes.append(arena_preview)
 
-	# Show text info
-	print("Editor Preview: Arena size %.1f, %d levels" % [arena_size, num_levels])
+	# Generate room previews if BSP rooms exist
+	for room in bsp_rooms:
+		var room_center: Vector2 = room.get_center()
+		var room_preview: MeshInstance3D = create_preview_box(
+			Vector3(room_center.x, room.height_offset + 2.0, room_center.y),
+			Vector3(room.room.size.x, 4.0, room.room.size.y),
+			preview_room_color
+		)
+		room_preview.name = "RoomPreview_%d" % room.room_id
+		_preview_meshes.append(room_preview)
+
+	# Generate corridor previews
+	for corridor_data in corridors:
+		var level_z: float = corridor_data.level * level_height_offset
+		for i in range(corridor_data.segments.size()):
+			var segment: Rect2 = corridor_data.segments[i]
+			var seg_center: Vector2 = segment.position + segment.size / 2.0
+			var corridor_preview: MeshInstance3D = create_preview_box(
+				Vector3(seg_center.x, level_z + 2.0, seg_center.y),
+				Vector3(segment.size.x, 3.0, segment.size.y),
+				preview_corridor_color
+			)
+			corridor_preview.name = "CorridorPreview_%d_%d" % [corridor_data.from_room, i]
+			_preview_meshes.append(corridor_preview)
+
+	# Show symmetry axis if enabled
+	if enable_symmetry:
+		var axis_length: float = arena_size * 1.2
+		var axis_color: Color = Color(1.0, 0.2, 0.2, 0.5)
+		var axis_preview: MeshInstance3D
+		if symmetry_axis == 0:  # X-axis
+			axis_preview = create_preview_box(
+				Vector3(0, 5, 0),
+				Vector3(0.5, 10.0, axis_length),
+				axis_color
+			)
+		else:  # Z-axis
+			axis_preview = create_preview_box(
+				Vector3(0, 5, 0),
+				Vector3(axis_length, 10.0, 0.5),
+				axis_color
+			)
+		axis_preview.name = "SymmetryAxisPreview"
+		_preview_meshes.append(axis_preview)
+
+	print("Editor Preview: %d rooms, %d corridors, symmetry=%s" % [
+		bsp_rooms.size(), corridors.size(), "on" if enable_symmetry else "off"
+	])
 
 func create_preview_box(pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
 	## Create a transparent preview box for editor visualization
