@@ -1356,9 +1356,9 @@ func generate_teleporters() -> void:
 		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
 		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
 
-		# Check if both positions are clear
-		if not is_cell_available(pos1, 1) or not is_cell_available(pos2, 1):
-			continue
+		# Note: We don't check is_cell_available() here because teleporters are flat
+		# floor elements (0.3 height) that can coexist with nearby structures.
+		# Only distance checks to other teleporters/jump pads are needed.
 
 		# Check distance to other teleporters and jump pads
 		var valid: bool = true
