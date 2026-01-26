@@ -97,6 +97,7 @@ var skybox_generator: Node3D = null
 # "A" = Type A (Original: floating platforms, grind rails, Sonic-style)
 # "B" = Type B (Quake 3 Arena: rooms, corridors, jump pads, teleporters)
 var current_level_type: String = "A"
+var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 
 func _ready() -> void:
 	# Generate procedural level (default to Type A)
@@ -878,14 +879,9 @@ func ask_level_config() -> Dictionary:
 	size_section.add_child(size_value_label)
 
 	# Update size value display when slider changes
-	size_slider.value_changed.connect(func(value: float):
-		level_config_size = int(value)
-		match int(value):
-			1: size_value_label.text = "Small (Compact arena)"
-			2: size_value_label.text = "Medium (Standard arena)"
-			3: size_value_label.text = "Large (Expanded arena)"
-			4: size_value_label.text = "Huge (Massive arena)"
-	)
+	# IMPORTANT: Use _update_level_config_size method to properly set instance variable
+	size_slider.value_changed.connect(_on_size_slider_changed.bind(size_value_label))
+	print("[DEBUG] Size slider connected. Initial value: %d, focusable: %s, editable: %s" % [size_slider.value, size_slider.focus_mode != Control.FOCUS_NONE, size_slider.editable])
 
 	# Add separator
 	var separator2 = HSeparator.new()
@@ -941,16 +937,10 @@ func ask_level_config() -> Dictionary:
 	time_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	time_section.add_child(time_value_label)
 
-	# Time values mapping: slider value to seconds
-	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
-	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
-
 	# Update time value display when slider changes
-	time_slider.value_changed.connect(func(value: float):
-		var index: int = int(value) - 1
-		level_config_time = time_values[index]
-		time_value_label.text = time_labels[index]
-	)
+	# IMPORTANT: Use _update_level_config_time method to properly set instance variable
+	time_slider.value_changed.connect(_on_time_slider_changed.bind(time_value_label))
+	print("[DEBUG] Time slider connected. Initial value: %d" % time_slider.value)
 
 	# Add separator
 	var separator3 = HSeparator.new()
@@ -1038,8 +1028,31 @@ func ask_level_config() -> Dictionary:
 		print("Level config cancelled")
 		return {}
 
-	print("Level config selected - Size: %d, Time: %.0f" % [level_config_size, level_config_time])
+	print("======================================")
+	print("[LEVEL CONFIG] FINAL VALUES BEING RETURNED:")
+	print("  level_config_size = %d" % level_config_size)
+	print("  level_config_time = %.0f" % level_config_time)
+	print("======================================")
 	return {"size": level_config_size, "time": level_config_time}
+
+func _on_size_slider_changed(value: float, label: Label) -> void:
+	"""Callback for size slider - properly sets instance variable"""
+	level_config_size = int(value)
+	print("[SLIDER] Size changed to: %d" % level_config_size)
+	match int(value):
+		1: label.text = "Small (Compact arena)"
+		2: label.text = "Medium (Standard arena)"
+		3: label.text = "Large (Expanded arena)"
+		4: label.text = "Huge (Massive arena)"
+
+func _on_time_slider_changed(value: float, label: Label) -> void:
+	"""Callback for time slider - properly sets instance variable"""
+	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
+	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+	var index: int = int(value) - 1
+	level_config_time = time_values[index]
+	label.text = time_labels[index]
+	print("[SLIDER] Time changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
 func start_practice_mode(bot_count: int, level_type: String = "A", level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
@@ -1078,6 +1091,7 @@ func start_practice_mode(bot_count: int, level_type: String = "A", level_size: i
 
 	# Regenerate level with selected type and size
 	current_level_type = level_type
+	current_level_size = level_size  # Store for later use (e.g., start_deathmatch)
 	print("Regenerating level with type %s, size %d..." % [level_type, level_size])
 	await generate_procedural_level(level_type, true, level_size)
 	print("Level regeneration complete!")
@@ -1113,8 +1127,8 @@ func start_practice_mode(bot_count: int, level_type: String = "A", level_size: i
 	pending_bot_count = bot_count
 	print("Will spawn %d bots after countdown completes..." % bot_count)
 
-	# Start the deathmatch
-	start_deathmatch()
+	# Start the deathmatch (skip level regen since we already generated it above)
+	start_deathmatch(true)
 
 func _set_practice_button_disabled(disabled: bool) -> void:
 	"""Disable or enable the practice button to prevent spam during gameplay"""
@@ -1399,10 +1413,13 @@ func upnp_setup() -> void:
 # DEATHMATCH GAME LOGIC
 # ============================================================================
 
-func start_deathmatch() -> void:
-	"""Start a 5-minute deathmatch with countdown"""
+func start_deathmatch(skip_level_regen: bool = false) -> void:
+	"""Start a 5-minute deathmatch with countdown
+	Args:
+		skip_level_regen: If true, don't regenerate the level (practice mode already did)
+	"""
 	print("======================================")
-	print("start_deathmatch() CALLED!")
+	print("start_deathmatch() CALLED! skip_level_regen=%s" % skip_level_regen)
 	print("Stack trace:")
 	print_stack()
 	print("Current game_active: ", game_active)
@@ -1441,15 +1458,15 @@ func start_deathmatch() -> void:
 		gameplay_music.start_playlist()
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
-	# FIXME: For multiplayer, level type should be chosen in lobby
-	if multiplayer.has_multiplayer_peer():
-		# Use current_level_type (don't hardcode, respect what was set)
-		# Default to "A" if somehow not set
+	if not skip_level_regen and multiplayer.has_multiplayer_peer():
+		# Use current_level_type and current_level_size (don't hardcode, respect what was set)
 		if current_level_type == "":
 			current_level_type = "A"
-		print("Regenerating level for multiplayer match (Type %s)..." % current_level_type)
-		await generate_procedural_level(current_level_type)
+		print("Regenerating level for multiplayer match (Type %s, Size %d)..." % [current_level_type, current_level_size])
+		await generate_procedural_level(current_level_type, true, current_level_size)
 		print("Level regeneration complete!")
+	elif skip_level_regen:
+		print("Skipping level regeneration (practice mode already generated level)")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -2504,23 +2521,24 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	Args:
 		level_type: "A" for original generator, "B" for Quake 3 arena style
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
-		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size and platform count)
+		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 	"""
-	if OS.is_debug_build():
-		print("Generating procedural arena (Type %s, Size %d)..." % [level_type, level_size])
+	print("======================================")
+	print("[LEVEL GEN] RECEIVED PARAMETERS:")
+	print("  level_type: %s" % level_type)
+	print("  level_size: %d" % level_size)
+	print("  spawn_collectibles: %s" % spawn_collectibles)
+	print("======================================")
 
-	# Calculate arena parameters based on level_size
-	# Size 1: Small - compact arena for quick, close-quarters combat
-	# Size 2: Medium - standard arena (default)
-	# Size 3: Large - expanded arena with more platforms
-	# Size 4: Huge - massive arena for extended gameplay
-	var size_multipliers: Dictionary = {
-		1: {"arena": 0.7, "platforms": 0.5, "ramps": 0.5, "complexity": 2},   # Small
-		2: {"arena": 1.0, "platforms": 1.0, "ramps": 1.0, "complexity": 3},   # Medium (default)
-		3: {"arena": 1.4, "platforms": 1.5, "ramps": 1.5, "complexity": 4},   # Large
-		4: {"arena": 1.8, "platforms": 2.0, "ramps": 2.0, "complexity": 5}    # Huge
+	# Size multipliers for arena dimensions
+	# Larger arenas get DRAMATICALLY more space
+	var arena_multipliers: Dictionary = {
+		1: 0.7,   # Small - compact arena
+		2: 1.0,   # Medium - standard arena (default)
+		3: 1.5,   # Large - significantly expanded
+		4: 2.0    # Huge - massive arena
 	}
-	var multiplier: Dictionary = size_multipliers.get(level_size, size_multipliers[2])
+	var arena_mult: float = arena_multipliers.get(level_size, 1.0)
 
 	# Remove old level generator if it exists
 	if level_generator:
@@ -2540,21 +2558,19 @@ func generate_procedural_level(level_type: String = "A", spawn_collectibles: boo
 	level_generator.name = "LevelGenerator"
 
 	if level_type == "B":
-		# Use Quake 3 Arena-style generator (v2.0 with BSP rooms)
+		# Use Quake 3 Arena-style generator
 		level_generator.set_script(LevelGeneratorQ3)
-		# Configure size and complexity based on level_size parameter
-		level_generator.arena_size = 140.0 * multiplier.arena
-		level_generator.complexity = multiplier.complexity
+		# Set arena size and complexity - generator handles all internal scaling
+		level_generator.arena_size = 140.0 * arena_mult
+		level_generator.complexity = level_size  # Use size setting as complexity
 		print("Using Quake 3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 	else:
-		# Use Sonic-style generator (Type A) v3.0
+		# Use original generator (Type A - Sonic-style speedrun)
 		level_generator.set_script(LevelGenerator)
-		# Configure size and complexity based on level_size parameter
-		level_generator.arena_size = 120.0 * multiplier.arena
-		level_generator.complexity = multiplier.complexity  # New v3.0 complexity parameter
-		level_generator.platform_count = int(30 * multiplier.platforms)  # Legacy parameter backup
-		level_generator.ramp_count = int(20 * multiplier.ramps)  # Legacy parameter backup
-		print("Using Sonic-style level generator v3.0 (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
+		# Set arena size and complexity - generator handles all internal scaling
+		level_generator.arena_size = 120.0 * arena_mult
+		level_generator.complexity = level_size  # Use size setting as complexity
+		print("Using Sonic-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
 	add_child(level_generator)
 
