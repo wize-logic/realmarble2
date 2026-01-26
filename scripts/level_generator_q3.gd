@@ -11,10 +11,9 @@ extends Node3D
 ## - NavigationRegion3D for AI pathfinding
 ## - OmniLight3D placement for dynamic lighting
 ## - OccluderInstance3D for performance optimization
-## - Item/weapon pickup placement
 ## - Multi-level support with ramps and stairs
 ## - Jump pads and teleporters
-## - Scene export (.tscn)
+## - Hazard zones (lava/slime)
 
 # ============================================================================
 # EXPORTED PARAMETERS
@@ -57,11 +56,8 @@ extends Node3D
 @export var light_color: Color = Color(1.0, 0.95, 0.9)  ## Warm white default
 @export var ambient_light_energy: float = 0.3  ## Ambient/fill light level
 
-@export_group("Spawns & Items")
+@export_group("Spawn Points")
 @export var target_spawn_points: int = 16
-@export var weapons_per_room: float = 0.5
-@export var health_per_room: float = 0.3
-@export var armor_per_room: float = 0.2
 
 @export_group("Hazards")
 @export var enable_hazards: bool = false  ## Add lava/slime hazard zones
@@ -77,11 +73,6 @@ extends Node3D
 @export_group("Performance")
 @export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
 @export var use_static_batching: bool = true  ## Batch static geometry
-
-@export_group("Scene Export")
-@export var auto_save_scene: bool = false  ## Save generated level as .tscn
-@export var scene_name: String = "generated_level"
-@export var output_path: String = "res://generated_levels/"
 
 # ============================================================================
 # BSP NODE CLASS
@@ -155,7 +146,6 @@ var navigation_region: NavigationRegion3D = null
 var lights: Array[OmniLight3D] = []
 var occluders: Array[OccluderInstance3D] = []
 var spawn_markers: Array[Marker3D] = []
-var item_pickups: Array[Area3D] = []
 
 # Grid system for structure placement
 const CELL_SIZE: float = 8.0
@@ -238,10 +228,6 @@ func generate_level() -> void:
 	# Create spawn point markers
 	generate_spawn_markers()
 
-	# Save scene if requested
-	if auto_save_scene:
-		save_level_scene()
-
 	print("=== GENERATION COMPLETE ===")
 	print("Rooms: %d, Corridors: %d, Platforms: %d" % [bsp_rooms.size(), corridors.size(), platforms.size()])
 	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
@@ -265,7 +251,6 @@ func clear_level() -> void:
 	lights.clear()
 	occluders.clear()
 	spawn_markers.clear()
-	item_pickups.clear()
 	navigation_region = null
 	bsp_root = null
 
@@ -1592,13 +1577,6 @@ func mirror_vector3(vec: Vector3) -> Vector3:
 	else:  # Z-axis mirror
 		return Vector3(vec.x, vec.y, -vec.z)
 
-# NOTE: Q3 .map export code removed - this generator is now Godot-native only
-# See generate_level() for Godot-specific features:
-# - OmniLight3D room lighting
-# - NavigationRegion3D for AI pathfinding
-# - OccluderInstance3D for performance
-# - Scene saving to .tscn
-
 # ============================================================================
 # HAZARD ZONES
 # ============================================================================
@@ -1879,29 +1857,6 @@ func generate_spawn_markers() -> void:
 		spawn_idx += 1
 
 	print("  Created %d spawn markers" % spawn_markers.size())
-
-func save_level_scene() -> void:
-	## Save the generated level as a .tscn file
-
-	# Ensure output directory exists
-	var dir: DirAccess = DirAccess.open("res://")
-	if dir and not dir.dir_exists(output_path):
-		dir.make_dir_recursive(output_path)
-
-	var scene_path: String = output_path + scene_name + ".tscn"
-
-	# Create a packed scene from this node
-	var packed_scene: PackedScene = PackedScene.new()
-	var result: int = packed_scene.pack(self)
-
-	if result == OK:
-		var save_result: int = ResourceSaver.save(packed_scene, scene_path)
-		if save_result == OK:
-			print("Level saved to: %s" % scene_path)
-		else:
-			push_error("Failed to save scene to: %s" % scene_path)
-	else:
-		push_error("Failed to pack scene")
 
 func get_spawn_points() -> PackedVector3Array:
 	## Return spawn points for game integration
