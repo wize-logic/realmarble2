@@ -1053,12 +1053,18 @@ func _physics_process(delta: float) -> void:
 	# But we still calculated movement_input_direction above for the rail to use
 	if is_grinding:
 		# Safety check: ensure rail is still valid to prevent getting stuck
-		if not is_instance_valid(current_rail):
+		if not is_instance_valid(current_rail) or current_rail == null:
 			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Rail became invalid while grinding - forcing stop_grinding()", false, get_entity_id())
 			stop_grinding()
 			jump_count = 0  # Give full recovery jumps
+			# Don't return - allow normal movement to resume immediately
 		else:
 			return
+
+	# Additional safety: if is_grinding is false but we think we have a rail, clear it
+	if current_rail != null and not is_grinding:
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Clearing stale rail reference", false, get_entity_id())
+		current_rail = null
 
 	# Apply movement force if there's input
 	if input_dir != Vector2.ZERO:
@@ -2063,7 +2069,12 @@ func update_charge_meter_ui() -> void:
 func start_grinding(rail: GrindRail) -> void:
 	"""Called by rail when player enters grinding state"""
 	if is_grinding:
-		return
+		# If already grinding on a different rail, stop first
+		if current_rail != rail and current_rail != null:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "Switching rails - stopping old grind first", false, get_entity_id())
+			stop_grinding()
+		else:
+			return  # Already grinding on this rail
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Started grinding on rail!", false, get_entity_id())
 	is_grinding = true
@@ -2085,21 +2096,24 @@ func start_grinding(rail: GrindRail) -> void:
 
 func stop_grinding() -> void:
 	"""Called by rail when player exits grinding state"""
-	if not is_grinding:
+	# Always clear current_rail reference even if not grinding (safety)
+	var was_grinding: bool = is_grinding
+	current_rail = null
+	is_grinding = false
+
+	if not was_grinding:
 		return
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding!", false, get_entity_id())
-	is_grinding = false
-	current_rail = null
 
 	# Restore normal physics
 	linear_damp = 0.5
 
 	# IMPORTANT: Ensure player has recovery jump available after leaving rail
 	# This prevents getting stuck in AIR state with no way to recover
-	# Set to 1 so player has one jump remaining (the double jump)
-	if jump_count > 1:
-		jump_count = 1
+	# Give player at least one jump for recovery
+	if jump_count >= max_jumps:
+		jump_count = max_jumps - 1
 
 	# Reset bounce state in case it was active before grinding
 	is_bouncing = false

@@ -257,10 +257,14 @@ func _physics_process(delta: float) -> void:
 			_remove_grinder(grinder)
 			continue
 
+		# If grinder's current_rail doesn't match us, they've been detached elsewhere
+		# Clean them up from our tracking to prevent state issues
 		if grinder.get("current_rail") != self:
 			var data = grinder_data[grinder]
 			if data and data.rope_visual:
-				data.rope_visual.visible = false
+				data.rope_visual.queue_free()
+			active_grinders.erase(grinder)
+			grinder_data.erase(grinder)
 			continue
 
 		_update_active_grinder(grinder, delta, current_time)

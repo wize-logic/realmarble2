@@ -1462,12 +1462,12 @@ func generate_grind_rails() -> void:
 
 	rail_positions.clear()
 
-	# Very sparse rail count: 1 rail at low complexity, up to 2 at high complexity
-	# This keeps rails feeling special and strategic rather than cluttered
-	var num_target_rails: int = 1 + (complexity / 3)  # 1, 1, 2, 2 for complexity 1-4
+	# Sparse rail count that scales slightly with complexity
+	# 1 rail at complexity 1, 2 rails at complexity 2-4
+	var num_target_rails: int = 1 if complexity == 1 else 2
 	var rails_created: int = 0
 	var attempts: int = 0
-	var max_attempts: int = num_target_rails * 30  # More attempts for better placement
+	var max_attempts: int = num_target_rails * 50  # More attempts for better placement
 
 	while rails_created < num_target_rails and attempts < max_attempts:
 		attempts += 1
@@ -1483,10 +1483,10 @@ func generate_grind_rails() -> void:
 		if end_pos == Vector3.ZERO:
 			continue
 
-		# Validate the rail path
+		# Validate the rail path - scale max_length with arena size
 		var distance: float = start_pos.distance_to(end_pos)
-		var min_length: float = 20.0 * scale  # Longer minimum for strategic value
-		var max_length: float = 60.0 * scale
+		var min_length: float = 20.0  # Minimum useful length (in world units)
+		var max_length: float = floor_extent * 2.0  # Can span most of arena
 
 		if distance < min_length or distance > max_length:
 			continue
@@ -1599,7 +1599,8 @@ func _validate_rail_clearance(start: Vector3, end: Vector3, scale: float) -> boo
 	var distance: float = start.distance_to(end)
 
 	# Calculate arc height for this rail (same as in create_grind_rail)
-	var arc_height: float = distance * 0.15 * scale
+	# Note: distance is already in world units, so don't multiply by scale again
+	var arc_height: float = distance * 0.12
 
 	for i in range(num_samples):
 		var t: float = float(i) / (num_samples - 1)
@@ -1622,7 +1623,7 @@ func _validate_rail_clearance(start: Vector3, end: Vector3, scale: float) -> boo
 
 	return true
 
-func create_grind_rail(start: Vector3, end: Vector3, index: int, scale: float) -> void:
+func create_grind_rail(start: Vector3, end: Vector3, index: int, _scale: float) -> void:
 	## Create a grind rail between two points with a smooth arc
 	var rail: Path3D = GrindRailScript.new()
 	rail.name = "GrindRail%d" % index
@@ -1632,7 +1633,8 @@ func create_grind_rail(start: Vector3, end: Vector3, index: int, scale: float) -
 	var num_points: int = max(8, int(distance / 4.0))  # Smooth curve
 
 	# Calculate arc height - creates a nice curved path
-	var arc_height: float = distance * 0.15 * scale
+	# Distance is already in world units, arc is proportional to length
+	var arc_height: float = distance * 0.12
 
 	for i in range(num_points):
 		var t: float = float(i) / (num_points - 1)
