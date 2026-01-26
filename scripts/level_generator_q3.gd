@@ -24,9 +24,9 @@ extends Node3D
 @export var complexity: int = 2  ## 1=Low, 2=Medium, 3=High, 4=Extreme
 
 @export_group("BSP Generation")
-@export var use_bsp_layout: bool = true  ## Use BSP for room layout vs procedural structures
-@export var min_room_size: float = 200.0  ## Minimum room dimension
-@export var max_bsp_depth: int = 5  ## Maximum BSP subdivision depth
+@export var use_bsp_layout: bool = false  ## Use BSP for room layout vs procedural structures (disabled by default for arena gameplay)
+@export var min_room_size: float = 20.0  ## Minimum room dimension in Godot units
+@export var max_bsp_depth: int = 4  ## Maximum BSP subdivision depth
 @export var room_inset_min: float = 0.75  ## Room inset factor minimum (75%)
 @export var room_inset_max: float = 0.90  ## Room inset factor maximum (90%)
 
@@ -39,11 +39,11 @@ extends Node3D
 
 @export_group("Multi-Level")
 @export var num_levels: int = 1  ## Number of vertical levels
-@export var level_height_offset: float = 320.0  ## Height between levels
+@export var level_height_offset: float = 20.0  ## Height between levels in Godot units
 
 @export_group("Corridor Settings")
-@export var corridor_width_min: float = 64.0  ## Minimum corridor width
-@export var corridor_width_max: float = 128.0  ## Maximum corridor width
+@export var corridor_width_min: float = 4.0  ## Minimum corridor width in Godot units
+@export var corridor_width_max: float = 8.0  ## Maximum corridor width in Godot units
 
 @export_group("Textures (for .map export)")
 @export var floor_texture: String = "gothic_floor/largeblock3b"
@@ -1397,12 +1397,14 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
 	add_child(pad_instance)
 
+	# Create a bright green material for jump pads
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 1.0, 0.4)
+	material.albedo_color = Color(0.2, 0.9, 0.3)  # Bright green
 	material.emission_enabled = true
-	material.emission = Color(0.2, 0.8, 0.3)
-	material.emission_energy_multiplier = 0.5
-	pad_instance.material_override = material
+	material.emission = Color(0.1, 0.6, 0.2)  # Green glow
+	material.emission_energy_multiplier = 2.0  # Visible glow
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	pad_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -1467,12 +1469,14 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 	teleporter_instance.position = Vector3(pos.x, 0.15, pos.z)
 	add_child(teleporter_instance)
 
+	# Create a purple material for teleporters
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.4, 1.0)
+	material.albedo_color = Color(0.6, 0.3, 0.9)  # Purple
 	material.emission_enabled = true
-	material.emission = Color(0.5, 0.3, 0.9)
-	material.emission_energy_multiplier = 0.5
-	teleporter_instance.material_override = material
+	material.emission = Color(0.4, 0.2, 0.8)  # Purple glow
+	material.emission_energy_multiplier = 2.0  # Visible glow
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	teleporter_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
