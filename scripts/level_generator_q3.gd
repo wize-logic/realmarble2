@@ -199,12 +199,7 @@ func generate_level() -> void:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
 
-	# Add interactive elements (teleporters first - they need more space)
-	generate_teleporters()
-	generate_jump_pads()
-	generate_grind_rails()
-
-	# Add hazard zones if enabled
+	# Add hazard zones if enabled (before interactive elements so they can avoid them)
 	if enable_hazards:
 		generate_hazard_zones()
 
@@ -230,6 +225,12 @@ func generate_level() -> void:
 
 	if generate_occluders:
 		generate_occlusion_culling()
+
+	# Add interactive elements LAST - after all geometry is in place
+	# This ensures we can properly check for geometry clipping
+	generate_teleporters()
+	generate_jump_pads()
+	generate_grind_rails()
 
 	# Create spawn point markers
 	generate_spawn_markers()
@@ -1781,9 +1782,11 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 	return true
 
 func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
-	## Check if a position is too close to any platform geometry.
-	## Returns true if position is within min_distance of any platform.
+	## Check if a position is too close to any geometry (platforms, walls, structures).
+	## Returns true if position is within min_distance of any geometry.
+	## Checks all MeshInstance3D children, not just tracked platforms.
 
+	# Check tracked platforms first
 	for platform in platforms:
 		if platform == null or platform.mesh == null:
 			continue
@@ -1798,10 +1801,34 @@ func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
 		# Check if position is within expanded footprint
 		if pos.x >= plat_pos.x - half_x and pos.x <= plat_pos.x + half_x:
 			if pos.z >= plat_pos.z - half_z and pos.z <= plat_pos.z + half_z:
-				# Within horizontal bounds - check if platform is at ground level
+				# Within horizontal bounds - check if platform is at or near ground level
 				var platform_bottom: float = plat_pos.y - plat_size.y / 2.0
-				if platform_bottom < 2.0:  # Platform is at or near ground level
+				if platform_bottom < 3.0:  # Platform is at or near ground level
 					return true
+
+	# Also check all MeshInstance3D children that might not be in platforms array
+	for child in get_children():
+		if child is MeshInstance3D and child.mesh != null:
+			var mesh_pos: Vector3 = child.position
+			var mesh_size: Vector3 = Vector3(4, 4, 4)  # Default size
+
+			if child.mesh is BoxMesh:
+				mesh_size = child.mesh.size
+			elif child.mesh is CylinderMesh:
+				var cyl: CylinderMesh = child.mesh
+				mesh_size = Vector3(cyl.top_radius * 2, cyl.height, cyl.top_radius * 2)
+
+			# Calculate expanded bounds
+			var half_x: float = mesh_size.x / 2.0 + min_distance
+			var half_z: float = mesh_size.z / 2.0 + min_distance
+
+			# Check horizontal proximity
+			if pos.x >= mesh_pos.x - half_x and pos.x <= mesh_pos.x + half_x:
+				if pos.z >= mesh_pos.z - half_z and pos.z <= mesh_pos.z + half_z:
+					# Check if geometry is at ground level (could block placement)
+					var mesh_bottom: float = mesh_pos.y - mesh_size.y / 2.0
+					if mesh_bottom < 3.0:
+						return true
 
 	return false
 
