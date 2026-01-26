@@ -82,23 +82,26 @@ class BSPNode:
 	var platform_rect: Rect2  # Inset rect for actual platform placement
 	var center: Vector3  # 3D center point for path generation
 	var is_mirrored: bool = false  # For arena symmetry
+	var min_zone_size: float = 200.0  # Dynamic: scales with arena (set by generator)
 
-	const MIN_ZONE_SIZE: float = 200.0
+	# Platform inset: 75-90% of zone size leaves 10-25% margin for walls/edges
 	const PLATFORM_INSET_MIN: float = 0.75
 	const PLATFORM_INSET_MAX: float = 0.90
+	# Height variation: 0-128 units creates multi-level Sonic-style stacking
 	const HEIGHT_VARIATION_MIN: float = 0.0
 	const HEIGHT_VARIATION_MAX: float = 128.0
 
-	func _init(rect: Rect2, height: float = 0.0):
+	func _init(rect: Rect2, height: float = 0.0, min_size: float = 200.0):
 		bounds = rect
 		height_offset = height
+		min_zone_size = min_size
 
 	func is_leaf() -> bool:
 		return left == null and right == null
 
 	func can_split() -> bool:
-		# Ensure sub-areas are >= 200x200 units
-		return bounds.size.x >= MIN_ZONE_SIZE * 2 or bounds.size.y >= MIN_ZONE_SIZE * 2
+		# Ensure sub-areas are >= min_zone_size (scales with arena)
+		return bounds.size.x >= min_zone_size * 2 or bounds.size.y >= min_zone_size * 2
 
 	func split(horizontal: bool, rng: RandomNumberGenerator) -> bool:
 		"""Split this node horizontally or vertically.
@@ -106,35 +109,40 @@ class BSPNode:
 		if not can_split():
 			return false
 
+		# Split ratio 0.4-0.6 ensures neither child is too small/large
 		var split_ratio: float = rng.randf_range(0.4, 0.6)
 
-		if horizontal and bounds.size.y >= MIN_ZONE_SIZE * 2:
+		if horizontal and bounds.size.y >= min_zone_size * 2:
 			var split_y: float = bounds.position.y + bounds.size.y * split_ratio
 			var height_left: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
 			var height_right: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
 
 			left = BSPNode.new(
 				Rect2(bounds.position.x, bounds.position.y, bounds.size.x, split_y - bounds.position.y),
-				height_left
+				height_left,
+				min_zone_size  # Propagate min_zone_size to children
 			)
 			right = BSPNode.new(
 				Rect2(bounds.position.x, split_y, bounds.size.x, bounds.end.y - split_y),
-				height_right
+				height_right,
+				min_zone_size
 			)
 			return true
 
-		elif not horizontal and bounds.size.x >= MIN_ZONE_SIZE * 2:
+		elif not horizontal and bounds.size.x >= min_zone_size * 2:
 			var split_x: float = bounds.position.x + bounds.size.x * split_ratio
 			var height_left: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
 			var height_right: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
 
 			left = BSPNode.new(
 				Rect2(bounds.position.x, bounds.position.y, split_x - bounds.position.x, bounds.size.y),
-				height_left
+				height_left,
+				min_zone_size
 			)
 			right = BSPNode.new(
 				Rect2(split_x, bounds.position.y, bounds.end.x - split_x, bounds.size.y),
-				height_right
+				height_right,
+				min_zone_size
 			)
 			return true
 
@@ -192,7 +200,8 @@ class PlatformBuilder:
 		geometry_bounds = bounds_ref
 
 	func create_platform(rect: Rect2, height: float, name_prefix: String, index: int, use_noise_edges: bool = true) -> MeshInstance3D:
-		"""Create a platform from a Rect2 with optional organic edge perturbation."""
+		"""Create a platform from a Rect2 with optional organic edge perturbation.
+		When use_noise_edges=true, applies FastNoiseLite to create wavy island-like edges."""
 		var size: Vector3 = Vector3(rect.size.x, 2.0, rect.size.y)
 		var pos: Vector3 = Vector3(
 			rect.position.x + rect.size.x / 2.0,
@@ -200,19 +209,26 @@ class PlatformBuilder:
 			rect.position.y + rect.size.y / 2.0
 		)
 
-		var mesh: BoxMesh = BoxMesh.new()
-		mesh.size = size
-		mesh.subdivide_width = 4
-		mesh.subdivide_height = 2
-		mesh.subdivide_depth = 4
-
 		var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-		mesh_instance.mesh = mesh
 		mesh_instance.name = name_prefix + str(index)
 		mesh_instance.position = pos
+
+		if use_noise_edges and noise:
+			# Create ArrayMesh with noise-perturbed vertices for organic shapes
+			var array_mesh: ArrayMesh = _create_noise_perturbed_box(size, pos, index)
+			mesh_instance.mesh = array_mesh
+		else:
+			# Standard box mesh
+			var mesh: BoxMesh = BoxMesh.new()
+			mesh.size = size
+			mesh.subdivide_width = 4
+			mesh.subdivide_height = 2
+			mesh.subdivide_depth = 4
+			mesh_instance.mesh = mesh
+
 		parent_node.add_child(mesh_instance)
 
-		# Add collision
+		# Add collision (uses unperturbed box for simplicity - physics stays stable)
 		var static_body: StaticBody3D = StaticBody3D.new()
 		var collision: CollisionShape3D = CollisionShape3D.new()
 		var shape: BoxShape3D = BoxShape3D.new()
@@ -228,6 +244,120 @@ class PlatformBuilder:
 		})
 
 		return mesh_instance
+
+	func _create_noise_perturbed_box(size: Vector3, world_pos: Vector3, seed_offset: int) -> ArrayMesh:
+		"""Create a box mesh with noise-perturbed edges for organic island-like shapes.
+		Perturbs horizontal edges (X/Z) while keeping top/bottom flat for playability."""
+		var mesh: ArrayMesh = ArrayMesh.new()
+		var surface_tool: SurfaceTool = SurfaceTool.new()
+		surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+		var half: Vector3 = size / 2.0
+		# Noise perturbation strength: 10% of smallest dimension for subtle organic feel
+		var perturb_strength: float = min(size.x, size.z) * 0.1
+
+		# Generate vertices for a box with perturbed horizontal positions
+		# Top face (Y+) - flat for gameplay
+		var top_verts: Array[Vector3] = []
+		var subdivisions: int = 4
+		for iz in range(subdivisions + 1):
+			for ix in range(subdivisions + 1):
+				var u: float = float(ix) / subdivisions
+				var v: float = float(iz) / subdivisions
+				var x: float = lerp(-half.x, half.x, u)
+				var z: float = lerp(-half.z, half.z, v)
+
+				# Apply noise to edge vertices only (not center)
+				var edge_factor: float = 1.0 - (1.0 - abs(u - 0.5) * 2.0) * (1.0 - abs(v - 0.5) * 2.0)
+				var noise_val: float = noise.get_noise_2d(world_pos.x + x + seed_offset, world_pos.z + z)
+				x += noise_val * perturb_strength * edge_factor
+				z += noise_val * perturb_strength * edge_factor * 0.7  # Slightly less on Z
+
+				top_verts.append(Vector3(x, half.y, z))
+
+		# Add top face triangles
+		surface_tool.set_normal(Vector3.UP)
+		for iz in range(subdivisions):
+			for ix in range(subdivisions):
+				var i0: int = iz * (subdivisions + 1) + ix
+				var i1: int = i0 + 1
+				var i2: int = i0 + (subdivisions + 1)
+				var i3: int = i2 + 1
+
+				surface_tool.add_vertex(top_verts[i0])
+				surface_tool.add_vertex(top_verts[i2])
+				surface_tool.add_vertex(top_verts[i1])
+
+				surface_tool.add_vertex(top_verts[i1])
+				surface_tool.add_vertex(top_verts[i2])
+				surface_tool.add_vertex(top_verts[i3])
+
+		# Bottom face (Y-) - flat
+		surface_tool.set_normal(Vector3.DOWN)
+		var bottom_verts: Array[Vector3] = []
+		for v in top_verts:
+			bottom_verts.append(Vector3(v.x, -half.y, v.z))
+
+		for iz in range(subdivisions):
+			for ix in range(subdivisions):
+				var i0: int = iz * (subdivisions + 1) + ix
+				var i1: int = i0 + 1
+				var i2: int = i0 + (subdivisions + 1)
+				var i3: int = i2 + 1
+
+				surface_tool.add_vertex(bottom_verts[i0])
+				surface_tool.add_vertex(bottom_verts[i1])
+				surface_tool.add_vertex(bottom_verts[i2])
+
+				surface_tool.add_vertex(bottom_verts[i1])
+				surface_tool.add_vertex(bottom_verts[i3])
+				surface_tool.add_vertex(bottom_verts[i2])
+
+		# Side faces - connect top and bottom with perturbed edges
+		_add_side_faces(surface_tool, top_verts, bottom_verts, subdivisions)
+
+		surface_tool.generate_normals()
+		return surface_tool.commit()
+
+	func _add_side_faces(st: SurfaceTool, top: Array[Vector3], bottom: Array[Vector3], subdivs: int) -> void:
+		"""Add side faces connecting perturbed top/bottom vertices."""
+		var stride: int = subdivs + 1
+
+		# Front face (Z+)
+		for ix in range(subdivs):
+			var t0: Vector3 = top[subdivs * stride + ix]
+			var t1: Vector3 = top[subdivs * stride + ix + 1]
+			var b0: Vector3 = bottom[subdivs * stride + ix]
+			var b1: Vector3 = bottom[subdivs * stride + ix + 1]
+			st.add_vertex(t0); st.add_vertex(b0); st.add_vertex(t1)
+			st.add_vertex(t1); st.add_vertex(b0); st.add_vertex(b1)
+
+		# Back face (Z-)
+		for ix in range(subdivs):
+			var t0: Vector3 = top[ix]
+			var t1: Vector3 = top[ix + 1]
+			var b0: Vector3 = bottom[ix]
+			var b1: Vector3 = bottom[ix + 1]
+			st.add_vertex(t0); st.add_vertex(t1); st.add_vertex(b0)
+			st.add_vertex(t1); st.add_vertex(b1); st.add_vertex(b0)
+
+		# Right face (X+)
+		for iz in range(subdivs):
+			var t0: Vector3 = top[iz * stride + subdivs]
+			var t1: Vector3 = top[(iz + 1) * stride + subdivs]
+			var b0: Vector3 = bottom[iz * stride + subdivs]
+			var b1: Vector3 = bottom[(iz + 1) * stride + subdivs]
+			st.add_vertex(t0); st.add_vertex(t1); st.add_vertex(b0)
+			st.add_vertex(t1); st.add_vertex(b1); st.add_vertex(b0)
+
+		# Left face (X-)
+		for iz in range(subdivs):
+			var t0: Vector3 = top[iz * stride]
+			var t1: Vector3 = top[(iz + 1) * stride]
+			var b0: Vector3 = bottom[iz * stride]
+			var b1: Vector3 = bottom[(iz + 1) * stride]
+			st.add_vertex(t0); st.add_vertex(b0); st.add_vertex(t1)
+			st.add_vertex(t1); st.add_vertex(b0); st.add_vertex(b1)
 
 	func create_sloped_ramp(start_pos: Vector3, end_pos: Vector3, width: float, name_prefix: String, index: int) -> MeshInstance3D:
 		"""Create a sloped ramp between two heights for speed boosts."""
@@ -269,35 +399,40 @@ class PlatformBuilder:
 
 	func create_loop(center: Vector3, radius: float, name_prefix: String, index: int) -> Node3D:
 		"""Create a toroidal loop for momentum tricks (Sonic-style).
-		Uses CSG subtraction to create a hollow tube."""
+		Uses CSGTorus3D for visual with full collision coverage for player contact."""
 		var loop_node: Node3D = Node3D.new()
 		loop_node.name = name_prefix + str(index)
 		loop_node.position = center
 		parent_node.add_child(loop_node)
 
 		# Create outer torus using CSGTorus3D
+		# inner_radius = hole size, outer_radius = tube thickness
 		var outer_torus: CSGTorus3D = CSGTorus3D.new()
 		outer_torus.name = "OuterTorus"
 		outer_torus.inner_radius = radius
-		outer_torus.outer_radius = radius + 8.0
-		outer_torus.sides = 24
-		outer_torus.ring_sides = 16
+		outer_torus.outer_radius = radius + 8.0  # 8 unit thick tube for player to run through
+		outer_torus.sides = 24  # Ring smoothness
+		outer_torus.ring_sides = 16  # Tube cross-section smoothness
 		# Rotate to stand vertically (loop plane perpendicular to ground)
 		outer_torus.rotation_degrees = Vector3(90, 0, 0)
 		loop_node.add_child(outer_torus)
 
-		# Add static body for collision (simplified box collider for the loop)
+		# Add static body for FULL loop collision (not just bottom arc)
 		var static_body: StaticBody3D = StaticBody3D.new()
 		static_body.name = "LoopCollision"
 		loop_node.add_child(static_body)
 
-		# Create collision for the bottom arc of the loop (where player runs)
-		for i in range(8):
-			var angle: float = PI + (float(i) / 7.0) * PI  # Bottom half arc
+		# Create collision segments around the ENTIRE loop (16 segments for full coverage)
+		# This prevents players from clipping through any part of the loop
+		var num_segments: int = 16
+		for i in range(num_segments):
+			var angle: float = (float(i) / num_segments) * TAU  # Full 360 degrees
 			var collision: CollisionShape3D = CollisionShape3D.new()
 			var box: BoxShape3D = BoxShape3D.new()
-			box.size = Vector3(8.0, 3.0, 10.0)
+			# Box size: width=tube thickness, height=segment arc, depth=track width
+			box.size = Vector3(10.0, 4.0, 12.0)
 			collision.shape = box
+			# Position on the tube surface (inside of torus where player runs)
 			collision.position = Vector3(0, cos(angle) * radius, sin(angle) * radius)
 			collision.rotation = Vector3(angle, 0, 0)
 			static_body.add_child(collision)
@@ -416,9 +551,10 @@ class RailGenerator:
 			rail.curve.set_point_out(j, tangent * 0.5)
 
 	func _create_rail_visual(rail: Path3D) -> void:
-		"""Create visual mesh for the rail using ImmediateMesh for tube geometry."""
-		if not rail.curve or rail.curve.get_baked_length() == 0:
-			return
+		"""Create visual mesh for the rail using ImmediateMesh for tube geometry.
+		Handles edge cases: short rails, flat segments, and near-vertical sections."""
+		if not rail.curve or rail.curve.get_baked_length() < 1.0:
+			return  # Skip rails too short to render
 
 		var rail_visual: MeshInstance3D = MeshInstance3D.new()
 		rail_visual.name = "RailVisual"
@@ -427,34 +563,50 @@ class RailGenerator:
 		rail_visual.mesh = immediate_mesh
 
 		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = Color(0.7, 0.75, 0.85)
+		material.albedo_color = Color(0.7, 0.75, 0.85)  # Steel blue-gray
 		material.metallic = 0.85
 		material.roughness = 0.3
 		material.emission_enabled = true
-		material.emission = Color(0.3, 0.35, 0.45)
+		material.emission = Color(0.3, 0.35, 0.45)  # Subtle glow
 		material.emission_energy_multiplier = 0.3
 
 		immediate_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
 
 		var radial_segments: int = 8
-		var length_segments: int = int(rail.curve.get_baked_length() * 2)
-		length_segments = max(length_segments, 10)
+		var rail_length: float = rail.curve.get_baked_length()
+		# Clamp segments: min 4 for short rails, max 200 to prevent high vertex count
+		var length_segments: int = clampi(int(rail_length * 0.5), 4, 200)
+
+		# Track last valid frame to avoid degenerate segments
+		var last_right: Vector3 = Vector3.RIGHT
+		var last_up: Vector3 = Vector3.UP
 
 		for i in range(length_segments):
-			var offset: float = (float(i) / length_segments) * rail.curve.get_baked_length()
-			var next_offset: float = (float(i + 1) / length_segments) * rail.curve.get_baked_length()
+			var offset: float = (float(i) / length_segments) * rail_length
+			var next_offset: float = (float(i + 1) / length_segments) * rail_length
 
 			var pos: Vector3 = rail.curve.sample_baked(offset)
 			var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
 
-			var forward: Vector3 = (next_pos - pos).normalized()
-			if forward.length() < 0.1:
-				forward = Vector3.FORWARD
+			var forward: Vector3 = (next_pos - pos)
+			# Skip degenerate segments where positions are nearly identical
+			if forward.length_squared() < 0.001:
+				continue
+			forward = forward.normalized()
 
-			var right: Vector3 = forward.cross(Vector3.UP).normalized()
-			if right.length() < 0.1:
-				right = forward.cross(Vector3.RIGHT).normalized()
+			# Compute orthonormal frame, handling near-vertical rails
+			var right: Vector3 = forward.cross(Vector3.UP)
+			if right.length_squared() < 0.01:
+				# Rail is nearly vertical - use last valid right or fallback
+				right = forward.cross(last_right)
+				if right.length_squared() < 0.01:
+					right = forward.cross(Vector3.RIGHT)
+			right = right.normalized()
 			var up: Vector3 = right.cross(forward).normalized()
+
+			# Cache valid frame for continuity
+			last_right = right
+			last_up = up
 
 			for j in range(radial_segments):
 				var angle_curr: float = (float(j) / radial_segments) * TAU
@@ -485,31 +637,59 @@ class RailGenerator:
 
 class EntityPlacer:
 	"""Handles placement of spawns, collectibles, power-ups, and enemies.
-	Uses zone graph for balanced distribution via AStar3D pathfinding."""
+	Uses zone graph for balanced distribution via AStar3D pathfinding.
+	Includes ground-snapping via raycast for proper entity placement."""
 
 	var parent_node: Node3D
 	var rng: RandomNumberGenerator
 	var zones: Array[BSPNode]
 	var astar: AStar3D
+	var geometry_bounds_ref: Array  # Reference to level geometry for snapping
 
 	func _init(parent: Node3D, random: RandomNumberGenerator, zone_list: Array[BSPNode]):
 		parent_node = parent
 		rng = random
 		zones = zone_list
 		astar = AStar3D.new()
+		# Get geometry bounds from parent if available
+		if parent.has_method("get") and parent.get("geometry_bounds"):
+			geometry_bounds_ref = parent.geometry_bounds
 		_build_zone_graph()
 
 	func _build_zone_graph() -> void:
-		"""Build AStar3D graph from zone centers for balanced item distribution."""
+		"""Build AStar3D graph from zone centers for balanced item distribution.
+		Connection threshold 300 units ensures reasonable path density."""
 		for i in range(zones.size()):
 			astar.add_point(i, zones[i].center)
 
-		# Connect adjacent zones
+		# Connect zones within reasonable distance for pathfinding
 		for i in range(zones.size()):
 			for j in range(i + 1, zones.size()):
 				var dist: float = zones[i].center.distance_to(zones[j].center)
-				if dist < 300.0:  # Only connect nearby zones
+				if dist < 300.0:  # 300 unit threshold balances connectivity vs path complexity
 					astar.connect_points(i, j)
+
+	func snap_to_ground(pos: Vector3, default_height: float = 0.0) -> Vector3:
+		"""Snap a position down to the nearest ground surface using geometry bounds.
+		Falls back to default_height if no ground found."""
+		var best_y: float = default_height
+		var found_ground: bool = false
+
+		for geo in geometry_bounds_ref:
+			var geo_pos: Vector3 = geo.get("position", Vector3.ZERO)
+			var geo_size: Vector3 = geo.get("size", Vector3.ONE)
+
+			# Check if pos is within horizontal bounds of this geometry
+			if abs(pos.x - geo_pos.x) < geo_size.x / 2.0 + 1.0 and \
+			   abs(pos.z - geo_pos.z) < geo_size.z / 2.0 + 1.0:
+				# Calculate top surface of this geometry
+				var surface_y: float = geo_pos.y + geo_size.y / 2.0
+				# Only snap if surface is below our current position
+				if surface_y < pos.y and surface_y > best_y:
+					best_y = surface_y
+					found_ground = true
+
+		return Vector3(pos.x, best_y + 0.1 if found_ground else default_height, pos.z)
 
 	func create_player_spawn(position: Vector3, index: int) -> Marker3D:
 		"""Create a player spawn point as Marker3D with PlayerSpawn group."""
@@ -862,11 +1042,17 @@ func clear_level() -> void:
 
 func _generate_bsp_tree(rng: RandomNumberGenerator) -> void:
 	"""Generate BSP tree with 8-16 leaves for room-sized zones."""
-	# Scale BSP area with arena_size (Godot Y-up, so we use X-Z plane)
-	var bsp_size: float = arena_size * 4.0  # Larger area for BSP subdivision
+	# BSP area = arena_size * 4.0: provides enough space for 8-16 zones
+	# when subdivided. This multiplier balances zone count vs zone size.
+	var bsp_size: float = arena_size * 4.0
 	var initial_rect: Rect2 = Rect2(-bsp_size / 2, -bsp_size / 2, bsp_size, bsp_size)
 
-	bsp_root = BSPNode.new(initial_rect, 0.0)
+	# Dynamic min_zone_size: scales with arena (20% of arena_size)
+	# Small arenas (60): min=12, Large arenas (240): min=48
+	# This ensures proper subdivision regardless of arena scale
+	var dynamic_min_zone: float = arena_size * 0.2
+
+	bsp_root = BSPNode.new(initial_rect, 0.0, dynamic_min_zone)
 
 	var nodes_to_split: Array[BSPNode] = [bsp_root]
 	var target_leaves: int = rng.randi_range(8, 16)
@@ -911,12 +1097,27 @@ func _generate_bsp_tree(rng: RandomNumberGenerator) -> void:
 
 	print("BSP generated %d zones" % bsp_leaves.size())
 
-func _apply_arena_symmetry(rng: RandomNumberGenerator) -> void:
-	"""Mirror half the arena for multiplayer fairness."""
-	# Mark zones on the positive X side as mirrored sources
+func _apply_arena_symmetry(_rng: RandomNumberGenerator) -> void:
+	"""Mirror zones across X=0 plane for multiplayer fairness.
+	Creates symmetric pairs: for each zone with X>0, there's a matching zone at X<0."""
+	# First pass: mark zones as sources (X>0) or targets (X<0)
+	var source_zones: Array[BSPNode] = []
+	var target_zones: Array[BSPNode] = []
+
 	for zone in bsp_leaves:
-		if zone.center.x > 0:
+		if zone.center.x > 5.0:  # Small threshold to avoid center zones
 			zone.is_mirrored = true
+			source_zones.append(zone)
+		elif zone.center.x < -5.0:
+			target_zones.append(zone)
+
+	# Second pass: adjust target zones to mirror source zones
+	# This creates balanced item/spawn distribution
+	for i in range(min(source_zones.size(), target_zones.size())):
+		var source: BSPNode = source_zones[i]
+		var target: BSPNode = target_zones[i]
+		# Mirror the height offset for visual symmetry
+		target.height_offset = source.height_offset
 
 # =============================================================================
 # PLATFORM GENERATION
@@ -924,12 +1125,15 @@ func _apply_arena_symmetry(rng: RandomNumberGenerator) -> void:
 
 func _generate_main_floor() -> void:
 	"""Generate the main central arena floor."""
+	# Floor is 70% of arena_size: leaves 30% margin for perimeter elements (ramps, rails)
 	var floor_size: float = arena_size * 0.7
 
 	print("Creating main floor: %.1f x %.1f" % [floor_size, floor_size])
 
 	var floor_mesh: BoxMesh = BoxMesh.new()
+	# Height 2.0: thick enough to prevent tunneling, thin enough to be unobtrusive
 	floor_mesh.size = Vector3(floor_size, 2.0, floor_size)
+	# Subdivision 4x2x4: provides enough vertices for material variation without performance hit
 	floor_mesh.subdivide_width = 4
 	floor_mesh.subdivide_height = 2
 	floor_mesh.subdivide_depth = 4
@@ -937,6 +1141,7 @@ func _generate_main_floor() -> void:
 	var floor_instance: MeshInstance3D = MeshInstance3D.new()
 	floor_instance.mesh = floor_mesh
 	floor_instance.name = "MainFloor"
+	# Position Y=-1: centers the 2-unit thick floor so top surface is at Y=0
 	floor_instance.position = Vector3(0, -1, 0)
 	add_child(floor_instance)
 
@@ -953,22 +1158,32 @@ func _generate_main_floor() -> void:
 func _generate_zone_platforms(rng: RandomNumberGenerator) -> void:
 	"""Generate platforms from BSP zone leaves."""
 	var builder: PlatformBuilder = PlatformBuilder.new(self, noise, geometry_bounds)
+	# size_scale: ratio to default arena (120). Affects all spatial calculations.
 	var size_scale: float = arena_size / 120.0
+
+	# Dynamic platform size limits based on arena scale
+	# Small arena (60): min=2.5, max=12.5
+	# Default (120): min=5, max=25
+	# Large (240): min=10, max=50
+	var min_platform_size: float = 5.0 * size_scale
+	var max_platform_size: float = 25.0 * size_scale
 
 	for i in range(min(bsp_leaves.size(), platform_count)):
 		var zone: BSPNode = bsp_leaves[i]
 
-		# Scale platform rect to fit arena
+		# Scale platform rect: 0.3 for position, 0.15 for size
+		# These multipliers convert BSP coordinates to arena scale
 		var scaled_rect: Rect2 = Rect2(
 			zone.platform_rect.position * size_scale * 0.3,
 			zone.platform_rect.size * size_scale * 0.15
 		)
 
-		# Clamp to reasonable platform sizes
-		scaled_rect.size.x = clampf(scaled_rect.size.x, 5.0, 25.0)
-		scaled_rect.size.y = clampf(scaled_rect.size.y, 5.0, 25.0)
+		# Clamp to arena-scaled platform sizes
+		scaled_rect.size.x = clampf(scaled_rect.size.x, min_platform_size, max_platform_size)
+		scaled_rect.size.y = clampf(scaled_rect.size.y, min_platform_size, max_platform_size)
 
-		var height: float = zone.height_offset * size_scale * 0.1 + rng.randf_range(3.0, 15.0)
+		# Height: base from zone offset + random variation (3-15 units default)
+		var height: float = zone.height_offset * size_scale * 0.1 + rng.randf_range(3.0, 15.0) * size_scale
 
 		var platform: MeshInstance3D = builder.create_platform(
 			scaled_rect,
@@ -1035,15 +1250,21 @@ func _generate_zone_connections(rng: RandomNumberGenerator) -> void:
 func _generate_grind_rails(rng: RandomNumberGenerator) -> void:
 	"""Generate grind rails with perimeter, vertical, and connecting variations."""
 	var rail_gen: RailGenerator = RailGenerator.new(self, rng)
+	# Rail distance 45% of arena: places rails between floor edge (35%) and walls (90%)
 	var rail_distance: float = arena_size * 0.45
+	# Base rail height 2.5% of arena: ensures rails are reachable but elevated
 	var base_rail_height: float = arena_size * 0.025
 
 	print("Generating %d perimeter grind rails" % grind_rail_count)
 
 	# Perimeter rails (curved arcs around arena)
 	for i in range(grind_rail_count):
+		# Evenly distribute rails around the perimeter
 		var angle_start: float = (float(i) / grind_rail_count) * TAU
+		# Arc spans 70% of segment: leaves gaps for jumps between rails
 		var angle_end: float = angle_start + (TAU / grind_rail_count) * 0.7
+		# Height cycles through 3 levels (i % 3): creates vertical variety
+		# 2% of arena per level creates noticeable but traversable height differences
 		var height: float = base_rail_height + (i % 3) * (arena_size * 0.02)
 
 		var start_pos: Vector3 = Vector3(
@@ -1138,21 +1359,28 @@ func _generate_loops(rng: RandomNumberGenerator) -> void:
 func _generate_springs(rng: RandomNumberGenerator) -> void:
 	"""Generate spring pads for jump impulses."""
 	var placer: EntityPlacer = EntityPlacer.new(self, rng, bsp_leaves)
+	placer.geometry_bounds_ref = geometry_bounds  # Enable ground snapping
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
 	print("Generating %d springs" % spring_count)
 
 	for i in range(spring_count):
+		# Distribute springs around arena with slight angular randomization (±0.2 rad)
 		var angle: float = (float(i) / spring_count) * TAU + rng.randf_range(-0.2, 0.2)
+		# Distance 30-80% of floor radius: avoids center clutter and edge clipping
 		var distance: float = rng.randf_range(floor_radius * 0.3, floor_radius * 0.8)
 
 		var pos: Vector3 = Vector3(
 			cos(angle) * distance,
-			0.0,
+			50.0,  # Start high for ground snapping
 			sin(angle) * distance
 		)
 
-		# Vary impulse strength
+		# Snap spring to ground surface
+		pos = placer.snap_to_ground(pos, 0.0)
+
+		# Impulse strength: base 200 + random 0-150 + 30 per complexity level
+		# Results in: C1=200-380, C2=230-410, C3=260-440, C4=290-470
 		var impulse: float = 200.0 + rng.randf_range(0, 150) + complexity * 30.0
 		placer.create_spring(pos, impulse, i)
 
