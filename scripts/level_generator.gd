@@ -42,6 +42,10 @@ extends Node3D
 			_save_generated_scene()
 		save_as_scene = false
 
+@export_group("Runtime Settings")
+## Enable automatic generation on _ready() in builds (not editor)
+@export var auto_generate_on_ready: bool = true
+
 # =============================================================================
 # INTERNAL STATE
 # =============================================================================
@@ -105,22 +109,28 @@ class BSPNode:
 
 	func split(horizontal: bool, rng: RandomNumberGenerator) -> bool:
 		"""Split this node horizontally or vertically.
-		Returns true if split was successful."""
+		Returns true if split was successful. Child heights ACCUMULATE from parent."""
 		if not can_split():
 			return false
 
 		# Split ratio 0.4-0.6 ensures neither child is too small/large
 		var split_ratio: float = rng.randf_range(0.4, 0.6)
 
+		# Height variation is ADDED to parent height for proper stacking
+		# One child slightly higher, one slightly lower for visual variety
+		var height_variation: float = rng.randf_range(0, HEIGHT_VARIATION_MAX * 0.3)
+
 		if horizontal and bounds.size.y >= min_zone_size * 2:
 			var split_y: float = bounds.position.y + bounds.size.y * split_ratio
-			var height_left: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
-			var height_right: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
+			# Left child: parent height + small variation
+			# Right child: parent height + different variation (creates steps)
+			var height_left: float = height_offset + height_variation
+			var height_right: float = height_offset + rng.randf_range(0, HEIGHT_VARIATION_MAX * 0.3)
 
 			left = BSPNode.new(
 				Rect2(bounds.position.x, bounds.position.y, bounds.size.x, split_y - bounds.position.y),
 				height_left,
-				min_zone_size  # Propagate min_zone_size to children
+				min_zone_size
 			)
 			right = BSPNode.new(
 				Rect2(bounds.position.x, split_y, bounds.size.x, bounds.end.y - split_y),
@@ -131,8 +141,8 @@ class BSPNode:
 
 		elif not horizontal and bounds.size.x >= min_zone_size * 2:
 			var split_x: float = bounds.position.x + bounds.size.x * split_ratio
-			var height_left: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
-			var height_right: float = rng.randf_range(HEIGHT_VARIATION_MIN, HEIGHT_VARIATION_MAX)
+			var height_left: float = height_offset + height_variation
+			var height_right: float = height_offset + rng.randf_range(0, HEIGHT_VARIATION_MAX * 0.3)
 
 			left = BSPNode.new(
 				Rect2(bounds.position.x, bounds.position.y, split_x - bounds.position.x, bounds.size.y),
@@ -247,7 +257,8 @@ class PlatformBuilder:
 
 	func _create_noise_perturbed_box(size: Vector3, world_pos: Vector3, seed_offset: int) -> ArrayMesh:
 		"""Create a box mesh with noise-perturbed edges for organic island-like shapes.
-		Perturbs horizontal edges (X/Z) while keeping top/bottom flat for playability."""
+		Perturbs horizontal edges (X/Z) while keeping top/bottom flat for playability.
+		Includes UV coordinates for proper texturing."""
 		var mesh: ArrayMesh = ArrayMesh.new()
 		var surface_tool: SurfaceTool = SurfaceTool.new()
 		surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -256,9 +267,14 @@ class PlatformBuilder:
 		# Noise perturbation strength: 10% of smallest dimension for subtle organic feel
 		var perturb_strength: float = min(size.x, size.z) * 0.1
 
+		# Use unique seed per platform: combine world position and index for variety
+		# This prevents similar patterns across platforms
+		var unique_seed: float = world_pos.x * 73.0 + world_pos.z * 137.0 + seed_offset * 1000.0
+
 		# Generate vertices for a box with perturbed horizontal positions
 		# Top face (Y+) - flat for gameplay
 		var top_verts: Array[Vector3] = []
+		var top_uvs: Array[Vector2] = []  # UV coordinates for texturing
 		var subdivisions: int = 4
 		for iz in range(subdivisions + 1):
 			for ix in range(subdivisions + 1):
@@ -269,13 +285,14 @@ class PlatformBuilder:
 
 				# Apply noise to edge vertices only (not center)
 				var edge_factor: float = 1.0 - (1.0 - abs(u - 0.5) * 2.0) * (1.0 - abs(v - 0.5) * 2.0)
-				var noise_val: float = noise.get_noise_2d(world_pos.x + x + seed_offset, world_pos.z + z)
+				var noise_val: float = noise.get_noise_2d(unique_seed + x, unique_seed * 0.7 + z)
 				x += noise_val * perturb_strength * edge_factor
 				z += noise_val * perturb_strength * edge_factor * 0.7  # Slightly less on Z
 
 				top_verts.append(Vector3(x, half.y, z))
+				top_uvs.append(Vector2(u, v))
 
-		# Add top face triangles
+		# Add top face triangles with UVs
 		surface_tool.set_normal(Vector3.UP)
 		for iz in range(subdivisions):
 			for ix in range(subdivisions):
@@ -284,19 +301,19 @@ class PlatformBuilder:
 				var i2: int = i0 + (subdivisions + 1)
 				var i3: int = i2 + 1
 
-				surface_tool.add_vertex(top_verts[i0])
-				surface_tool.add_vertex(top_verts[i2])
-				surface_tool.add_vertex(top_verts[i1])
+				surface_tool.set_uv(top_uvs[i0]); surface_tool.add_vertex(top_verts[i0])
+				surface_tool.set_uv(top_uvs[i2]); surface_tool.add_vertex(top_verts[i2])
+				surface_tool.set_uv(top_uvs[i1]); surface_tool.add_vertex(top_verts[i1])
 
-				surface_tool.add_vertex(top_verts[i1])
-				surface_tool.add_vertex(top_verts[i2])
-				surface_tool.add_vertex(top_verts[i3])
+				surface_tool.set_uv(top_uvs[i1]); surface_tool.add_vertex(top_verts[i1])
+				surface_tool.set_uv(top_uvs[i2]); surface_tool.add_vertex(top_verts[i2])
+				surface_tool.set_uv(top_uvs[i3]); surface_tool.add_vertex(top_verts[i3])
 
-		# Bottom face (Y-) - flat
+		# Bottom face (Y-) - flat, UVs flipped
 		surface_tool.set_normal(Vector3.DOWN)
 		var bottom_verts: Array[Vector3] = []
-		for v in top_verts:
-			bottom_verts.append(Vector3(v.x, -half.y, v.z))
+		for vert in top_verts:
+			bottom_verts.append(Vector3(vert.x, -half.y, vert.z))
 
 		for iz in range(subdivisions):
 			for ix in range(subdivisions):
@@ -305,59 +322,84 @@ class PlatformBuilder:
 				var i2: int = i0 + (subdivisions + 1)
 				var i3: int = i2 + 1
 
-				surface_tool.add_vertex(bottom_verts[i0])
-				surface_tool.add_vertex(bottom_verts[i1])
-				surface_tool.add_vertex(bottom_verts[i2])
+				surface_tool.set_uv(top_uvs[i0]); surface_tool.add_vertex(bottom_verts[i0])
+				surface_tool.set_uv(top_uvs[i1]); surface_tool.add_vertex(bottom_verts[i1])
+				surface_tool.set_uv(top_uvs[i2]); surface_tool.add_vertex(bottom_verts[i2])
 
-				surface_tool.add_vertex(bottom_verts[i1])
-				surface_tool.add_vertex(bottom_verts[i3])
-				surface_tool.add_vertex(bottom_verts[i2])
+				surface_tool.set_uv(top_uvs[i1]); surface_tool.add_vertex(bottom_verts[i1])
+				surface_tool.set_uv(top_uvs[i3]); surface_tool.add_vertex(bottom_verts[i3])
+				surface_tool.set_uv(top_uvs[i2]); surface_tool.add_vertex(bottom_verts[i2])
 
 		# Side faces - connect top and bottom with perturbed edges
-		_add_side_faces(surface_tool, top_verts, bottom_verts, subdivisions)
+		_add_side_faces(surface_tool, top_verts, bottom_verts, subdivisions, size)
 
 		surface_tool.generate_normals()
 		return surface_tool.commit()
 
-	func _add_side_faces(st: SurfaceTool, top: Array[Vector3], bottom: Array[Vector3], subdivs: int) -> void:
-		"""Add side faces connecting perturbed top/bottom vertices."""
+	func _add_side_faces(st: SurfaceTool, top: Array[Vector3], bottom: Array[Vector3], subdivs: int, size: Vector3) -> void:
+		"""Add side faces connecting perturbed top/bottom vertices with UVs."""
 		var stride: int = subdivs + 1
+		var height: float = size.y
 
 		# Front face (Z+)
 		for ix in range(subdivs):
+			var u0: float = float(ix) / subdivs
+			var u1: float = float(ix + 1) / subdivs
 			var t0: Vector3 = top[subdivs * stride + ix]
 			var t1: Vector3 = top[subdivs * stride + ix + 1]
 			var b0: Vector3 = bottom[subdivs * stride + ix]
 			var b1: Vector3 = bottom[subdivs * stride + ix + 1]
-			st.add_vertex(t0); st.add_vertex(b0); st.add_vertex(t1)
-			st.add_vertex(t1); st.add_vertex(b0); st.add_vertex(b1)
+			st.set_uv(Vector2(u0, 0)); st.add_vertex(t0)
+			st.set_uv(Vector2(u0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(u1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(u1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(u0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(u1, 1)); st.add_vertex(b1)
 
 		# Back face (Z-)
 		for ix in range(subdivs):
+			var u0: float = float(ix) / subdivs
+			var u1: float = float(ix + 1) / subdivs
 			var t0: Vector3 = top[ix]
 			var t1: Vector3 = top[ix + 1]
 			var b0: Vector3 = bottom[ix]
 			var b1: Vector3 = bottom[ix + 1]
-			st.add_vertex(t0); st.add_vertex(t1); st.add_vertex(b0)
-			st.add_vertex(t1); st.add_vertex(b1); st.add_vertex(b0)
+			st.set_uv(Vector2(u0, 0)); st.add_vertex(t0)
+			st.set_uv(Vector2(u1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(u0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(u1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(u1, 1)); st.add_vertex(b1)
+			st.set_uv(Vector2(u0, 1)); st.add_vertex(b0)
 
 		# Right face (X+)
 		for iz in range(subdivs):
+			var v0: float = float(iz) / subdivs
+			var v1: float = float(iz + 1) / subdivs
 			var t0: Vector3 = top[iz * stride + subdivs]
 			var t1: Vector3 = top[(iz + 1) * stride + subdivs]
 			var b0: Vector3 = bottom[iz * stride + subdivs]
 			var b1: Vector3 = bottom[(iz + 1) * stride + subdivs]
-			st.add_vertex(t0); st.add_vertex(t1); st.add_vertex(b0)
-			st.add_vertex(t1); st.add_vertex(b1); st.add_vertex(b0)
+			st.set_uv(Vector2(v0, 0)); st.add_vertex(t0)
+			st.set_uv(Vector2(v1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(v0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(v1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(v1, 1)); st.add_vertex(b1)
+			st.set_uv(Vector2(v0, 1)); st.add_vertex(b0)
 
 		# Left face (X-)
 		for iz in range(subdivs):
+			var v0: float = float(iz) / subdivs
+			var v1: float = float(iz + 1) / subdivs
 			var t0: Vector3 = top[iz * stride]
 			var t1: Vector3 = top[(iz + 1) * stride]
 			var b0: Vector3 = bottom[iz * stride]
 			var b1: Vector3 = bottom[(iz + 1) * stride]
-			st.add_vertex(t0); st.add_vertex(b0); st.add_vertex(t1)
-			st.add_vertex(t1); st.add_vertex(b0); st.add_vertex(b1)
+			st.set_uv(Vector2(v0, 0)); st.add_vertex(t0)
+			st.set_uv(Vector2(v0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(v1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(v1, 0)); st.add_vertex(t1)
+			st.set_uv(Vector2(v0, 1)); st.add_vertex(b0)
+			st.set_uv(Vector2(v1, 1)); st.add_vertex(b1)
 
 	func create_sloped_ramp(start_pos: Vector3, end_pos: Vector3, width: float, name_prefix: String, index: int) -> MeshInstance3D:
 		"""Create a sloped ramp between two heights for speed boosts."""
@@ -944,6 +986,8 @@ func _on_body_entered(body: Node3D) -> void:
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		return  # Don't auto-generate in editor
+	if not auto_generate_on_ready:
+		return  # Manual generation only
 	configure_for_complexity()
 	generate_level()
 
@@ -1417,6 +1461,7 @@ func _generate_player_spawns(rng: RandomNumberGenerator) -> void:
 func _generate_collectibles(rng: RandomNumberGenerator) -> void:
 	"""Generate collectible rings scattered throughout arena."""
 	var placer: EntityPlacer = EntityPlacer.new(self, rng, bsp_leaves)
+	placer.geometry_bounds_ref = geometry_bounds  # Enable ground snapping
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
 	print("Generating %d rings" % ring_count)
@@ -1424,13 +1469,18 @@ func _generate_collectibles(rng: RandomNumberGenerator) -> void:
 	for i in range(ring_count):
 		var angle: float = rng.randf() * TAU
 		var distance: float = rng.randf_range(5.0, floor_radius * 0.9)
-		var height: float = rng.randf_range(2.0, 20.0)
+		# Rings float above ground: height above surface (2-8 units)
+		var float_height: float = rng.randf_range(2.0, 8.0)
 
 		var pos: Vector3 = Vector3(
 			cos(angle) * distance,
-			height,
+			50.0,  # Start high for ground snapping
 			sin(angle) * distance
 		)
+
+		# Snap to ground then add float height
+		pos = placer.snap_to_ground(pos, 0.0)
+		pos.y += float_height
 
 		# Check if position is clear
 		if is_position_clear(pos, 2.0):
@@ -1439,6 +1489,7 @@ func _generate_collectibles(rng: RandomNumberGenerator) -> void:
 func _generate_powerups(rng: RandomNumberGenerator) -> void:
 	"""Generate power-ups at strategic chokepoints."""
 	var placer: EntityPlacer = EntityPlacer.new(self, rng, bsp_leaves)
+	placer.geometry_bounds_ref = geometry_bounds  # Enable ground snapping
 	var floor_radius: float = (arena_size * 0.7) / 2.0
 
 	var powerup_types: Array[String] = ["speed", "invincibility", "magnet"]
@@ -1448,13 +1499,18 @@ func _generate_powerups(rng: RandomNumberGenerator) -> void:
 	for i in range(powerup_count):
 		var angle: float = (float(i) / powerup_count) * TAU + rng.randf_range(-0.3, 0.3)
 		var distance: float = floor_radius * 0.5
-		var height: float = 5.0 + rng.randf_range(0, 15)
+		# Power-ups float higher than rings (3-6 units above ground)
+		var float_height: float = 3.0 + rng.randf_range(0, 3)
 
 		var pos: Vector3 = Vector3(
 			cos(angle) * distance,
-			height,
+			50.0,  # Start high for ground snapping
 			sin(angle) * distance
 		)
+
+		# Snap to ground then add float height
+		pos = placer.snap_to_ground(pos, 0.0)
+		pos.y += float_height
 
 		var powerup_type: String = powerup_types[rng.randi() % powerup_types.size()]
 		placer.create_powerup(pos, powerup_type, i)
