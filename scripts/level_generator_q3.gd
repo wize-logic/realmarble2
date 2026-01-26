@@ -1456,36 +1456,37 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 func generate_grind_rails() -> void:
 	## Generate strategic grind rails - sparingly placed to avoid clutter
-	## Rails connect elevated areas or provide shortcuts across the arena
+	## Rails connect elevated areas or span across open spaces
 	var scale: float = arena_size / 140.0
 	var floor_extent: float = (arena_size * 0.6) / 2.0
 
 	rail_positions.clear()
 
-	# Sparse rail count: 1-2 at low complexity, up to 4 at high complexity
+	# Very sparse rail count: 1 rail at low complexity, up to 2 at high complexity
 	# This keeps rails feeling special and strategic rather than cluttered
-	var num_target_rails: int = 1 + (complexity / 2)  # 1, 1, 2, 2 for complexity 1-4
+	var num_target_rails: int = 1 + (complexity / 3)  # 1, 1, 2, 2 for complexity 1-4
 	var rails_created: int = 0
 	var attempts: int = 0
-	var max_attempts: int = num_target_rails * 15
+	var max_attempts: int = num_target_rails * 30  # More attempts for better placement
 
-	# Generate elevated connector rails between platforms
 	while rails_created < num_target_rails and attempts < max_attempts:
 		attempts += 1
 
-		# Find two elevated positions to connect with a rail
-		var start_pos: Vector3 = find_elevated_rail_anchor(floor_extent, scale)
+		# Strategy: Create rails that span across open areas at elevated height
+		# This provides strategic shortcuts without cluttering ground space
+		var start_pos: Vector3 = _find_strategic_rail_endpoint(floor_extent, scale)
 		if start_pos == Vector3.ZERO:
 			continue
 
-		var end_pos: Vector3 = find_elevated_rail_anchor(floor_extent, scale)
+		# Find an endpoint on the opposite side of the arena for strategic value
+		var end_pos: Vector3 = _find_opposing_rail_endpoint(start_pos, floor_extent, scale)
 		if end_pos == Vector3.ZERO:
 			continue
 
-		# Ensure rails are long enough to be useful and not too long
+		# Validate the rail path
 		var distance: float = start_pos.distance_to(end_pos)
-		var min_length: float = 15.0 * scale
-		var max_length: float = 50.0 * scale
+		var min_length: float = 20.0 * scale  # Longer minimum for strategic value
+		var max_length: float = 60.0 * scale
 
 		if distance < min_length or distance > max_length:
 			continue
@@ -1493,7 +1494,7 @@ func generate_grind_rails() -> void:
 		# Check distance to other rails to avoid clustering
 		var too_close_to_rail: bool = false
 		for existing in rail_positions:
-			if start_pos.distance_to(existing) < 12.0 * scale:
+			if start_pos.distance_to(existing) < 20.0 * scale or end_pos.distance_to(existing) < 20.0 * scale:
 				too_close_to_rail = true
 				break
 		if too_close_to_rail:
@@ -1502,15 +1503,19 @@ func generate_grind_rails() -> void:
 		# Check distance to jump pads and teleporters
 		var too_close_to_interactive: bool = false
 		for pad_pos in jump_pad_positions:
-			if start_pos.distance_to(pad_pos) < 8.0 * scale or end_pos.distance_to(pad_pos) < 8.0 * scale:
+			if start_pos.distance_to(pad_pos) < 10.0 * scale or end_pos.distance_to(pad_pos) < 10.0 * scale:
 				too_close_to_interactive = true
 				break
 		for tele_pos in teleporter_positions:
-			if start_pos.distance_to(tele_pos) < 8.0 * scale or end_pos.distance_to(tele_pos) < 8.0 * scale:
+			if start_pos.distance_to(tele_pos) < 10.0 * scale or end_pos.distance_to(tele_pos) < 10.0 * scale:
 				too_close_to_interactive = true
 				break
 
 		if too_close_to_interactive:
+			continue
+
+		# Validate the rail path has clearance from geometry along its entire length
+		if not _validate_rail_clearance(start_pos, end_pos, scale):
 			continue
 
 		# Create the rail
@@ -1521,44 +1526,112 @@ func generate_grind_rails() -> void:
 
 	print("Generated %d strategic grind rails" % rails_created)
 
-func find_elevated_rail_anchor(floor_extent: float, scale: float) -> Vector3:
-	## Find a valid elevated position for a rail anchor point
+func _find_strategic_rail_endpoint(floor_extent: float, scale: float) -> Vector3:
+	## Find a strategic endpoint for a rail - elevated and clear of geometry
 	## Returns Vector3.ZERO if no valid position found
 
-	# Try to place on elevated structures or platform edges
-	var rail_height: float = rng.randf_range(3.0, 8.0) * scale  # Elevated but not too high
+	# Rails should be high enough to pass over most structures
+	var rail_height: float = rng.randf_range(8.0, 14.0) * scale
 
-	for _attempt in range(10):
-		# Random position within arena bounds
+	for _attempt in range(15):
+		# Place near arena edges for strategic cross-arena rails
+		var angle: float = rng.randf() * TAU
+		var dist: float = floor_extent * rng.randf_range(0.5, 0.8)
+
 		var pos: Vector3 = Vector3(
-			rng.randf_range(-floor_extent * 0.65, floor_extent * 0.65),
+			cos(angle) * dist,
 			rail_height,
-			rng.randf_range(-floor_extent * 0.65, floor_extent * 0.65)
+			sin(angle) * dist
 		)
 
-		# Ensure position doesn't overlap with structures (using cell check at ground level)
-		var ground_pos: Vector3 = Vector3(pos.x, 0, pos.z)
-		if not is_cell_available(ground_pos, 0):
-			# Position is near a structure - good for rail anchoring
-			return pos
-
-		# Also accept positions near the edge of the arena (perimeter rails)
-		var dist_from_center: float = Vector2(pos.x, pos.z).length()
-		if dist_from_center > floor_extent * 0.5:
+		# Ensure this position has clearance from structures below
+		if _has_vertical_clearance(pos, scale):
 			return pos
 
 	return Vector3.ZERO
 
+func _find_opposing_rail_endpoint(start_pos: Vector3, floor_extent: float, scale: float) -> Vector3:
+	## Find an endpoint roughly opposite to start_pos for strategic value
+	## Returns Vector3.ZERO if no valid position found
+
+	var start_angle: float = atan2(start_pos.z, start_pos.x)
+	var rail_height: float = rng.randf_range(8.0, 14.0) * scale
+
+	for _attempt in range(15):
+		# Aim for roughly opposite side with some variation
+		var angle_offset: float = PI + rng.randf_range(-0.6, 0.6)  # ~180 degrees opposite
+		var angle: float = start_angle + angle_offset
+		var dist: float = floor_extent * rng.randf_range(0.5, 0.8)
+
+		var pos: Vector3 = Vector3(
+			cos(angle) * dist,
+			rail_height,
+			sin(angle) * dist
+		)
+
+		# Ensure this position has clearance from structures below
+		if _has_vertical_clearance(pos, scale):
+			return pos
+
+	return Vector3.ZERO
+
+func _has_vertical_clearance(pos: Vector3, scale: float) -> bool:
+	## Check if a position has enough clearance from structures below
+	var min_clearance: float = 5.0 * scale
+
+	# Check the cell at ground level - if occupied, we need more height
+	var ground_pos: Vector3 = Vector3(pos.x, 0, pos.z)
+	if not is_cell_available(ground_pos, 1):
+		# There's a structure here - ensure we're high enough above it
+		# Estimate structure height based on complexity
+		var estimated_structure_height: float = (4.0 + complexity * 2.0) * scale
+		if pos.y < estimated_structure_height + min_clearance:
+			return false
+
+	return true
+
+func _validate_rail_clearance(start: Vector3, end: Vector3, scale: float) -> bool:
+	## Validate that the rail path has sufficient clearance from geometry
+	## Samples points along the rail path to check for obstructions
+
+	var min_clearance: float = 4.0 * scale
+	var num_samples: int = 10
+	var distance: float = start.distance_to(end)
+
+	# Calculate arc height for this rail (same as in create_grind_rail)
+	var arc_height: float = distance * 0.15 * scale
+
+	for i in range(num_samples):
+		var t: float = float(i) / (num_samples - 1)
+		var sample_pos: Vector3 = start.lerp(end, t)
+
+		# Add the arc height
+		sample_pos.y += sin(t * PI) * arc_height
+
+		# Check ground cell occupancy
+		var ground_pos: Vector3 = Vector3(sample_pos.x, 0, sample_pos.z)
+		if not is_cell_available(ground_pos, 1):
+			# Structure below - check clearance
+			var estimated_structure_height: float = (4.0 + complexity * 2.0) * scale
+			if sample_pos.y < estimated_structure_height + min_clearance:
+				return false
+
+		# Also check if rail goes too low (below reasonable height)
+		if sample_pos.y < 3.0 * scale:
+			return false
+
+	return true
+
 func create_grind_rail(start: Vector3, end: Vector3, index: int, scale: float) -> void:
-	## Create a grind rail between two points with a curved arc
+	## Create a grind rail between two points with a smooth arc
 	var rail: Path3D = GrindRailScript.new()
 	rail.name = "GrindRail%d" % index
 	rail.curve = Curve3D.new()
 
 	var distance: float = start.distance_to(end)
-	var num_points: int = max(8, int(distance / 3.0))  # More points for smoother curves
+	var num_points: int = max(8, int(distance / 4.0))  # Smooth curve
 
-	# Calculate arc height - higher for longer rails
+	# Calculate arc height - creates a nice curved path
 	var arc_height: float = distance * 0.15 * scale
 
 	for i in range(num_points):
@@ -1567,11 +1640,6 @@ func create_grind_rail(start: Vector3, end: Vector3, index: int, scale: float) -
 
 		# Add arc using sine curve (highest at middle)
 		pos.y += sin(t * PI) * arc_height
-
-		# Add slight lateral variation for visual interest
-		var perpendicular: Vector3 = (end - start).cross(Vector3.UP).normalized()
-		var lateral_offset: float = sin(t * PI * 2.0) * rng.randf_range(-1.0, 1.0) * scale
-		pos += perpendicular * lateral_offset
 
 		rail.curve.add_point(pos)
 
@@ -1600,7 +1668,7 @@ func _set_rail_tangents(rail: Path3D) -> void:
 		rail.curve.set_point_out(j, tangent * 0.5)
 
 func _create_rail_visual(rail: Path3D) -> void:
-	## Create visual mesh for the rail
+	## Create visual mesh for the rail (Compatibility renderer safe)
 	if not rail.curve or rail.curve.get_baked_length() < 1.0:
 		return
 
@@ -1610,9 +1678,9 @@ func _create_rail_visual(rail: Path3D) -> void:
 	var surface_tool: SurfaceTool = SurfaceTool.new()
 	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	var radial_segments: int = 8
+	var radial_segments: int = 6  # Reduced for performance
 	var rail_length: float = rail.curve.get_baked_length()
-	var length_segments: int = clampi(int(rail_length * 0.5), 4, 100)
+	var length_segments: int = clampi(int(rail_length * 0.4), 4, 80)
 
 	var last_right: Vector3 = Vector3.RIGHT
 	var last_up: Vector3 = Vector3.UP
@@ -1640,14 +1708,9 @@ func _create_rail_visual(rail: Path3D) -> void:
 		last_right = right
 		last_up = up
 
-		var u_offset: float = float(i) / length_segments
-		var u_next: float = float(i + 1) / length_segments
-
 		for j in range(radial_segments):
 			var angle_curr: float = (float(j) / radial_segments) * TAU
 			var angle_next: float = (float(j + 1) / radial_segments) * TAU
-			var v_curr: float = float(j) / radial_segments
-			var v_next: float = float(j + 1) / radial_segments
 
 			var offset_curr: Vector3 = (right * cos(angle_curr) + up * sin(angle_curr)) * RAIL_RADIUS
 			var offset_next_rad: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * RAIL_RADIUS
@@ -1662,41 +1725,29 @@ func _create_rail_visual(rail: Path3D) -> void:
 
 			# Triangle 1
 			surface_tool.set_normal(n1)
-			surface_tool.set_uv(Vector2(u_offset, v_curr))
 			surface_tool.add_vertex(v1)
-
 			surface_tool.set_normal(n2)
-			surface_tool.set_uv(Vector2(u_offset, v_next))
 			surface_tool.add_vertex(v2)
-
 			surface_tool.set_normal(n1)
-			surface_tool.set_uv(Vector2(u_next, v_curr))
 			surface_tool.add_vertex(v3)
 
 			# Triangle 2
 			surface_tool.set_normal(n2)
-			surface_tool.set_uv(Vector2(u_offset, v_next))
 			surface_tool.add_vertex(v2)
-
 			surface_tool.set_normal(n2)
-			surface_tool.set_uv(Vector2(u_next, v_next))
 			surface_tool.add_vertex(v4)
-
 			surface_tool.set_normal(n1)
-			surface_tool.set_uv(Vector2(u_next, v_curr))
 			surface_tool.add_vertex(v3)
 
 	rail_visual.mesh = surface_tool.commit()
 
-	# Create a metallic orange material for rails (distinct from other elements)
+	# Compatibility renderer safe material - unshaded with emission like jump pads
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.9, 0.5, 0.1)  # Orange
-	material.metallic = 0.8
-	material.metallic_specular = 0.6
-	material.roughness = 0.3
+	material.albedo_color = Color(0.9, 0.6, 0.2)  # Orange-yellow
 	material.emission_enabled = true
-	material.emission = Color(0.6, 0.3, 0.05)  # Subtle orange glow
-	material.emission_energy_multiplier = 0.5
+	material.emission = Color(0.7, 0.4, 0.1)  # Orange glow
+	material.emission_energy_multiplier = 1.5
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rail_visual.set_surface_override_material(0, material)
 
 	rail.add_child(rail_visual)
