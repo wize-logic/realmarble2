@@ -510,6 +510,8 @@ func clear_level() -> void:
 	corridors.clear()
 	map_brushes.clear()
 	map_entities.clear()
+	jump_pad_positions.clear()
+	teleporter_positions.clear()
 	bsp_root = null
 
 # ============================================================================
@@ -1359,30 +1361,52 @@ func generate_procedural_bridges() -> void:
 # JUMP PADS
 # ============================================================================
 
+# Store positions of interactive elements to filter spawns
+var jump_pad_positions: Array[Vector3] = []
+var teleporter_positions: Array[Vector3] = []
+
 func generate_jump_pads() -> void:
 	var scale: float = arena_size / 140.0
 	var floor_extent: float = (arena_size * 0.6) / 2.0
+	var pad_radius: float = 2.0 * scale
 
-	var jump_pad_positions: Array[Vector3] = [Vector3(0, 0, 0)]
+	jump_pad_positions.clear()
 
-	var num_extra_pads: int = 2 + complexity
-	for i in range(num_extra_pads):
+	# Try to place jump pads, checking for collisions with structures
+	var num_target_pads: int = 3 + complexity
+	var attempts: int = 0
+	var max_attempts: int = num_target_pads * 20
+
+	while jump_pad_positions.size() < num_target_pads and attempts < max_attempts:
+		attempts += 1
+
 		var pad_pos: Vector3 = Vector3(
 			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7),
 			0,
 			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7)
 		)
 
+		# Check if position is clear of structures
+		if not is_cell_available(pad_pos, 1):
+			continue
+
+		# Check distance to other jump pads
 		var too_close: bool = false
 		for existing in jump_pad_positions:
 			if pad_pos.distance_to(existing) < 10.0 * scale:
 				too_close = true
 				break
+
 		if not too_close:
 			jump_pad_positions.append(pad_pos)
+			mark_cell_occupied(pad_pos, 1)  # Mark cell as occupied
 
+	# Create the jump pads
 	for i in range(jump_pad_positions.size()):
 		create_jump_pad(jump_pad_positions[i], i, scale)
+
+	# Remove spawn positions that are too close to jump pads
+	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.0)
 
 	print("Generated %d jump pads" % jump_pad_positions.size())
 
@@ -1441,22 +1465,54 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 func generate_teleporters() -> void:
 	var scale: float = arena_size / 140.0
 	var floor_extent: float = (arena_size * 0.6) / 2.0
+	var teleporter_radius: float = 2.5 * scale
+
+	teleporter_positions.clear()
 
 	var num_pairs: int = 1 + complexity / 2
+	var pairs_created: int = 0
+	var attempts: int = 0
+	var max_attempts: int = num_pairs * 30
 
-	for i in range(num_pairs):
+	while pairs_created < num_pairs and attempts < max_attempts:
+		attempts += 1
+
 		var angle1: float = rng.randf() * TAU
 		var angle2: float = angle1 + PI + rng.randf_range(-0.5, 0.5)
-		var dist1: float = rng.randf_range(floor_extent * 0.5, floor_extent * 0.8)
-		var dist2: float = rng.randf_range(floor_extent * 0.5, floor_extent * 0.8)
+		var dist1: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
+		var dist2: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
 
 		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
 		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
 
-		create_teleporter(pos1, pos2, i * 2, scale)
-		create_teleporter(pos2, pos1, i * 2 + 1, scale)
+		# Check if both positions are clear
+		if not is_cell_available(pos1, 1) or not is_cell_available(pos2, 1):
+			continue
 
-	print("Generated %d teleporters" % (num_pairs * 2))
+		# Check distance to other teleporters and jump pads
+		var valid: bool = true
+		for existing in teleporter_positions:
+			if pos1.distance_to(existing) < 8.0 * scale or pos2.distance_to(existing) < 8.0 * scale:
+				valid = false
+				break
+		for jump_pos in jump_pad_positions:
+			if pos1.distance_to(jump_pos) < 6.0 * scale or pos2.distance_to(jump_pos) < 6.0 * scale:
+				valid = false
+				break
+
+		if valid:
+			teleporter_positions.append(pos1)
+			teleporter_positions.append(pos2)
+			mark_cell_occupied(pos1, 1)
+			mark_cell_occupied(pos2, 1)
+			create_teleporter(pos1, pos2, pairs_created * 2, scale)
+			create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
+			pairs_created += 1
+
+	# Remove spawn positions that are too close to teleporters
+	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.0)
+
+	print("Generated %d teleporters" % (pairs_created * 2))
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
 	var teleporter_radius: float = 2.5 * scale
@@ -1553,6 +1609,21 @@ func _on_death_zone_entered(body: Node3D) -> void:
 	elif body.has_method("respawn"):
 		body.respawn()
 
+func filter_spawns_near_positions(positions: Array[Vector3], min_distance: float) -> void:
+	## Remove spawn points that are too close to given positions
+	var filtered: Array[Vector3] = []
+	for spawn in clear_positions:
+		var too_close: bool = false
+		for pos in positions:
+			# Check horizontal distance only (ignore Y)
+			var h_dist: float = Vector2(spawn.x, spawn.z).distance_to(Vector2(pos.x, pos.z))
+			if h_dist < min_distance:
+				too_close = true
+				break
+		if not too_close:
+			filtered.append(spawn)
+	clear_positions = filtered
+
 # ============================================================================
 # GRID HELPER FUNCTIONS
 # ============================================================================
@@ -1617,18 +1688,54 @@ func apply_procedural_textures() -> void:
 
 func get_spawn_points() -> PackedVector3Array:
 	var spawns: PackedVector3Array = PackedVector3Array()
+	var scale: float = arena_size / 140.0
+	var min_dist_jump: float = 4.0 * scale  # Stay away from jump pads
+	var min_dist_tele: float = 5.0 * scale  # Stay away from teleporters
 
+	# Add clear positions that aren't near interactive elements
 	for pos in clear_positions:
-		spawns.append(pos)
+		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
+			spawns.append(pos)
 
+	# Add floor fallback spawns if they're valid
 	var floor_radius: float = (arena_size * 0.6) / 2.0 * 0.5
-	spawns.append(Vector3(0, 2, 0))
-	spawns.append(Vector3(floor_radius, 2, 0))
-	spawns.append(Vector3(-floor_radius, 2, 0))
-	spawns.append(Vector3(0, 2, floor_radius))
-	spawns.append(Vector3(0, 2, -floor_radius))
+	var fallback_spawns: Array[Vector3] = [
+		Vector3(0, 2, 0),
+		Vector3(floor_radius, 2, 0),
+		Vector3(-floor_radius, 2, 0),
+		Vector3(0, 2, floor_radius),
+		Vector3(0, 2, -floor_radius)
+	]
+
+	for pos in fallback_spawns:
+		if is_spawn_valid(pos, min_dist_jump, min_dist_tele):
+			spawns.append(pos)
+
+	# Ensure we have at least some spawn points
+	if spawns.is_empty():
+		# Emergency fallback - find any safe spot
+		for i in range(8):
+			var angle: float = i * TAU / 8.0
+			var dist: float = floor_radius * 0.7
+			var pos: Vector3 = Vector3(cos(angle) * dist, 2, sin(angle) * dist)
+			if is_spawn_valid(pos, min_dist_jump * 0.5, min_dist_tele * 0.5):
+				spawns.append(pos)
 
 	return spawns
+
+func is_spawn_valid(pos: Vector3, min_dist_jump: float, min_dist_tele: float) -> bool:
+	## Check if a spawn position is far enough from interactive elements
+	for jump_pos in jump_pad_positions:
+		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(jump_pos.x, jump_pos.z))
+		if h_dist < min_dist_jump:
+			return false
+
+	for tele_pos in teleporter_positions:
+		var h_dist: float = Vector2(pos.x, pos.z).distance_to(Vector2(tele_pos.x, tele_pos.z))
+		if h_dist < min_dist_tele:
+			return false
+
+	return true
 
 # ============================================================================
 # .MAP FILE EXPORT
