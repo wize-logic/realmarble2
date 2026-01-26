@@ -194,9 +194,9 @@ func generate_level() -> void:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
 
-	# Add interactive elements
-	generate_jump_pads()
+	# Add interactive elements (teleporters first - they need more space)
 	generate_teleporters()
+	generate_jump_pads()
 
 	# Add hazard zones if enabled
 	if enable_hazards:
@@ -1257,10 +1257,14 @@ func generate_jump_pads() -> void:
 		if not is_cell_available(pad_pos, 1):
 			continue
 
-		# Check distance to other jump pads
+		# Check distance to other jump pads and teleporters
 		var too_close: bool = false
 		for existing in jump_pad_positions:
 			if pad_pos.distance_to(existing) < 10.0 * scale:
+				too_close = true
+				break
+		for tele_pos in teleporter_positions:
+			if pad_pos.distance_to(tele_pos) < 6.0 * scale:
 				too_close = true
 				break
 
