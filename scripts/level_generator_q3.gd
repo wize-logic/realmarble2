@@ -159,6 +159,11 @@ var _hazard_material: StandardMaterial3D
 # Material manager for runtime textures (if available)
 var material_manager = null
 
+# Grind rail system
+var GrindRailScript = preload("res://scripts/grind_rail.gd")
+var rail_positions: Array[Vector3] = []  # Track rail start positions to avoid overlap
+const RAIL_RADIUS: float = 0.3  # Visual radius for rail tubes
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -194,11 +199,7 @@ func generate_level() -> void:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
 
-	# Add interactive elements (teleporters first - they need more space)
-	generate_teleporters()
-	generate_jump_pads()
-
-	# Add hazard zones if enabled
+	# Add hazard zones if enabled (before interactive elements so they can avoid them)
 	if enable_hazards:
 		generate_hazard_zones()
 
@@ -225,11 +226,17 @@ func generate_level() -> void:
 	if generate_occluders:
 		generate_occlusion_culling()
 
+	# Add interactive elements LAST - after all geometry is in place
+	# This ensures we can properly check for geometry clipping
+	generate_teleporters()
+	generate_jump_pads()
+	generate_grind_rails()
+
 	# Create spawn point markers
 	generate_spawn_markers()
 
 	print("=== GENERATION COMPLETE ===")
-	print("Rooms: %d, Corridors: %d, Platforms: %d" % [bsp_rooms.size(), corridors.size(), platforms.size()])
+	print("Rooms: %d, Corridors: %d, Platforms: %d, Rails: %d" % [bsp_rooms.size(), corridors.size(), platforms.size(), rail_positions.size() / 2])
 	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
 	print("Spawn positions: %d" % clear_positions.size())
 
@@ -240,6 +247,7 @@ func clear_level() -> void:
 
 	platforms.clear()
 	teleporters.clear()
+	rail_positions.clear()
 	clear_positions.clear()
 	occupied_cells.clear()
 	bsp_rooms.clear()
@@ -1239,43 +1247,43 @@ func generate_jump_pads() -> void:
 
 	jump_pad_positions.clear()
 
-	# Match jump pad count to teleporter count for balance
-	# Teleporters generate (2 + complexity + 1) / 2 pairs = that many * 2 teleporters
-	var num_target_pads: int = ((2 + complexity + 1) / 2) * 2
+	# 60% ratio: Generate 3-6 jump pads based on complexity
+	var num_target_pads: int = 3 + complexity
 	var attempts: int = 0
-	var max_attempts: int = num_target_pads * 20
+	var max_attempts: int = num_target_pads * 40
 
 	while jump_pad_positions.size() < num_target_pads and attempts < max_attempts:
 		attempts += 1
 
 		var pad_pos: Vector3 = Vector3(
-			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7),
+			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8),
 			0,
-			rng.randf_range(-floor_extent * 0.7, floor_extent * 0.7)
+			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8)
 		)
 
-		# Check if position is clear of structures
-		if not is_cell_available(pad_pos, 1):
+		# Light geometry check: ensure not inside a structure
+		# Uses direct mesh bounds checking, skips main floor automatically
+		if is_near_platform_geometry(pad_pos, 3.0):
 			continue
 
-		# Ensure position has overhead clearance (not under geometry)
-		if not has_overhead_clearance(pad_pos):
+		# Ensure position has overhead clearance
+		if not has_overhead_clearance(pad_pos, 3.0):
 			continue
 
-		# Check distance to other jump pads and teleporters
+		# Check distance to other jump pads (not too close)
 		var too_close: bool = false
 		for existing in jump_pad_positions:
-			if pad_pos.distance_to(existing) < 10.0 * scale:
+			if pad_pos.distance_to(existing) < 15.0:
 				too_close = true
 				break
+		# Check distance to teleporters
 		for tele_pos in teleporter_positions:
-			if pad_pos.distance_to(tele_pos) < 6.0 * scale:
+			if pad_pos.distance_to(tele_pos) < 10.0:
 				too_close = true
 				break
 
 		if not too_close:
 			jump_pad_positions.append(pad_pos)
-			mark_cell_occupied(pad_pos, 1)  # Mark cell as occupied
 
 	# Create the jump pads
 	for i in range(jump_pad_positions.size()):
@@ -1287,33 +1295,34 @@ func generate_jump_pads() -> void:
 	print("Generated %d jump pads" % jump_pad_positions.size())
 
 func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
-	var pad_radius: float = 2.0 * scale
+	var pad_radius: float = 1.4 * scale  # Smaller than before
 
-	var pad_mesh: CylinderMesh = CylinderMesh.new()
-	pad_mesh.top_radius = pad_radius
-	pad_mesh.bottom_radius = pad_radius
-	pad_mesh.height = 0.5
+	# Create a rounded dome shape using a squashed sphere
+	var pad_mesh: SphereMesh = SphereMesh.new()
+	pad_mesh.radius = pad_radius
+	pad_mesh.height = pad_radius * 0.6  # Squashed for dome look
+	pad_mesh.radial_segments = 24
+	pad_mesh.rings = 12
 
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
 	pad_instance.mesh = pad_mesh
 	pad_instance.name = "JumpPad%d" % index
-	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
+	pad_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)  # Slightly above ground
 	add_child(pad_instance)
 
-	# Create a bright green material for jump pads
+	# High quality glowing green material (Compatibility renderer safe)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.2, 0.9, 0.3)  # Bright green
+	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
 	material.emission_enabled = true
-	material.emission = Color(0.1, 0.6, 0.2)  # Green glow
-	material.emission_energy_multiplier = 2.0  # Visible glow
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	material.emission = Color(0.3, 1.0, 0.4)  # Match albedo for solid color
+	material.emission_energy_multiplier = 2.0  # Glow intensity
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
 	pad_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
-	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = pad_radius
-	collision_shape.height = 0.5
+	var collision_shape: SphereShape3D = SphereShape3D.new()
+	collision_shape.radius = pad_radius * 0.5
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	pad_instance.add_child(static_body)
@@ -1330,7 +1339,7 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
 	area_shape.radius = pad_radius
-	area_shape.height = 3.0
+	area_shape.height = 2.5
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
 
@@ -1345,81 +1354,90 @@ func generate_teleporters() -> void:
 
 	teleporter_positions.clear()
 
-	# Generate balanced count: (2 + complexity) rounded up to even number via pairs
-	# This ensures equal teleporter and jump pad counts
-	var num_pairs: int = (2 + complexity + 1) / 2  # Integer division rounds down, +1 rounds up
+	# 40% ratio: Generate 1-2 teleporter pairs based on complexity
+	# Strategic placement: opposite ends of the arena for quick traversal
+	var num_pairs: int = 1 if complexity <= 2 else 2
 	var pairs_created: int = 0
-	var attempts: int = 0
-	var max_attempts: int = num_pairs * 30
 
-	while pairs_created < num_pairs and attempts < max_attempts:
-		attempts += 1
+	# Place teleporter pairs at strategic positions (opposite ends of arena)
+	for pair_index in range(num_pairs):
+		# Distribute pairs around the arena
+		var base_angle: float = (float(pair_index) / num_pairs) * PI + rng.randf_range(-0.2, 0.2)
 
-		var angle1: float = rng.randf() * TAU
-		var angle2: float = angle1 + PI + rng.randf_range(-0.5, 0.5)
-		var dist1: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
-		var dist2: float = rng.randf_range(floor_extent * 0.4, floor_extent * 0.75)
+		# Position 1: Near one edge of the arena
+		var dist1: float = floor_extent * rng.randf_range(0.6, 0.85)
+		var pos1: Vector3 = Vector3(
+			cos(base_angle) * dist1,
+			0,
+			sin(base_angle) * dist1
+		)
 
-		var pos1: Vector3 = Vector3(cos(angle1) * dist1, 0, sin(angle1) * dist1)
-		var pos2: Vector3 = Vector3(cos(angle2) * dist2, 0, sin(angle2) * dist2)
+		# Position 2: Opposite side for strategic advantage
+		var opposite_angle: float = base_angle + PI + rng.randf_range(-0.3, 0.3)
+		var dist2: float = floor_extent * rng.randf_range(0.6, 0.85)
+		var pos2: Vector3 = Vector3(
+			cos(opposite_angle) * dist2,
+			0,
+			sin(opposite_angle) * dist2
+		)
 
-		# Ensure both positions have overhead clearance (not under geometry)
-		if not has_overhead_clearance(pos1) or not has_overhead_clearance(pos2):
-			continue
+		# Light geometry check: ensure not inside a structure
+		# Uses direct mesh bounds checking, skips main floor automatically
+		if is_near_platform_geometry(pos1, 3.0) or is_near_platform_geometry(pos2, 3.0):
+			# Try adjusting positions slightly
+			pos1.x += rng.randf_range(-5.0, 5.0)
+			pos1.z += rng.randf_range(-5.0, 5.0)
+			pos2.x += rng.randf_range(-5.0, 5.0)
+			pos2.z += rng.randf_range(-5.0, 5.0)
 
-		# Check distance to other teleporters and jump pads
-		var valid: bool = true
-		for existing in teleporter_positions:
-			if pos1.distance_to(existing) < 8.0 * scale or pos2.distance_to(existing) < 8.0 * scale:
-				valid = false
-				break
-		for jump_pos in jump_pad_positions:
-			if pos1.distance_to(jump_pos) < 6.0 * scale or pos2.distance_to(jump_pos) < 6.0 * scale:
-				valid = false
-				break
+		# Simple overhead clearance check
+		if not has_overhead_clearance(pos1, 3.0) or not has_overhead_clearance(pos2, 3.0):
+			# Try adjusting positions slightly
+			pos1.x += rng.randf_range(-5.0, 5.0)
+			pos1.z += rng.randf_range(-5.0, 5.0)
+			pos2.x += rng.randf_range(-5.0, 5.0)
+			pos2.z += rng.randf_range(-5.0, 5.0)
 
-		if valid:
-			teleporter_positions.append(pos1)
-			teleporter_positions.append(pos2)
-			mark_cell_occupied(pos1, 1)
-			mark_cell_occupied(pos2, 1)
-			create_teleporter(pos1, pos2, pairs_created * 2, scale)
-			create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
-			pairs_created += 1
+		teleporter_positions.append(pos1)
+		teleporter_positions.append(pos2)
+		create_teleporter(pos1, pos2, pairs_created * 2, scale)
+		create_teleporter(pos2, pos1, pairs_created * 2 + 1, scale)
+		pairs_created += 1
 
 	# Remove spawn positions that are too close to teleporters
 	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.0)
 
-	print("Generated %d teleporters" % (pairs_created * 2))
+	print("Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
-	var teleporter_radius: float = 2.5 * scale
+	var pad_radius: float = 1.4 * scale  # Same size as jump pads
 
-	var teleporter_mesh: CylinderMesh = CylinderMesh.new()
-	teleporter_mesh.top_radius = teleporter_radius
-	teleporter_mesh.bottom_radius = teleporter_radius
-	teleporter_mesh.height = 0.3
+	# Create a rounded dome shape using a squashed sphere (same as jump pads)
+	var teleporter_mesh: SphereMesh = SphereMesh.new()
+	teleporter_mesh.radius = pad_radius
+	teleporter_mesh.height = pad_radius * 0.6  # Squashed for dome look
+	teleporter_mesh.radial_segments = 24
+	teleporter_mesh.rings = 12
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
 	teleporter_instance.mesh = teleporter_mesh
 	teleporter_instance.name = "Teleporter%d" % index
-	teleporter_instance.position = Vector3(pos.x, 0.15, pos.z)
+	teleporter_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)
 	add_child(teleporter_instance)
 
-	# Create a purple material for teleporters
+	# High quality glowing purple material (Compatibility renderer safe)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.3, 0.9)  # Purple
+	material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
 	material.emission_enabled = true
-	material.emission = Color(0.4, 0.2, 0.8)  # Purple glow
-	material.emission_energy_multiplier = 2.0  # Visible glow
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	material.emission = Color(0.7, 0.3, 1.0)  # Match albedo for solid color
+	material.emission_energy_multiplier = 2.0  # Glow intensity
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
 	teleporter_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
-	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = teleporter_radius
-	collision_shape.height = 0.3
+	var collision_shape: SphereShape3D = SphereShape3D.new()
+	collision_shape.radius = pad_radius * 0.5
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	teleporter_instance.add_child(static_body)
@@ -1436,12 +1454,206 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = teleporter_radius
-	area_shape.height = 5.0
+	area_shape.radius = pad_radius
+	area_shape.height = 2.5
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
 	teleporters.append({"area": teleport_area, "destination": destination})
+
+# ============================================================================
+# GRIND RAILS (Strategic placement - sparse to avoid clutter)
+# ============================================================================
+
+func generate_grind_rails() -> void:
+	## Generate strategic grind rails - sparingly placed to avoid clutter
+	## Rails span across the arena at elevated height
+	var scale: float = arena_size / 140.0
+	var floor_extent: float = (arena_size * 0.6) / 2.0
+
+	rail_positions.clear()
+
+	# Sparse rail count: 1-2 rails total
+	var num_target_rails: int = 1 if complexity == 1 else 2
+	var rails_created: int = 0
+
+	# Fixed height that works well across arena sizes (high enough to clear most structures)
+	var rail_height: float = 12.0 * scale
+
+	# Create rails that span across the arena
+	for rail_index in range(num_target_rails):
+		# Distribute rails evenly around the arena
+		var base_angle: float = (float(rail_index) / num_target_rails) * PI + rng.randf_range(-0.3, 0.3)
+
+		# Start point on one side
+		var start_dist: float = floor_extent * rng.randf_range(0.4, 0.7)
+		var start_pos: Vector3 = Vector3(
+			cos(base_angle) * start_dist,
+			rail_height,
+			sin(base_angle) * start_dist
+		)
+
+		# End point on opposite side
+		var end_angle: float = base_angle + PI + rng.randf_range(-0.4, 0.4)
+		var end_dist: float = floor_extent * rng.randf_range(0.4, 0.7)
+		var end_pos: Vector3 = Vector3(
+			cos(end_angle) * end_dist,
+			rail_height + rng.randf_range(-2.0, 2.0) * scale,  # Slight height variation
+			sin(end_angle) * end_dist
+		)
+
+		# Check distance - should be reasonable
+		var distance: float = start_pos.distance_to(end_pos)
+		if distance < 15.0:
+			continue
+
+		# Check distance to jump pads and teleporters (simplified check)
+		var too_close: bool = false
+		for pad_pos in jump_pad_positions:
+			if start_pos.distance_to(pad_pos) < 8.0 or end_pos.distance_to(pad_pos) < 8.0:
+				too_close = true
+				break
+		if too_close:
+			continue
+
+		# Create the rail
+		create_grind_rail(start_pos, end_pos, rails_created, scale)
+		rail_positions.append(start_pos)
+		rail_positions.append(end_pos)
+		rails_created += 1
+
+	print("Generated %d strategic grind rails" % rails_created)
+
+func create_grind_rail(start: Vector3, end: Vector3, index: int, _scale: float) -> void:
+	## Create a grind rail between two points with a smooth arc
+	var rail: Path3D = GrindRailScript.new()
+	rail.name = "GrindRail%d" % index
+	rail.curve = Curve3D.new()
+
+	var distance: float = start.distance_to(end)
+	var num_points: int = max(8, int(distance / 4.0))  # Smooth curve
+
+	# Calculate arc height - creates a nice curved path
+	# Distance is already in world units, arc is proportional to length
+	var arc_height: float = distance * 0.12
+
+	for i in range(num_points):
+		var t: float = float(i) / (num_points - 1)
+		var pos: Vector3 = start.lerp(end, t)
+
+		# Add arc using sine curve (highest at middle)
+		pos.y += sin(t * PI) * arc_height
+
+		rail.curve.add_point(pos)
+
+	# Set smooth tangents for better grinding physics
+	_set_rail_tangents(rail)
+
+	add_child(rail)
+
+	# Create visual mesh for the rail
+	_create_rail_visual(rail)
+
+func _set_rail_tangents(rail: Path3D) -> void:
+	## Set smooth tangents for rail curves
+	for j in range(rail.curve.point_count):
+		var tangent: Vector3
+		if j == 0:
+			tangent = (rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)).normalized()
+		elif j == rail.curve.point_count - 1:
+			tangent = (rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)).normalized()
+		else:
+			var prev_to_curr: Vector3 = rail.curve.get_point_position(j) - rail.curve.get_point_position(j - 1)
+			var curr_to_next: Vector3 = rail.curve.get_point_position(j + 1) - rail.curve.get_point_position(j)
+			tangent = (prev_to_curr + curr_to_next).normalized()
+
+		rail.curve.set_point_in(j, -tangent * 0.5)
+		rail.curve.set_point_out(j, tangent * 0.5)
+
+func _create_rail_visual(rail: Path3D) -> void:
+	## Create visual mesh for the rail (Compatibility renderer safe)
+	if not rail.curve or rail.curve.get_baked_length() < 1.0:
+		return
+
+	var rail_visual: MeshInstance3D = MeshInstance3D.new()
+	rail_visual.name = "RailVisual"
+
+	var surface_tool: SurfaceTool = SurfaceTool.new()
+	surface_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	var radial_segments: int = 6  # Reduced for performance
+	var rail_length: float = rail.curve.get_baked_length()
+	var length_segments: int = clampi(int(rail_length * 0.4), 4, 80)
+
+	var last_right: Vector3 = Vector3.RIGHT
+	var last_up: Vector3 = Vector3.UP
+
+	for i in range(length_segments):
+		var offset_dist: float = (float(i) / length_segments) * rail_length
+		var next_offset: float = (float(i + 1) / length_segments) * rail_length
+
+		var pos: Vector3 = rail.curve.sample_baked(offset_dist)
+		var next_pos: Vector3 = rail.curve.sample_baked(next_offset)
+
+		var forward: Vector3 = (next_pos - pos)
+		if forward.length_squared() < 0.001:
+			continue
+		forward = forward.normalized()
+
+		var right: Vector3 = forward.cross(Vector3.UP)
+		if right.length_squared() < 0.01:
+			right = forward.cross(last_right)
+			if right.length_squared() < 0.01:
+				right = forward.cross(Vector3.RIGHT)
+		right = right.normalized()
+		var up: Vector3 = right.cross(forward).normalized()
+
+		last_right = right
+		last_up = up
+
+		for j in range(radial_segments):
+			var angle_curr: float = (float(j) / radial_segments) * TAU
+			var angle_next: float = (float(j + 1) / radial_segments) * TAU
+
+			var offset_curr: Vector3 = (right * cos(angle_curr) + up * sin(angle_curr)) * RAIL_RADIUS
+			var offset_next_rad: Vector3 = (right * cos(angle_next) + up * sin(angle_next)) * RAIL_RADIUS
+
+			var v1: Vector3 = pos + offset_curr
+			var v2: Vector3 = pos + offset_next_rad
+			var v3: Vector3 = next_pos + offset_curr
+			var v4: Vector3 = next_pos + offset_next_rad
+
+			var n1: Vector3 = offset_curr.normalized()
+			var n2: Vector3 = offset_next_rad.normalized()
+
+			# Triangle 1
+			surface_tool.set_normal(n1)
+			surface_tool.add_vertex(v1)
+			surface_tool.set_normal(n2)
+			surface_tool.add_vertex(v2)
+			surface_tool.set_normal(n1)
+			surface_tool.add_vertex(v3)
+
+			# Triangle 2
+			surface_tool.set_normal(n2)
+			surface_tool.add_vertex(v2)
+			surface_tool.set_normal(n2)
+			surface_tool.add_vertex(v4)
+			surface_tool.set_normal(n1)
+			surface_tool.add_vertex(v3)
+
+	rail_visual.mesh = surface_tool.commit()
+
+	# Compatibility renderer safe material - dark grey with subtle sheen
+	var material: StandardMaterial3D = StandardMaterial3D.new()
+	material.albedo_color = Color(0.25, 0.25, 0.28)  # Dark grey
+	material.emission_enabled = true
+	material.emission = Color(0.15, 0.15, 0.18)  # Subtle grey glow for visibility
+	material.emission_energy_multiplier = 0.8
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rail_visual.set_surface_override_material(0, material)
+
+	rail.add_child(rail_visual)
 
 # ============================================================================
 # PERIMETER & DEATH ZONE
@@ -1563,6 +1775,57 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 			return false
 
 	return true
+
+func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
+	## Check if a position is too close to structures/geometry.
+	## Returns true if position is within min_distance of blocking geometry.
+	## Skips floor-like meshes (large AND flat) but checks tall structures.
+
+	for child in get_children():
+		if not child is MeshInstance3D or child.mesh == null:
+			continue
+
+		# Explicitly skip main floor and raised sections (these are placeable surfaces)
+		var child_name: String = child.name
+		if child_name.begins_with("MainArenaFloor") or child_name.begins_with("RaisedSection"):
+			continue
+
+		var mesh_pos: Vector3 = child.position
+		var mesh_size: Vector3 = Vector3(4, 4, 4)  # Default size
+
+		if child.mesh is BoxMesh:
+			mesh_size = child.mesh.size
+		elif child.mesh is CylinderMesh:
+			var cyl: CylinderMesh = child.mesh
+			mesh_size = Vector3(cyl.top_radius * 2, cyl.height, cyl.top_radius * 2)
+		else:
+			continue  # Skip unknown mesh types
+
+		# Skip FLOOR-LIKE meshes: large horizontally AND short vertically
+		# This allows us to place on floors but still detect large walls/pillars
+		var is_floor_like: bool = (mesh_size.x > 50.0 or mesh_size.z > 50.0) and mesh_size.y < 5.0
+		if is_floor_like:
+			continue
+
+		# Skip meshes that are clearly elevated above ground level
+		var mesh_bottom: float = mesh_pos.y - mesh_size.y / 2.0
+		if mesh_bottom > 1.0:
+			continue  # This is elevated, won't clip with ground-level elements
+
+		# Skip very thin/flat meshes (likely floor tiles or decorations)
+		if mesh_size.y < 0.5:
+			continue
+
+		# Calculate expanded bounds for collision check
+		var half_x: float = mesh_size.x / 2.0 + min_distance
+		var half_z: float = mesh_size.z / 2.0 + min_distance
+
+		# Check horizontal proximity
+		if pos.x >= mesh_pos.x - half_x and pos.x <= mesh_pos.x + half_x:
+			if pos.z >= mesh_pos.z - half_z and pos.z <= mesh_pos.z + half_z:
+				return true
+
+	return false
 
 # ============================================================================
 # MESH/PLATFORM HELPER FUNCTIONS

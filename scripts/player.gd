@@ -551,6 +551,9 @@ func _ready() -> void:
 		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
 		grind_particles.color_ramp = grind_gradient
 
+	# Create area detector for jump pads and teleporters (ALL players including bots)
+	create_area_detector()
+
 	# In practice mode (no multiplayer peer), we're always the authority
 	# Otherwise, only run for nodes we have authority over
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
@@ -566,9 +569,6 @@ func _ready() -> void:
 
 	# Create rail detection raycast
 	create_rail_raycast()
-
-	# Create area detector for jump pads and teleporters
-	create_area_detector()
 
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
@@ -1052,7 +1052,19 @@ func _physics_process(delta: float) -> void:
 	# Don't apply movement force while grinding - rail physics handles everything
 	# But we still calculated movement_input_direction above for the rail to use
 	if is_grinding:
-		return
+		# Safety check: ensure rail is still valid to prevent getting stuck
+		if not is_instance_valid(current_rail) or current_rail == null:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Rail became invalid while grinding - forcing stop_grinding()", false, get_entity_id())
+			stop_grinding()
+			jump_count = 0  # Give full recovery jumps
+			# Don't return - allow normal movement to resume immediately
+		else:
+			return
+
+	# Additional safety: if is_grinding is false but we think we have a rail, clear it
+	if current_rail != null and not is_grinding:
+		DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Clearing stale rail reference", false, get_entity_id())
+		current_rail = null
 
 	# Apply movement force if there's input
 	if input_dir != Vector2.ZERO:
@@ -1076,9 +1088,17 @@ func check_ground() -> void:
 		return
 
 	# Grinding is a distinct state - not grounded, not airborne
+	# BUT: First verify the rail is still valid to prevent getting stuck in AIR state
 	if is_grinding:
-		is_grounded = false
-		return
+		# SAFETY CHECK: If grinding but rail is invalid, force stop grinding
+		if not is_instance_valid(current_rail) or current_rail == null:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY (check_ground): Rail invalid while is_grinding=true - forcing stop_grinding()", false, get_entity_id())
+			stop_grinding()
+			jump_count = 0  # Give full recovery jumps
+			# Fall through to normal ground check instead of returning
+		else:
+			is_grounded = false
+			return
 
 	# Force raycast update
 	ground_ray.force_raycast_update()
@@ -1124,7 +1144,7 @@ func check_ground() -> void:
 
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count], false, get_entity_id())
 
-	# Reset jump count when landing
+	# Reset jump count when landing (transition from air to ground)
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
@@ -1144,6 +1164,10 @@ func check_ground() -> void:
 		# Play landing sound (only if not from a bounce, since bounce has its own sound)
 		if land_sound and land_sound.stream and not just_bounce_landed:
 			play_land_sound.rpc()
+
+	# SAFETY: Always ensure jump_count is 0 while grounded (catches stuck states)
+	if is_grounded and jump_count > 0:
+		jump_count = 0
 
 	# Debug logging every 60 frames (about once per second)
 	if Engine.get_physics_frames() % 60 == 0:
@@ -1338,6 +1362,10 @@ func respawn() -> void:
 	is_spin_dashing = false
 	spin_charge = 0.0
 	spin_dash_timer = 0.0
+
+	# CRITICAL: Force grounded state on respawn (we spawn on ground)
+	# This fixes the stuck AIR state bug after grinding
+	is_grounded = true
 
 	# Reset all cooldowns
 	bounce_cooldown = 0.0
@@ -2057,7 +2085,12 @@ func update_charge_meter_ui() -> void:
 func start_grinding(rail: GrindRail) -> void:
 	"""Called by rail when player enters grinding state"""
 	if is_grinding:
-		return
+		# If already grinding on a different rail, stop first
+		if current_rail != rail and current_rail != null:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "Switching rails - stopping old grind first", false, get_entity_id())
+			stop_grinding()
+		else:
+			return  # Already grinding on this rail
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Started grinding on rail!", false, get_entity_id())
 	is_grinding = true
@@ -2079,15 +2112,26 @@ func start_grinding(rail: GrindRail) -> void:
 
 func stop_grinding() -> void:
 	"""Called by rail when player exits grinding state"""
-	if not is_grinding:
+	# Always clear current_rail reference even if not grinding (safety)
+	var was_grinding: bool = is_grinding
+	current_rail = null
+	is_grinding = false
+
+	# Restore normal physics damping
+	linear_damp = 0.5
+
+	if not was_grinding:
 		return
 
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding!", false, get_entity_id())
-	is_grinding = false
-	current_rail = null
+	# Only reset bounce state if we were actually grinding
+	# (prevents canceling a bounce that started after leaving the rail)
+	is_bouncing = false
 
-	# Restore normal physics
-	linear_damp = 0.5
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding! jump_count: %d" % jump_count, false, get_entity_id())
+
+	# IMPORTANT: Always give player recovery jumps after leaving rail
+	# Reset to 0 so they have full double jump available for recovery
+	jump_count = 0
 
 	# Stop spark particles
 	if grind_particles:
@@ -2099,19 +2143,39 @@ func launch_from_rail(velocity: Vector3) -> void:
 		return
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
-	stop_grinding()
+	stop_grinding()  # This resets jump_count to 0
 
 	# Player already has velocity from physics, just add upward boost
 	apply_central_impulse(Vector3.UP * 15.0)
 
 func jump_off_rail() -> void:
 	"""Player manually jumps off the rail"""
-	if not is_grinding or not current_rail:
+	# Store reference before clearing state
+	var rail_ref = current_rail
+	var was_grinding = is_grinding
+
+	# If we have a rail reference, detach from it
+	if rail_ref and is_instance_valid(rail_ref):
+		rail_ref.detach_grinder(self)
+
+	# Always call stop_grinding to ensure clean state
+	stop_grinding()
+
+	# If we weren't actually grinding, just do a normal jump instead
+	if not was_grinding:
+		if jump_count < max_jumps:
+			var vel: Vector3 = linear_velocity
+			vel.y = 0
+			linear_velocity = vel
+			apply_central_impulse(Vector3.UP * current_jump_impulse)
+			jump_count += 1
+			if jump_sound and jump_sound.stream:
+				play_jump_sound.rpc()
+			spawn_jump_bounce_effect(1.0)
 		return
 
-	# Detach from rail (maintains current velocity)
-	current_rail.detach_grinder(self)
-	stop_grinding()
+	# Set jump_count to 1 - the rail jump counts as first jump, leaving double jump available
+	jump_count = 1
 
 	# Apply jump impulse upward (player keeps their grinding momentum)
 	var jump_strength: float = current_jump_impulse * 1.2  # Bonus for rail jump
@@ -2124,7 +2188,7 @@ func jump_off_rail() -> void:
 	# Spawn jump particle effect
 	spawn_jump_bounce_effect(1.2)
 
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s" % linear_velocity, false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Jumped off rail! Velocity: %s, jump_count: %d" % [linear_velocity, jump_count], false, get_entity_id())
 
 # ============================================================================
 # JUMP PAD & TELEPORTER SYSTEM (Q3 ARENA STYLE)
@@ -2155,8 +2219,9 @@ func create_area_detector() -> void:
 
 func _on_area_entered(area: Area3D) -> void:
 	"""Handle entering areas (jump pads, teleporters, etc.)"""
-	if not is_multiplayer_authority():
-		return  # Only process for local player
+	# Allow local player AND bots to use jump pads/teleporters
+	if not is_multiplayer_authority() and not is_bot():
+		return  # Only process for local player or bots
 
 	# Check if this is a jump pad
 	if area.is_in_group("jump_pad"):

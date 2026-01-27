@@ -167,7 +167,13 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 
 	var pos: Vector3 = grinder.global_position
 	var local: Vector3 = to_local(pos)
-	var offset: float = curve.get_closest_offset(local)
+	var raw_offset: float = curve.get_closest_offset(local)
+	var rail_length: float = curve.get_baked_length()
+
+	# Clamp offset away from rail ends to prevent immediate launch
+	# Minimum 3 units from each end (more than the 1.5 launch threshold)
+	var min_offset: float = minf(3.0, rail_length * 0.1)
+	var offset: float = clamp(raw_offset, min_offset, rail_length - min_offset)
 	var closest_world: Vector3 = to_global(curve.sample_baked(offset))
 
 	# Validate distance one more time (max 30 units as per player.gd)
@@ -180,7 +186,7 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 	_attach(grinder, offset, closest_world)
 	nearby_players.erase(grinder)  # Remove from nearby list if present
 	var entity_id: int = grinder.name.to_int() if grinder else -1
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Manual attachment successful! Distance: %s" % [name, distance], false, entity_id)
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] Manual attachment successful! Distance: %s, offset: %.1f/%.1f" % [name, distance, offset, rail_length], false, entity_id)
 	return true
 
 
@@ -242,7 +248,16 @@ func _process(_delta: float) -> void:
 	# Iterate backwards to avoid duplication when removing items
 	for i in range(active_grinders.size() - 1, -1, -1):
 		var grinder = active_grinders[i]
-		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
+		if not is_instance_valid(grinder):
+			# Handle freed objects directly without calling _remove_grinder
+			# (can't pass freed object to typed function parameter)
+			var data = grinder_data.get(grinder)
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			active_grinders.remove_at(i)
+			grinder_data.erase(grinder)
+			continue
+		if not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 
 
@@ -252,15 +267,32 @@ func _physics_process(delta: float) -> void:
 
 	# Iterate backwards to avoid duplication when removing items
 	for i in range(active_grinders.size() - 1, -1, -1):
-		var grinder: RigidBody3D = active_grinders[i]
-		if not is_instance_valid(grinder) or not grinder_data.has(grinder):
+		var grinder = active_grinders[i]  # No type hint to handle freed objects
+		if not is_instance_valid(grinder):
+			# Handle freed objects directly without calling _remove_grinder
+			# (can't pass freed object to typed function parameter)
+			var data = grinder_data.get(grinder)
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			active_grinders.remove_at(i)
+			grinder_data.erase(grinder)
+			continue
+
+		if not grinder_data.has(grinder):
 			_remove_grinder(grinder)
 			continue
 
+		# If grinder's current_rail doesn't match us, they've been detached elsewhere
+		# Clean them up from our tracking AND ensure their state is reset
 		if grinder.get("current_rail") != self:
 			var data = grinder_data[grinder]
-			if data and data.rope_visual:
-				data.rope_visual.visible = false
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			active_grinders.erase(grinder)
+			grinder_data.erase(grinder)
+			# Always call stop_grinding to ensure player state is properly reset
+			if grinder.has_method("stop_grinding"):
+				grinder.stop_grinding()
 			continue
 
 		_update_active_grinder(grinder, delta, current_time)
@@ -448,8 +480,10 @@ func _update_active_grinder(grinder: RigidBody3D, delta: float, current_time: fl
 		data.last_progress_check_time = current_time
 		data.last_progress_offset = attach_offset
 
-	# Only detach at end of rail
-	if attach_offset <= 1.5 or attach_offset >= length - 1.5:
+	# Only detach at end of rail - but give a grace period after attachment
+	# to prevent immediate launch when attaching near rail ends
+	var min_grind_time: float = 0.5  # Must grind for at least 0.5 seconds before end-launch
+	if time_since_attach > min_grind_time and (attach_offset <= 1.5 or attach_offset >= length - 1.5):
 		var entity_id: int = grinder.name.to_int() if grinder else -1
 		DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] End of rail — HIGH LAUNCH!" % name, false, entity_id)
 		if grinder.has_method("launch_from_rail"):
