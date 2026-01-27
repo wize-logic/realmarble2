@@ -1261,7 +1261,11 @@ func generate_jump_pads() -> void:
 			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8)
 		)
 
-		# Simple check: ensure position has overhead clearance
+		# Light geometry check: ensure not directly on a structure
+		if not is_cell_available(pad_pos, 1):
+			continue
+
+		# Ensure position has overhead clearance
 		if not has_overhead_clearance(pad_pos, 3.0):
 			continue
 
@@ -1374,6 +1378,14 @@ func generate_teleporters() -> void:
 			0,
 			sin(opposite_angle) * dist2
 		)
+
+		# Light geometry check: ensure not directly on a structure
+		if not is_cell_available(pos1, 1) or not is_cell_available(pos2, 1):
+			# Try adjusting positions slightly
+			pos1.x += rng.randf_range(-5.0, 5.0)
+			pos1.z += rng.randf_range(-5.0, 5.0)
+			pos2.x += rng.randf_range(-5.0, 5.0)
+			pos2.z += rng.randf_range(-5.0, 5.0)
 
 		# Simple overhead clearance check
 		if not has_overhead_clearance(pos1, 3.0) or not has_overhead_clearance(pos2, 3.0):

@@ -1088,9 +1088,17 @@ func check_ground() -> void:
 		return
 
 	# Grinding is a distinct state - not grounded, not airborne
+	# BUT: First verify the rail is still valid to prevent getting stuck in AIR state
 	if is_grinding:
-		is_grounded = false
-		return
+		# SAFETY CHECK: If grinding but rail is invalid, force stop grinding
+		if not is_instance_valid(current_rail) or current_rail == null:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY (check_ground): Rail invalid while is_grinding=true - forcing stop_grinding()", false, get_entity_id())
+			stop_grinding()
+			jump_count = 0  # Give full recovery jumps
+			# Fall through to normal ground check instead of returning
+		else:
+			is_grounded = false
+			return
 
 	# Force raycast update
 	ground_ray.force_raycast_update()
