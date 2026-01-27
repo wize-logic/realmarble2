@@ -179,12 +179,8 @@ func generate_level() -> void:
 	rng = RandomNumberGenerator.new()
 	rng.seed = level_seed if level_seed != 0 else int(Time.get_unix_time_from_system())
 
-	print("=== PROCEDURAL ARENA GENERATOR ===")
-	print("Seed: %d" % rng.seed)
-	print("Arena Size: %.1f" % arena_size)
-	print("Complexity: %d" % complexity)
-	print("BSP Layout: %s" % ("Enabled" if use_bsp_layout else "Disabled"))
-	print("Levels: %d" % num_levels)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "=== PROCEDURAL ARENA GENERATOR ===")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Seed: %d | Arena Size: %.1f | Complexity: %d | BSP: %s | Levels: %d" % [rng.seed, arena_size, complexity, "Enabled" if use_bsp_layout else "Disabled", num_levels])
 
 	# Initialize materials for Compatibility renderer
 	setup_materials()
@@ -211,7 +207,7 @@ func generate_level() -> void:
 	if use_bsp_layout:
 		var leak_result: Dictionary = check_for_leaks()
 		if leak_result.has_leak:
-			print("WARNING: %s" % leak_result.details)
+			DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "WARNING: %s" % leak_result.details)
 
 	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
@@ -235,10 +231,7 @@ func generate_level() -> void:
 	# Create spawn point markers
 	generate_spawn_markers()
 
-	print("=== GENERATION COMPLETE ===")
-	print("Rooms: %d, Corridors: %d, Platforms: %d, Rails: %d" % [bsp_rooms.size(), corridors.size(), platforms.size(), rail_positions.size() / 2])
-	print("Lights: %d, Spawn Points: %d" % [lights.size(), spawn_markers.size()])
-	print("Spawn positions: %d" % clear_positions.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "=== GENERATION COMPLETE === Rooms: %d, Corridors: %d, Platforms: %d, Rails: %d, Lights: %d, Spawns: %d" % [bsp_rooms.size(), corridors.size(), platforms.size(), rail_positions.size() / 2, lights.size(), spawn_markers.size()])
 
 func clear_level() -> void:
 	## Remove all generated content
@@ -313,7 +306,7 @@ func generate_bsp_for_level(level_idx: int, level_z: float, map_size: float) -> 
 		create_room_with_noise(node)
 		bsp_rooms.append(node)
 
-	print("Level %d: %d rooms generated" % [level_idx, level_rooms.size()])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level %d: %d rooms generated" % [level_idx, level_rooms.size()])
 
 	# Generate runtime geometry for rooms
 	for node in level_rooms:
@@ -478,7 +471,7 @@ func apply_bsp_symmetry() -> void:
 	## Mirror all BSP rooms across the symmetry axis
 	## This creates a balanced arena layout for competitive play
 
-	print("Applying BSP symmetry across %s axis..." % ("X" if symmetry_axis == 0 else "Z"))
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Applying BSP symmetry across %s axis..." % ("X" if symmetry_axis == 0 else "Z"))
 
 	var original_rooms: Array[BSPNode] = bsp_rooms.duplicate()
 	var next_room_id: int = bsp_rooms.size()
@@ -509,7 +502,7 @@ func apply_bsp_symmetry() -> void:
 		bsp_rooms.append(mirrored)
 		next_room_id += 1
 
-	print("  Mirrored %d rooms (total: %d)" % [bsp_rooms.size() - original_rooms.size(), bsp_rooms.size()])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Mirrored %d rooms (total: %d)" % [bsp_rooms.size() - original_rooms.size(), bsp_rooms.size()])
 
 func generate_bsp_corridors(node: BSPNode, level_z: float) -> void:
 	## Generate corridors connecting BSP sibling rooms
@@ -785,7 +778,7 @@ func generate_procedural_level() -> void:
 	generate_main_arena()
 
 	var structure_budget: int = get_structure_budget()
-	print("Structure budget: %d" % structure_budget)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Structure budget: %d" % structure_budget)
 
 	generate_procedural_structures(structure_budget)
 	generate_procedural_bridges()
@@ -858,7 +851,7 @@ func generate_procedural_structures(budget: int) -> void:
 			mark_cell_occupied(pos, cell_radius)
 			structures_placed += 1
 
-	print("Placed %d/%d structures" % [structures_placed, budget])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Placed %d/%d structures" % [structures_placed, budget])
 
 func get_structure_cell_radius(type: int) -> int:
 	match type:
@@ -1292,7 +1285,7 @@ func generate_jump_pads() -> void:
 	# Remove spawn positions that are too close to jump pads
 	filter_spawns_near_positions(jump_pad_positions, pad_radius * 2.0)
 
-	print("Generated %d jump pads" % jump_pad_positions.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated %d jump pads" % jump_pad_positions.size())
 
 func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	var pad_radius: float = 1.4 * scale  # Smaller than before
@@ -1407,7 +1400,7 @@ func generate_teleporters() -> void:
 	# Remove spawn positions that are too close to teleporters
 	filter_spawns_near_positions(teleporter_positions, teleporter_radius * 2.0)
 
-	print("Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
 	var pad_radius: float = 1.4 * scale  # Same size as jump pads
@@ -1522,7 +1515,7 @@ func generate_grind_rails() -> void:
 		rail_positions.append(end_pos)
 		rails_created += 1
 
-	print("Generated %d strategic grind rails" % rails_created)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated %d strategic grind rails" % rails_created)
 
 func create_grind_rail(start: Vector3, end: Vector3, index: int, _scale: float) -> void:
 	## Create a grind rail between two points with a smooth arc
@@ -1892,7 +1885,7 @@ func generate_hazard_zones() -> void:
 	if not enable_hazards:
 		return
 
-	print("Generating %d hazard zones..." % hazard_count)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating %d hazard zones..." % hazard_count)
 
 	var scale: float = arena_size / 140.0
 	var floor_extent: float = (arena_size * 0.6) / 2.0
@@ -1924,7 +1917,7 @@ func generate_hazard_zones() -> void:
 			mark_cell_occupied(pos, 2)
 			placed = true
 
-	print("  Hazard zones created: %d" % hazard_count)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Hazard zones created: %d" % hazard_count)
 
 func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 	## Create a hazard zone (lava/slime) at the specified position
@@ -2014,7 +2007,7 @@ func generate_room_lights() -> void:
 	## Generate OmniLight3D nodes for each room
 	## Uses simple point lights compatible with all renderers
 
-	print("Generating room lights...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating room lights...")
 
 	for room in bsp_rooms:
 		var room_center: Vector3 = room.get_center_3d(room_height)
@@ -2055,12 +2048,12 @@ func generate_room_lights() -> void:
 			add_child(light)
 			lights.append(light)
 
-	print("  Created %d lights" % lights.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights" % lights.size())
 
 func generate_navigation_mesh() -> void:
 	## Generate NavigationRegion3D for AI pathfinding
 
-	print("Generating navigation mesh...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating navigation mesh...")
 
 	navigation_region = NavigationRegion3D.new()
 	navigation_region.name = "NavigationRegion"
@@ -2084,13 +2077,13 @@ func generate_navigation_mesh() -> void:
 	# Bake the navmesh (deferred to avoid blocking)
 	navigation_region.bake_navigation_mesh.call_deferred()
 
-	print("  Navigation mesh configured (will bake asynchronously)")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Navigation mesh configured (will bake asynchronously)")
 
 func generate_occlusion_culling() -> void:
 	## Generate OccluderInstance3D nodes for performance optimization
 	## Creates box occluders for large solid geometry
 
-	print("Generating occlusion culling...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating occlusion culling...")
 
 	# Create occluders for perimeter walls
 	var wall_distance: float = arena_size * 0.55
@@ -2140,12 +2133,12 @@ func generate_occlusion_culling() -> void:
 		add_child(occluder)
 		occluders.append(occluder)
 
-	print("  Created %d occluders" % occluders.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d occluders" % occluders.size())
 
 func generate_spawn_markers() -> void:
 	## Create Marker3D nodes at spawn positions for game integration
 
-	print("Generating spawn markers...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating spawn markers...")
 
 	var spawn_idx: int = 0
 	for pos in clear_positions:
@@ -2161,7 +2154,7 @@ func generate_spawn_markers() -> void:
 		spawn_markers.append(marker)
 		spawn_idx += 1
 
-	print("  Created %d spawn markers" % spawn_markers.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d spawn markers" % spawn_markers.size())
 
 func get_spawn_points() -> PackedVector3Array:
 	## Return spawn points for game integration
@@ -2234,7 +2227,7 @@ func check_for_leaks() -> Dictionary:
 
 	if result.has_leak:
 		result.details = "Disconnected rooms detected: %s" % str(result.disconnected_rooms)
-		print("WARNING: Potential map leak - %d disconnected room(s)" % result.disconnected_rooms.size())
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "WARNING: Potential map leak - %d disconnected room(s)" % result.disconnected_rooms.size())
 	else:
 		result.details = "All %d rooms are connected" % bsp_rooms.size()
 
@@ -2359,7 +2352,7 @@ func generate_editor_preview() -> void:
 		axis_preview.name = "SymmetryAxisPreview"
 		_preview_meshes.append(axis_preview)
 
-	print("Editor Preview: %d rooms, %d corridors, symmetry=%s" % [
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Editor Preview: %d rooms, %d corridors, symmetry=%s" % [
 		bsp_rooms.size(), corridors.size(), "on" if enable_symmetry else "off"
 	])
 

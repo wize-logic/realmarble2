@@ -1721,7 +1721,7 @@ func spawn_beam_effect() -> void:
 	# Get the world node (parent) to add the effect to
 	var world: Node = get_parent()
 	if not world:
-		print("ERROR: No parent node to spawn beam effect into!")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "ERROR: No parent node to spawn beam effect into!", false, get_entity_id())
 		return
 
 	# Create the beam effect instance
@@ -1865,7 +1865,7 @@ func create_charge_meter_ui() -> void:
 
 	charge_meter_ui.add_child(charge_meter_bar)
 
-	print("Charge meter UI created")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Charge meter UI created", false, get_entity_id())
 
 func create_rail_reticle_ui() -> void:
 	"""Create the rail targeting prompt UI (text only, no visual reticle)"""
@@ -1899,7 +1899,7 @@ func create_rail_reticle_ui() -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	rail_reticle_ui.add_child(label)
 
-	print("Rail attachment prompt UI created (text only)")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Rail attachment prompt UI created (text only)", false, get_entity_id())
 
 func create_rail_raycast() -> void:
 	"""Create the raycast for detecting rails"""
@@ -1916,7 +1916,7 @@ func create_rail_raycast() -> void:
 	rail_lock_raycast.collide_with_areas = false
 	rail_lock_raycast.collide_with_bodies = false
 
-	print("Rail lock raycast created")
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Rail lock raycast created", false, get_entity_id())
 
 func find_all_rails(node: Node) -> Array[GrindRail]:
 	"""Recursively find all GrindRail nodes in the scene"""
@@ -2215,7 +2215,7 @@ func create_area_detector() -> void:
 	# Connect signals
 	area_detector.area_entered.connect(_on_area_entered)
 
-	print("Area detector created for jump pads and teleporters")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Area detector created for jump pads and teleporters", false, get_entity_id())
 
 func _on_area_entered(area: Area3D) -> void:
 	"""Handle entering areas (jump pads, teleporters, etc.)"""
@@ -2237,7 +2237,7 @@ func activate_jump_pad(area: Area3D = null) -> void:
 	if jump_pad_cooldown > 0.0:
 		return  # Still on cooldown
 
-	print("Jump pad activated! Applying boost...")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Jump pad activated! Applying boost...", false, get_entity_id())
 
 	# Cancel downward velocity and apply strong upward boost
 	var vel: Vector3 = linear_velocity
@@ -2248,7 +2248,7 @@ func activate_jump_pad(area: Area3D = null) -> void:
 	var boost: float = jump_pad_boost_force
 	if area and area.has_meta("boost_force"):
 		boost = area.get_meta("boost_force")
-		print("Using custom boost force: %.1f (target height: %.1f)" % [boost, area.get_meta("target_height") if area.has_meta("target_height") else 0.0])
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Using custom boost force: %.1f (target height: %.1f)" % [boost, area.get_meta("target_height") if area.has_meta("target_height") else 0.0], false, get_entity_id())
 
 	# Apply strong upward impulse
 	apply_central_impulse(Vector3.UP * boost)
@@ -2271,14 +2271,14 @@ func activate_jump_pad(area: Area3D = null) -> void:
 	# Set cooldown to prevent rapid re-triggering
 	jump_pad_cooldown = jump_pad_cooldown_time
 
-	print("Jump pad boost applied! New velocity: ", linear_velocity)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Jump pad boost applied! New velocity: %s" % linear_velocity, false, get_entity_id())
 
 func activate_teleporter(destination: Vector3) -> void:
 	"""Teleport player to destination"""
 	if teleporter_cooldown > 0.0:
 		return  # Still on cooldown
 
-	print("Teleporter activated! Teleporting to: ", destination)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Teleporter activated! Teleporting to: %s" % destination, false, get_entity_id())
 
 	# Teleport player (add height offset to ensure above ground)
 	global_position = destination + Vector3(0, 2, 0)
@@ -2301,7 +2301,7 @@ func activate_teleporter(destination: Vector3) -> void:
 	# Set cooldown to prevent rapid re-triggering
 	teleporter_cooldown = teleporter_cooldown_time
 
-	print("Teleported to: ", global_position)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Teleported to: %s" % global_position, false, get_entity_id())
 
 func spawn_jump_pad_effect() -> void:
 	"""Spawn BRIGHT GREEN explosive particle effect for jump pad activation"""
@@ -2325,7 +2325,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.emitting = true
 	death_particles.restart()
 
-	print("BRIGHT GREEN jump pad particle explosion spawned!")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "BRIGHT GREEN jump pad particle explosion spawned!", false, get_entity_id())
 
 func spawn_teleporter_effect() -> void:
 	"""Spawn BRIGHT PURPLE/BLUE swirling particle effect for teleporter activation"""
@@ -2349,7 +2349,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.emitting = true
 	death_particles.restart()
 
-	print("BRIGHT PURPLE teleporter particle swirl spawned!")
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "BRIGHT PURPLE teleporter particle swirl spawned!", false, get_entity_id())
 
 func apply_marble_material() -> void:
 	"""Apply a unique procedural marble material to this player"""
@@ -2383,23 +2383,20 @@ func apply_marble_material() -> void:
 		if primary_color:
 			aura_light.light_color = primary_color
 
-	print("Applied beautiful marble material to player: ", name)
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Applied marble material to player: %s" % name, false, get_entity_id())
 
 func notify_kill(killer_id: int, victim_id: int) -> void:
 	"""Notify the HUD about a kill - should be called on the killer's player node"""
-	print("[NOTIFY_KILL] Called with killer_id: ", killer_id, ", victim_id: ", victim_id)
-	print("[NOTIFY_KILL] This player name: ", name, ", has_multiplayer_peer: ", multiplayer.has_multiplayer_peer())
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[NOTIFY_KILL] Called with killer_id: %d, victim_id: %d" % [killer_id, victim_id], false, get_entity_id())
 
 	# Only show if this is the local player (has authority)
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		print("[NOTIFY_KILL] Skipping - not authority")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[NOTIFY_KILL] Skipping - not authority", false, get_entity_id())
 		return  # Skip for non-authority players (bots, other players)
-
-	print("[NOTIFY_KILL] Passed authority check")
 
 	var world: Node = get_parent()
 	if not world:
-		print("[NOTIFY_KILL] ERROR: No world node!")
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[NOTIFY_KILL] ERROR: No world node!", false, get_entity_id())
 		return
 
 	# Get the victim's name
@@ -2411,17 +2408,15 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 			victim_name = "Bot"
 		else:
 			victim_name = "Player %d" % victim_id
-	print("[NOTIFY_KILL] Victim name: ", victim_name)
 
 	# Find the HUD and show kill notification
 	# HUD is at GameHUD/HUD path (see world.gd line 11)
 	var game_hud = world.get_node_or_null("GameHUD/HUD")
-	print("[NOTIFY_KILL] GameHUD found: ", game_hud != null)
 	if game_hud and game_hud.has_method("show_kill_notification"):
-		print("[NOTIFY_KILL] Calling show_kill_notification for: ", victim_name)
+		DebugLogger.dlog(DebugLogger.Category.UI, "[NOTIFY_KILL] Calling show_kill_notification for: %s" % victim_name, false, get_entity_id())
 		game_hud.show_kill_notification(victim_name)
 	else:
-		print("[NOTIFY_KILL] ERROR: GameHUD or method not found!")
+		DebugLogger.dlog(DebugLogger.Category.UI, "[NOTIFY_KILL] ERROR: GameHUD or method not found!", false, get_entity_id())
 
 func notify_killstreak(player_id: int, streak: int) -> void:
 	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
@@ -2437,5 +2432,5 @@ func notify_killstreak(player_id: int, streak: int) -> void:
 	# HUD is at GameHUD/HUD path (see world.gd line 11)
 	var game_hud = world.get_node_or_null("GameHUD/HUD")
 	if game_hud and game_hud.has_method("show_killstreak_notification"):
-		print("Calling show_killstreak_notification for streak: ", streak)
+		DebugLogger.dlog(DebugLogger.Category.UI, "Calling show_killstreak_notification for streak: %d" % streak, false, get_entity_id())
 		game_hud.show_killstreak_notification(streak)
