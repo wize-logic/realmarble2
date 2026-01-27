@@ -551,6 +551,9 @@ func _ready() -> void:
 		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade
 		grind_particles.color_ramp = grind_gradient
 
+	# Create area detector for jump pads and teleporters (ALL players including bots)
+	create_area_detector()
+
 	# In practice mode (no multiplayer peer), we're always the authority
 	# Otherwise, only run for nodes we have authority over
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
@@ -566,9 +569,6 @@ func _ready() -> void:
 
 	# Create rail detection raycast
 	create_rail_raycast()
-
-	# Create area detector for jump pads and teleporters
-	create_area_detector()
 
 	# Spawn at fixed position based on player ID
 	var player_id: int = str(name).to_int()
@@ -2211,8 +2211,9 @@ func create_area_detector() -> void:
 
 func _on_area_entered(area: Area3D) -> void:
 	"""Handle entering areas (jump pads, teleporters, etc.)"""
-	if not is_multiplayer_authority():
-		return  # Only process for local player
+	# Allow local player AND bots to use jump pads/teleporters
+	if not is_multiplayer_authority() and not is_bot():
+		return  # Only process for local player or bots
 
 	# Check if this is a jump pad
 	if area.is_in_group("jump_pad"):
