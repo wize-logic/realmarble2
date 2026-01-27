@@ -1314,12 +1314,9 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
 	material.emission_enabled = true
-	material.emission = Color(0.2, 0.9, 0.3)  # Strong green glow
-	material.emission_energy_multiplier = 3.5  # High glow intensity
-	material.metallic = 0.3
-	material.metallic_specular = 0.8
-	material.roughness = 0.2  # Shiny surface
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.emission = Color(0.3, 1.0, 0.4)  # Match albedo for solid color
+	material.emission_energy_multiplier = 2.0  # Glow intensity
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
 	pad_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
@@ -1434,12 +1431,9 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 	var material: StandardMaterial3D = StandardMaterial3D.new()
 	material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
 	material.emission_enabled = true
-	material.emission = Color(0.6, 0.2, 0.9)  # Strong purple glow
-	material.emission_energy_multiplier = 4.0  # High glow intensity
-	material.metallic = 0.4
-	material.metallic_specular = 0.9
-	material.roughness = 0.15  # Very shiny
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.emission = Color(0.7, 0.3, 1.0)  # Match albedo for solid color
+	material.emission_energy_multiplier = 2.0  # Glow intensity
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
 	teleporter_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
