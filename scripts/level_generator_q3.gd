@@ -1410,21 +1410,19 @@ func generate_teleporters() -> void:
 	print("Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
-	var teleporter_radius: float = 1.8 * scale  # Smaller than before
+	var pad_radius: float = 1.4 * scale  # Same size as jump pads
 
-	# Create a torus (ring) shape for a portal-like appearance
-	var teleporter_mesh: TorusMesh = TorusMesh.new()
-	teleporter_mesh.inner_radius = teleporter_radius * 0.5
-	teleporter_mesh.outer_radius = teleporter_radius
-	teleporter_mesh.rings = 32
-	teleporter_mesh.ring_segments = 16
+	# Create a rounded dome shape using a squashed sphere (same as jump pads)
+	var teleporter_mesh: SphereMesh = SphereMesh.new()
+	teleporter_mesh.radius = pad_radius
+	teleporter_mesh.height = pad_radius * 0.6  # Squashed for dome look
+	teleporter_mesh.radial_segments = 24
+	teleporter_mesh.rings = 12
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
 	teleporter_instance.mesh = teleporter_mesh
 	teleporter_instance.name = "Teleporter%d" % index
-	teleporter_instance.position = Vector3(pos.x, 0.2, pos.z)
-	# Rotate to lay flat on ground
-	teleporter_instance.rotation_degrees = Vector3(90, 0, 0)
+	teleporter_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)
 	add_child(teleporter_instance)
 
 	# High quality glowing purple material (Compatibility renderer safe)
@@ -1438,9 +1436,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
-	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = teleporter_radius
-	collision_shape.height = 0.4
+	var collision_shape: SphereShape3D = SphereShape3D.new()
+	collision_shape.radius = pad_radius * 0.5
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	teleporter_instance.add_child(static_body)
@@ -1457,8 +1454,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
-	area_shape.radius = teleporter_radius
-	area_shape.height = 4.0
+	area_shape.radius = pad_radius
+	area_shape.height = 2.5
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
