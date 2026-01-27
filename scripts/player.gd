@@ -2117,15 +2117,15 @@ func stop_grinding() -> void:
 	current_rail = null
 	is_grinding = false
 
-	# Always reset these states for safety, even if we weren't grinding
-	# This ensures we never get stuck in a bad state
-	is_bouncing = false
-
 	# Restore normal physics damping
 	linear_damp = 0.5
 
 	if not was_grinding:
 		return
+
+	# Only reset bounce state if we were actually grinding
+	# (prevents canceling a bounce that started after leaving the rail)
+	is_bouncing = false
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding! jump_count: %d" % jump_count, false, get_entity_id())
 
