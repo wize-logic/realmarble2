@@ -1261,8 +1261,9 @@ func generate_jump_pads() -> void:
 			rng.randf_range(-floor_extent * 0.8, floor_extent * 0.8)
 		)
 
-		# Light geometry check: ensure not directly on a structure
-		if not is_cell_available(pad_pos, 1):
+		# Light geometry check: ensure not inside a structure
+		# Uses direct mesh bounds checking, skips main floor automatically
+		if is_near_platform_geometry(pad_pos, 3.0):
 			continue
 
 		# Ensure position has overhead clearance
@@ -1379,8 +1380,9 @@ func generate_teleporters() -> void:
 			sin(opposite_angle) * dist2
 		)
 
-		# Light geometry check: ensure not directly on a structure
-		if not is_cell_available(pos1, 1) or not is_cell_available(pos2, 1):
+		# Light geometry check: ensure not inside a structure
+		# Uses direct mesh bounds checking, skips main floor automatically
+		if is_near_platform_geometry(pos1, 3.0) or is_near_platform_geometry(pos2, 3.0):
 			# Try adjusting positions slightly
 			pos1.x += rng.randf_range(-5.0, 5.0)
 			pos1.z += rng.randf_range(-5.0, 5.0)
@@ -1775,10 +1777,15 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
 	## Check if a position is too close to smaller structures/platforms.
 	## Returns true if position is within min_distance of blocking geometry.
-	## Skips large floor meshes and only checks structures that could clip.
+	## Skips floor meshes and only checks structures that could clip.
 
 	for child in get_children():
 		if not child is MeshInstance3D or child.mesh == null:
+			continue
+
+		# Explicitly skip main floor and raised sections (these are placeable surfaces)
+		var child_name: String = child.name
+		if child_name.begins_with("MainArenaFloor") or child_name.begins_with("RaisedSection"):
 			continue
 
 		var mesh_pos: Vector3 = child.position
@@ -1792,12 +1799,11 @@ func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
 		else:
 			continue  # Skip unknown mesh types
 
-		# Skip very large meshes (main floor, perimeter walls)
-		# These are either floors we can place on, or walls at the edge
+		# Skip very large meshes (perimeter walls, large floors)
 		if mesh_size.x > 50.0 or mesh_size.z > 50.0:
 			continue
 
-		# Skip meshes that are clearly elevated (not at ground level)
+		# Skip meshes that are clearly elevated above ground level
 		var mesh_bottom: float = mesh_pos.y - mesh_size.y / 2.0
 		if mesh_bottom > 1.0:
 			continue  # This is elevated, won't clip with ground-level elements
