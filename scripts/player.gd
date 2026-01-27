@@ -1144,7 +1144,7 @@ func check_ground() -> void:
 
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Bounce complete! Total bounces: %d/%d | Cooldown started" % [bounce_count, max_bounce_count], false, get_entity_id())
 
-	# Reset jump count when landing
+	# Reset jump count when landing (transition from air to ground)
 	if is_grounded and not was_grounded:
 		jump_count = 0
 
@@ -1164,6 +1164,10 @@ func check_ground() -> void:
 		# Play landing sound (only if not from a bounce, since bounce has its own sound)
 		if land_sound and land_sound.stream and not just_bounce_landed:
 			play_land_sound.rpc()
+
+	# SAFETY: Always ensure jump_count is 0 while grounded (catches stuck states)
+	if is_grounded and jump_count > 0:
+		jump_count = 0
 
 	# Debug logging every 60 frames (about once per second)
 	if Engine.get_physics_frames() % 60 == 0:
@@ -1358,6 +1362,10 @@ func respawn() -> void:
 	is_spin_dashing = false
 	spin_charge = 0.0
 	spin_dash_timer = 0.0
+
+	# CRITICAL: Force grounded state on respawn (we spawn on ground)
+	# This fixes the stuck AIR state bug after grinding
+	is_grounded = true
 
 	# Reset all cooldowns
 	bounce_cooldown = 0.0
