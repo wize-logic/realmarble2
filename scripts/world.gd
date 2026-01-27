@@ -180,7 +180,7 @@ func _process(delta: float) -> void:
 
 		if countdown_time <= 0:
 			# Countdown finished - start the game
-			print("Countdown finished! Starting match...")
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Countdown finished! Starting match...")
 			countdown_active = false
 			game_active = true
 			if countdown_label:
@@ -191,7 +191,7 @@ func _process(delta: float) -> void:
 				# CRITICAL FIX: Reset HUD to find new player for this match
 				if game_hud.has_method("reset_hud"):
 					game_hud.reset_hud()
-			print("GO! Match started! game_active is now: ", game_active)
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "GO! Match started! game_active is now: %s" % game_active)
 
 			# Spawn pending bots now that match is active
 			if pending_bot_count > 0:
@@ -223,7 +223,7 @@ func _process(delta: float) -> void:
 
 		if game_time_remaining <= 0:
 			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
-			print("Time's up! Ending deathmatch...")
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Time's up! Ending deathmatch...")
 			end_deathmatch()
 
 # ============================================================================
@@ -291,7 +291,7 @@ func _on_back_pressed() -> void:
 
 func _on_return_to_title_pressed() -> void:
 	"""Return to title screen from pause menu"""
-	print("Return to title screen pressed")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Return to title screen pressed")
 
 	# Unpause the game
 	paused = false
@@ -335,12 +335,12 @@ func _on_play_pressed() -> void:
 
 func _on_practice_button_pressed() -> void:
 	"""Start practice mode with bots - ask for bot count first"""
-	print("======================================")
-	print("_on_practice_button_pressed() CALLED!")
-	print("Current player count: ", get_tree().get_nodes_in_group("players").size())
-	print("Current bot_counter: ", bot_counter)
-	print("game_active: ", game_active, " | countdown_active: ", countdown_active)
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "_on_practice_button_pressed() CALLED!")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Current player count: %d" % get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Current bot_counter: %d" % bot_counter)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "game_active: %s | countdown_active: %s" % [game_active, countdown_active])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "======================================")
 
 	# Prevent starting practice mode if a game is already active or counting down
 	if game_active or countdown_active:
@@ -350,30 +350,30 @@ func _on_practice_button_pressed() -> void:
 	# Prevent starting if players already exist (game already started)
 	var existing_players: int = get_tree().get_nodes_in_group("players").size()
 	if existing_players > 0:
-		print("WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
-		print("======================================")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: Cannot start practice mode - %d players already in game!" % existing_players)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "======================================")
 		return
 
 	# Ask user how many bots they want
-	print("Calling ask_bot_count()...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling ask_bot_count()...")
 	var bot_count_choice = await ask_bot_count()
-	print("ask_bot_count() returned: ", bot_count_choice)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "ask_bot_count() returned: %d" % bot_count_choice)
 	if bot_count_choice < 0:
 		# User cancelled or error
-		print("Practice mode cancelled")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Practice mode cancelled")
 		return
 
 	# Ask user for level size/complexity and match duration
-	print("Calling ask_level_config()...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Calling ask_level_config()...")
 	var level_config = await ask_level_config()
-	print("ask_level_config() returned: ", level_config)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "ask_level_config() returned: %s" % level_config)
 	if level_config.is_empty():
 		# User cancelled or error
-		print("Practice mode cancelled")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Practice mode cancelled")
 		return
 
 	# Now start practice mode with the chosen settings (Q3 generator only)
-	print("Starting practice mode with %d bots, size %d, time %.0fs..." % [bot_count_choice, level_config.size, level_config.time])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs..." % [bot_count_choice, level_config.size, level_config.time])
 	start_practice_mode(bot_count_choice, level_config.size, level_config.time)
 
 func ask_bot_count() -> int:
@@ -487,15 +487,10 @@ func ask_bot_count() -> int:
 		# FIX: Capture the value properly to avoid closure issue
 		var count_value = count  # Capture the current count value
 		button.pressed.connect(func():
-			print("=== BUTTON PRESSED CALLBACK START ===")
-			print("Button clicked for count: %d" % count_value)
+			DebugLogger.dlog(DebugLogger.Category.UI, "Bot count button clicked for count: %d" % count_value)
 			bot_count_selected = count_value  # Use instance variable
-			print("bot_count_selected set to: %d" % bot_count_selected)
 			bot_count_dialog_closed = true  # Use instance variable
-			print("bot_count_dialog_closed set to: true")
 			dialog.hide()
-			print("dialog.hide() called")
-			print("=== BUTTON PRESSED CALLBACK END ===")
 		)
 		grid.add_child(button)
 
@@ -518,21 +513,21 @@ func ask_bot_count() -> int:
 	dialog.close_requested.connect(func():
 		bot_count_dialog_closed = true
 		bot_count_selected = -1  # Indicate cancellation
-		print("Dialog closed via X button or ESC")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Bot count dialog closed via X button or ESC")
 	)
 
 	# Ensure mouse is visible for dialog interaction
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	dialog.popup_centered()
-	print("Dialog shown, waiting for user selection...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Bot count dialog shown, waiting for user selection...")
 
 	# Wait for user to select an option (flag-based waiting using instance variable)
 	while not bot_count_dialog_closed:
 		await get_tree().process_frame
 		# Silently wait - no need to spam console
 
-	print("Dialog closed flag detected, cleaning up...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Bot count dialog closed flag detected, cleaning up...")
 	# Clean up
 	dialog.queue_free()
 
@@ -543,7 +538,7 @@ func ask_bot_count() -> int:
 	# Keep mouse visible (we're still in main menu)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
-	print("Bot count selected: %d" % bot_count_selected)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Bot count selected: %d" % bot_count_selected)
 	return bot_count_selected
 
 func ask_level_config() -> Dictionary:
@@ -670,7 +665,7 @@ func ask_level_config() -> Dictionary:
 	# Update size value display when slider changes
 	# IMPORTANT: Use _update_level_config_size method to properly set instance variable
 	size_slider.value_changed.connect(_on_size_slider_changed.bind(size_value_label))
-	print("[DEBUG] Size slider connected. Initial value: %d, focusable: %s, editable: %s" % [size_slider.value, size_slider.focus_mode != Control.FOCUS_NONE, size_slider.editable])
+	DebugLogger.dlog(DebugLogger.Category.UI, "Size slider connected. Initial value: %d, focusable: %s, editable: %s" % [size_slider.value, size_slider.focus_mode != Control.FOCUS_NONE, size_slider.editable])
 
 	# Add separator
 	var separator2 = HSeparator.new()
@@ -729,7 +724,7 @@ func ask_level_config() -> Dictionary:
 	# Update time value display when slider changes
 	# IMPORTANT: Use _update_level_config_time method to properly set instance variable
 	time_slider.value_changed.connect(_on_time_slider_changed.bind(time_value_label))
-	print("[DEBUG] Time slider connected. Initial value: %d" % time_slider.value)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider connected. Initial value: %d" % time_slider.value)
 
 	# Add separator
 	var separator3 = HSeparator.new()
@@ -769,7 +764,7 @@ func ask_level_config() -> Dictionary:
 	start_button.add_theme_stylebox_override("pressed", start_button_hover)
 
 	start_button.pressed.connect(func():
-		print("Start Match button clicked - Size: %d, Time: %.0f seconds" % [level_config_size, level_config_time])
+		DebugLogger.dlog(DebugLogger.Category.UI, "Start Match button clicked - Size: %d, Time: %.0f seconds" % [level_config_size, level_config_time])
 		level_config_dialog_closed = true
 		dialog.hide()
 	)
@@ -789,20 +784,20 @@ func ask_level_config() -> Dictionary:
 	dialog.close_requested.connect(func():
 		level_config_dialog_closed = true
 		level_config_size = -1  # Indicate cancellation
-		print("Level config dialog closed via X button or ESC")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Level config dialog closed via X button or ESC")
 	)
 
 	# Ensure mouse is visible for dialog interaction
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 	dialog.popup_centered()
-	print("Level config dialog shown, waiting for user selection...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config dialog shown, waiting for user selection...")
 
 	# Wait for user to confirm or cancel
 	while not level_config_dialog_closed:
 		await get_tree().process_frame
 
-	print("Level config dialog closed, cleaning up...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config dialog closed, cleaning up...")
 	dialog.queue_free()
 
 	# Hide blur after dialog is closed
@@ -814,20 +809,16 @@ func ask_level_config() -> Dictionary:
 
 	# Return configuration or empty dict if cancelled
 	if level_config_size == -1:
-		print("Level config cancelled")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Level config cancelled")
 		return {}
 
-	print("======================================")
-	print("[LEVEL CONFIG] FINAL VALUES BEING RETURNED:")
-	print("  level_config_size = %d" % level_config_size)
-	print("  level_config_time = %.0f" % level_config_time)
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f" % [level_config_size, level_config_time])
 	return {"size": level_config_size, "time": level_config_time}
 
 func _on_size_slider_changed(value: float, label: Label) -> void:
 	"""Callback for size slider - properly sets instance variable"""
 	level_config_size = int(value)
-	print("[SLIDER] Size changed to: %d" % level_config_size)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Size slider changed to: %d" % level_config_size)
 	match int(value):
 		1: label.text = "Small (Compact arena)"
 		2: label.text = "Medium (Standard arena)"
@@ -841,7 +832,7 @@ func _on_time_slider_changed(value: float, label: Label) -> void:
 	var index: int = int(value) - 1
 	level_config_time = time_values[index]
 	label.text = time_labels[index]
-	print("[SLIDER] Time changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
+	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
 func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
@@ -850,7 +841,7 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
 		match_time: Match duration in seconds
 	"""
-	print("Starting practice mode with %d bots, size %d, time %.0fs" % [bot_count, level_size, match_time])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs" % [bot_count, level_size, match_time])
 
 	if main_menu:
 		main_menu.hide()
@@ -875,13 +866,13 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 
 	# Set match duration based on user selection
 	game_time_remaining = match_time
-	print("Match duration set to %.0f seconds (%.1f minutes)" % [match_time, match_time / 60.0])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Match duration set to %.0f seconds (%.1f minutes)" % [match_time, match_time / 60.0])
 
 	# Regenerate level with selected size
 	current_level_size = level_size
-	print("Regenerating level with size %d..." % level_size)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d..." % level_size)
 	await generate_procedural_level(true, level_size)
-	print("Level regeneration complete!")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -904,15 +895,15 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 			# Reposition player to correct spawn point
 			var spawn_index: int = 1 % spawn_points.size()
 			local_player.global_position = spawn_points[spawn_index]
-			print("Player spawned at position %d: %s" % [spawn_index, local_player.global_position])
+			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Player spawned at position %d: %s" % [spawn_index, local_player.global_position])
 
 	player_scores[1] = 0
 	player_deaths[1] = 0
-	print("Local player added. Total players now: ", get_tree().get_nodes_in_group("players").size())
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Local player added. Total players now: %d" % get_tree().get_nodes_in_group("players").size())
 
 	# Store bot count to spawn after countdown
 	pending_bot_count = bot_count
-	print("Will spawn %d bots after countdown completes..." % bot_count)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Will spawn %d bots after countdown completes..." % bot_count)
 
 	# Start the deathmatch (skip level regen since we already generated it above)
 	start_deathmatch(true)
@@ -947,9 +938,9 @@ func _set_practice_button_disabled(disabled: bool) -> void:
 	if "disabled" in practice_button:
 		practice_button.disabled = disabled
 		if disabled:
-			print("[UI] Practice button disabled (game active)")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Practice button disabled (game active)")
 		else:
-			print("[UI] Practice button enabled (game inactive)")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Practice button enabled (game inactive)")
 
 func _on_settings_pressed() -> void:
 	"""Open settings menu from main menu"""
@@ -961,11 +952,11 @@ func _on_quit_pressed() -> void:
 
 func _on_item_shop_pressed() -> void:
 	"""Item Shop placeholder"""
-	print("Item Shop - Not implemented yet")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Item Shop - Not implemented yet")
 
 func _on_garage_pressed() -> void:
 	"""Garage placeholder"""
-	print("Garage - Not implemented yet")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Garage - Not implemented yet")
 
 func _on_profile_pressed() -> void:
 	"""Show profile panel"""
@@ -1102,7 +1093,7 @@ func add_player(peer_id: int) -> void:
 			# Reposition player to correct spawn point
 			var spawn_index: int = peer_id % spawn_points.size()
 			player.global_position = spawn_points[spawn_index]
-			print("Multiplayer player %d spawned at position %d: %s" % [peer_id, spawn_index, player.global_position])
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer player %d spawned at position %d: %s" % [peer_id, spawn_index, player.global_position])
 
 	# Initialize player score and deaths
 	player_scores[peer_id] = 0
@@ -1120,13 +1111,13 @@ func remove_player(peer_id: int) -> void:
 # New multiplayer manager handlers
 func _on_multiplayer_player_connected(peer_id: int, player_info: Dictionary) -> void:
 	"""Called when a player connects via multiplayer manager"""
-	print("Multiplayer player connected: ", peer_id, " - ", player_info)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer player connected: %d - %s" % [peer_id, player_info])
 	# DON'T spawn player here - they're just joining the lobby!
 	# Players will be spawned when the game actually starts
 
 func _on_multiplayer_player_disconnected(peer_id: int) -> void:
 	"""Called when a player disconnects via multiplayer manager"""
-	print("Multiplayer player disconnected: ", peer_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer player disconnected: %d" % peer_id)
 	# Only remove if game is active (player exists in scene)
 	if game_active or countdown_active:
 		remove_player(peer_id)
@@ -1192,9 +1183,9 @@ func upnp_setup() -> void:
 
 	var ip: String = upnp.query_external_address()
 	if ip == "":
-		print("Failed to establish upnp connection!")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to establish upnp connection!")
 	else:
-		print("Success! Join Address: %s" % upnp.query_external_address())
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Success! Join Address: %s" % upnp.query_external_address())
 
 # ============================================================================
 # DEATHMATCH GAME LOGIC
@@ -1205,18 +1196,12 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	Args:
 		skip_level_regen: If true, don't regenerate the level (practice mode already did)
 	"""
-	print("======================================")
-	print("start_deathmatch() CALLED! skip_level_regen=%s" % skip_level_regen)
-	print("Stack trace:")
-	print_stack()
-	print("Current game_active: ", game_active)
-	print("Current countdown_active: ", countdown_active)
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_deathmatch() CALLED! skip_level_regen=%s" % skip_level_regen)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Current game_active: %s | countdown_active: %s" % [game_active, countdown_active])
 
 	# Prevent starting a new match if one is already active or counting down
 	if game_active or countdown_active:
-		print("WARNING: Match already active or counting down! Ignoring start_deathmatch() call.")
-		print("======================================")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: Match already active or counting down! Ignoring start_deathmatch() call.")
 		return
 
 	# Hide lobby UI and show game
@@ -1246,18 +1231,18 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
 	if not skip_level_regen and multiplayer.has_multiplayer_peer():
-		print("Regenerating level for multiplayer match (Size %d)..." % current_level_size)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d)..." % current_level_size)
 		await generate_procedural_level(true, current_level_size)
-		print("Level regeneration complete!")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 	elif skip_level_regen:
-		print("Skipping level regeneration (practice mode already generated level)")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skipping level regeneration (practice mode already generated level)")
 
 	# Capture mouse for gameplay
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 	# Spawn all players from multiplayer manager
 	if MultiplayerManager and MultiplayerManager.players:
-		print("Spawning %d multiplayer players..." % MultiplayerManager.players.size())
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Spawning %d multiplayer players..." % MultiplayerManager.players.size())
 		for peer_id in MultiplayerManager.players.keys():
 			add_player(peer_id)
 
@@ -1275,7 +1260,7 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	countdown_time = 2.0  # 2 seconds: "READY" (1s), "GO!" (1s)
 	if countdown_label:
 		countdown_label.visible = true
-	print("Starting countdown...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting countdown...")
 
 func is_game_active() -> bool:
 	"""Check if the game is currently active"""
@@ -1283,15 +1268,11 @@ func is_game_active() -> bool:
 
 func end_deathmatch() -> void:
 	"""End the deathmatch and show results"""
-	print("======================================")
-	print("end_deathmatch() CALLED!")
-	print("Game time was: %.2f seconds" % max(0.0, game_time_remaining))
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "end_deathmatch() CALLED! Game time was: %.2f seconds" % max(0.0, game_time_remaining))
 
 	# Prevent ending if already ended
 	if not game_active and not countdown_active:
-		print("WARNING: Match already ended! Ignoring end_deathmatch() call.")
-		print("======================================")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: Match already ended! Ignoring end_deathmatch() call.")
 		return
 
 	game_active = false
@@ -1308,14 +1289,14 @@ func end_deathmatch() -> void:
 	for ability in all_abilities:
 		if ability:
 			ability.queue_free()
-	print("Cleared %d ability pickups from world" % all_abilities.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared %d ability pickups from world" % all_abilities.size())
 
 	# Clear ALL orbs (both spawned and dropped by players)
 	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
 	for orb in all_orbs:
 		if orb:
 			orb.queue_free()
-	print("Cleared %d orbs from world" % all_orbs.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared %d orbs from world" % all_orbs.size())
 
 	# Also tell spawners to clear their tracking arrays
 	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
@@ -1326,7 +1307,7 @@ func end_deathmatch() -> void:
 	if orb_spawner and orb_spawner.has_method("clear_all"):
 		orb_spawner.clear_all()
 
-	print("Deathmatch ended!")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Deathmatch ended!")
 
 	# Notify CrazyGames SDK that gameplay has stopped
 	if CrazyGamesSDK:
@@ -1348,9 +1329,9 @@ func end_deathmatch() -> void:
 	if winner_id != -1:
 		# Determine bot or player
 		var winner_type: String = " (Bot)" if winner_id >= 9000 else ""
-		print("🏆 Winner: Player %d%s with %d points!" % [winner_id, winner_type, highest_score])
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Winner: Player %d%s with %d points!" % [winner_id, winner_type, highest_score])
 	else:
-		print("Match ended - no scores recorded")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Match ended - no scores recorded")
 
 	# Show scoreboard for 10 seconds
 	var scoreboard: Control = get_node_or_null("Scoreboard")
@@ -1368,7 +1349,7 @@ func end_deathmatch() -> void:
 
 func return_to_main_menu() -> void:
 	"""Return to main menu after match ends"""
-	print("Returning to main menu...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Returning to main menu...")
 
 	# Hide scoreboard
 	var scoreboard: Control = get_node_or_null("Scoreboard")
@@ -1381,27 +1362,27 @@ func return_to_main_menu() -> void:
 		player.queue_free()
 
 	# Clear ALL ability pickups (both spawned and dropped by players)
-	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
-	for ability in all_abilities:
+	var all_abilities2: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities2:
 		if ability:
 			ability.queue_free()
-	print("Cleared %d ability pickups from world" % all_abilities.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared %d ability pickups from world" % all_abilities2.size())
 
 	# Clear ALL orbs (both spawned and dropped by players)
-	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
-	for orb in all_orbs:
+	var all_orbs2: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs2:
 		if orb:
 			orb.queue_free()
-	print("Cleared %d orbs from world" % all_orbs.size())
+	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Cleared %d orbs from world" % all_orbs2.size())
 
 	# Also tell spawners to clear their tracking arrays
-	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
-	if ability_spawner and ability_spawner.has_method("clear_all"):
-		ability_spawner.clear_all()
+	var ability_spawner2: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner2 and ability_spawner2.has_method("clear_all"):
+		ability_spawner2.clear_all()
 
-	var orb_spawner: Node = get_node_or_null("OrbSpawner")
-	if orb_spawner and orb_spawner.has_method("clear_all"):
-		orb_spawner.clear_all()
+	var orb_spawner2: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner2 and orb_spawner2.has_method("clear_all"):
+		orb_spawner2.clear_all()
 
 	# Clear scores and deaths
 	player_scores.clear()
@@ -1439,7 +1420,7 @@ func return_to_main_menu() -> void:
 	await get_tree().process_frame
 
 	# Regenerate map for menu preview (without spawning collectibles)
-	print("[MENU] Regenerating map preview")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Regenerating map preview")
 	await generate_procedural_level(false)
 
 	# Recreate marble preview after level regeneration
@@ -1453,14 +1434,14 @@ func return_to_main_menu() -> void:
 	# Make sure mouse is visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
-	print("Returned to main menu")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Returned to main menu")
 
 func add_score(player_id: int, points: int = 1) -> void:
 	"""Add points to a player's score"""
 	if not player_scores.has(player_id):
 		player_scores[player_id] = 0
 	player_scores[player_id] += points
-	print("Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
 
 func add_death(player_id: int) -> void:
 	"""Add a death to a player's death count"""
@@ -1506,14 +1487,14 @@ func _auto_load_music() -> void:
 
 	# Fallback to res://music if no songs were found (and we're not already using it)
 	if songs_loaded == 0 and music_dir != "res://music":
-		print("No music found in %s, falling back to res://music" % music_dir)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "No music found in %s, falling back to res://music" % music_dir)
 		songs_loaded = _load_music_from_directory("res://music")
 
 	if songs_loaded > 0:
-		print("Auto-loaded %d songs from music directory" % songs_loaded)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Auto-loaded %d songs from music directory" % songs_loaded)
 	elif not OS.has_feature("web"):
 		# Only print error for non-HTML5 builds (HTML5 won't have music files in res://)
-		print("No music files found in either %s or res://music" % music_dir)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "No music files found in either %s or res://music" % music_dir)
 
 func _load_music_from_directory(dir: String) -> int:
 	"""Load all music files from a directory and return count of songs loaded"""
@@ -1521,7 +1502,7 @@ func _load_music_from_directory(dir: String) -> int:
 	if not dir_access:
 		# Only print error if not HTML5 trying to access non-res:// path
 		if not (OS.has_feature("web") and not dir.begins_with("res://")):
-			print("Failed to open music directory: %s" % dir)
+			DebugLogger.dlog(DebugLogger.Category.AUDIO, "Failed to open music directory: %s" % dir)
 		return 0
 
 	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Scanning directory: %s" % dir)
@@ -1584,10 +1565,10 @@ func _on_music_directory_button_pressed() -> void:
 
 func _on_music_directory_selected(dir: String) -> void:
 	"""Load all music files from selected directory"""
-	print("Loading music from directory: %s" % dir)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "Loading music from directory: %s" % dir)
 
 	if not gameplay_music:
-		print("Error: GameplayMusic node not found")
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Error: GameplayMusic node not found")
 		return
 
 	# Clear existing playlist
@@ -1596,7 +1577,7 @@ func _on_music_directory_selected(dir: String) -> void:
 
 	# Load music from selected directory
 	var songs_loaded: int = _load_music_from_directory(dir)
-	print("Music directory loaded: %d songs added to playlist" % songs_loaded)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "Music directory loaded: %d songs added to playlist" % songs_loaded)
 
 	# Save this as the new music directory
 	Global.music_directory = dir
@@ -1656,7 +1637,7 @@ func _load_audio_file(file_path: String, extension: String) -> AudioStream:
 			audio_stream = ResourceLoader.load(file_path)
 
 	if not audio_stream:
-		print("Warning: Could not load audio file: %s" % file_path)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Warning: Could not load audio file: %s" % file_path)
 
 	return audio_stream
 
@@ -1730,7 +1711,7 @@ func despawn_all_bots() -> void:
 			# Check if this is a bot (ID >= 9000)
 			var player_id: int = str(player.name).to_int()
 			if player_id >= 9000:
-				print("Despawning bot: %s (ID: %d)" % [player.name, player_id])
+				DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Despawning bot: %s (ID: %d)" % [player.name, player_id])
 				# Keep scores/deaths on leaderboard - don't erase them
 				# Remove from scene
 				player.queue_free()
@@ -1738,21 +1719,21 @@ func despawn_all_bots() -> void:
 
 	bot_counter = 0
 	pending_bot_count = 0
-	print("Despawned %d bots. Remaining players: %d" % [bots_removed, get_tree().get_nodes_in_group("players").size() - bots_removed])
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Despawned %d bots. Remaining players: %d" % [bots_removed, get_tree().get_nodes_in_group("players").size() - bots_removed])
 
 func spawn_abilities_and_orbs() -> void:
 	"""Trigger spawning of abilities and orbs when match becomes active"""
 	# Find and trigger ability spawner
-	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
-	if ability_spawner and ability_spawner.has_method("spawn_abilities"):
-		ability_spawner.spawn_abilities()
-		print("Triggered ability spawning")
+	var ability_spawner3: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner3 and ability_spawner3.has_method("spawn_abilities"):
+		ability_spawner3.spawn_abilities()
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Triggered ability spawning")
 
 	# Find and trigger orb spawner
-	var orb_spawner: Node = get_node_or_null("OrbSpawner")
-	if orb_spawner and orb_spawner.has_method("spawn_orbs"):
-		orb_spawner.spawn_orbs()
-		print("Triggered orb spawning")
+	var orb_spawner3: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner3 and orb_spawner3.has_method("spawn_orbs"):
+		orb_spawner3.spawn_orbs()
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Triggered orb spawning")
 
 # ============================================================================
 # COUNTDOWN SYSTEM
@@ -1942,7 +1923,7 @@ func _create_profile_panel() -> void:
 	# Start hidden
 	profile_panel.visible = false
 
-	print("Profile panel created")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Profile panel created")
 
 func _create_friends_panel() -> void:
 	"""Create the friends panel UI following style guide"""
@@ -2073,7 +2054,7 @@ func _create_friends_panel() -> void:
 	# Start hidden
 	friends_panel.visible = false
 
-	print("Friends panel created")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Friends panel created")
 
 func _create_marble_preview() -> void:
 	"""Create marble preview for main menu - actual player marble"""
@@ -2089,9 +2070,9 @@ func _create_marble_preview() -> void:
 	var ground_position = Vector3(0, 0, 0)
 	if result:
 		ground_position = result.position
-		print("Ground found at: ", ground_position)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Ground found at: %s" % ground_position)
 	else:
-		print("No ground found, using default position")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "No ground found, using default position")
 
 	# Instantiate an actual player marble
 	var marble = Player.instantiate()
@@ -2153,7 +2134,7 @@ func _create_marble_preview() -> void:
 	# Add to World root (Menu is a CanvasLayer for UI, can't hold 3D nodes)
 	add_child(preview_container)
 
-	print("Marble preview created")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Marble preview created")
 
 func _resume_audio_context() -> void:
 	"""Resume AudioContext on first user interaction (HTML5 browser policy fix)"""
@@ -2173,7 +2154,7 @@ func _resume_audio_context() -> void:
 		}
 	"""
 	JavaScriptBridge.eval(js_code, true)
-	print("[HTML5] Attempted to resume AudioContext")
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[HTML5] Attempted to resume AudioContext")
 
 func _on_profile_panel_close_pressed() -> void:
 	"""Handle profile panel close button pressed"""
@@ -2234,9 +2215,9 @@ func create_countdown_ui() -> void:
 		countdown_sound.name = "CountdownSound"
 		countdown_sound.volume_db = 0.0
 		add_child(countdown_sound)
-		print("Created countdown sound player (no audio file loaded)")
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Created countdown sound player (no audio file loaded)")
 
-	print("Countdown UI created")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Countdown UI created")
 
 func update_countdown_display() -> void:
 	"""Update countdown display based on remaining time"""
@@ -2302,11 +2283,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 	"""
-	print("======================================")
-	print("[LEVEL GEN] RECEIVED PARAMETERS:")
-	print("  level_size: %d" % level_size)
-	print("  spawn_collectibles: %s" % spawn_collectibles)
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s" % [level_size, spawn_collectibles])
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
@@ -2336,7 +2313,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.set_script(LevelGeneratorQ3)
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
-	print("Using Q3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Using Q3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
 	add_child(level_generator)
 
@@ -2366,7 +2343,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator.set_script(SkyboxGenerator)
 	add_child(skybox_generator)
 
-	print("Procedural level generation complete!")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Procedural level generation complete!")
 
 func update_player_spawns() -> void:
 	"""Update all player spawn points from generated level"""
@@ -2374,14 +2351,14 @@ func update_player_spawns() -> void:
 		return
 
 	var new_spawns: PackedVector3Array = level_generator.get_spawn_points()
-	print("Updating player spawns: ", new_spawns.size(), " spawn points")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Updating player spawns: %d spawn points" % new_spawns.size())
 
 	# Update all existing players
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	for player in players:
 		if "spawns" in player:
 			player.spawns = new_spawns
-			print("Updated spawns for player: ", player.name)
+			DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Updated spawns for player: %s" % player.name)
 
 func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
@@ -2394,9 +2371,7 @@ func _on_track_started(metadata: Dictionary) -> void:
 
 func trigger_mid_round_expansion() -> void:
 	"""Trigger the mid-round expansion - show notification, spawn new area, connect with rail"""
-	print("======================================")
-	print("TRIGGERING MID-ROUND EXPANSION!")
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "TRIGGERING MID-ROUND EXPANSION!")
 
 	expansion_triggered = true
 
@@ -2426,7 +2401,7 @@ func trigger_mid_round_expansion() -> void:
 	# Generate secondary arena
 	if level_generator and level_generator.has_method("generate_secondary_map"):
 		level_generator.generate_secondary_map(expansion_offset)
-		print("Secondary arena generated at offset: ", expansion_offset)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Secondary arena generated at offset: %s" % expansion_offset)
 
 		# Apply textures to new platforms (only new ones, not regenerating entire map)
 		if level_generator.has_method("apply_procedural_textures"):
@@ -2438,18 +2413,16 @@ func trigger_mid_round_expansion() -> void:
 
 		if level_generator.has_method("generate_connecting_rail"):
 			level_generator.generate_connecting_rail(start_rail_pos, end_rail_pos)
-			print("Connecting rail generated!")
+			DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Connecting rail generated!")
 
 	# Showcase the new arena with a dolly camera
 	await showcase_new_arena(expansion_offset)
 
-	print("======================================")
-	print("MID-ROUND EXPANSION COMPLETE!")
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "MID-ROUND EXPANSION COMPLETE!")
 
 func showcase_new_arena(arena_position: Vector3) -> void:
 	"""Temporarily show all players the new arena with a dolly camera"""
-	print("Starting arena showcase...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting arena showcase...")
 
 	# Create a showcase camera
 	var showcase_camera = Camera3D.new()
@@ -2465,22 +2438,18 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 	var player_states: Dictionary = {}
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 
-	print("======================================")
-	print("FREEZING ", players.size(), " PLAYERS FOR SHOWCASE")
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "FREEZING %d PLAYERS FOR SHOWCASE" % players.size())
 
 	for player in players:
 		var state: Dictionary = {}
 
-		print("Storing state for player: ", player.name)
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Storing state for player: %s" % player.name)
 
 		# Store position and transform
 		if player is Node3D:
 			state["position"] = player.global_position
 			state["rotation"] = player.global_rotation
 			state["visible"] = player.visible
-			print("  Position: ", player.global_position)
-			print("  Visible: ", player.visible)
 
 		# Store and disable camera
 		if player.has_node("CameraArm/Camera3D"):
@@ -2501,9 +2470,6 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			state["camera_arm_rotation"] = camera_arm.global_rotation
 
 			camera.current = false
-			print("  Camera stored (was_current: ", state["was_current"], ")")
-			print("  Camera local position: ", camera.position)
-			print("  CameraArm global position: ", camera_arm.global_position)
 
 		# Freeze player physics (RigidBody3D)
 		if player is RigidBody3D:
@@ -2513,17 +2479,15 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			player.freeze = true
 			player.linear_velocity = Vector3.ZERO
 			player.angular_velocity = Vector3.ZERO
-			print("  Physics frozen (was frozen: ", state["original_freeze"], ")")
 
 		# Disable player input processing
 		state["original_process_mode"] = player.process_mode
 		player.set_process_input(false)
 		player.set_process_unhandled_input(false)
-		print("  Input disabled")
 
 		player_states[player] = state
 
-	print("All players frozen and stored")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "All players frozen and stored")
 
 	# Make showcase camera active
 	showcase_camera.current = true
@@ -2560,29 +2524,27 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 	if multiplayer.has_multiplayer_peer():
 		local_player_id = multiplayer.get_unique_id()
 	var local_player_name: String = str(local_player_id)
-	print("Identifying local player: ", local_player_name)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Identifying local player: %s" % local_player_name)
 
 	# Restore all player states
 	for player in player_states.keys():
 		if not is_instance_valid(player):
-			print("Warning: Player instance invalid during restoration")
+			DebugLogger.dlog(DebugLogger.Category.WORLD, "Warning: Player instance invalid during restoration")
 			continue
 
 		var state: Dictionary = player_states[player]
 		var is_local_player: bool = (player.name == local_player_name)
 
-		print("Processing player: ", player.name, " (is_local: ", is_local_player, ")")
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "Restoring player: %s (is_local: %s)" % [player.name, is_local_player])
 
 		# Restore position and visibility
 		if player is Node3D:
 			if state.has("position"):
 				player.global_position = state["position"]
-				print("✓ Restored position: ", state["position"])
 			if state.has("rotation"):
 				player.global_rotation = state["rotation"]
 			if state.has("visible"):
 				player.visible = state["visible"]
-				print("✓ Restored visibility: ", state["visible"])
 
 		# Unfreeze player physics FIRST
 		if player is RigidBody3D and state.has("original_freeze"):
@@ -2591,20 +2553,17 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 			if not player.freeze:
 				player.linear_velocity = Vector3.ZERO
 				player.angular_velocity = Vector3.ZERO
-			print("✓ Unfroze player: ", player.name, " (freeze: ", player.freeze, ")")
 
 		# Re-enable player input processing
 		player.set_process_input(true)
 		player.set_process_unhandled_input(true)
 		player.set_process(true)
 		player.set_physics_process(true)
-		print("✓ Re-enabled processing for player: ", player.name)
 
 		# Ensure all child meshes are visible
 		for child in player.get_children():
 			if child is MeshInstance3D:
 				child.visible = true
-				print("✓ Made mesh visible: ", child.name)
 
 		# Restore camera - ALWAYS restore for local player (do this LAST)
 		if state.has("camera") and is_instance_valid(state["camera"]):
@@ -2615,37 +2574,27 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 				var camera_arm = state["camera_arm"]
 				if state.has("camera_arm_position"):
 					camera_arm.global_position = state["camera_arm_position"]
-					print("  Restored CameraArm global position: ", camera_arm.global_position)
 				if state.has("camera_arm_rotation"):
 					camera_arm.global_rotation = state["camera_arm_rotation"]
-					print("  Restored CameraArm global rotation")
 
 			# Then restore camera's local transform (position relative to CameraArm)
 			if state.has("camera_transform"):
 				camera.transform = state["camera_transform"]
-				print("  Restored camera local transform")
 			elif state.has("camera_position") and state.has("camera_rotation"):
 				camera.position = state["camera_position"]
 				camera.rotation = state["camera_rotation"]
-				print("  Restored camera local position: ", camera.position)
 
 			# Always activate camera for local player
 			if is_local_player:
 				camera.current = true
 				# Force camera to update its transform
 				camera.force_update_transform()
-				print("✓ Restored camera for LOCAL player: ", player.name)
-				print("  Camera global position: ", camera.global_position)
-				print("  Player position: ", player.global_position)
-				print("  Camera local position: ", camera.position)
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "Restored camera for LOCAL player: %s" % player.name)
 			elif state.get("was_current", false):
 				camera.current = true
 				camera.force_update_transform()
-				print("✓ Restored camera for player: ", player.name, " (was current before)")
 
 	# Wait another frame to ensure everything is properly restored
 	await get_tree().process_frame
 
-	print("======================================")
-	print("Arena showcase complete - control returned to players")
-	print("======================================")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Arena showcase complete - control returned to players")

@@ -56,7 +56,7 @@ func create_game(player_name: String) -> String:
 		var peer: WebSocketMultiplayerPeer = WebSocketMultiplayerPeer.new()
 		var error: Error = peer.create_server(relay_server_port)
 		if error != OK:
-			print("Failed to create WebSocket server: ", error)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to create WebSocket server: %s" % error)
 			network_mode = NetworkMode.OFFLINE
 			return ""
 		multiplayer.multiplayer_peer = peer
@@ -64,7 +64,7 @@ func create_game(player_name: String) -> String:
 		var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 		var error: Error = peer.create_server(enet_port, max_players)
 		if error != OK:
-			print("Failed to create ENet server: ", error)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to create ENet server: %s" % error)
 			network_mode = NetworkMode.OFFLINE
 			return ""
 		multiplayer.multiplayer_peer = peer
@@ -76,7 +76,7 @@ func create_game(player_name: String) -> String:
 		"score": 0
 	})
 
-	print("Game created! Room code: ", room_code)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game created! Room code: %s" % room_code)
 	lobby_created.emit(room_code)
 	return room_code
 
@@ -99,7 +99,7 @@ func join_game(player_name: String, join_room_code: String) -> bool:
 		var url: String = relay_server_url
 		var error: Error = peer.create_client(url)
 		if error != OK:
-			print("Failed to connect to WebSocket server: ", error)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to WebSocket server: %s" % error)
 			network_mode = NetworkMode.OFFLINE
 			return false
 		multiplayer.multiplayer_peer = peer
@@ -107,12 +107,12 @@ func join_game(player_name: String, join_room_code: String) -> bool:
 		var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 		var error: Error = peer.create_client(host_address, enet_port)
 		if error != OK:
-			print("Failed to connect to server: ", error)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to server: %s" % error)
 			network_mode = NetworkMode.OFFLINE
 			return false
 		multiplayer.multiplayer_peer = peer
 
-	print("Attempting to join game with room code: ", room_code)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Attempting to join game with room code: %s" % room_code)
 	return true
 
 func quick_play(player_name: String) -> void:
@@ -120,7 +120,7 @@ func quick_play(player_name: String) -> void:
 	# In a real implementation, this would query your matchmaking server
 	# For now, just create a new game
 	create_game(player_name)
-	print("Quick play - created new game")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Quick play - created new game")
 
 func leave_game() -> void:
 	"""Leave current game"""
@@ -130,14 +130,14 @@ func leave_game() -> void:
 	# Notify others
 	if network_mode == NetworkMode.HOST:
 		# Host leaving - could implement host migration here
-		print("Host leaving game")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Host leaving game")
 
 	# Disconnect
 	multiplayer.multiplayer_peer = null
 	network_mode = NetworkMode.OFFLINE
 	players.clear()
 	room_code = ""
-	print("Left game")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Left game")
 
 func set_player_ready(ready: bool) -> void:
 	"""Set local player ready status"""
@@ -167,20 +167,20 @@ func all_players_ready() -> bool:
 func start_game() -> void:
 	"""Start the game (host only)"""
 	if network_mode != NetworkMode.HOST:
-		print("Only host can start game")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Only host can start game")
 		return
 
 	if not all_players_ready():
-		print("Not all players ready")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Not all players ready")
 		return
 
-	print("Starting game!")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Starting game!")
 	rpc("on_game_started")
 
 @rpc("authority", "call_local", "reliable")
 func on_game_started() -> void:
 	"""Called on all peers when game starts"""
-	print("Game starting!")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game starting!")
 	# Signal to world to start match
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("start_deathmatch"):
@@ -189,14 +189,14 @@ func on_game_started() -> void:
 func register_player(peer_id: int, player_info: Dictionary) -> void:
 	"""Register a new player"""
 	players[peer_id] = player_info
-	print("Player registered: ", peer_id, " - ", player_info.name)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Player registered: %d - %s" % [peer_id, player_info.name])
 	player_connected.emit(peer_id, player_info)
 	player_list_changed.emit()
 
 func unregister_player(peer_id: int) -> void:
 	"""Unregister a player"""
 	if players.has(peer_id):
-		print("Player unregistered: ", peer_id)
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Player unregistered: %d" % peer_id)
 		players.erase(peer_id)
 		player_disconnected.emit(peer_id)
 		player_list_changed.emit()
@@ -225,7 +225,7 @@ func get_player_list() -> Array:
 # Network callbacks
 func _on_peer_connected(peer_id: int) -> void:
 	"""Called when a peer connects"""
-	print("Peer connected: ", peer_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Peer connected: %d" % peer_id)
 
 	# If we're the host, send them our player list
 	if network_mode == NetworkMode.HOST:
@@ -249,17 +249,17 @@ func register_new_player(peer_id: int, player_name: String) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	"""Called when a peer disconnects"""
-	print("Peer disconnected: ", peer_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Peer disconnected: %d" % peer_id)
 	unregister_player(peer_id)
 
 	# If host disconnected, handle host migration
 	if peer_id == 1 and network_mode == NetworkMode.CLIENT:
-		print("Host disconnected - attempting host migration...")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Host disconnected - attempting host migration...")
 		attempt_host_migration()
 
 func _on_connected_to_server() -> void:
 	"""Called when successfully connected to server as client"""
-	print("Connected to server!")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected to server!")
 
 	# Register ourselves with the host
 	var peer_id: int = multiplayer.get_unique_id()
@@ -270,13 +270,13 @@ func _on_connected_to_server() -> void:
 
 func _on_connection_failed() -> void:
 	"""Called when connection to server fails"""
-	print("Connection failed!")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connection failed!")
 	network_mode = NetworkMode.OFFLINE
 	connection_failed.emit()
 
 func _on_server_disconnected() -> void:
 	"""Called when disconnected from server"""
-	print("Disconnected from server")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Disconnected from server")
 	network_mode = NetworkMode.OFFLINE
 	server_disconnected.emit()
 
@@ -294,11 +294,11 @@ func attempt_host_migration() -> void:
 	var local_id: int = multiplayer.get_unique_id()
 
 	if local_id == new_host_id:
-		print("Becoming new host!")
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Becoming new host!")
 		# We're the new host - recreate server
 		create_game(local_player_name)
 	else:
-		print("New host is: ", new_host_id)
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "New host is: %d" % new_host_id)
 
 func is_host() -> bool:
 	"""Check if local player is host"""
