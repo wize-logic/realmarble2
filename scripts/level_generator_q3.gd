@@ -1295,33 +1295,37 @@ func generate_jump_pads() -> void:
 	print("Generated %d jump pads" % jump_pad_positions.size())
 
 func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
-	var pad_radius: float = 2.0 * scale
+	var pad_radius: float = 1.4 * scale  # Smaller than before
 
-	var pad_mesh: CylinderMesh = CylinderMesh.new()
-	pad_mesh.top_radius = pad_radius
-	pad_mesh.bottom_radius = pad_radius
-	pad_mesh.height = 0.5
+	# Create a rounded dome shape using a squashed sphere
+	var pad_mesh: SphereMesh = SphereMesh.new()
+	pad_mesh.radius = pad_radius
+	pad_mesh.height = pad_radius * 0.6  # Squashed for dome look
+	pad_mesh.radial_segments = 24
+	pad_mesh.rings = 12
 
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
 	pad_instance.mesh = pad_mesh
 	pad_instance.name = "JumpPad%d" % index
-	pad_instance.position = Vector3(pos.x, 0.25, pos.z)
+	pad_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)  # Slightly above ground
 	add_child(pad_instance)
 
-	# Create a bright green material for jump pads
+	# High quality glowing green material (Compatibility renderer safe)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.2, 0.9, 0.3)  # Bright green
+	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
 	material.emission_enabled = true
-	material.emission = Color(0.1, 0.6, 0.2)  # Green glow
-	material.emission_energy_multiplier = 2.0  # Visible glow
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	material.emission = Color(0.2, 0.9, 0.3)  # Strong green glow
+	material.emission_energy_multiplier = 3.5  # High glow intensity
+	material.metallic = 0.3
+	material.metallic_specular = 0.8
+	material.roughness = 0.2  # Shiny surface
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	pad_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
-	var collision_shape: CylinderShape3D = CylinderShape3D.new()
-	collision_shape.radius = pad_radius
-	collision_shape.height = 0.5
+	var collision_shape: SphereShape3D = SphereShape3D.new()
+	collision_shape.radius = pad_radius * 0.5
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	pad_instance.add_child(static_body)
@@ -1338,7 +1342,7 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
 	area_shape.radius = pad_radius
-	area_shape.height = 3.0
+	area_shape.height = 2.5
 	area_collision.shape = area_shape
 	jump_area.add_child(area_collision)
 
@@ -1409,33 +1413,40 @@ func generate_teleporters() -> void:
 	print("Generated %d teleporters (%d pairs spanning arena)" % [pairs_created * 2, pairs_created])
 
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
-	var teleporter_radius: float = 2.5 * scale
+	var teleporter_radius: float = 1.8 * scale  # Smaller than before
 
-	var teleporter_mesh: CylinderMesh = CylinderMesh.new()
-	teleporter_mesh.top_radius = teleporter_radius
-	teleporter_mesh.bottom_radius = teleporter_radius
-	teleporter_mesh.height = 0.3
+	# Create a torus (ring) shape for a portal-like appearance
+	var teleporter_mesh: TorusMesh = TorusMesh.new()
+	teleporter_mesh.inner_radius = teleporter_radius * 0.5
+	teleporter_mesh.outer_radius = teleporter_radius
+	teleporter_mesh.rings = 32
+	teleporter_mesh.ring_segments = 16
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
 	teleporter_instance.mesh = teleporter_mesh
 	teleporter_instance.name = "Teleporter%d" % index
-	teleporter_instance.position = Vector3(pos.x, 0.15, pos.z)
+	teleporter_instance.position = Vector3(pos.x, 0.2, pos.z)
+	# Rotate to lay flat on ground
+	teleporter_instance.rotation_degrees = Vector3(90, 0, 0)
 	add_child(teleporter_instance)
 
-	# Create a purple material for teleporters
+	# High quality glowing purple material (Compatibility renderer safe)
 	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.6, 0.3, 0.9)  # Purple
+	material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
 	material.emission_enabled = true
-	material.emission = Color(0.4, 0.2, 0.8)  # Purple glow
-	material.emission_energy_multiplier = 2.0  # Visible glow
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Prevent lighting issues
+	material.emission = Color(0.6, 0.2, 0.9)  # Strong purple glow
+	material.emission_energy_multiplier = 4.0  # High glow intensity
+	material.metallic = 0.4
+	material.metallic_specular = 0.9
+	material.roughness = 0.15  # Very shiny
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	teleporter_instance.set_surface_override_material(0, material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var collision_shape: CylinderShape3D = CylinderShape3D.new()
 	collision_shape.radius = teleporter_radius
-	collision_shape.height = 0.3
+	collision_shape.height = 0.4
 	collision.shape = collision_shape
 	static_body.add_child(collision)
 	teleporter_instance.add_child(static_body)
@@ -1453,7 +1464,7 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 	var area_collision: CollisionShape3D = CollisionShape3D.new()
 	var area_shape: CylinderShape3D = CylinderShape3D.new()
 	area_shape.radius = teleporter_radius
-	area_shape.height = 5.0
+	area_shape.height = 4.0
 	area_collision.shape = area_shape
 	teleport_area.add_child(area_collision)
 
