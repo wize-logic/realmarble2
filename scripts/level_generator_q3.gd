@@ -1775,9 +1775,9 @@ func has_overhead_clearance(pos: Vector3, required_height: float = 3.0) -> bool:
 	return true
 
 func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
-	## Check if a position is too close to smaller structures/platforms.
+	## Check if a position is too close to structures/geometry.
 	## Returns true if position is within min_distance of blocking geometry.
-	## Skips floor meshes and only checks structures that could clip.
+	## Skips floor-like meshes (large AND flat) but checks tall structures.
 
 	for child in get_children():
 		if not child is MeshInstance3D or child.mesh == null:
@@ -1799,8 +1799,10 @@ func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
 		else:
 			continue  # Skip unknown mesh types
 
-		# Skip very large meshes (perimeter walls, large floors)
-		if mesh_size.x > 50.0 or mesh_size.z > 50.0:
+		# Skip FLOOR-LIKE meshes: large horizontally AND short vertically
+		# This allows us to place on floors but still detect large walls/pillars
+		var is_floor_like: bool = (mesh_size.x > 50.0 or mesh_size.z > 50.0) and mesh_size.y < 5.0
+		if is_floor_like:
 			continue
 
 		# Skip meshes that are clearly elevated above ground level
