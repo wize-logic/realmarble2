@@ -82,6 +82,14 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	add_child(sub_viewport)
 	print("[VideoWallManager] SubViewport created and added as child, size: %s" % sub_viewport.size)
 
+	# Add pitch black background to viewport
+	var black_bg = ColorRect.new()
+	black_bg.name = "BlackBackground"
+	black_bg.color = Color(0, 0, 0, 1)  # Pitch black
+	black_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	sub_viewport.add_child(black_bg)
+	print("[VideoWallManager] Added pitch black background to viewport")
+
 	# Create VideoStreamPlayer inside the viewport
 	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
