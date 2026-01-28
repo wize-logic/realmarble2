@@ -76,18 +76,18 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	sub_viewport.name = "VideoWallViewport"
 	sub_viewport.size = viewport_size
 	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	sub_viewport.transparent_bg = false
+	sub_viewport.transparent_bg = true  # Transparent so we can control background
 	sub_viewport.handle_input_locally = false
 	sub_viewport.gui_disable_input = true
 	add_child(sub_viewport)
 	print("[VideoWallManager] SubViewport created and added as child, size: %s" % sub_viewport.size)
 
-	# Add pitch black background to viewport
+	# Add pitch black background to viewport (must be first child, behind video)
 	var black_bg = ColorRect.new()
 	black_bg.name = "BlackBackground"
 	black_bg.color = Color(0, 0, 0, 1)  # Pitch black
-	black_bg.position = Vector2.ZERO
-	black_bg.size = Vector2(viewport_size)
+	black_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	black_bg.size = Vector2(float(viewport_size.x), float(viewport_size.y))
 	sub_viewport.add_child(black_bg)
 	print("[VideoWallManager] Added pitch black background to viewport, size: %s" % black_bg.size)
 
@@ -95,8 +95,8 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
 	video_player.name = "VideoPlayer"
-	video_player.position = Vector2.ZERO
-	video_player.size = Vector2(viewport_size)
+	video_player.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	video_player.size = Vector2(float(viewport_size.x), float(viewport_size.y))
 	video_player.volume_db = volume_db
 	video_player.autoplay = false  # We'll control playback manually
 	video_player.expand = true
