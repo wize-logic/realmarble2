@@ -1714,6 +1714,18 @@ func apply_video_walls() -> void:
 		push_warning("No perimeter walls to apply video to")
 		return
 
+	# First, apply pitch black material to perimeter walls for a clean video display
+	print("[LevelGen] Applying pitch black material to perimeter walls...")
+	var black_material = StandardMaterial3D.new()
+	black_material.albedo_color = Color(0, 0, 0)  # Pitch black
+	black_material.roughness = 1.0
+	black_material.metallic = 0.0
+	black_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # No lighting effects
+	for wall in perimeter_walls:
+		if wall is MeshInstance3D:
+			wall.material_override = black_material
+	print("[LevelGen] Pitch black material applied to %d walls" % perimeter_walls.size())
+
 	# Log each perimeter wall
 	for i in range(perimeter_walls.size()):
 		print("[LevelGen] perimeter_walls[%d]: %s" % [i, perimeter_walls[i]])
