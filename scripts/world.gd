@@ -77,7 +77,6 @@ var level_config_dialog_closed: bool = false
 var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
 var level_config_video_walls: bool = false  # Enable video on perimeter walls
-var level_config_video_path: String = "res://videos/arena_bg.ogv"  # Path to video file (.ogv format)
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
@@ -376,9 +375,8 @@ func _on_practice_button_pressed() -> void:
 
 	# Now start practice mode with the chosen settings (Q3 generator only)
 	var video_walls_enabled: bool = level_config.get("video_walls", false)
-	var video_path: String = level_config.get("video_path", "")
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s..." % [bot_count_choice, level_config.size, level_config.time, video_walls_enabled])
-	start_practice_mode(bot_count_choice, level_config.size, level_config.time, video_walls_enabled, video_path)
+	start_practice_mode(bot_count_choice, level_config.size, level_config.time, video_walls_enabled)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -607,7 +605,6 @@ func ask_level_config() -> Dictionary:
 	level_config_size = 2  # Default: Medium
 	level_config_time = 300.0  # Default: 5 minutes
 	level_config_video_walls = false  # Default: disabled
-	level_config_video_path = "res://videos/arena_bg.ogv"  # Default video path (.ogv format required)
 
 	# === LEVEL SIZE/COMPLEXITY SECTION ===
 	var size_section = VBoxContainer.new()
@@ -756,54 +753,16 @@ func ask_level_config() -> Dictionary:
 	video_section.add_child(video_toggle_container)
 
 	var video_checkbox = CheckBox.new()
-	video_checkbox.text = "Enable video on arena walls (.ogv format)"
+	video_checkbox.text = "Enable video on arena walls"
 	video_checkbox.button_pressed = false
 	video_checkbox.add_theme_font_size_override("font_size", 14)
 	video_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	video_toggle_container.add_child(video_checkbox)
 
-	# Video path input container (shown when enabled)
-	var video_path_container = HBoxContainer.new()
-	video_path_container.add_theme_constant_override("separation", 10)
-	video_path_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	video_path_container.visible = false
-	video_section.add_child(video_path_container)
-
-	var video_path_label = Label.new()
-	video_path_label.text = "Video path:"
-	video_path_label.add_theme_font_size_override("font_size", 12)
-	video_path_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
-	video_path_container.add_child(video_path_label)
-
-	var video_path_input = LineEdit.new()
-	video_path_input.text = level_config_video_path  # Pre-fill with default path
-	video_path_input.placeholder_text = "res://videos/your_video.ogv"
-	video_path_input.custom_minimum_size = Vector2(350, 30)
-	video_path_input.add_theme_font_size_override("font_size", 12)
-
-	var input_style = StyleBoxFlat.new()
-	input_style.bg_color = Color(0.15, 0.15, 0.2, 0.9)
-	input_style.set_corner_radius_all(4)
-	input_style.border_width_left = 1
-	input_style.border_width_top = 1
-	input_style.border_width_right = 1
-	input_style.border_width_bottom = 1
-	input_style.border_color = Color(0.3, 0.5, 0.7, 0.5)
-	video_path_input.add_theme_stylebox_override("normal", input_style)
-
-	video_path_container.add_child(video_path_input)
-
-	# Connect video checkbox to show/hide path input
+	# Connect video checkbox to toggle
 	video_checkbox.toggled.connect(func(enabled: bool):
 		level_config_video_walls = enabled
-		video_path_container.visible = enabled
 		DebugLogger.dlog(DebugLogger.Category.UI, "Video walls toggled: %s" % enabled)
-	)
-
-	# Connect path input to update video path
-	video_path_input.text_changed.connect(func(new_text: String):
-		level_config_video_path = new_text
-		DebugLogger.dlog(DebugLogger.Category.UI, "Video path changed: %s" % new_text)
 	)
 
 	# Add separator before start button
@@ -892,8 +851,8 @@ func ask_level_config() -> Dictionary:
 		DebugLogger.dlog(DebugLogger.Category.UI, "Level config cancelled")
 		return {}
 
-	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f, video_walls: %s, video_path: %s" % [level_config_size, level_config_time, level_config_video_walls, level_config_video_path])
-	return {"size": level_config_size, "time": level_config_time, "video_walls": level_config_video_walls, "video_path": level_config_video_path}
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f, video_walls: %s" % [level_config_size, level_config_time, level_config_video_walls])
+	return {"size": level_config_size, "time": level_config_time, "video_walls": level_config_video_walls}
 
 func _on_size_slider_changed(value: float, label: Label) -> void:
 	"""Callback for size slider - properly sets instance variable"""
@@ -914,14 +873,13 @@ func _on_time_slider_changed(value: float, label: Label) -> void:
 	label.text = time_labels[index]
 	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
-func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0, video_walls: bool = false, video_path: String = "") -> void:
+func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0, video_walls: bool = false) -> void:
 	"""Start practice mode with specified settings.
 	Args:
 		bot_count: Number of bots to spawn
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
 		match_time: Match duration in seconds
-		video_walls: Enable WebM video on perimeter walls
-		video_path: Path to WebM video file
+		video_walls: Enable video on perimeter walls
 	"""
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s" % [bot_count, level_size, match_time, video_walls])
 
@@ -953,7 +911,7 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 	# Regenerate level with selected size and video wall settings
 	current_level_size = level_size
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d, video_walls: %s..." % [level_size, video_walls])
-	await generate_procedural_level(true, level_size, video_walls, video_path)
+	await generate_procedural_level(true, level_size, video_walls)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -2359,13 +2317,12 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, video_path: String = "") -> void:
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false) -> void:
 	"""Generate a procedural Q3-style level with skybox
 	Args:
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
-		video_walls: Enable WebM video on perimeter walls
-		video_path: Path to WebM video file
+		video_walls: Enable video on perimeter walls
 	"""
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s" % [level_size, spawn_collectibles, video_walls])
 
@@ -2399,10 +2356,9 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.complexity = level_size
 
 	# Configure video walls if enabled
-	if video_walls and not video_path.is_empty():
+	if video_walls:
 		level_generator.enable_video_walls = true
-		level_generator.video_wall_path = video_path
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls enabled with path: %s" % video_path)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls enabled")
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Using Q3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
