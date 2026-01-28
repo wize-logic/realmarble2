@@ -206,7 +206,11 @@ func generate_level() -> void:
 
 	# Menu preview mode: only floor + video walls (no structures, obstacles, etc.)
 	if menu_preview_mode:
+		# Force complexity to 1 to avoid raised sections on the floor
+		var saved_complexity: int = complexity
+		complexity = 1
 		generate_main_arena()
+		complexity = saved_complexity
 		apply_procedural_textures()
 		# Always enable video walls in menu preview
 		enable_video_walls = true
