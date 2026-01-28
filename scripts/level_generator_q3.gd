@@ -74,6 +74,17 @@ extends Node3D
 @export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
 @export var use_static_batching: bool = true  ## Batch static geometry
 
+@export_group("Video Walls")
+@export var enable_video_walls: bool = false  ## Enable WebM video display on perimeter walls
+@export_file("*.webm") var video_wall_path: String = ""  ## Path to WebM video file
+@export var video_wall_brightness: float = 1.0  ## Video brightness (0.0-2.0)
+@export var video_wall_emission: float = 0.5  ## Self-illumination strength (0.0-5.0)
+@export var video_wall_edge_glow: bool = true  ## Enable glowing edge effect
+@export var video_wall_edge_color: Color = Color(0.2, 0.6, 1.0)  ## Edge glow color
+@export var video_wall_scanlines: bool = false  ## Enable retro scanline effect
+@export var video_wall_loop: bool = true  ## Loop video playback
+@export var video_wall_resolution: Vector2i = Vector2i(1920, 1080)  ## Video render resolution
+
 # ============================================================================
 # BSP NODE CLASS
 # ============================================================================
@@ -159,6 +170,10 @@ var _hazard_material: StandardMaterial3D
 # Material manager for runtime textures (if available)
 var material_manager = null
 
+# Video wall manager for WebM display on perimeter walls
+var video_wall_manager = null
+var perimeter_walls: Array[MeshInstance3D] = []
+
 # Grind rail system
 var GrindRailScript = preload("res://scripts/grind_rail.gd")
 var rail_positions: Array[Vector3] = []  # Track rail start positions to avoid overlap
@@ -212,6 +227,9 @@ func generate_level() -> void:
 	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
 
+	# Apply video walls if enabled (after procedural textures to override them)
+	apply_video_walls()
+
 	# Godot-specific features
 	if generate_lights:
 		generate_room_lights()
@@ -247,6 +265,13 @@ func clear_level() -> void:
 	corridors.clear()
 	jump_pad_positions.clear()
 	teleporter_positions.clear()
+	perimeter_walls.clear()
+
+	# Clean up video wall manager
+	if video_wall_manager != null:
+		video_wall_manager.cleanup()
+		video_wall_manager.queue_free()
+		video_wall_manager = null
 
 	# Clear Godot-specific nodes
 	lights.clear()
@@ -1658,6 +1683,7 @@ func generate_perimeter_walls() -> void:
 	var perim_wall_height: float = 25.0 * scale
 	var perim_wall_thickness: float = 2.0
 
+	# Wall configs: North (front), South (back), East (right), West (left)
 	var wall_configs = [
 		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, perim_wall_thickness)},
 		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, perim_wall_thickness)},
@@ -1665,9 +1691,52 @@ func generate_perimeter_walls() -> void:
 		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(perim_wall_thickness, perim_wall_height, arena_size * 1.2)}
 	]
 
+	perimeter_walls.clear()
 	for i in range(wall_configs.size()):
 		var config = wall_configs[i]
-		add_platform_with_collision(config.pos, config.size, "PerimeterWall%d" % i)
+		var wall_mesh: MeshInstance3D = add_platform_with_collision(config.pos, config.size, "PerimeterWall%d" % i)
+		perimeter_walls.append(wall_mesh)
+
+
+func apply_video_walls() -> void:
+	## Apply WebM video textures to perimeter walls if enabled
+	if not enable_video_walls or video_wall_path.is_empty():
+		return
+
+	if perimeter_walls.is_empty():
+		push_warning("No perimeter walls to apply video to")
+		return
+
+	# Load and initialize video wall manager
+	var VideoWallManagerScript = load("res://scripts/video_wall_manager.gd")
+	if VideoWallManagerScript == null:
+		push_error("Failed to load VideoWallManager script")
+		return
+
+	video_wall_manager = Node.new()
+	video_wall_manager.set_script(VideoWallManagerScript)
+	video_wall_manager.name = "VideoWallManager"
+
+	# Configure video wall manager settings
+	video_wall_manager.brightness = video_wall_brightness
+	video_wall_manager.emission_strength = video_wall_emission
+	video_wall_manager.enable_edge_glow = video_wall_edge_glow
+	video_wall_manager.edge_glow_color = video_wall_edge_color
+	video_wall_manager.enable_scanlines = video_wall_scanlines
+	video_wall_manager.loop_video = video_wall_loop
+
+	add_child(video_wall_manager)
+
+	# Initialize with video file
+	if video_wall_manager.initialize(video_wall_path, video_wall_resolution):
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls initialized with: " + video_wall_path)
+
+		# Apply video to all perimeter walls with proper orientation
+		video_wall_manager.apply_to_perimeter_walls(perimeter_walls)
+	else:
+		push_warning("Failed to initialize video walls with: " + video_wall_path)
+		video_wall_manager.queue_free()
+		video_wall_manager = null
 
 func generate_death_zone() -> void:
 	var death_zone: Area3D = Area3D.new()
