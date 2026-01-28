@@ -147,34 +147,93 @@ func _on_body_entered(body: Node3D) -> void:
 
 	# Check if body is a player
 	if body is RigidBody3D and body.has_method("pickup_ability"):
-		collect(body)
+		var player_id: int = body.name.to_int()
+		# In multiplayer, only server handles collection to prevent duplication
+		if multiplayer.has_multiplayer_peer():
+			if multiplayer.is_server():
+				collect(body, player_id)
+			else:
+				# Client requests server to collect
+				_request_collect.rpc_id(1, player_id)
+		else:
+			# Offline mode - collect directly
+			collect(body, player_id)
 
-func collect(player: Node) -> void:
+@rpc("any_peer", "reliable")
+func _request_collect(player_id: int) -> void:
+	"""RPC: Client requests server to collect ability"""
+	if not multiplayer.is_server():
+		return
+	if is_collected:
+		return
+
+	# Find the player node
+	var world: Node = get_parent()
+	if world:
+		var player: Node = world.get_node_or_null(str(player_id))
+		if player and player.has_method("pickup_ability"):
+			collect(player, player_id)
+
+func collect(player: Node, player_id: int = -1) -> void:
 	"""Handle ability pickup collection"""
+	if is_collected:
+		return
+
 	# Give player the ability
 	if ability_scene:
 		player.pickup_ability(ability_scene, ability_name)
 	else:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Warning: Ability pickup has no ability_scene assigned!")
 
+	# Mark as collected and sync to clients
+	_set_collected(true)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_collected.rpc(true)
+
 	# Play pickup sound
 	if pickup_sound and pickup_sound.stream:
 		play_pickup_sound.rpc()
 
-	# Mark as collected
-	is_collected = true
-	respawn_timer = respawn_time
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability '%s' collected by player %d! Respawning in %.1f seconds" % [ability_name, player_id, respawn_time])
 
-	# Hide the pickup
-	if mesh_instance:
-		mesh_instance.visible = false
-	if collision_shape:
-		collision_shape.set_deferred("disabled", true)
+func _set_collected(collected: bool) -> void:
+	"""Internal: Set collection state locally"""
+	is_collected = collected
+	if collected:
+		respawn_timer = respawn_time
+		# Hide the pickup
+		if mesh_instance:
+			mesh_instance.visible = false
+		if collision_shape:
+			collision_shape.set_deferred("disabled", true)
+	else:
+		# Respawn - show the pickup with animation
+		if mesh_instance:
+			mesh_instance.visible = true
+			mesh_instance.scale = Vector3.ZERO
+		if collision_shape:
+			collision_shape.set_deferred("disabled", false)
+		is_spawning = true
+		spawn_timer = 0.0
+		time += randf() * 2.0
 
-	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability '%s' collected by player! Respawning in %.1f seconds" % [ability_name, respawn_time])
+@rpc("authority", "call_local", "reliable")
+func _sync_collected(collected: bool) -> void:
+	"""RPC: Server syncs collection state to all clients"""
+	_set_collected(collected)
 
 func respawn_pickup() -> void:
 	"""Respawn the ability pickup"""
+	# In multiplayer, only server initiates respawn
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+
+	_do_respawn()
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_collected.rpc(false)
+
+func _do_respawn() -> void:
+	"""Internal: Perform respawn locally"""
 	is_collected = false
 
 	# Show the pickup again

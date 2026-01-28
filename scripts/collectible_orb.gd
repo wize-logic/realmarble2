@@ -76,41 +76,84 @@ func _on_body_entered(body: Node3D) -> void:
 	# Check if body is a player (RigidBody3D with player script)
 	# Allow collection regardless of level - even max level players can collect orbs
 	if body is RigidBody3D and body.has_method("collect_orb"):
-		collect(body)
+		var player_id: int = body.name.to_int()
+		# In multiplayer, only server handles collection to prevent duplication
+		if multiplayer.has_multiplayer_peer():
+			if multiplayer.is_server():
+				collect(body, player_id)
+			else:
+				# Client requests server to collect
+				_request_collect.rpc_id(1, player_id)
+		else:
+			# Offline mode - collect directly
+			collect(body, player_id)
 
-func collect(player: Node) -> void:
+@rpc("any_peer", "reliable")
+func _request_collect(player_id: int) -> void:
+	"""RPC: Client requests server to collect orb"""
+	if not multiplayer.is_server():
+		return
+	if is_collected:
+		return
+
+	# Find the player node
+	var world: Node = get_parent()
+	if world:
+		var player: Node = world.get_node_or_null(str(player_id))
+		if player and player.has_method("collect_orb"):
+			collect(player, player_id)
+
+func collect(player: Node, player_id: int = -1) -> void:
 	"""Handle orb collection"""
+	if is_collected:
+		return
+
 	# Call player's collect method
 	player.collect_orb()
+
+	# Mark as collected and sync to clients
+	_set_collected(true)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_collected.rpc(true)
 
 	# Play collection sound
 	if collection_sound and collection_sound.stream:
 		play_collection_sound.rpc()
 
-	# Mark as collected
-	is_collected = true
-	respawn_timer = respawn_time
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Orb collected by player %d! Respawning in %.1f seconds" % [player_id, respawn_time])
 
-	# Hide the orb
-	if mesh_instance:
-		mesh_instance.visible = false
-	if collision_shape:
-		collision_shape.set_deferred("disabled", true)
+func _set_collected(collected: bool) -> void:
+	"""Internal: Set collection state locally"""
+	is_collected = collected
+	if collected:
+		respawn_timer = respawn_time
+		# Hide the orb
+		if mesh_instance:
+			mesh_instance.visible = false
+		if collision_shape:
+			collision_shape.set_deferred("disabled", true)
+	else:
+		# Respawn - show the orb
+		if mesh_instance:
+			mesh_instance.visible = true
+		if collision_shape:
+			collision_shape.set_deferred("disabled", false)
+		time += randf() * 2.0
 
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Orb collected by player! Respawning in %.1f seconds" % respawn_time)
+@rpc("authority", "call_local", "reliable")
+func _sync_collected(collected: bool) -> void:
+	"""RPC: Server syncs collection state to all clients"""
+	_set_collected(collected)
 
 func respawn_orb() -> void:
 	"""Respawn the orb"""
-	is_collected = false
+	# In multiplayer, only server initiates respawn
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
 
-	# Show the orb again
-	if mesh_instance:
-		mesh_instance.visible = true
-	if collision_shape:
-		collision_shape.set_deferred("disabled", false)
-
-	# Reset animation phase slightly for variety
-	time += randf() * 2.0
+	_set_collected(false)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_collected.rpc(false)
 
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Orb respawned!")
 

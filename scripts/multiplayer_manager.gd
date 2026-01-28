@@ -28,6 +28,12 @@ var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force We
 var relay_server_url: String = "ws://localhost:9080"  # Change to your server URL
 var relay_server_port: int = 9080
 
+# Connection retry settings
+var connection_retry_count: int = 0
+var max_connection_retries: int = 3
+var connection_retry_delay: float = 2.0  # Seconds between retries (doubles each time)
+var _pending_retry_room_code: String = ""
+
 # ENet settings (for local testing)
 var enet_port: int = 9999
 
@@ -85,6 +91,9 @@ func join_game(player_name: String, join_room_code: String) -> bool:
 	local_player_name = player_name
 	room_code = join_room_code
 	network_mode = NetworkMode.CLIENT
+
+	# Save room code for retry purposes
+	_pending_retry_room_code = join_room_code
 
 	# CRITICAL HTML5 FIX: Force WebSocket on HTML5 (ENet not supported in browsers)
 	if OS.has_feature("web"):
@@ -150,6 +159,12 @@ func set_player_ready(ready: bool) -> void:
 @rpc("any_peer", "reliable")
 func sync_player_ready(peer_id: int, ready: bool) -> void:
 	"""Sync player ready status across network"""
+	# Validate that the sender is setting their own ready status (prevent spoofing)
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Warning: Peer %d tried to set ready status for peer %d - rejected" % [sender_id, peer_id])
+		return
+
 	if players.has(peer_id):
 		players[peer_id].ready = ready
 		player_list_changed.emit()
@@ -241,6 +256,12 @@ func receive_player_list(player_list: Dictionary) -> void:
 @rpc("any_peer", "reliable")
 func register_new_player(peer_id: int, player_name: String) -> void:
 	"""Register a new player across the network"""
+	# Validate that the sender is registering themselves (prevent spoofing)
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Warning: Peer %d tried to register peer %d - rejected" % [sender_id, peer_id])
+		return
+
 	register_player(peer_id, {
 		"name": player_name,
 		"ready": false,
@@ -261,6 +282,10 @@ func _on_connected_to_server() -> void:
 	"""Called when successfully connected to server as client"""
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected to server!")
 
+	# Reset retry state on successful connection
+	connection_retry_count = 0
+	_pending_retry_room_code = ""
+
 	# Register ourselves with the host
 	var peer_id: int = multiplayer.get_unique_id()
 	rpc_id(1, "register_new_player", peer_id, local_player_name)
@@ -270,9 +295,42 @@ func _on_connected_to_server() -> void:
 
 func _on_connection_failed() -> void:
 	"""Called when connection to server fails"""
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connection failed!")
-	network_mode = NetworkMode.OFFLINE
-	connection_failed.emit()
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connection failed! Retry %d/%d" % [connection_retry_count, max_connection_retries])
+
+	# Attempt retry if we haven't exceeded max retries
+	if connection_retry_count < max_connection_retries:
+		connection_retry_count += 1
+		var retry_delay: float = connection_retry_delay * pow(2, connection_retry_count - 1)  # Exponential backoff
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Retrying connection in %.1f seconds..." % retry_delay)
+
+		# Schedule retry
+		var timer: SceneTreeTimer = get_tree().create_timer(retry_delay)
+		timer.timeout.connect(_retry_connection)
+	else:
+		# Max retries exceeded - give up
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Max connection retries exceeded. Giving up.")
+		connection_retry_count = 0
+		_pending_retry_room_code = ""
+		network_mode = NetworkMode.OFFLINE
+		connection_failed.emit()
+
+func _retry_connection() -> void:
+	"""Retry the last connection attempt"""
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Retrying connection (attempt %d)..." % connection_retry_count)
+
+	# Clean up old peer
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+
+	# Retry joining the game
+	if _pending_retry_room_code != "":
+		join_game(local_player_name, _pending_retry_room_code)
+	else:
+		# No room code saved - just emit failure
+		connection_retry_count = 0
+		network_mode = NetworkMode.OFFLINE
+		connection_failed.emit()
 
 func _on_server_disconnected() -> void:
 	"""Called when disconnected from server"""

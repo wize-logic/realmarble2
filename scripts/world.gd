@@ -1477,18 +1477,70 @@ func return_to_main_menu() -> void:
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Returned to main menu")
 
 func add_score(player_id: int, points: int = 1) -> void:
-	"""Add points to a player's score"""
+	"""Add points to a player's score - syncs across network"""
+	# In multiplayer, only authority should initiate score updates
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		# Client - request server to add score
+		_request_add_score.rpc_id(1, player_id, points)
+		return
+
+	# Server or offline - apply locally and sync to clients
+	_apply_score(player_id, points)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_score.rpc(player_id, player_scores.get(player_id, 0))
+
+func _apply_score(player_id: int, points: int) -> void:
+	"""Internal: Apply score change locally"""
 	if not player_scores.has(player_id):
 		player_scores[player_id] = 0
 	player_scores[player_id] += points
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
 
+@rpc("any_peer", "reliable")
+func _request_add_score(player_id: int, points: int) -> void:
+	"""RPC: Client requests server to add score"""
+	if not multiplayer.is_server():
+		return
+	add_score(player_id, points)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_score(player_id: int, total_score: int) -> void:
+	"""RPC: Server syncs score to all clients"""
+	player_scores[player_id] = total_score
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Score synced - Player %d: %d" % [player_id, total_score])
+
 func add_death(player_id: int) -> void:
-	"""Add a death to a player's death count"""
+	"""Add a death to a player's death count - syncs across network"""
+	# In multiplayer, only authority should initiate death updates
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		# Client - request server to add death
+		_request_add_death.rpc_id(1, player_id)
+		return
+
+	# Server or offline - apply locally and sync to clients
+	_apply_death(player_id)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_death.rpc(player_id, player_deaths.get(player_id, 0))
+
+func _apply_death(player_id: int) -> void:
+	"""Internal: Apply death count change locally"""
 	if not player_deaths.has(player_id):
 		player_deaths[player_id] = 0
 	player_deaths[player_id] += 1
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+
+@rpc("any_peer", "reliable")
+func _request_add_death(player_id: int) -> void:
+	"""RPC: Client requests server to add death"""
+	if not multiplayer.is_server():
+		return
+	add_death(player_id)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_death(player_id: int, total_deaths: int) -> void:
+	"""RPC: Server syncs death count to all clients"""
+	player_deaths[player_id] = total_deaths
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Death synced - Player %d: %d" % [player_id, total_deaths])
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
