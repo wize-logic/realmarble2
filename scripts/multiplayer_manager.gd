@@ -21,6 +21,7 @@ var max_players: int = 8  # 1 player + up to 7 bots/other players
 # Player info
 var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
 var local_player_name: String = "Player"
+var bot_counter: int = 0  # Counter for generating bot IDs
 
 # WebSocket settings (for production, point to your relay server)
 # CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
@@ -146,6 +147,7 @@ func leave_game() -> void:
 	network_mode = NetworkMode.OFFLINE
 	players.clear()
 	room_code = ""
+	bot_counter = 0  # Reset bot counter
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Left game")
 
 func set_player_ready(ready: bool) -> void:
@@ -178,6 +180,52 @@ func all_players_ready() -> bool:
 		if not player.ready:
 			return false
 	return true
+
+func add_bot() -> bool:
+	"""Add a bot player to the lobby (host only)"""
+	if network_mode != NetworkMode.HOST:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Only host can add bots")
+		return false
+
+	if get_player_count() >= max_players:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Lobby full - cannot add bot")
+		return false
+
+	# Generate bot peer ID (IDs starting at 9000 for bots)
+	bot_counter += 1
+	var bot_peer_id: int = 9000 + bot_counter
+
+	# Register bot in player list
+	register_player(bot_peer_id, {
+		"name": "Bot %d" % bot_counter,
+		"ready": true,  # Bots are always ready
+		"score": 0,
+		"is_bot": true
+	})
+
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot added to lobby: %d" % bot_peer_id)
+	return true
+
+func remove_bot(bot_id: int) -> bool:
+	"""Remove a bot from the lobby (host only)"""
+	if network_mode != NetworkMode.HOST:
+		return false
+
+	if not players.has(bot_id):
+		return false
+
+	# Only allow removing bots (IDs >= 9000)
+	if bot_id < 9000:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Cannot remove non-bot player")
+		return false
+
+	unregister_player(bot_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot removed from lobby: %d" % bot_id)
+	return true
+
+func reset_bots() -> void:
+	"""Reset bot counter (call when leaving lobby)"""
+	bot_counter = 0
 
 func start_game() -> void:
 	"""Start the game (host only)"""

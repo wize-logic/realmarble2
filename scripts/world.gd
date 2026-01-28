@@ -1125,6 +1125,15 @@ func add_player(peer_id: int) -> void:
 	# Add to players group for AI targeting
 	player.add_to_group("players")
 
+	# Check if this is a bot (IDs >= 9000 are bots)
+	var is_bot: bool = peer_id >= 9000
+	if is_bot:
+		# Add AI controller to bot
+		var ai: Node = BotAI_TypeB.new()
+		ai.name = "BotAI"
+		player.add_child(ai)
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Added BotAI to multiplayer bot %d" % peer_id)
+
 	# Update player spawns from level generator (same as bots)
 	if level_generator and level_generator.has_method("get_spawn_points"):
 		var spawn_points: PackedVector3Array = level_generator.get_spawn_points()
@@ -1133,7 +1142,7 @@ func add_player(peer_id: int) -> void:
 			# Reposition player to correct spawn point
 			var spawn_index: int = peer_id % spawn_points.size()
 			player.global_position = spawn_points[spawn_index]
-			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer player %d spawned at position %d: %s" % [peer_id, spawn_index, player.global_position])
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer %s %d spawned at position %d: %s" % ["bot" if is_bot else "player", peer_id, spawn_index, player.global_position])
 
 	# Initialize player score and deaths
 	player_scores[peer_id] = 0
