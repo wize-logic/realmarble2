@@ -251,6 +251,12 @@ func build_page_0() -> void:
 	add_score_btn.pressed.connect(_on_add_score_pressed)
 	page_content.add_child(add_score_btn)
 
+	var charge_ult_btn = Button.new()
+	charge_ult_btn.text = "Charge Ult (Full)"
+	charge_ult_btn.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Gold
+	charge_ult_btn.pressed.connect(_on_charge_ult_pressed)
+	page_content.add_child(charge_ult_btn)
+
 func build_page_1() -> void:
 	"""Build Page 1: Match & World Controls"""
 	if not page_content:
@@ -852,6 +858,18 @@ func _on_add_score_pressed() -> void:
 		if world and world.has_method("add_score"):
 			world.add_score(player_id, 5)
 			print("Added 5 score to player")
+
+func _on_charge_ult_pressed() -> void:
+	"""Instantly charge the player's ultimate"""
+	var player: Node = get_local_player()
+	if player and "ult_system" in player and player.ult_system:
+		if player.ult_system.has_method("force_full_charge"):
+			player.ult_system.force_full_charge()
+			print("Ult fully charged!")
+		else:
+			print("Error: ult_system doesn't have force_full_charge method")
+	else:
+		print("Error: Player or ult_system not found")
 
 func _on_reset_timer_pressed() -> void:
 	"""Reset the match timer"""
