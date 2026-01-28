@@ -85,6 +85,11 @@ func show_game_lobby() -> void:
 	main_lobby_panel.visible = false
 	game_lobby_panel.visible = true
 
+	# Reset ready button state
+	is_ready = false
+	ready_button.text = "NOT READY"
+	ready_button.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+
 	# Update UI based on role
 	if multiplayer_manager and multiplayer_manager.is_host():
 		start_game_button.visible = true
@@ -249,7 +254,7 @@ func _on_lobby_joined(code: String) -> void:
 
 func _on_connection_failed() -> void:
 	"""Called when connection fails"""
-	status_label.text = "Connection failed!"
+	status_label.text = "Connection failed! Check the room code and try again."
 	show_main_lobby()
 
 func _update_player_list() -> void:

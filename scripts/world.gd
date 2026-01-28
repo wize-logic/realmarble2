@@ -1125,6 +1125,15 @@ func add_player(peer_id: int) -> void:
 	# Add to players group for AI targeting
 	player.add_to_group("players")
 
+	# Check if this is a bot (IDs >= 9000 are bots)
+	var is_bot: bool = peer_id >= 9000
+	if is_bot:
+		# Add AI controller to bot
+		var ai: Node = BotAI_TypeB.new()
+		ai.name = "BotAI"
+		player.add_child(ai)
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "Added BotAI to multiplayer bot %d" % peer_id)
+
 	# Update player spawns from level generator (same as bots)
 	if level_generator and level_generator.has_method("get_spawn_points"):
 		var spawn_points: PackedVector3Array = level_generator.get_spawn_points()
@@ -1133,7 +1142,7 @@ func add_player(peer_id: int) -> void:
 			# Reposition player to correct spawn point
 			var spawn_index: int = peer_id % spawn_points.size()
 			player.global_position = spawn_points[spawn_index]
-			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer player %d spawned at position %d: %s" % [peer_id, spawn_index, player.global_position])
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Multiplayer %s %d spawned at position %d: %s" % ["bot" if is_bot else "player", peer_id, spawn_index, player.global_position])
 
 	# Initialize player score and deaths
 	player_scores[peer_id] = 0
@@ -1162,10 +1171,19 @@ func _on_multiplayer_player_disconnected(peer_id: int) -> void:
 	if game_active or countdown_active:
 		remove_player(peer_id)
 
-func show_multiplayer_lobby() -> void:
-	"""Show the multiplayer lobby UI"""
+func show_multiplayer_lobby(show_game_lobby: bool = false) -> void:
+	"""Show the multiplayer lobby UI
+	Args:
+		show_game_lobby: If true, show the game lobby panel (for returning from match).
+		                 If false, show the main lobby panel (for opening from main menu).
+	"""
 	if lobby_ui:
 		lobby_ui.visible = true
+		# Show the appropriate panel
+		if show_game_lobby and lobby_ui.has_method("show_game_lobby"):
+			lobby_ui.show_game_lobby()
+		elif lobby_ui.has_method("show_main_lobby"):
+			lobby_ui.show_main_lobby()
 		# Hide main menu
 		if main_menu:
 			main_menu.visible = false
@@ -1384,8 +1402,91 @@ func end_deathmatch() -> void:
 	# Wait 10 seconds
 	await get_tree().create_timer(10.0).timeout
 
-	# Return to main menu
-	return_to_main_menu()
+	# Return to lobby if multiplayer, otherwise main menu
+	if MultiplayerManager and MultiplayerManager.is_online():
+		return_to_multiplayer_lobby()
+	else:
+		return_to_main_menu()
+
+func return_to_multiplayer_lobby() -> void:
+	"""Return to multiplayer lobby after match ends"""
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Returning to multiplayer lobby...")
+
+	# Hide scoreboard
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Remove all players (including bots)
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	for player in players:
+		player.queue_free()
+
+	# Clear ALL ability pickups
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+
+	# Clear ALL orbs
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+
+	# Clear spawner tracking
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("clear_all"):
+		ability_spawner.clear_all()
+
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("clear_all"):
+		orb_spawner.clear_all()
+
+	# Clear scores and deaths
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Reset game state
+	game_active = false
+	countdown_active = false
+	game_time_remaining = 300.0
+	last_time_print = -1
+
+	# Reset mid-round expansion
+	expansion_triggered = false
+
+	# Reset bot counter locally (MultiplayerManager keeps its own for lobby)
+	bot_counter = 0
+
+	# Hide countdown label and HUD
+	if countdown_label:
+		countdown_label.visible = false
+	if game_hud:
+		game_hud.visible = false
+
+	# Wait for cleanup to complete
+	await get_tree().process_frame
+
+	# Regenerate map for lobby preview
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating map for lobby preview")
+	await generate_procedural_level(false)
+
+	# Show the multiplayer lobby (game lobby panel, not main lobby)
+	show_multiplayer_lobby(true)
+
+	# Reset player ready status for next match
+	if MultiplayerManager:
+		MultiplayerManager.set_player_ready(false)
+
+	# Start menu music
+	if menu_music:
+		menu_music.play()
+
+	# Make sure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Returned to multiplayer lobby")
 
 func return_to_main_menu() -> void:
 	"""Return to main menu after match ends"""
@@ -1477,18 +1578,70 @@ func return_to_main_menu() -> void:
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Returned to main menu")
 
 func add_score(player_id: int, points: int = 1) -> void:
-	"""Add points to a player's score"""
+	"""Add points to a player's score - syncs across network"""
+	# In multiplayer, only authority should initiate score updates
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		# Client - request server to add score
+		_request_add_score.rpc_id(1, player_id, points)
+		return
+
+	# Server or offline - apply locally and sync to clients
+	_apply_score(player_id, points)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_score.rpc(player_id, player_scores.get(player_id, 0))
+
+func _apply_score(player_id: int, points: int) -> void:
+	"""Internal: Apply score change locally"""
 	if not player_scores.has(player_id):
 		player_scores[player_id] = 0
 	player_scores[player_id] += points
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d scored! Total: %d" % [player_id, player_scores[player_id]])
 
+@rpc("any_peer", "reliable")
+func _request_add_score(player_id: int, points: int) -> void:
+	"""RPC: Client requests server to add score"""
+	if not multiplayer.is_server():
+		return
+	add_score(player_id, points)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_score(player_id: int, total_score: int) -> void:
+	"""RPC: Server syncs score to all clients"""
+	player_scores[player_id] = total_score
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Score synced - Player %d: %d" % [player_id, total_score])
+
 func add_death(player_id: int) -> void:
-	"""Add a death to a player's death count"""
+	"""Add a death to a player's death count - syncs across network"""
+	# In multiplayer, only authority should initiate death updates
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		# Client - request server to add death
+		_request_add_death.rpc_id(1, player_id)
+		return
+
+	# Server or offline - apply locally and sync to clients
+	_apply_death(player_id)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_sync_death.rpc(player_id, player_deaths.get(player_id, 0))
+
+func _apply_death(player_id: int) -> void:
+	"""Internal: Apply death count change locally"""
 	if not player_deaths.has(player_id):
 		player_deaths[player_id] = 0
 	player_deaths[player_id] += 1
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Player %d died! Total deaths: %d" % [player_id, player_deaths[player_id]])
+
+@rpc("any_peer", "reliable")
+func _request_add_death(player_id: int) -> void:
+	"""RPC: Client requests server to add death"""
+	if not multiplayer.is_server():
+		return
+	add_death(player_id)
+
+@rpc("authority", "call_local", "reliable")
+func _sync_death(player_id: int, total_deaths: int) -> void:
+	"""RPC: Server syncs death count to all clients"""
+	player_deaths[player_id] = total_deaths
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Death synced - Player %d: %d" % [player_id, total_deaths])
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""

@@ -21,12 +21,19 @@ var max_players: int = 8  # 1 player + up to 7 bots/other players
 # Player info
 var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
 var local_player_name: String = "Player"
+var bot_counter: int = 0  # Counter for generating bot IDs
 
 # WebSocket settings (for production, point to your relay server)
 # CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
 var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force WebSocket
 var relay_server_url: String = "ws://localhost:9080"  # Change to your server URL
 var relay_server_port: int = 9080
+
+# Connection retry settings
+var connection_retry_count: int = 0
+var max_connection_retries: int = 3
+var connection_retry_delay: float = 2.0  # Seconds between retries (doubles each time)
+var _pending_retry_room_code: String = ""
 
 # ENet settings (for local testing)
 var enet_port: int = 9999
@@ -54,6 +61,8 @@ func create_game(player_name: String) -> String:
 	# Create server
 	if use_websocket:
 		var peer: WebSocketMultiplayerPeer = WebSocketMultiplayerPeer.new()
+		# Include room code in URL so relay server can route clients
+		var url: String = relay_server_url + "?room=" + room_code
 		var error: Error = peer.create_server(relay_server_port)
 		if error != OK:
 			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to create WebSocket server: %s" % error)
@@ -80,23 +89,28 @@ func create_game(player_name: String) -> String:
 	lobby_created.emit(room_code)
 	return room_code
 
-func join_game(player_name: String, join_room_code: String) -> bool:
-	"""Join an existing game lobby"""
+func join_game(player_name: String, join_room_code: String, host_address: String = "127.0.0.1") -> bool:
+	"""Join an existing game lobby
+	Args:
+		player_name: Display name for the joining player
+		join_room_code: Room code to join
+		host_address: Host IP address (used for ENet direct connections)
+	"""
 	local_player_name = player_name
 	room_code = join_room_code
 	network_mode = NetworkMode.CLIENT
+
+	# Save room code for retry purposes
+	_pending_retry_room_code = join_room_code
 
 	# CRITICAL HTML5 FIX: Force WebSocket on HTML5 (ENet not supported in browsers)
 	if OS.has_feature("web"):
 		use_websocket = true
 
-	# For this simple implementation, we use direct connection
-	# In production, you'd query your relay server for the room's IP/port
-	var host_address: String = "127.0.0.1"  # Change based on your matchmaking server
-
 	if use_websocket:
 		var peer: WebSocketMultiplayerPeer = WebSocketMultiplayerPeer.new()
-		var url: String = relay_server_url
+		# Include room code in URL so relay server routes to the correct host
+		var url: String = relay_server_url + "?room=" + join_room_code
 		var error: Error = peer.create_client(url)
 		if error != OK:
 			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to WebSocket server: %s" % error)
@@ -107,20 +121,34 @@ func join_game(player_name: String, join_room_code: String) -> bool:
 		var peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 		var error: Error = peer.create_client(host_address, enet_port)
 		if error != OK:
-			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to server: %s" % error)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to %s:%d - %s" % [host_address, enet_port, error])
 			network_mode = NetworkMode.OFFLINE
 			return false
 		multiplayer.multiplayer_peer = peer
 
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Attempting to join game with room code: %s" % room_code)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Attempting to join game %s at %s" % [room_code, host_address if not use_websocket else relay_server_url])
 	return true
 
 func quick_play(player_name: String) -> void:
-	"""Quick play - auto-matchmaking"""
-	# In a real implementation, this would query your matchmaking server
-	# For now, just create a new game
-	create_game(player_name)
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Quick play - created new game")
+	"""Quick play - creates a game and auto-fills with bots"""
+	local_player_name = player_name
+
+	# Create a new game
+	var code: String = create_game(player_name)
+	if code.is_empty():
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Quick play - failed to create game")
+		connection_failed.emit()
+		return
+
+	# Auto-add bots to fill the lobby (3 bots for a quick game)
+	var quick_play_bots: int = 3
+	for i in range(quick_play_bots):
+		add_bot()
+
+	# Auto-ready the host
+	set_player_ready(true)
+
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Quick play - created game %s with %d bots" % [code, quick_play_bots])
 
 func leave_game() -> void:
 	"""Leave current game"""
@@ -137,6 +165,7 @@ func leave_game() -> void:
 	network_mode = NetworkMode.OFFLINE
 	players.clear()
 	room_code = ""
+	bot_counter = 0  # Reset bot counter
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Left game")
 
 func set_player_ready(ready: bool) -> void:
@@ -150,6 +179,12 @@ func set_player_ready(ready: bool) -> void:
 @rpc("any_peer", "reliable")
 func sync_player_ready(peer_id: int, ready: bool) -> void:
 	"""Sync player ready status across network"""
+	# Validate that the sender is setting their own ready status (prevent spoofing)
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Warning: Peer %d tried to set ready status for peer %d - rejected" % [sender_id, peer_id])
+		return
+
 	if players.has(peer_id):
 		players[peer_id].ready = ready
 		player_list_changed.emit()
@@ -163,6 +198,52 @@ func all_players_ready() -> bool:
 		if not player.ready:
 			return false
 	return true
+
+func add_bot() -> bool:
+	"""Add a bot player to the lobby (host only)"""
+	if network_mode != NetworkMode.HOST:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Only host can add bots")
+		return false
+
+	if get_player_count() >= max_players:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Lobby full - cannot add bot")
+		return false
+
+	# Generate bot peer ID (IDs starting at 9000 for bots)
+	bot_counter += 1
+	var bot_peer_id: int = 9000 + bot_counter
+
+	# Register bot in player list
+	register_player(bot_peer_id, {
+		"name": "Bot %d" % bot_counter,
+		"ready": true,  # Bots are always ready
+		"score": 0,
+		"is_bot": true
+	})
+
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot added to lobby: %d" % bot_peer_id)
+	return true
+
+func remove_bot(bot_id: int) -> bool:
+	"""Remove a bot from the lobby (host only)"""
+	if network_mode != NetworkMode.HOST:
+		return false
+
+	if not players.has(bot_id):
+		return false
+
+	# Only allow removing bots (IDs >= 9000)
+	if bot_id < 9000:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Cannot remove non-bot player")
+		return false
+
+	unregister_player(bot_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot removed from lobby: %d" % bot_id)
+	return true
+
+func reset_bots() -> void:
+	"""Reset bot counter (call when leaving lobby)"""
+	bot_counter = 0
 
 func start_game() -> void:
 	"""Start the game (host only)"""
@@ -239,13 +320,34 @@ func receive_player_list(player_list: Dictionary) -> void:
 	player_list_changed.emit()
 
 @rpc("any_peer", "reliable")
-func register_new_player(peer_id: int, player_name: String) -> void:
+func register_new_player(peer_id: int, player_name: String, client_room_code: String = "") -> void:
 	"""Register a new player across the network"""
+	# Validate that the sender is registering themselves (prevent spoofing)
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id != 0 and sender_id != peer_id:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Warning: Peer %d tried to register peer %d - rejected" % [sender_id, peer_id])
+		return
+
+	# Validate room code if we're the host and client sent one
+	if network_mode == NetworkMode.HOST and client_room_code != "" and client_room_code != room_code:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Peer %d sent wrong room code '%s' (expected '%s') - rejecting" % [peer_id, client_room_code, room_code])
+		# Notify the client they joined the wrong room
+		rpc_id(peer_id, "_on_wrong_room_code")
+		return
+
 	register_player(peer_id, {
 		"name": player_name,
 		"ready": false,
 		"score": 0
 	})
+
+@rpc("authority", "reliable")
+func _on_wrong_room_code() -> void:
+	"""Called on client when host rejects due to wrong room code"""
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Rejected by host - wrong room code")
+	multiplayer.multiplayer_peer = null
+	network_mode = NetworkMode.OFFLINE
+	connection_failed.emit()
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	"""Called when a peer disconnects"""
@@ -261,18 +363,55 @@ func _on_connected_to_server() -> void:
 	"""Called when successfully connected to server as client"""
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected to server!")
 
-	# Register ourselves with the host
+	# Reset retry state on successful connection
+	connection_retry_count = 0
+	_pending_retry_room_code = ""
+
+	# Register ourselves with the host, including room code for validation
 	var peer_id: int = multiplayer.get_unique_id()
-	rpc_id(1, "register_new_player", peer_id, local_player_name)
+	rpc_id(1, "register_new_player", peer_id, local_player_name, room_code)
 
 	connection_succeeded.emit()
 	lobby_joined.emit(room_code)
 
 func _on_connection_failed() -> void:
 	"""Called when connection to server fails"""
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connection failed!")
-	network_mode = NetworkMode.OFFLINE
-	connection_failed.emit()
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connection failed! Retry %d/%d" % [connection_retry_count, max_connection_retries])
+
+	# Attempt retry if we haven't exceeded max retries
+	if connection_retry_count < max_connection_retries:
+		connection_retry_count += 1
+		var retry_delay: float = connection_retry_delay * pow(2, connection_retry_count - 1)  # Exponential backoff
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Retrying connection in %.1f seconds..." % retry_delay)
+
+		# Schedule retry
+		var timer: SceneTreeTimer = get_tree().create_timer(retry_delay)
+		timer.timeout.connect(_retry_connection)
+	else:
+		# Max retries exceeded - give up
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Max connection retries exceeded. Giving up.")
+		connection_retry_count = 0
+		_pending_retry_room_code = ""
+		network_mode = NetworkMode.OFFLINE
+		connection_failed.emit()
+
+func _retry_connection() -> void:
+	"""Retry the last connection attempt"""
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Retrying connection (attempt %d)..." % connection_retry_count)
+
+	# Clean up old peer
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer.close()
+		multiplayer.multiplayer_peer = null
+
+	# Retry joining the game
+	if _pending_retry_room_code != "":
+		join_game(local_player_name, _pending_retry_room_code)
+	else:
+		# No room code saved - just emit failure
+		connection_retry_count = 0
+		network_mode = NetworkMode.OFFLINE
+		connection_failed.emit()
 
 func _on_server_disconnected() -> void:
 	"""Called when disconnected from server"""
