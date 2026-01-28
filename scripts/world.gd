@@ -76,8 +76,8 @@ var bot_count_selected: int = 3
 var level_config_dialog_closed: bool = false
 var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
-var level_config_video_walls: bool = false  # Enable WebM video on perimeter walls
-var level_config_video_path: String = "res://videos/arena_bg.webm"  # Path to WebM video file
+var level_config_video_walls: bool = false  # Enable video on perimeter walls
+var level_config_video_path: String = "res://videos/arena_bg.ogv"  # Path to video file (.ogv format)
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
@@ -607,7 +607,7 @@ func ask_level_config() -> Dictionary:
 	level_config_size = 2  # Default: Medium
 	level_config_time = 300.0  # Default: 5 minutes
 	level_config_video_walls = false  # Default: disabled
-	level_config_video_path = "res://videos/arena_bg.webm"  # Default video path
+	level_config_video_path = "res://videos/arena_bg.ogv"  # Default video path (.ogv format required)
 
 	# === LEVEL SIZE/COMPLEXITY SECTION ===
 	var size_section = VBoxContainer.new()
@@ -756,7 +756,7 @@ func ask_level_config() -> Dictionary:
 	video_section.add_child(video_toggle_container)
 
 	var video_checkbox = CheckBox.new()
-	video_checkbox.text = "Enable WebM video on arena walls"
+	video_checkbox.text = "Enable video on arena walls (.ogv format)"
 	video_checkbox.button_pressed = false
 	video_checkbox.add_theme_font_size_override("font_size", 14)
 	video_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
@@ -777,7 +777,7 @@ func ask_level_config() -> Dictionary:
 
 	var video_path_input = LineEdit.new()
 	video_path_input.text = level_config_video_path  # Pre-fill with default path
-	video_path_input.placeholder_text = "res://videos/your_video.webm"
+	video_path_input.placeholder_text = "res://videos/your_video.ogv"
 	video_path_input.custom_minimum_size = Vector2(350, 30)
 	video_path_input.add_theme_font_size_override("font_size", 12)
 

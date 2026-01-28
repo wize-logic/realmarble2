@@ -94,15 +94,35 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	print("[VideoWallManager] VideoStreamPlayer created with expand=%s, volume_db=%s" % [video_player.expand, video_player.volume_db])
 
 	# Load the video stream
+	# Godot 4 only supports Ogg Theora (.ogv) format natively
 	print("[VideoWallManager] Loading video stream from: '%s'" % video_path)
-	video_stream = load(video_path)
-	print("[VideoWallManager] load() returned: %s (type: %s)" % [video_stream, typeof(video_stream)])
 
-	if video_stream == null:
-		print("[VideoWallManager] ERROR: Failed to load video stream from: '%s'" % video_path)
-		push_error("VideoWallManager: Failed to load video: " + video_path)
-		sub_viewport.queue_free()
-		return false
+	# Check file extension
+	var extension = video_path.get_extension().to_lower()
+	print("[VideoWallManager] File extension: '%s'" % extension)
+
+	if extension == "ogv":
+		# For .ogv files, create VideoStreamTheora and set file directly
+		print("[VideoWallManager] Creating VideoStreamTheora for .ogv file...")
+		var theora_stream = VideoStreamTheora.new()
+		theora_stream.file = video_path
+		video_stream = theora_stream
+		print("[VideoWallManager] VideoStreamTheora created with file: '%s'" % theora_stream.file)
+	else:
+		# Try loading via ResourceLoader (might work if properly imported)
+		print("[VideoWallManager] Attempting to load via ResourceLoader...")
+		video_stream = load(video_path)
+		print("[VideoWallManager] load() returned: %s (type: %s)" % [video_stream, typeof(video_stream)])
+
+		if video_stream == null:
+			# WebM/other formats not supported natively in Godot 4
+			print("[VideoWallManager] ERROR: Failed to load video stream from: '%s'" % video_path)
+			print("[VideoWallManager] NOTE: Godot 4 only supports Ogg Theora (.ogv) video format!")
+			print("[VideoWallManager] Please convert your video to .ogv format using FFmpeg:")
+			print("[VideoWallManager]   ffmpeg -i input.webm -c:v libtheora -q:v 7 -c:a libvorbis -q:a 4 output.ogv")
+			push_error("VideoWallManager: Failed to load video. Godot 4 only supports .ogv (Ogg Theora) format. Path: " + video_path)
+			sub_viewport.queue_free()
+			return false
 
 	print("[VideoWallManager] Video stream loaded successfully, class: %s" % video_stream.get_class())
 	video_player.stream = video_stream

@@ -75,8 +75,8 @@ extends Node3D
 @export var use_static_batching: bool = true  ## Batch static geometry
 
 @export_group("Video Walls")
-@export var enable_video_walls: bool = false  ## Enable WebM video display on perimeter walls
-@export_file("*.webm") var video_wall_path: String = ""  ## Path to WebM video file
+@export var enable_video_walls: bool = false  ## Enable video display on perimeter walls (.ogv format)
+@export_file("*.ogv") var video_wall_path: String = "res://videos/arena_bg.ogv"  ## Path to video file (Ogg Theora .ogv format)
 @export var video_wall_brightness: float = 1.0  ## Video brightness (0.0-2.0)
 @export var video_wall_emission: float = 0.5  ## Self-illumination strength (0.0-5.0)
 @export var video_wall_edge_glow: bool = true  ## Enable glowing edge effect
