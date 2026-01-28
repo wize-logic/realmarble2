@@ -1335,7 +1335,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		drop_ability()
 
 		# Notify world of kill and death
-		var world: Node = get_parent()
+		# (reuse world variable from above)
 		if world:
 			if world.has_method("add_score"):
 				world.add_score(attacker_id, 1)
