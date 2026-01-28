@@ -94,13 +94,17 @@ body {
 		<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 		<script>
 			// CrazyGames SDK Bridge for Godot
+			// Implements full CrazyGames SDK v3 API: User, Ads, Banners, Game, Data, In-Game Purchases
 			window.CrazyGamesSDK = {
 				sdk: null,
 				initialized: false,
 				userInfo: null,
 				friendsList: [],
+				settingsChangeListeners: [],
 
-				// Initialize the SDK
+				// =====================
+				// SDK Initialization
+				// =====================
 				init: function() {
 					if (window.CrazyGames && window.CrazyGames.SDK) {
 						this.sdk = window.CrazyGames.SDK;
@@ -108,8 +112,6 @@ body {
 							console.log('CrazyGames SDK initialized successfully');
 							this.initialized = true;
 							this.notifyGodot('sdk_initialized', {success: true});
-
-							// Load user info if available
 							this.getUserInfo();
 						}).catch((error) => {
 							console.error('CrazyGames SDK initialization failed:', error);
@@ -128,20 +130,21 @@ body {
 					}
 				},
 
-				// User methods
+				// =====================
+				// User Module
+				// =====================
 				getUserInfo: function() {
 					if (!this.initialized || !this.sdk.user) {
 						return null;
 					}
-
 					try {
 						const user = this.sdk.user.getUser();
 						if (user) {
 							this.userInfo = {
 								id: user.userId || user.id || '',
-								username: user.username || user.profilePictureUrl ? 'User' : 'Guest',
+								username: user.username || 'Guest',
 								profilePictureUrl: user.profilePictureUrl || '',
-								isAuthenticated: user.userId ? true : false
+								isAuthenticated: !!(user.userId || user.id)
 							};
 							this.notifyGodot('user_info_loaded', this.userInfo);
 							return this.userInfo;
@@ -152,14 +155,25 @@ body {
 					return null;
 				},
 
+				isUserAccountAvailable: function() {
+					if (!this.initialized || !this.sdk.user) {
+						return false;
+					}
+					try {
+						return !!this.sdk.user.isUserAccountAvailable;
+					} catch (error) {
+						console.error('Failed to check user account availability:', error);
+						return false;
+					}
+				},
+
 				showAuthPrompt: function() {
 					if (!this.initialized || !this.sdk.user) {
-						this.notifyGodot('auth_prompt_failed', {error: 'SDK not initialized'});
+						this.notifyGodot('auth_completed', {success: false, error: 'SDK not initialized'});
 						return;
 					}
-
 					this.sdk.user.showAuthPrompt().then(() => {
-						console.log('Auth prompt shown');
+						console.log('Auth prompt completed');
 						this.getUserInfo();
 						this.notifyGodot('auth_completed', {success: true});
 					}).catch((error) => {
@@ -170,12 +184,11 @@ body {
 
 				showAccountLinkPrompt: function() {
 					if (!this.initialized || !this.sdk.user) {
-						this.notifyGodot('account_link_failed', {error: 'SDK not initialized'});
+						this.notifyGodot('account_linked', {success: false, error: 'SDK not initialized'});
 						return;
 					}
-
 					this.sdk.user.showAccountLinkPrompt().then(() => {
-						console.log('Account link prompt shown');
+						console.log('Account link completed');
 						this.getUserInfo();
 						this.notifyGodot('account_linked', {success: true});
 					}).catch((error) => {
@@ -184,51 +197,203 @@ body {
 					});
 				},
 
-				// Friends methods
-				getFriends: function() {
-					if (!this.initialized) {
-						return [];
+				addAuthListener: function() {
+					if (!this.initialized || !this.sdk.user) return;
+					try {
+						this.sdk.user.addAuthListener(function() {
+							console.log('Auth state changed');
+							window.CrazyGamesSDK.getUserInfo();
+							window.CrazyGamesSDK.notifyGodot('auth_state_changed', {});
+						});
+					} catch (error) {
+						console.error('Failed to add auth listener:', error);
 					}
-
-					// Note: CrazyGames SDK v3 may not have friends API yet
-					// This is a placeholder for future implementation
-					console.log('Getting friends list...');
-					this.notifyGodot('friends_loaded', {friends: this.friendsList});
-					return this.friendsList;
 				},
 
-				inviteFriend: function(friendId) {
-					if (!this.initialized) {
-						this.notifyGodot('friend_invite_failed', {error: 'SDK not initialized'});
+				getUserToken: function() {
+					if (!this.initialized || !this.sdk.user) {
+						this.notifyGodot('user_token_received', {success: false, error: 'SDK not initialized'});
 						return;
 					}
-
-					console.log('Inviting friend:', friendId);
-					// Placeholder for future implementation
-					this.notifyGodot('friend_invited', {friendId: friendId, success: true});
+					try {
+						this.sdk.user.getUserToken().then(function(token) {
+							console.log('User token received');
+							window.CrazyGamesSDK.notifyGodot('user_token_received', {success: true, token: token});
+						}).catch(function(error) {
+							console.error('Failed to get user token:', error);
+							window.CrazyGamesSDK.notifyGodot('user_token_received', {success: false, error: error.message});
+						});
+					} catch (error) {
+						console.error('Failed to get user token:', error);
+						this.notifyGodot('user_token_received', {success: false, error: error.message});
+					}
 				},
 
-				// Ad methods
-				showAd: function(adType) {
+				getSystemInfo: function() {
+					if (!this.initialized || !this.sdk.user) {
+						return null;
+					}
+					try {
+						var info = this.sdk.user.systemInfo;
+						if (info) {
+							var systemData = {
+								countryCode: info.countryCode || '',
+								locale: info.locale || '',
+								device: info.device || {},
+								os: info.os || {},
+								browser: info.browser || {},
+								appType: info.appType || ''
+							};
+							this.notifyGodot('system_info_loaded', systemData);
+							return systemData;
+						}
+					} catch (error) {
+						console.error('Failed to get system info:', error);
+					}
+					return null;
+				},
+
+				// =====================
+				// Video Ads Module
+				// =====================
+				requestAd: function(adType) {
 					if (!this.initialized || !this.sdk.ad) {
 						console.warn('Cannot show ad: SDK not initialized');
-						this.notifyGodot('ad_finished', {success: false, error: 'SDK not initialized'});
+						this.notifyGodot('ad_error', {type: adType || 'midgame', error: 'SDK not initialized', code: 'other'});
 						return;
 					}
-
-					const type = adType || 'midgame';
+					var type = adType || 'midgame';
+					var self = this;
 					console.log('Requesting ad:', type);
 
-					this.sdk.ad.requestAd(type).then(() => {
-						console.log('Ad completed successfully');
-						this.notifyGodot('ad_finished', {success: true, type: type});
-					}).catch((error) => {
-						console.error('Ad failed:', error);
-						this.notifyGodot('ad_finished', {success: false, type: type, error: error.message});
+					this.sdk.ad.requestAd(type, {
+						adStarted: function() {
+							console.log('Ad started:', type);
+							self.notifyGodot('ad_started', {type: type});
+						},
+						adFinished: function() {
+							console.log('Ad finished:', type);
+							self.notifyGodot('ad_finished', {success: true, type: type});
+						},
+						adError: function(errorData) {
+							console.error('Ad error:', type, errorData);
+							self.notifyGodot('ad_error', {
+								type: type,
+								error: errorData ? (errorData.message || '') : '',
+								code: errorData ? (errorData.code || 'other') : 'other'
+							});
+						}
 					});
 				},
 
-				// Game methods
+				// Legacy alias
+				showAd: function(adType) {
+					this.requestAd(adType);
+				},
+
+				hasAdblock: function() {
+					if (!this.initialized || !this.sdk.ad) {
+						this.notifyGodot('adblock_result', {hasAdblock: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						this.sdk.ad.hasAdblock().then(function(result) {
+							console.log('Adblock check result:', result);
+							window.CrazyGamesSDK.notifyGodot('adblock_result', {hasAdblock: !!result});
+						}).catch(function(error) {
+							console.error('Adblock check failed:', error);
+							window.CrazyGamesSDK.notifyGodot('adblock_result', {hasAdblock: false, error: error.message});
+						});
+					} catch (error) {
+						console.error('Adblock check failed:', error);
+						this.notifyGodot('adblock_result', {hasAdblock: false, error: error.message});
+					}
+				},
+
+				// =====================
+				// Banner Ads Module
+				// =====================
+				requestBanner: function(options) {
+					if (!this.initialized || !this.sdk.banner) {
+						this.notifyGodot('banner_error', {error: 'SDK not initialized'});
+						return;
+					}
+					var opts = options || {};
+					var self = this;
+					try {
+						this.sdk.banner.requestBanner(opts).then(function() {
+							console.log('Banner shown');
+							self.notifyGodot('banner_shown', {success: true, containerId: opts.id || ''});
+						}).catch(function(error) {
+							console.error('Banner failed:', error);
+							self.notifyGodot('banner_error', {
+								error: error.message || '',
+								code: error.code || 'other',
+								containerId: opts.id || ''
+							});
+						});
+					} catch (error) {
+						console.error('Banner request failed:', error);
+						this.notifyGodot('banner_error', {error: error.message || '', containerId: opts.id || ''});
+					}
+				},
+
+				requestResponsiveBanner: function(containerId) {
+					if (!this.initialized || !this.sdk.banner) {
+						this.notifyGodot('banner_error', {error: 'SDK not initialized', containerId: containerId || ''});
+						return;
+					}
+					var self = this;
+					try {
+						this.sdk.banner.requestResponsiveBanner({id: containerId}).then(function() {
+							console.log('Responsive banner shown in:', containerId);
+							self.notifyGodot('banner_shown', {success: true, containerId: containerId, responsive: true});
+						}).catch(function(error) {
+							console.error('Responsive banner failed:', error);
+							self.notifyGodot('banner_error', {
+								error: error.message || '',
+								code: error.code || 'other',
+								containerId: containerId
+							});
+						});
+					} catch (error) {
+						console.error('Responsive banner request failed:', error);
+						this.notifyGodot('banner_error', {error: error.message || '', containerId: containerId || ''});
+					}
+				},
+
+				// Legacy alias
+				showBanner: function(options) {
+					this.requestBanner(options);
+				},
+
+				clearBanner: function(containerId) {
+					if (!this.initialized || !this.sdk.banner) return;
+					try {
+						if (containerId) {
+							this.sdk.banner.clearBanner(containerId);
+						} else {
+							this.sdk.banner.clearBanner();
+						}
+						console.log('Banner cleared:', containerId || 'default');
+					} catch (error) {
+						console.error('Failed to clear banner:', error);
+					}
+				},
+
+				clearAllBanners: function() {
+					if (!this.initialized || !this.sdk.banner) return;
+					try {
+						this.sdk.banner.clearAllBanners();
+						console.log('All banners cleared');
+					} catch (error) {
+						console.error('Failed to clear all banners:', error);
+					}
+				},
+
+				// =====================
+				// Game Lifecycle Module
+				// =====================
 				gameplayStart: function() {
 					if (this.initialized && this.sdk.game) {
 						console.log('Gameplay started');
@@ -243,6 +408,20 @@ body {
 					}
 				},
 
+				loadingStart: function() {
+					if (this.initialized && this.sdk.game) {
+						console.log('Loading started');
+						this.sdk.game.loadingStart();
+					}
+				},
+
+				loadingStop: function() {
+					if (this.initialized && this.sdk.game) {
+						console.log('Loading stopped');
+						this.sdk.game.loadingStop();
+					}
+				},
+
 				happytime: function() {
 					if (this.initialized && this.sdk.game) {
 						console.log('Happy time!');
@@ -250,31 +429,264 @@ body {
 					}
 				},
 
-				// Banner methods
-				showBanner: function() {
-					if (this.initialized && this.sdk.banner) {
-						this.sdk.banner.requestBanner().then(() => {
-							console.log('Banner shown');
-							this.notifyGodot('banner_shown', {success: true});
-						}).catch((error) => {
-							console.error('Banner failed:', error);
-							this.notifyGodot('banner_shown', {success: false, error: error.message});
+				// Settings
+				getSettings: function() {
+					if (!this.initialized || !this.sdk.game) return null;
+					try {
+						var settings = this.sdk.game.settings;
+						if (settings) {
+							var data = {
+								disableChat: !!settings.disableChat,
+								muteAudio: !!settings.muteAudio
+							};
+							this.notifyGodot('settings_loaded', data);
+							return data;
+						}
+					} catch (error) {
+						console.error('Failed to get settings:', error);
+					}
+					return null;
+				},
+
+				addSettingsChangeListener: function() {
+					if (!this.initialized || !this.sdk.game) return;
+					var self = this;
+					try {
+						var listener = function(settings) {
+							console.log('Settings changed:', settings);
+							self.notifyGodot('settings_changed', {
+								disableChat: !!(settings && settings.disableChat),
+								muteAudio: !!(settings && settings.muteAudio)
+							});
+						};
+						self.settingsChangeListeners.push(listener);
+						this.sdk.game.addSettingsChangeListener(listener);
+					} catch (error) {
+						console.error('Failed to add settings listener:', error);
+					}
+				},
+
+				removeSettingsChangeListeners: function() {
+					if (!this.initialized || !this.sdk.game) return;
+					try {
+						for (var i = 0; i < this.settingsChangeListeners.length; i++) {
+							this.sdk.game.removeSettingsChangeListener(this.settingsChangeListeners[i]);
+						}
+						this.settingsChangeListeners = [];
+					} catch (error) {
+						console.error('Failed to remove settings listeners:', error);
+					}
+				},
+
+				// Multiplayer / Invite features
+				isInstantMultiplayer: function() {
+					if (!this.initialized || !this.sdk.game) return false;
+					try {
+						return !!this.sdk.game.isInstantMultiplayer;
+					} catch (error) {
+						return false;
+					}
+				},
+
+				inviteLink: function(params) {
+					if (!this.initialized || !this.sdk.game) {
+						this.notifyGodot('invite_link_result', {success: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						var link = this.sdk.game.inviteLink(params || {});
+						console.log('Invite link generated:', link);
+						this.notifyGodot('invite_link_result', {success: true, link: link});
+						return link;
+					} catch (error) {
+						console.error('Failed to generate invite link:', error);
+						this.notifyGodot('invite_link_result', {success: false, error: error.message});
+						return null;
+					}
+				},
+
+				getInviteParam: function(key) {
+					if (!this.initialized || !this.sdk.game) return null;
+					try {
+						var value = this.sdk.game.getInviteParam(key);
+						this.notifyGodot('invite_param_result', {key: key, value: value});
+						return value;
+					} catch (error) {
+						console.error('Failed to get invite param:', error);
+						return null;
+					}
+				},
+
+				showInviteButton: function(params) {
+					if (!this.initialized || !this.sdk.game) return;
+					try {
+						this.sdk.game.showInviteButton(params || {});
+						console.log('Invite button shown');
+						this.notifyGodot('invite_button_shown', {success: true});
+					} catch (error) {
+						console.error('Failed to show invite button:', error);
+						this.notifyGodot('invite_button_shown', {success: false, error: error.message});
+					}
+				},
+
+				hideInviteButton: function() {
+					if (!this.initialized || !this.sdk.game) return;
+					try {
+						this.sdk.game.hideInviteButton();
+						console.log('Invite button hidden');
+					} catch (error) {
+						console.error('Failed to hide invite button:', error);
+					}
+				},
+
+				// =====================
+				// Data / Cloud Saves Module
+				// =====================
+				dataGetItem: function(key) {
+					if (!this.initialized || !this.sdk.data) {
+						this.notifyGodot('data_get_result', {key: key, value: null, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						this.sdk.data.getItem(key).then(function(value) {
+							window.CrazyGamesSDK.notifyGodot('data_get_result', {key: key, value: value});
+						}).catch(function(error) {
+							console.error('Data getItem failed:', error);
+							window.CrazyGamesSDK.notifyGodot('data_get_result', {
+								key: key, value: null,
+								error: error.message || '', code: error.code || 'other'
+							});
 						});
+					} catch (error) {
+						console.error('Data getItem failed:', error);
+						this.notifyGodot('data_get_result', {key: key, value: null, error: error.message});
 					}
 				},
 
-				clearBanner: function() {
-					if (this.initialized && this.sdk.banner) {
-						this.sdk.banner.clearBanner();
-						console.log('Banner cleared');
+				dataSetItem: function(key, value) {
+					if (!this.initialized || !this.sdk.data) {
+						this.notifyGodot('data_set_result', {key: key, success: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						this.sdk.data.setItem(key, value).then(function() {
+							window.CrazyGamesSDK.notifyGodot('data_set_result', {key: key, success: true});
+						}).catch(function(error) {
+							console.error('Data setItem failed:', error);
+							window.CrazyGamesSDK.notifyGodot('data_set_result', {
+								key: key, success: false,
+								error: error.message || '', code: error.code || 'other'
+							});
+						});
+					} catch (error) {
+						console.error('Data setItem failed:', error);
+						this.notifyGodot('data_set_result', {key: key, success: false, error: error.message});
 					}
 				},
 
-				clearAllBanners: function() {
-					if (this.initialized && this.sdk.banner) {
-						this.sdk.banner.clearAllBanners();
-						console.log('All banners cleared');
+				dataRemoveItem: function(key) {
+					if (!this.initialized || !this.sdk.data) {
+						this.notifyGodot('data_remove_result', {key: key, success: false, error: 'SDK not initialized'});
+						return;
 					}
+					try {
+						this.sdk.data.removeItem(key).then(function() {
+							window.CrazyGamesSDK.notifyGodot('data_remove_result', {key: key, success: true});
+						}).catch(function(error) {
+							console.error('Data removeItem failed:', error);
+							window.CrazyGamesSDK.notifyGodot('data_remove_result', {
+								key: key, success: false,
+								error: error.message || '', code: error.code || 'other'
+							});
+						});
+					} catch (error) {
+						console.error('Data removeItem failed:', error);
+						this.notifyGodot('data_remove_result', {key: key, success: false, error: error.message});
+					}
+				},
+
+				dataClear: function() {
+					if (!this.initialized || !this.sdk.data) {
+						this.notifyGodot('data_clear_result', {success: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						this.sdk.data.clear().then(function() {
+							window.CrazyGamesSDK.notifyGodot('data_clear_result', {success: true});
+						}).catch(function(error) {
+							console.error('Data clear failed:', error);
+							window.CrazyGamesSDK.notifyGodot('data_clear_result', {
+								success: false,
+								error: error.message || '', code: error.code || 'other'
+							});
+						});
+					} catch (error) {
+						console.error('Data clear failed:', error);
+						this.notifyGodot('data_clear_result', {success: false, error: error.message});
+					}
+				},
+
+				// =====================
+				// In-Game Purchases Module
+				// =====================
+				getXsollaUserToken: function() {
+					if (!this.initialized || !this.sdk.user) {
+						this.notifyGodot('xsolla_token_result', {success: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						this.sdk.user.getXsollaUserToken().then(function(token) {
+							console.log('Xsolla user token received');
+							window.CrazyGamesSDK.notifyGodot('xsolla_token_result', {success: true, token: token});
+						}).catch(function(error) {
+							console.error('Failed to get Xsolla token:', error);
+							window.CrazyGamesSDK.notifyGodot('xsolla_token_result', {success: false, error: error.message});
+						});
+					} catch (error) {
+						console.error('Failed to get Xsolla token:', error);
+						this.notifyGodot('xsolla_token_result', {success: false, error: error.message});
+					}
+				},
+
+				trackOrder: function(provider, orderData) {
+					if (!this.initialized) {
+						this.notifyGodot('track_order_result', {success: false, error: 'SDK not initialized'});
+						return;
+					}
+					try {
+						if (this.sdk.analytics && this.sdk.analytics.trackOrder) {
+							this.sdk.analytics.trackOrder(provider || 'xsolla', orderData || {});
+							console.log('Order tracked:', provider, orderData);
+							this.notifyGodot('track_order_result', {success: true});
+						} else {
+							console.warn('Analytics trackOrder not available');
+							this.notifyGodot('track_order_result', {success: false, error: 'Analytics module not available'});
+						}
+					} catch (error) {
+						console.error('Failed to track order:', error);
+						this.notifyGodot('track_order_result', {success: false, error: error.message});
+					}
+				},
+
+				// =====================
+				// Friends Module (placeholder - SDK v3 may expand)
+				// =====================
+				getFriends: function() {
+					if (!this.initialized) {
+						return [];
+					}
+					console.log('Getting friends list...');
+					this.notifyGodot('friends_loaded', {friends: this.friendsList});
+					return this.friendsList;
+				},
+
+				inviteFriend: function(friendId) {
+					if (!this.initialized) {
+						this.notifyGodot('friend_invited', {friendId: friendId, success: false, error: 'SDK not initialized'});
+						return;
+					}
+					console.log('Inviting friend:', friendId);
+					this.notifyGodot('friend_invited', {friendId: friendId, success: true});
 				}
 			};
 
