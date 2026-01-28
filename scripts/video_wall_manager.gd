@@ -63,7 +63,6 @@ func initialize(video_path: String, viewport_size: Vector2i = Vector2i(1920, 108
 	video_player.volume_db = volume_db
 	video_player.autoplay = false
 	video_player.expand = true
-	video_player.stretch_mode = VideoStreamPlayer.STRETCH_MODE_KEEP_ASPECT_COVERED
 	sub_viewport.add_child(video_player)
 
 	# Load video stream (Godot 4 only supports .ogv)
