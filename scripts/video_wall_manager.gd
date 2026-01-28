@@ -19,16 +19,15 @@ var autoplay: bool = true
 var volume_db: float = -80.0  # Muted by default
 
 # Display settings
-var brightness: float = 1.0
+var brightness: float = 1.5
 var contrast: float = 1.0
 var saturation: float = 1.0
 var tint_color: Color = Color.WHITE
-var emission_strength: float = 0.5
 
 # Edge glow settings
-var enable_edge_glow: bool = true
+var enable_edge_glow: bool = false
 var edge_glow_color: Color = Color(0.2, 0.6, 1.0)
-var edge_glow_intensity: float = 0.5
+var edge_glow_intensity: float = 0.3
 
 # Scanline effect
 var enable_scanlines: bool = false
@@ -219,8 +218,7 @@ func create_video_material(flip_h: bool = false, flip_v: bool = false) -> Shader
 	material.set_shader_parameter("contrast", contrast)
 	material.set_shader_parameter("saturation", saturation)
 	material.set_shader_parameter("tint_color", Vector3(tint_color.r, tint_color.g, tint_color.b))
-	material.set_shader_parameter("emission_strength", emission_strength)
-	print("[VideoWallManager] Set display settings: brightness=%s, contrast=%s, emission=%s" % [brightness, contrast, emission_strength])
+	print("[VideoWallManager] Set display settings: brightness=%s, contrast=%s" % [brightness, contrast])
 
 	# Edge glow settings
 	material.set_shader_parameter("enable_edge_glow", enable_edge_glow)
@@ -297,12 +295,6 @@ func set_contrast(value: float) -> void:
 	## Update contrast for all video walls
 	contrast = value
 	_update_all_materials("contrast", value)
-
-
-func set_emission_strength(value: float) -> void:
-	## Update emission strength for all video walls
-	emission_strength = value
-	_update_all_materials("emission_strength", value)
 
 
 func set_edge_glow_enabled(enabled: bool) -> void:

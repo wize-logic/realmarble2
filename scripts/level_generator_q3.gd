@@ -77,9 +77,8 @@ extends Node3D
 @export_group("Video Walls")
 @export var enable_video_walls: bool = false  ## Enable video display on perimeter walls (.ogv format)
 @export_file("*.ogv") var video_wall_path: String = "res://videos/arena_bg.ogv"  ## Path to video file (Ogg Theora .ogv format)
-@export var video_wall_brightness: float = 1.0  ## Video brightness (0.0-2.0)
-@export var video_wall_emission: float = 0.5  ## Self-illumination strength (0.0-5.0)
-@export var video_wall_edge_glow: bool = true  ## Enable glowing edge effect
+@export var video_wall_brightness: float = 1.5  ## Video brightness (0.0-3.0)
+@export var video_wall_edge_glow: bool = false  ## Enable glowing edge effect
 @export var video_wall_edge_color: Color = Color(0.2, 0.6, 1.0)  ## Edge glow color
 @export var video_wall_scanlines: bool = false  ## Enable retro scanline effect
 @export var video_wall_loop: bool = true  ## Loop video playback
@@ -1734,12 +1733,11 @@ func apply_video_walls() -> void:
 	# Configure video wall manager settings
 	print("[LevelGen] Configuring video wall manager settings...")
 	video_wall_manager.brightness = video_wall_brightness
-	video_wall_manager.emission_strength = video_wall_emission
 	video_wall_manager.enable_edge_glow = video_wall_edge_glow
 	video_wall_manager.edge_glow_color = video_wall_edge_color
 	video_wall_manager.enable_scanlines = video_wall_scanlines
 	video_wall_manager.loop_video = video_wall_loop
-	print("[LevelGen] Settings: brightness=%s, emission=%s, edge_glow=%s, scanlines=%s, loop=%s" % [video_wall_brightness, video_wall_emission, video_wall_edge_glow, video_wall_scanlines, video_wall_loop])
+	print("[LevelGen] Settings: brightness=%s, edge_glow=%s, scanlines=%s, loop=%s" % [video_wall_brightness, video_wall_edge_glow, video_wall_scanlines, video_wall_loop])
 
 	print("[LevelGen] Adding VideoWallManager as child...")
 	add_child(video_wall_manager)
