@@ -74,15 +74,18 @@ extends Node3D
 @export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
 @export var use_static_batching: bool = true  ## Batch static geometry
 
+# Video Walls - simplified settings (only enable toggle exposed)
 @export_group("Video Walls")
-@export var enable_video_walls: bool = false  ## Enable video display on perimeter walls (.ogv format)
-@export_file("*.ogv") var video_wall_path: String = "res://videos/arena_bg.ogv"  ## Path to video file (Ogg Theora .ogv format)
-@export var video_wall_brightness: float = 1.5  ## Video brightness (0.0-3.0)
-@export var video_wall_edge_glow: bool = false  ## Enable glowing edge effect
-@export var video_wall_edge_color: Color = Color(0.2, 0.6, 1.0)  ## Edge glow color
-@export var video_wall_scanlines: bool = false  ## Enable retro scanline effect
-@export var video_wall_loop: bool = true  ## Loop video playback
-@export var video_wall_resolution: Vector2i = Vector2i(1920, 1080)  ## Video render resolution
+@export var enable_video_walls: bool = false  ## Enable video display on perimeter walls
+
+# Video wall constants - not user-configurable
+const VIDEO_WALL_PATH: String = "res://videos/arena_bg.ogv"
+const VIDEO_WALL_BRIGHTNESS: float = 1.5
+const VIDEO_WALL_EDGE_GLOW: bool = false
+const VIDEO_WALL_EDGE_COLOR: Color = Color(0.2, 0.6, 1.0)
+const VIDEO_WALL_SCANLINES: bool = false
+const VIDEO_WALL_LOOP: bool = true
+const VIDEO_WALL_RESOLUTION: Vector2i = Vector2i(1920, 1080)
 
 # ============================================================================
 # BSP NODE CLASS
@@ -1698,12 +1701,11 @@ func generate_perimeter_walls() -> void:
 
 
 func apply_video_walls() -> void:
-	## Apply WebM video textures to perimeter walls if enabled
-	print("[LevelGen] apply_video_walls() called")
-	print("[LevelGen] enable_video_walls: %s, video_wall_path: '%s'" % [enable_video_walls, video_wall_path])
+	## Apply video textures to perimeter walls if enabled
+	print("[LevelGen] apply_video_walls() called, enable_video_walls: %s" % enable_video_walls)
 
-	if not enable_video_walls or video_wall_path.is_empty():
-		print("[LevelGen] Video walls disabled or no path - skipping (enable_video_walls=%s, path_empty=%s)" % [enable_video_walls, video_wall_path.is_empty()])
+	if not enable_video_walls:
+		print("[LevelGen] Video walls disabled - skipping")
 		return
 
 	print("[LevelGen] perimeter_walls count: %d" % perimeter_walls.size())
@@ -1730,31 +1732,31 @@ func apply_video_walls() -> void:
 	video_wall_manager.set_script(VideoWallManagerScript)
 	video_wall_manager.name = "VideoWallManager"
 
-	# Configure video wall manager settings
+	# Configure video wall manager with constant settings
 	print("[LevelGen] Configuring video wall manager settings...")
-	video_wall_manager.brightness = video_wall_brightness
-	video_wall_manager.enable_edge_glow = video_wall_edge_glow
-	video_wall_manager.edge_glow_color = video_wall_edge_color
-	video_wall_manager.enable_scanlines = video_wall_scanlines
-	video_wall_manager.loop_video = video_wall_loop
-	print("[LevelGen] Settings: brightness=%s, edge_glow=%s, scanlines=%s, loop=%s" % [video_wall_brightness, video_wall_edge_glow, video_wall_scanlines, video_wall_loop])
+	video_wall_manager.brightness = VIDEO_WALL_BRIGHTNESS
+	video_wall_manager.enable_edge_glow = VIDEO_WALL_EDGE_GLOW
+	video_wall_manager.edge_glow_color = VIDEO_WALL_EDGE_COLOR
+	video_wall_manager.enable_scanlines = VIDEO_WALL_SCANLINES
+	video_wall_manager.loop_video = VIDEO_WALL_LOOP
+	print("[LevelGen] Settings: brightness=%s, edge_glow=%s, scanlines=%s, loop=%s" % [VIDEO_WALL_BRIGHTNESS, VIDEO_WALL_EDGE_GLOW, VIDEO_WALL_SCANLINES, VIDEO_WALL_LOOP])
 
 	print("[LevelGen] Adding VideoWallManager as child...")
 	add_child(video_wall_manager)
 
-	# Initialize with video file
-	print("[LevelGen] Calling video_wall_manager.initialize('%s', %s)..." % [video_wall_path, video_wall_resolution])
-	if video_wall_manager.initialize(video_wall_path, video_wall_resolution):
+	# Initialize with constant video file path
+	print("[LevelGen] Calling video_wall_manager.initialize('%s', %s)..." % [VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION])
+	if video_wall_manager.initialize(VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION):
 		print("[LevelGen] Video wall manager initialized successfully!")
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls initialized with: " + video_wall_path)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls initialized with: " + VIDEO_WALL_PATH)
 
 		# Apply video to all perimeter walls with proper orientation
 		print("[LevelGen] Calling apply_to_perimeter_walls with %d walls..." % perimeter_walls.size())
 		video_wall_manager.apply_to_perimeter_walls(perimeter_walls)
 		print("[LevelGen] apply_to_perimeter_walls completed!")
 	else:
-		print("[LevelGen] ERROR: Failed to initialize video walls with: '%s'" % video_wall_path)
-		push_warning("Failed to initialize video walls with: " + video_wall_path)
+		print("[LevelGen] ERROR: Failed to initialize video walls with: '%s'" % VIDEO_WALL_PATH)
+		push_warning("Failed to initialize video walls with: " + VIDEO_WALL_PATH)
 		video_wall_manager.queue_free()
 		video_wall_manager = null
 
