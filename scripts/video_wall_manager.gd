@@ -86,19 +86,21 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	var black_bg = ColorRect.new()
 	black_bg.name = "BlackBackground"
 	black_bg.color = Color(0, 0, 0, 1)  # Pitch black
-	black_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	black_bg.position = Vector2.ZERO
+	black_bg.size = Vector2(viewport_size)
 	sub_viewport.add_child(black_bg)
-	print("[VideoWallManager] Added pitch black background to viewport")
+	print("[VideoWallManager] Added pitch black background to viewport, size: %s" % black_bg.size)
 
 	# Create VideoStreamPlayer inside the viewport
 	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
 	video_player.name = "VideoPlayer"
-	video_player.set_anchors_preset(Control.PRESET_FULL_RECT)
+	video_player.position = Vector2.ZERO
+	video_player.size = Vector2(viewport_size)
 	video_player.volume_db = volume_db
 	video_player.autoplay = false  # We'll control playback manually
 	video_player.expand = true
-	print("[VideoWallManager] VideoStreamPlayer created with expand=%s, volume_db=%s" % [video_player.expand, video_player.volume_db])
+	print("[VideoWallManager] VideoStreamPlayer created with size=%s, expand=%s, volume_db=%s" % [video_player.size, video_player.expand, video_player.volume_db])
 
 	# Load the video stream
 	# Godot 4 only supports Ogg Theora (.ogv) format natively
