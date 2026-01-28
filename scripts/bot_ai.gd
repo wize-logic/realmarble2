@@ -66,6 +66,7 @@ var target_stuck_timer: float = 0.0
 var ability_check_timer: float = 0.0  # NEW: Timer for checking abilities
 var death_pause_timer: float = 0.0  # NEW: Pause after death before resuming AI
 var bot_repulsion_timer: float = 0.0  # NEW: Timer for bot-bot repulsion
+var ult_check_timer: float = 0.0  # Timer for checking ult availability
 
 # ============================================================================
 # CONSTANTS
@@ -94,19 +95,23 @@ const MIN_PLATFORM_SIZE_FOR_COMBAT: float = 8.0
 const DEATH_PAUSE_DURATION: float = 1.0  # NEW: Pause 1s after death
 const BOT_REPULSION_INTERVAL: float = 0.15  # NEW: Check bot repulsion frequently
 const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
+const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
+const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
 const SWORD_OPTIMAL_RANGE: float = 3.5
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
+const LIGHTNING_OPTIMAL_RANGE: float = 25.0  # Lightning has long range auto-aim
 
 # Ability proficiency scores
 const ABILITY_SCORES: Dictionary = {
 	"Cannon": 85,
 	"Sword": 75,
 	"Dash Attack": 80,
-	"Explosion": 70
+	"Explosion": 70,
+	"Lightning": 90  # High score - powerful auto-aim ability
 }
 
 # ============================================================================
@@ -202,6 +207,7 @@ func _ready() -> void:
 	player_avoidance_timer = randf_range(0.0, PLAYER_AVOIDANCE_CHECK_INTERVAL)
 	ability_check_timer = randf_range(0.0, 1.0)  # NEW
 	bot_repulsion_timer = randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
+	ult_check_timer = randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -379,6 +385,11 @@ func _physics_process(delta: float) -> void:
 		find_nearest_ability()
 		ability_check_timer = 0.5  # Check abilities twice per second
 
+	# Check for ult usage opportunity
+	if ult_check_timer <= 0.0:
+		try_use_ult()
+		ult_check_timer = ULT_CHECK_INTERVAL
+
 	# Check for platforms
 	if platform_check_timer <= 0.0:
 		find_best_platform()
@@ -436,6 +447,7 @@ func update_timers(delta: float) -> void:
 	death_pause_timer -= delta
 	bot_repulsion_timer -= delta
 	ability_blacklist_timer -= delta
+	ult_check_timer -= delta
 
 	# Clear ability blacklist every 30 seconds
 	if ability_blacklist_timer <= 0.0:
@@ -1256,6 +1268,18 @@ func do_chase(delta: float) -> void:
 		if bounce_cooldown_timer <= 0.0:
 			bot_bounce()
 
+	# Consider using ult to close distance quickly (aggressive chase)
+	if "ult_system" in bot and bot.ult_system and bot.ult_system.is_ready():
+		# Use ult to catch up to fleeing enemies
+		if distance > attack_range and distance < ULT_OPTIMAL_RANGE * 1.5:
+			var enemy_health: int = get_player_health(target_player)
+			# More likely to ult-chase if enemy is weak
+			var chase_ult_chance: float = 0.3 if enemy_health > 2 else 0.6
+			if strategic_preference == "aggressive":
+				chase_ult_chance += 0.2
+			if randf() < chase_ult_chance:
+				activate_bot_ult()
+
 func do_attack(delta: float) -> void:
 	"""Attack target player"""
 	if not target_player or not is_instance_valid(target_player):
@@ -1264,23 +1288,43 @@ func do_attack(delta: float) -> void:
 
 	var distance: float = bot.global_position.distance_to(target_player.global_position)
 
+	# Check if we have lightning - it has longer optimal range
+	var has_lightning: bool = false
+	var optimal_distance: float = attack_range
+	if bot.current_ability and "ability_name" in bot.current_ability:
+		if bot.current_ability.ability_name == "Lightning":
+			has_lightning = true
+			optimal_distance = LIGHTNING_OPTIMAL_RANGE
+
 	# Strafe around target
 	if strafe_timer <= 0.0:
 		strafe_direction = 1.0 if randf() > 0.5 else -1.0
 		strafe_timer = randf_range(1.0, 2.5)
 
-	# Calculate strafe position
+	# Calculate strafe position - stay at optimal range for current ability
 	var to_target: Vector3 = target_player.global_position - bot.global_position
 	to_target.y = 0
 	to_target = to_target.normalized()
 
 	var strafe_offset: Vector3 = to_target.cross(Vector3.UP) * strafe_direction * 5.0
+
+	# If we have lightning, maintain optimal distance instead of closing in
+	if has_lightning and distance < optimal_distance * 0.7:
+		# Back up slightly to maintain lightning range
+		strafe_offset -= to_target * 3.0
+
 	var strafe_pos: Vector3 = target_player.global_position + strafe_offset
 
 	move_towards(strafe_pos, 0.8)
 	rotate_to_target(target_player.global_position)
 
-	# Use ability
+	# Priority 1: Try to use ult if ready and good opportunity
+	if "ult_system" in bot and bot.ult_system and bot.ult_system.is_ready():
+		if distance < ULT_OPTIMAL_RANGE and randf() < aggression_level:
+			activate_bot_ult()
+			return
+
+	# Priority 2: Use ability
 	use_ability_smart()
 
 func do_retreat(delta: float) -> void:
@@ -1288,6 +1332,8 @@ func do_retreat(delta: float) -> void:
 	if not target_player or not is_instance_valid(target_player):
 		change_state("WANDER", "No threat to retreat from")
 		return
+
+	var distance: float = bot.global_position.distance_to(target_player.global_position)
 
 	# Find retreat direction (away from target)
 	var to_enemy: Vector3 = target_player.global_position - bot.global_position
@@ -1307,7 +1353,21 @@ func do_retreat(delta: float) -> void:
 	if not target_platform.is_empty():
 		move_towards(target_platform.position, 1.0)
 
-	# Use defensive abilities
+	# Desperation ult: If enemy is close while retreating, counter with ult
+	if "ult_system" in bot and bot.ult_system and bot.ult_system.is_ready():
+		if distance < ULT_OPTIMAL_RANGE * 0.8:
+			# Last resort counter-attack
+			var counter_chance: float = 0.5
+			if strategic_preference == "aggressive":
+				counter_chance = 0.7
+			elif strategic_preference == "defensive":
+				counter_chance = 0.4  # Even defensive bots will ult as last resort
+			if randf() < counter_chance:
+				DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Desperation ult during retreat!" % get_ai_type(), false, get_entity_id())
+				activate_bot_ult()
+				return
+
+	# Use defensive abilities (including lightning to keep distance)
 	if bot.current_ability and randf() < 0.3:
 		use_ability_smart()
 
@@ -1406,9 +1466,18 @@ func update_state() -> void:
 	if target_player and is_instance_valid(target_player) and bot.current_ability:
 		var distance: float = bot.global_position.distance_to(target_player.global_position)
 
-		if distance < attack_range:
+		# Determine effective attack range based on ability
+		var effective_attack_range: float = attack_range
+		if "ability_name" in bot.current_ability:
+			match bot.current_ability.ability_name:
+				"Lightning":
+					effective_attack_range = LIGHTNING_OPTIMAL_RANGE  # Lightning has long range
+				"Cannon":
+					effective_attack_range = CANNON_OPTIMAL_RANGE
+
+		if distance < effective_attack_range:
 			if state != "ATTACK":
-				change_state("ATTACK", "Target in attack range")
+				change_state("ATTACK", "Target in attack range (%.1fu)" % distance)
 			return
 
 	# PRIORITY 4: Chase if target found and we have ability
@@ -1494,12 +1563,146 @@ func use_ability_smart() -> void:
 	if action_timer > 0.0:
 		return
 
-	# Use ability based on aggression and situation
+	# Get ability name for smart usage
+	var ability_name: String = ""
+	if "ability_name" in bot.current_ability:
+		ability_name = bot.current_ability.ability_name
+
+	# Lightning-specific logic: use when target is in range and visible
+	if ability_name == "Lightning":
+		if target_player and is_instance_valid(target_player):
+			var distance: float = bot.global_position.distance_to(target_player.global_position)
+			# Lightning has great range (100 units) but optimal around 25 units
+			if distance < LIGHTNING_OPTIMAL_RANGE * 2.0:
+				# Higher chance to use lightning due to auto-aim
+				var use_chance: float = aggression_level + 0.15  # +15% for auto-aim
+				if randf() < use_chance:
+					bot.current_ability.use()
+					action_timer = randf_range(1.5, 2.5)  # Slightly longer cooldown
+					return
+		return  # Don't use lightning without a target
+
+	# Default ability usage based on aggression
 	var should_use: bool = randf() < aggression_level
 
 	if should_use:
 		bot.current_ability.use()
 		action_timer = randf_range(0.5, 1.5)
+
+func try_use_ult() -> void:
+	"""Check and attempt to use ultimate attack"""
+	if not bot:
+		return
+
+	# Check if bot has ult system
+	if not "ult_system" in bot or not bot.ult_system:
+		return
+
+	var ult_system = bot.ult_system
+
+	# Check if ult is ready
+	if not ult_system.has_method("is_ready") or not ult_system.is_ready():
+		return
+
+	# Evaluate if this is a good time to ult
+	if should_use_ult():
+		activate_bot_ult()
+
+func should_use_ult() -> bool:
+	"""Determine if bot should use ultimate attack now"""
+	if not bot or not "ult_system" in bot or not bot.ult_system:
+		return false
+
+	# Must have a target to ult effectively
+	if not target_player or not is_instance_valid(target_player):
+		return false
+
+	var distance: float = bot.global_position.distance_to(target_player.global_position)
+
+	# Don't ult if target is too far (ult is a dash attack)
+	if distance > ULT_OPTIMAL_RANGE * 2.0:
+		return false
+
+	# Aggressive bots use ult more readily
+	var base_chance: float = 0.0
+
+	match strategic_preference:
+		"aggressive":
+			# Aggressive: Use ult when in optimal range
+			if distance < ULT_OPTIMAL_RANGE:
+				base_chance = 0.8
+			else:
+				base_chance = 0.5
+		"defensive":
+			# Defensive: Use ult mainly for finishing or escape
+			var bot_health: int = get_bot_health()
+			var enemy_health: int = get_player_health(target_player)
+
+			# Use to finish low-health enemies
+			if enemy_health <= 2 and distance < ULT_OPTIMAL_RANGE:
+				base_chance = 0.9
+			# Use when low health for aggressive counter
+			elif bot_health <= 2:
+				base_chance = 0.6
+			else:
+				base_chance = 0.3
+		"support":
+			# Support: Use ult opportunistically
+			if distance < ULT_OPTIMAL_RANGE:
+				base_chance = 0.5
+			else:
+				base_chance = 0.3
+		_:  # "balanced"
+			# Balanced: Standard usage
+			if distance < ULT_OPTIMAL_RANGE:
+				base_chance = 0.65
+			else:
+				base_chance = 0.4
+
+	# Additional factors
+	var enemy_health: int = get_player_health(target_player)
+
+	# Bonus chance if enemy is weak
+	if enemy_health <= 1:
+		base_chance += 0.2
+
+	# Bonus if target is visible and reachable
+	if can_see_target(target_player):
+		base_chance += 0.1
+
+	# Clamp to valid range
+	base_chance = clamp(base_chance, 0.0, 0.95)
+
+	return randf() < base_chance
+
+func activate_bot_ult() -> void:
+	"""Activate the bot's ultimate attack"""
+	if not bot or not "ult_system" in bot or not bot.ult_system:
+		return
+
+	var ult_system = bot.ult_system
+
+	# Make bot look at target before ulting (for better dash direction)
+	if target_player and is_instance_valid(target_player):
+		rotate_to_target(target_player.global_position)
+
+		# Update camera arm to face target (ult uses camera direction)
+		var camera_arm: Node3D = bot.get_node_or_null("CameraArm")
+		if camera_arm:
+			var direction: Vector3 = (target_player.global_position - bot.global_position).normalized()
+			direction.y = 0
+			if direction.length() > 0.01:
+				# Set camera arm rotation to face target
+				camera_arm.rotation.y = atan2(direction.x, direction.z)
+
+	# Try to activate
+	if ult_system.has_method("try_activate"):
+		var success: bool = ult_system.try_activate()
+		if success:
+			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] ULTIMATE ACTIVATED! Dashing toward target!" % get_ai_type(), false, get_entity_id())
+	elif ult_system.has_method("activate_ult"):
+		ult_system.activate_ult()
+		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] ULTIMATE ACTIVATED! Dashing toward target!" % get_ai_type(), false, get_entity_id())
 
 # ============================================================================
 # VALIDATION HELPERS
