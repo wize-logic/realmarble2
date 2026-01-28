@@ -5,7 +5,7 @@ extends Ability
 ## Works like cannon's auto-aim but the attack comes from the heavens!
 
 @export var strike_damage: int = 1  # Base damage
-@export var strike_delay: float = 0.3  # Delay before strike lands (for dramatic effect)
+@export var strike_delay: float = 0.5  # Delay before strike lands (for dramatic effect)
 @export var lock_range: float = 100.0  # Auto-aim range
 @export var fire_rate: float = 1.8  # Cooldown between strikes
 @onready var ability_sound: AudioStreamPlayer3D = $LightningSound
@@ -261,7 +261,7 @@ func spawn_warning_indicator(position: Vector3) -> void:
 
 	warning_particles.emitting = true
 	warning_particles.amount = 20
-	warning_particles.lifetime = 0.3
+	warning_particles.lifetime = 0.5
 	warning_particles.explosiveness = 0.5
 	warning_particles.randomness = 0.3
 	warning_particles.local_coords = false
