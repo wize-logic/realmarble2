@@ -82,7 +82,7 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	add_child(sub_viewport)
 	print("[VideoWallManager] SubViewport created and added as child, size: %s" % sub_viewport.size)
 
-	# Use explicit pixel sizes for controls (anchors don't work reliably in SubViewport)
+	# Use explicit pixel sizes for controls
 	var vp_width: float = float(viewport_size.x)
 	var vp_height: float = float(viewport_size.y)
 
@@ -96,17 +96,37 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	sub_viewport.add_child(black_bg)
 	print("[VideoWallManager] Added pitch black background, size: %s" % black_bg.size)
 
-	# Create VideoStreamPlayer inside the viewport
+	# Create VideoStreamPlayer (will render at video's native size)
 	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
 	video_player.name = "VideoPlayer"
-	video_player.position = Vector2.ZERO
-	video_player.custom_minimum_size = Vector2(vp_width, vp_height)
-	video_player.size = Vector2(vp_width, vp_height)
 	video_player.volume_db = volume_db
-	video_player.autoplay = false  # We'll control playback manually
-	video_player.expand = true
-	print("[VideoWallManager] VideoStreamPlayer created, size: %s, expand=%s" % [video_player.size, video_player.expand])
+	video_player.autoplay = false
+	video_player.expand = false  # Render at native video resolution
+	# Don't add to viewport yet - we'll use a TextureRect to stretch it
+	print("[VideoWallManager] VideoStreamPlayer created with expand=false")
+
+	# Create inner SubViewport for video at native resolution
+	var video_viewport = SubViewport.new()
+	video_viewport.name = "VideoNativeViewport"
+	video_viewport.size = Vector2i(1920, 1080)  # Will be updated when video loads
+	video_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	video_viewport.transparent_bg = true
+	video_viewport.handle_input_locally = false
+	video_viewport.gui_disable_input = true
+	sub_viewport.add_child(video_viewport)
+	video_viewport.add_child(video_player)
+
+	# Create TextureRect to stretch video to fill the main viewport
+	var video_rect = TextureRect.new()
+	video_rect.name = "VideoTextureRect"
+	video_rect.position = Vector2.ZERO
+	video_rect.custom_minimum_size = Vector2(vp_width, vp_height)
+	video_rect.size = Vector2(vp_width, vp_height)
+	video_rect.stretch_mode = TextureRect.STRETCH_SCALE  # Stretch to fill, ignore aspect ratio
+	video_rect.texture = video_viewport.get_texture()
+	sub_viewport.add_child(video_rect)
+	print("[VideoWallManager] Added TextureRect with STRETCH_SCALE to fill viewport")
 
 	# Load the video stream
 	# Godot 4 only supports Ogg Theora (.ogv) format natively
