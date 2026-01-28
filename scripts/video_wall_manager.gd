@@ -121,11 +121,21 @@ func _create_video_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_name: 
 	mesh_instance.position = pos
 	mesh_instance.rotation = rot
 
-	# Create unshaded material with video texture
+	# Create completely unshaded material - no lighting, no effects
 	var material = StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.albedo_texture = viewport_texture
 	material.albedo_color = Color.WHITE
+	# Disable all lighting and effects
+	material.disable_ambient_light = true
+	material.disable_fog = true
+	material.disable_receive_shadows = true
+	# No transparency blending
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	# Ensure texture displays at full brightness
+	material.emission_enabled = false
+	material.metallic = 0.0
+	material.roughness = 1.0
 	mesh_instance.material_override = material
 
 	# Add collision for gameplay
