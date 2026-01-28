@@ -213,27 +213,11 @@ func create_video_material(flip_h: bool = false, flip_v: bool = false) -> Shader
 	material.set_shader_parameter("video_texture", viewport_texture)
 	print("[VideoWallManager] Set video_texture parameter to viewport_texture")
 
-	# Apply display settings
-	material.set_shader_parameter("brightness", brightness)
-	material.set_shader_parameter("contrast", contrast)
-	material.set_shader_parameter("saturation", saturation)
-	material.set_shader_parameter("tint_color", Vector3(tint_color.r, tint_color.g, tint_color.b))
-	print("[VideoWallManager] Set display settings: brightness=%s, contrast=%s" % [brightness, contrast])
-
-	# Edge glow settings
-	material.set_shader_parameter("enable_edge_glow", enable_edge_glow)
-	material.set_shader_parameter("edge_glow_color", Vector3(edge_glow_color.r, edge_glow_color.g, edge_glow_color.b))
-	material.set_shader_parameter("edge_glow_intensity", edge_glow_intensity)
-
-	# Scanline settings
-	material.set_shader_parameter("enable_scanlines", enable_scanlines)
-	material.set_shader_parameter("scanline_intensity", scanline_intensity)
-
-	# UV settings
+	# UV flip settings
 	material.set_shader_parameter("flip_h", flip_h)
 	material.set_shader_parameter("flip_v", flip_v)
 
-	print("[VideoWallManager] Material created successfully")
+	print("[VideoWallManager] Material created successfully - 100%% opaque video display")
 	return material
 
 

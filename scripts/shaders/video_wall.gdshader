@@ -1,47 +1,20 @@
 shader_type spatial;
 
 // Video Wall Shader
-// Displays video textures on 3D surfaces - fully opaque, stretched to fit
+// Displays video textures on 3D surfaces - 100% opaque, like a media player
 
-render_mode unshaded, cull_back, depth_draw_opaque;
+render_mode unshaded, cull_back, depth_draw_opaque, blend_mix;
 
 // Video texture from SubViewport
 uniform sampler2D video_texture : source_color, filter_linear, repeat_disable;
 
-// Display settings
-uniform float brightness : hint_range(0.0, 3.0) = 1.5;
-uniform float contrast : hint_range(0.0, 2.0) = 1.0;
-uniform float saturation : hint_range(0.0, 2.0) = 1.0;
-uniform vec3 tint_color : source_color = vec3(1.0, 1.0, 1.0);
-
-// Edge glow effect
-uniform bool enable_edge_glow = false;
-uniform vec3 edge_glow_color : source_color = vec3(0.2, 0.6, 1.0);
-uniform float edge_glow_intensity : hint_range(0.0, 2.0) = 0.3;
-uniform float edge_glow_width : hint_range(0.0, 0.2) = 0.02;
-
-// Scanline effect (optional retro look)
-uniform bool enable_scanlines = false;
-uniform float scanline_intensity : hint_range(0.0, 1.0) = 0.3;
-uniform float scanline_count : hint_range(10.0, 500.0) = 100.0;
-
 // UV settings for proper mapping
-uniform vec2 uv_scale = vec2(1.0, 1.0);
-uniform vec2 uv_offset = vec2(0.0, 0.0);
 uniform bool flip_h = false;
 uniform bool flip_v = false;
-
-vec3 adjust_saturation(vec3 color, float sat) {
-	float gray = dot(color, vec3(0.299, 0.587, 0.114));
-	return mix(vec3(gray), color, sat);
-}
 
 void fragment() {
 	// Calculate UV coordinates - stretched to fit the mesh
 	vec2 uv = UV;
-
-	// Apply UV transformations
-	uv = uv * uv_scale + uv_offset;
 
 	// Apply flipping
 	if (flip_h) {
@@ -51,39 +24,10 @@ void fragment() {
 		uv.y = 1.0 - uv.y;
 	}
 
-	// Sample video texture
+	// Sample video texture - display exactly as-is, like a media player
 	vec4 video_color = texture(video_texture, uv);
 
-	// Apply color adjustments
-	vec3 color = video_color.rgb;
-
-	// Contrast adjustment
-	color = (color - 0.5) * contrast + 0.5;
-
-	// Brightness adjustment
-	color *= brightness;
-
-	// Saturation adjustment
-	color = adjust_saturation(color, saturation);
-
-	// Apply tint
-	color *= tint_color;
-
-	// Scanline effect
-	if (enable_scanlines) {
-		float scanline = sin(uv.y * scanline_count * 3.14159) * 0.5 + 0.5;
-		color = mix(color, color * (1.0 - scanline_intensity), scanline * scanline_intensity);
-	}
-
-	// Edge glow effect (additive)
-	if (enable_edge_glow) {
-		float edge_x = smoothstep(0.0, edge_glow_width, uv.x) * smoothstep(0.0, edge_glow_width, 1.0 - uv.x);
-		float edge_y = smoothstep(0.0, edge_glow_width, uv.y) * smoothstep(0.0, edge_glow_width, 1.0 - uv.y);
-		float edge = 1.0 - (edge_x * edge_y);
-		color += edge_glow_color * edge * edge_glow_intensity;
-	}
-
-	// Set output - fully opaque, unshaded (no lighting affects it)
-	ALBEDO = color;
+	// Output the video color directly - no modifications
+	ALBEDO = video_color.rgb;
 	ALPHA = 1.0;
 }
