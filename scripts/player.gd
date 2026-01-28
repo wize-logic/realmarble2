@@ -9,6 +9,10 @@ const DashAttackScene = preload("res://abilities/dash_attack.tscn")
 const ExplosionScene = preload("res://abilities/explosion.tscn")
 const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
+const LightningStrikeScene = preload("res://abilities/lightning_strike.tscn")
+
+# Ult system
+const UltSystemScript = preload("res://scripts/ult_system.gd")
 
 # Beam spawn effect
 const BeamSpawnEffect = preload("res://scripts/beam_spawn_effect.gd")
@@ -147,6 +151,12 @@ var is_grounded: bool = false
 
 # Ability system
 var current_ability: Node = null  # The currently equipped ability
+
+# Ultimate system
+var ult_system: Node = null
+var ult_meter_ui: Control = null
+var ult_meter_bar: ProgressBar = null
+var ult_meter_label: Label = null
 
 # Death effects
 var death_particles: CPUParticles3D = null  # Particle effect for death
@@ -564,6 +574,10 @@ func _ready() -> void:
 	# Create charge meter UI
 	create_charge_meter_ui()
 
+	# Create ult meter UI and system
+	create_ult_meter_ui()
+	create_ult_system()
+
 	# Create rail reticle UI
 	create_rail_reticle_ui()
 
@@ -907,6 +921,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			if current_ability:
 				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dropping ability!", false, get_entity_id())
 				drop_ability()
+
+	# Ultimate attack - Q key
+	if event is InputEventKey and event.keycode == KEY_Q:
+		if event.pressed and not event.echo:
+			if ult_system and ult_system.has_method("try_activate"):
+				# Check if game is active
+				var world: Node = get_tree().get_root().get_node_or_null("World")
+				var game_is_active: bool = world and world.get("game_active")
+				if game_is_active:
+					if ult_system.try_activate():
+						DebugLogger.dlog(DebugLogger.Category.ABILITIES, "ULTIMATE ACTIVATED!", false, get_entity_id())
+					else:
+						DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ult not ready yet!", false, get_entity_id())
 
 	# Spin dash - start charging (Shift key)
 	if event is InputEventKey and event.keycode == KEY_SHIFT:
@@ -1286,6 +1313,18 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	health -= damage
 	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Received %d damage from player %d! Health: %d" % [damage, attacker_id, health], false, get_entity_id())
 
+	# Charge ult when taking damage (for this player)
+	if ult_system and ult_system.has_method("on_damage_taken"):
+		ult_system.on_damage_taken(damage)
+
+	# Give attacker ult charge for dealing damage
+	var world: Node = get_parent()
+	if world:
+		var attacker: Node = world.get_node_or_null(str(attacker_id))
+		if attacker and "ult_system" in attacker and attacker.ult_system:
+			if attacker.ult_system.has_method("on_damage_dealt"):
+				attacker.ult_system.on_damage_dealt(damage)
+
 	# Play hit sound
 	if hit_sound and hit_sound.stream:
 		play_hit_sound.rpc()
@@ -1296,7 +1335,7 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		drop_ability()
 
 		# Notify world of kill and death
-		var world: Node = get_parent()
+		# (reuse world variable from above)
 		if world:
 			if world.has_method("add_score"):
 				world.add_score(attacker_id, 1)
@@ -1310,6 +1349,11 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 			if attacker and "killstreak" in attacker:
 				attacker.killstreak += 1
 				DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Attacker killstreak is now: %d" % attacker.killstreak)
+
+				# Give attacker ult charge for the kill
+				if "ult_system" in attacker and attacker.ult_system and attacker.ult_system.has_method("on_kill"):
+					attacker.ult_system.on_kill()
+
 				# Notify HUD of kill with victim's name (call on attacker's node)
 				if attacker.has_method("notify_kill"):
 					DebugLogger.dlog(DebugLogger.Category.WORLD, "[KILL] Calling notify_kill on attacker node")
@@ -1372,6 +1416,10 @@ func respawn() -> void:
 	spin_cooldown = 0.0
 	jump_pad_cooldown = 0.0
 	teleporter_cooldown = 0.0
+
+	# Reset ult system on death
+	if ult_system and ult_system.has_method("reset"):
+		ult_system.reset()
 
 	# CRITICAL: Restore normal physics damping (fixes slowness if died while grinding)
 	linear_damp = 0.5
@@ -1866,6 +1914,81 @@ func create_charge_meter_ui() -> void:
 	charge_meter_ui.add_child(charge_meter_bar)
 
 	DebugLogger.dlog(DebugLogger.Category.UI, "Charge meter UI created", false, get_entity_id())
+
+func create_ult_meter_ui() -> void:
+	"""Create the ult charge meter UI"""
+	# Create container - positioned above the charge meter
+	ult_meter_ui = Control.new()
+	ult_meter_ui.name = "UltMeterUI"
+	ult_meter_ui.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	ult_meter_ui.anchor_left = 0.5
+	ult_meter_ui.anchor_right = 0.5
+	ult_meter_ui.anchor_top = 1.0
+	ult_meter_ui.anchor_bottom = 1.0
+	ult_meter_ui.offset_left = -150
+	ult_meter_ui.offset_right = 150
+	ult_meter_ui.offset_top = -170  # Above the charge meter
+	ult_meter_ui.offset_bottom = -130
+	ult_meter_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ult_meter_ui.visible = true  # Always visible
+	add_child(ult_meter_ui)
+
+	# Create label
+	ult_meter_label = Label.new()
+	ult_meter_label.name = "UltLabel"
+	ult_meter_label.text = "ULT: 0%"
+	ult_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ult_meter_label.add_theme_font_size_override("font_size", 16)
+	ult_meter_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Gold
+	ult_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	ult_meter_label.add_theme_constant_override("outline_size", 4)
+	ult_meter_label.position = Vector2(0, 0)
+	ult_meter_label.size = Vector2(300, 20)
+	ult_meter_ui.add_child(ult_meter_label)
+
+	# Create progress bar
+	ult_meter_bar = ProgressBar.new()
+	ult_meter_bar.name = "UltBar"
+	ult_meter_bar.min_value = 0.0
+	ult_meter_bar.max_value = 100.0
+	ult_meter_bar.value = 0.0
+	ult_meter_bar.show_percentage = false
+	ult_meter_bar.position = Vector2(0, 22)
+	ult_meter_bar.size = Vector2(300, 14)
+
+	# Style the progress bar - dark background with gold accents
+	var style_box_bg: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_bg.bg_color = Color(0.15, 0.12, 0.1, 0.9)
+	style_box_bg.border_width_left = 2
+	style_box_bg.border_width_right = 2
+	style_box_bg.border_width_top = 2
+	style_box_bg.border_width_bottom = 2
+	style_box_bg.border_color = Color(0.6, 0.5, 0.2)  # Gold border
+	ult_meter_bar.add_theme_stylebox_override("background", style_box_bg)
+
+	var style_box_fill: StyleBoxFlat = StyleBoxFlat.new()
+	style_box_fill.bg_color = Color(0.5, 0.5, 0.5, 0.9)  # Gray initially
+	ult_meter_bar.add_theme_stylebox_override("fill", style_box_fill)
+
+	ult_meter_ui.add_child(ult_meter_bar)
+
+	DebugLogger.dlog(DebugLogger.Category.UI, "Ult meter UI created", false, get_entity_id())
+
+func create_ult_system() -> void:
+	"""Create and initialize the ult system"""
+	ult_system = UltSystemScript.new()
+	ult_system.name = "UltSystem"
+	add_child(ult_system)
+
+	# Set up the ult system
+	if ult_system.has_method("setup"):
+		ult_system.setup(self)
+
+	# Give the ult system references to the UI
+	if ult_system.has_method("set_ui_references"):
+		ult_system.set_ui_references(ult_meter_ui, ult_meter_bar, ult_meter_label)
+
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ult system created for player %s" % name, false, get_entity_id())
 
 func create_rail_reticle_ui() -> void:
 	"""Create the rail targeting prompt UI (text only, no visual reticle)"""

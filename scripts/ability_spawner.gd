@@ -8,6 +8,7 @@ const DashAttackScene = preload("res://abilities/dash_attack.tscn")
 const ExplosionScene = preload("res://abilities/explosion.tscn")
 const CannonScene = preload("res://abilities/cannon.tscn")
 const SwordScene = preload("res://abilities/sword.tscn")
+const LightningStrikeScene = preload("res://abilities/lightning_strike.tscn")
 
 # Map volume bounds for random spawning
 @export var spawn_bounds_min: Vector3 = Vector3(-40, 6, -40)  # Min X, Y, Z (doubled Y from 3)
@@ -75,12 +76,13 @@ func spawn_abilities() -> void:
 
 	var total_abilities: int = clamp(int(player_count * abilities_per_player), 20, 60)  # Increased from 10-35
 
-	# Distribute abilities equally across all types (25% each)
+	# Distribute abilities equally across all types (20% each for 5 abilities)
 	# All abilities are equally viable - none should be rare
-	var scaled_dash: int = max(1, int(total_abilities * 0.25))      # 25%
-	var scaled_explosion: int = max(1, int(total_abilities * 0.25))  # 25%
-	var scaled_cannon: int = max(1, int(total_abilities * 0.25))     # 25%
-	var scaled_sword: int = max(1, int(total_abilities * 0.25))      # 25%
+	var scaled_dash: int = max(1, int(total_abilities * 0.20))       # 20%
+	var scaled_explosion: int = max(1, int(total_abilities * 0.20))  # 20%
+	var scaled_cannon: int = max(1, int(total_abilities * 0.20))     # 20%
+	var scaled_sword: int = max(1, int(total_abilities * 0.20))      # 20%
+	var scaled_lightning: int = max(1, int(total_abilities * 0.20)) # 20%
 
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ABILITY SPAWNER: Starting to spawn abilities ===")
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Players: %d | Total abilities: %d" % [player_count, total_abilities])
@@ -109,6 +111,12 @@ func spawn_abilities() -> void:
 		var pos: Vector3 = get_random_spawn_position()
 		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Sword %d spawning at: %s" % [i+1, pos])
 		spawn_ability_at(pos, SwordScene, "Sword", Color.CYAN)
+
+	# Spawn lightning strikes
+	for i in range(scaled_lightning):
+		var pos: Vector3 = get_random_spawn_position()
+		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Lightning Strike %d spawning at: %s" % [i+1, pos])
+		spawn_ability_at(pos, LightningStrikeScene, "Lightning", Color(0.4, 0.8, 1.0))  # Electric cyan
 
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ABILITY SPAWNER: Spawned %d ability pickups ===" % spawned_pickups.size())
 
@@ -223,7 +231,8 @@ func spawn_random_ability(pos: Vector3) -> void:
 		[DashAttackScene, "Dash Attack", Color.MAGENTA],
 		[ExplosionScene, "Explosion", Color.ORANGE],
 		[CannonScene, "Cannon", Color(0.5, 1.0, 0.0)],  # Lime green
-		[SwordScene, "Sword", Color.CYAN]
+		[SwordScene, "Sword", Color.CYAN],
+		[LightningStrikeScene, "Lightning", Color(0.4, 0.8, 1.0)]  # Electric cyan
 	]
 
 	var random_ability: Array = ability_types[randi() % ability_types.size()]

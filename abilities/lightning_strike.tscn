@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://bx8k3n5m2l4wq"]
+
+[ext_resource type="Script" path="res://scripts/abilities/lightning_strike.gd" id="1_lightning"]
+[ext_resource type="AudioStream" uid="uid://dc7puupetsakp" path="res://audio/Raygun.wav" id="2_lightning_sound"]
+
+[node name="LightningStrike" type="Node3D"]
+script = ExtResource("1_lightning")
+
+[node name="LightningSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_lightning_sound")
