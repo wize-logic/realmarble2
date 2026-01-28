@@ -1171,10 +1171,19 @@ func _on_multiplayer_player_disconnected(peer_id: int) -> void:
 	if game_active or countdown_active:
 		remove_player(peer_id)
 
-func show_multiplayer_lobby() -> void:
-	"""Show the multiplayer lobby UI"""
+func show_multiplayer_lobby(show_game_lobby: bool = false) -> void:
+	"""Show the multiplayer lobby UI
+	Args:
+		show_game_lobby: If true, show the game lobby panel (for returning from match).
+		                 If false, show the main lobby panel (for opening from main menu).
+	"""
 	if lobby_ui:
 		lobby_ui.visible = true
+		# Show the appropriate panel
+		if show_game_lobby and lobby_ui.has_method("show_game_lobby"):
+			lobby_ui.show_game_lobby()
+		elif lobby_ui.has_method("show_main_lobby"):
+			lobby_ui.show_main_lobby()
 		# Hide main menu
 		if main_menu:
 			main_menu.visible = false
@@ -1393,8 +1402,91 @@ func end_deathmatch() -> void:
 	# Wait 10 seconds
 	await get_tree().create_timer(10.0).timeout
 
-	# Return to main menu
-	return_to_main_menu()
+	# Return to lobby if multiplayer, otherwise main menu
+	if MultiplayerManager and MultiplayerManager.is_online():
+		return_to_multiplayer_lobby()
+	else:
+		return_to_main_menu()
+
+func return_to_multiplayer_lobby() -> void:
+	"""Return to multiplayer lobby after match ends"""
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Returning to multiplayer lobby...")
+
+	# Hide scoreboard
+	var scoreboard: Control = get_node_or_null("Scoreboard")
+	if scoreboard and scoreboard.has_method("hide_match_end_scoreboard"):
+		scoreboard.hide_match_end_scoreboard()
+
+	# Remove all players (including bots)
+	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	for player in players:
+		player.queue_free()
+
+	# Clear ALL ability pickups
+	var all_abilities: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
+	for ability in all_abilities:
+		if ability:
+			ability.queue_free()
+
+	# Clear ALL orbs
+	var all_orbs: Array[Node] = get_tree().get_nodes_in_group("orbs")
+	for orb in all_orbs:
+		if orb:
+			orb.queue_free()
+
+	# Clear spawner tracking
+	var ability_spawner: Node = get_node_or_null("AbilitySpawner")
+	if ability_spawner and ability_spawner.has_method("clear_all"):
+		ability_spawner.clear_all()
+
+	var orb_spawner: Node = get_node_or_null("OrbSpawner")
+	if orb_spawner and orb_spawner.has_method("clear_all"):
+		orb_spawner.clear_all()
+
+	# Clear scores and deaths
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Reset game state
+	game_active = false
+	countdown_active = false
+	game_time_remaining = 300.0
+	last_time_print = -1
+
+	# Reset mid-round expansion
+	expansion_triggered = false
+
+	# Reset bot counter locally (MultiplayerManager keeps its own for lobby)
+	bot_counter = 0
+
+	# Hide countdown label and HUD
+	if countdown_label:
+		countdown_label.visible = false
+	if game_hud:
+		game_hud.visible = false
+
+	# Wait for cleanup to complete
+	await get_tree().process_frame
+
+	# Regenerate map for lobby preview
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating map for lobby preview")
+	await generate_procedural_level(false)
+
+	# Show the multiplayer lobby (game lobby panel, not main lobby)
+	show_multiplayer_lobby(true)
+
+	# Reset player ready status for next match
+	if MultiplayerManager:
+		MultiplayerManager.set_player_ready(false)
+
+	# Start menu music
+	if menu_music:
+		menu_music.play()
+
+	# Make sure mouse is visible
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Returned to multiplayer lobby")
 
 func return_to_main_menu() -> void:
 	"""Return to main menu after match ends"""
