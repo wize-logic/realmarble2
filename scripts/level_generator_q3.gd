@@ -74,16 +74,12 @@ extends Node3D
 @export var generate_occluders: bool = true  ## Add OccluderInstance3D for culling
 @export var use_static_batching: bool = true  ## Batch static geometry
 
-# Video Walls - simplified settings (only enable toggle exposed)
+# Video Walls - replaces perimeter walls with video panels
 @export_group("Video Walls")
-@export var enable_video_walls: bool = false  ## Enable video display on perimeter walls
+@export var enable_video_walls: bool = false  ## Replace perimeter walls with video panels
 
-# Video wall constants - not user-configurable
+# Video wall constants
 const VIDEO_WALL_PATH: String = "res://videos/arena_bg.ogv"
-const VIDEO_WALL_BRIGHTNESS: float = 1.5
-const VIDEO_WALL_EDGE_GLOW: bool = false
-const VIDEO_WALL_EDGE_COLOR: Color = Color(0.2, 0.6, 1.0)
-const VIDEO_WALL_SCANLINES: bool = false
 const VIDEO_WALL_LOOP: bool = true
 const VIDEO_WALL_RESOLUTION: Vector2i = Vector2i(1920, 1080)
 
@@ -1680,6 +1676,11 @@ func _create_rail_visual(rail: Path3D) -> void:
 # ============================================================================
 
 func generate_perimeter_walls() -> void:
+	# Skip creating regular walls if video mode is enabled - video panels will replace them
+	if enable_video_walls:
+		print("[LevelGen] Video walls enabled - skipping regular perimeter walls")
+		return
+
 	var scale: float = arena_size / 140.0
 	var wall_distance: float = arena_size * 0.55
 	var perim_wall_height: float = 25.0 * scale
@@ -1701,74 +1702,46 @@ func generate_perimeter_walls() -> void:
 
 
 func apply_video_walls() -> void:
-	## Apply video textures to perimeter walls if enabled
+	## Create video panel meshes that replace perimeter walls
 	print("[LevelGen] apply_video_walls() called, enable_video_walls: %s" % enable_video_walls)
 
 	if not enable_video_walls:
 		print("[LevelGen] Video walls disabled - skipping")
 		return
 
-	print("[LevelGen] perimeter_walls count: %d" % perimeter_walls.size())
-	if perimeter_walls.is_empty():
-		print("[LevelGen] ERROR: No perimeter walls to apply video to!")
-		push_warning("No perimeter walls to apply video to")
-		return
+	var scale: float = arena_size / 140.0
+	var wall_distance: float = arena_size * 0.55
+	var perim_wall_height: float = 25.0 * scale
 
-	# First, apply pitch black material to perimeter walls for a clean video display
-	print("[LevelGen] Applying pitch black material to perimeter walls...")
-	var black_material = StandardMaterial3D.new()
-	black_material.albedo_color = Color(0, 0, 0)  # Pitch black
-	black_material.roughness = 1.0
-	black_material.metallic = 0.0
-	black_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # No lighting effects
-	for wall in perimeter_walls:
-		if wall is MeshInstance3D:
-			wall.material_override = black_material
-	print("[LevelGen] Pitch black material applied to %d walls" % perimeter_walls.size())
-
-	# Log each perimeter wall
-	for i in range(perimeter_walls.size()):
-		print("[LevelGen] perimeter_walls[%d]: %s" % [i, perimeter_walls[i]])
+	# Wall configs with rotation for video panels facing inward
+	# North: faces -Z (toward center), South: faces +Z, East: faces -X, West: faces +X
+	var wall_configs = [
+		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, PI, 0)},  # North - rotated to face inward
+		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, 0, 0)},  # South - faces +Z (inward)
+		{"pos": Vector3(wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, -PI/2, 0)},  # East - rotated to face inward
+		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, PI/2, 0)}  # West - rotated to face inward
+	]
 
 	# Load and initialize video wall manager
-	print("[LevelGen] Loading VideoWallManager script...")
+	print("[LevelGen] Loading VideoWallManager...")
 	var VideoWallManagerScript = load("res://scripts/video_wall_manager.gd")
-	print("[LevelGen] VideoWallManagerScript: %s" % VideoWallManagerScript)
 	if VideoWallManagerScript == null:
-		print("[LevelGen] ERROR: Failed to load VideoWallManager script!")
 		push_error("Failed to load VideoWallManager script")
 		return
 
-	print("[LevelGen] Creating VideoWallManager node...")
-	video_wall_manager = Node.new()
+	video_wall_manager = Node3D.new()
 	video_wall_manager.set_script(VideoWallManagerScript)
 	video_wall_manager.name = "VideoWallManager"
-
-	# Configure video wall manager with constant settings
-	print("[LevelGen] Configuring video wall manager settings...")
-	video_wall_manager.brightness = VIDEO_WALL_BRIGHTNESS
-	video_wall_manager.enable_edge_glow = VIDEO_WALL_EDGE_GLOW
-	video_wall_manager.edge_glow_color = VIDEO_WALL_EDGE_COLOR
-	video_wall_manager.enable_scanlines = VIDEO_WALL_SCANLINES
 	video_wall_manager.loop_video = VIDEO_WALL_LOOP
-	print("[LevelGen] Settings: brightness=%s, edge_glow=%s, scanlines=%s, loop=%s" % [VIDEO_WALL_BRIGHTNESS, VIDEO_WALL_EDGE_GLOW, VIDEO_WALL_SCANLINES, VIDEO_WALL_LOOP])
-
-	print("[LevelGen] Adding VideoWallManager as child...")
 	add_child(video_wall_manager)
 
-	# Initialize with constant video file path
-	print("[LevelGen] Calling video_wall_manager.initialize('%s', %s)..." % [VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION])
+	# Initialize video and create panels
 	if video_wall_manager.initialize(VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION):
-		print("[LevelGen] Video wall manager initialized successfully!")
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls initialized with: " + VIDEO_WALL_PATH)
-
-		# Apply video to all perimeter walls with proper orientation
-		print("[LevelGen] Calling apply_to_perimeter_walls with %d walls..." % perimeter_walls.size())
-		video_wall_manager.apply_to_perimeter_walls(perimeter_walls)
-		print("[LevelGen] apply_to_perimeter_walls completed!")
+		print("[LevelGen] Creating video panels...")
+		video_wall_manager.create_video_panels(wall_configs)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls created with: " + VIDEO_WALL_PATH)
 	else:
-		print("[LevelGen] ERROR: Failed to initialize video walls with: '%s'" % VIDEO_WALL_PATH)
-		push_warning("Failed to initialize video walls with: " + VIDEO_WALL_PATH)
+		push_warning("Failed to initialize video walls")
 		video_wall_manager.queue_free()
 		video_wall_manager = null
 
