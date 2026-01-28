@@ -43,25 +43,36 @@ var is_playing: bool = false
 
 
 func _ready() -> void:
-	pass
+	print("[VideoWallManager] _ready() called")
 
 
 func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
 	## Initialize the video wall system with a WebM file path
 	## Returns true on success, false on failure
 
+	print("[VideoWallManager] initialize() called with path: '%s', viewport_size: %s" % [webm_path, viewport_size])
+
 	if webm_path.is_empty():
+		print("[VideoWallManager] ERROR: No video path provided (empty string)")
 		push_warning("VideoWallManager: No video path provided")
 		return false
 
 	video_path = webm_path
+	print("[VideoWallManager] video_path set to: '%s'" % video_path)
 
 	# Check if file exists
-	if not FileAccess.file_exists(video_path) and not ResourceLoader.exists(video_path):
+	var file_exists = FileAccess.file_exists(video_path)
+	var resource_exists = ResourceLoader.exists(video_path)
+	print("[VideoWallManager] FileAccess.file_exists('%s'): %s" % [video_path, file_exists])
+	print("[VideoWallManager] ResourceLoader.exists('%s'): %s" % [video_path, resource_exists])
+
+	if not file_exists and not resource_exists:
+		print("[VideoWallManager] ERROR: Video file not found at path: '%s'" % video_path)
 		push_warning("VideoWallManager: Video file not found: " + video_path)
 		return false
 
 	# Create SubViewport for video rendering
+	print("[VideoWallManager] Creating SubViewport...")
 	sub_viewport = SubViewport.new()
 	sub_viewport.name = "VideoWallViewport"
 	sub_viewport.size = viewport_size
@@ -70,35 +81,47 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	sub_viewport.handle_input_locally = false
 	sub_viewport.gui_disable_input = true
 	add_child(sub_viewport)
+	print("[VideoWallManager] SubViewport created and added as child, size: %s" % sub_viewport.size)
 
 	# Create VideoStreamPlayer inside the viewport
+	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
 	video_player.name = "VideoPlayer"
 	video_player.set_anchors_preset(Control.PRESET_FULL_RECT)
 	video_player.volume_db = volume_db
 	video_player.autoplay = false  # We'll control playback manually
 	video_player.expand = true
+	print("[VideoWallManager] VideoStreamPlayer created with expand=%s, volume_db=%s" % [video_player.expand, video_player.volume_db])
 
 	# Load the video stream
+	print("[VideoWallManager] Loading video stream from: '%s'" % video_path)
 	video_stream = load(video_path)
+	print("[VideoWallManager] load() returned: %s (type: %s)" % [video_stream, typeof(video_stream)])
+
 	if video_stream == null:
+		print("[VideoWallManager] ERROR: Failed to load video stream from: '%s'" % video_path)
 		push_error("VideoWallManager: Failed to load video: " + video_path)
 		sub_viewport.queue_free()
 		return false
 
+	print("[VideoWallManager] Video stream loaded successfully, class: %s" % video_stream.get_class())
 	video_player.stream = video_stream
 	sub_viewport.add_child(video_player)
+	print("[VideoWallManager] VideoStreamPlayer added to SubViewport")
 
 	# Connect signals
 	video_player.finished.connect(_on_video_finished)
+	print("[VideoWallManager] Connected finished signal")
 
 	# Get viewport texture
 	viewport_texture = sub_viewport.get_texture()
+	print("[VideoWallManager] Got viewport texture: %s" % viewport_texture)
 
 	is_initialized = true
-	print("VideoWallManager: Initialized with video: " + video_path)
+	print("[VideoWallManager] Initialization complete! is_initialized=%s" % is_initialized)
 
 	if autoplay:
+		print("[VideoWallManager] Autoplay enabled, calling play()...")
 		play()
 
 	return true
@@ -106,11 +129,14 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 
 func play() -> void:
 	## Start video playback
+	print("[VideoWallManager] play() called, is_initialized=%s, video_player=%s" % [is_initialized, video_player])
 	if not is_initialized or video_player == null:
+		print("[VideoWallManager] Cannot play - not initialized or no video_player")
 		return
 
 	video_player.play()
 	is_playing = true
+	print("[VideoWallManager] Video playback started, is_playing=%s" % is_playing)
 
 
 func pause() -> void:
@@ -142,6 +168,7 @@ func stop() -> void:
 
 func _on_video_finished() -> void:
 	## Called when video finishes playing
+	print("[VideoWallManager] Video finished, loop_video=%s" % loop_video)
 	if loop_video and is_initialized:
 		video_player.play()
 
@@ -150,15 +177,22 @@ func create_video_material(flip_h: bool = false, flip_v: bool = false) -> Shader
 	## Create a new video wall material using the viewport texture
 	## flip_h/flip_v: Flip texture horizontally/vertically (useful for different wall orientations)
 
+	print("[VideoWallManager] create_video_material() called, flip_h=%s, flip_v=%s" % [flip_h, flip_v])
+	print("[VideoWallManager] is_initialized=%s, viewport_texture=%s" % [is_initialized, viewport_texture])
+
 	if not is_initialized or viewport_texture == null:
+		print("[VideoWallManager] ERROR: Cannot create material - not initialized or no viewport_texture")
 		push_warning("VideoWallManager: Cannot create material - not initialized")
 		return null
 
+	print("[VideoWallManager] Creating ShaderMaterial with VIDEO_WALL_SHADER...")
 	var material = ShaderMaterial.new()
 	material.shader = VIDEO_WALL_SHADER
+	print("[VideoWallManager] Shader set: %s" % material.shader)
 
 	# Set video texture
 	material.set_shader_parameter("video_texture", viewport_texture)
+	print("[VideoWallManager] Set video_texture parameter to viewport_texture")
 
 	# Apply display settings
 	material.set_shader_parameter("brightness", brightness)
@@ -166,6 +200,7 @@ func create_video_material(flip_h: bool = false, flip_v: bool = false) -> Shader
 	material.set_shader_parameter("saturation", saturation)
 	material.set_shader_parameter("tint_color", Vector3(tint_color.r, tint_color.g, tint_color.b))
 	material.set_shader_parameter("emission_strength", emission_strength)
+	print("[VideoWallManager] Set display settings: brightness=%s, contrast=%s, emission=%s" % [brightness, contrast, emission_strength])
 
 	# Edge glow settings
 	material.set_shader_parameter("enable_edge_glow", enable_edge_glow)
@@ -180,25 +215,36 @@ func create_video_material(flip_h: bool = false, flip_v: bool = false) -> Shader
 	material.set_shader_parameter("flip_h", flip_h)
 	material.set_shader_parameter("flip_v", flip_v)
 
+	print("[VideoWallManager] Material created successfully")
 	return material
 
 
 func apply_to_wall(mesh_instance: MeshInstance3D, flip_h: bool = false, flip_v: bool = false) -> void:
 	## Apply video material to a wall mesh
+	print("[VideoWallManager] apply_to_wall() called, mesh_instance=%s, flip_h=%s, flip_v=%s" % [mesh_instance, flip_h, flip_v])
+
 	if mesh_instance == null:
+		print("[VideoWallManager] ERROR: mesh_instance is null!")
 		return
 
+	print("[VideoWallManager] Applying to mesh: %s (path: %s)" % [mesh_instance.name, mesh_instance.get_path()])
 	var material = create_video_material(flip_h, flip_v)
 	if material:
 		mesh_instance.material_override = material
 		wall_meshes.append(mesh_instance)
+		print("[VideoWallManager] Material applied to %s, total wall_meshes: %d" % [mesh_instance.name, wall_meshes.size()])
+	else:
+		print("[VideoWallManager] ERROR: Failed to create material for %s" % mesh_instance.name)
 
 
 func apply_to_perimeter_walls(walls: Array) -> void:
 	## Apply video to perimeter walls with proper orientation
 	## Expects walls array in order: North, South, East, West
 
+	print("[VideoWallManager] apply_to_perimeter_walls() called with %d walls" % walls.size())
+
 	for i in range(walls.size()):
+		print("[VideoWallManager] Processing wall[%d]: %s (is MeshInstance3D: %s)" % [i, walls[i], walls[i] is MeshInstance3D])
 		if walls[i] is MeshInstance3D:
 			var flip_h = false
 			var flip_v = false
@@ -215,6 +261,10 @@ func apply_to_perimeter_walls(walls: Array) -> void:
 					flip_h = true
 
 			apply_to_wall(walls[i], flip_h, flip_v)
+		else:
+			print("[VideoWallManager] WARNING: walls[%d] is NOT a MeshInstance3D, skipping" % i)
+
+	print("[VideoWallManager] Finished applying to perimeter walls, total applied: %d" % wall_meshes.size())
 
 
 func set_brightness(value: float) -> void:
@@ -257,6 +307,7 @@ func _update_all_materials(param_name: String, value: Variant) -> void:
 
 func cleanup() -> void:
 	## Clean up video resources
+	print("[VideoWallManager] cleanup() called")
 	stop()
 
 	wall_meshes.clear()

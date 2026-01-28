@@ -114,7 +114,6 @@ func drop() -> void:
 ## Called when the player uses the ability
 func use() -> void:
 	if is_on_cooldown:
-		print("Ability on cooldown! %.1fs remaining" % cooldown_timer)
 		return
 
 	# Call the specific ability implementation
