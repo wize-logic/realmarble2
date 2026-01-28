@@ -76,31 +76,37 @@ func initialize(webm_path: String, viewport_size: Vector2i = Vector2i(1920, 1080
 	sub_viewport.name = "VideoWallViewport"
 	sub_viewport.size = viewport_size
 	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	sub_viewport.transparent_bg = true  # Transparent so we can control background
+	sub_viewport.transparent_bg = false
 	sub_viewport.handle_input_locally = false
 	sub_viewport.gui_disable_input = true
 	add_child(sub_viewport)
 	print("[VideoWallManager] SubViewport created and added as child, size: %s" % sub_viewport.size)
 
-	# Add pitch black background to viewport (must be first child, behind video)
+	# Use explicit pixel sizes for controls (anchors don't work reliably in SubViewport)
+	var vp_width: float = float(viewport_size.x)
+	var vp_height: float = float(viewport_size.y)
+
+	# Add pitch black background that fills entire viewport
 	var black_bg = ColorRect.new()
 	black_bg.name = "BlackBackground"
 	black_bg.color = Color(0, 0, 0, 1)  # Pitch black
-	black_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	black_bg.size = Vector2(float(viewport_size.x), float(viewport_size.y))
+	black_bg.position = Vector2.ZERO
+	black_bg.custom_minimum_size = Vector2(vp_width, vp_height)
+	black_bg.size = Vector2(vp_width, vp_height)
 	sub_viewport.add_child(black_bg)
-	print("[VideoWallManager] Added pitch black background to viewport, size: %s" % black_bg.size)
+	print("[VideoWallManager] Added pitch black background, size: %s" % black_bg.size)
 
 	# Create VideoStreamPlayer inside the viewport
 	print("[VideoWallManager] Creating VideoStreamPlayer...")
 	video_player = VideoStreamPlayer.new()
 	video_player.name = "VideoPlayer"
-	video_player.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	video_player.size = Vector2(float(viewport_size.x), float(viewport_size.y))
+	video_player.position = Vector2.ZERO
+	video_player.custom_minimum_size = Vector2(vp_width, vp_height)
+	video_player.size = Vector2(vp_width, vp_height)
 	video_player.volume_db = volume_db
 	video_player.autoplay = false  # We'll control playback manually
 	video_player.expand = true
-	print("[VideoWallManager] VideoStreamPlayer created with size=%s, expand=%s, volume_db=%s" % [video_player.size, video_player.expand, video_player.volume_db])
+	print("[VideoWallManager] VideoStreamPlayer created, size: %s, expand=%s" % [video_player.size, video_player.expand])
 
 	# Load the video stream
 	# Godot 4 only supports Ogg Theora (.ogv) format natively
