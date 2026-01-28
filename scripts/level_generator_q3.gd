@@ -78,6 +78,9 @@ extends Node3D
 @export_group("Video Walls")
 @export var enable_video_walls: bool = false  ## Replace perimeter walls with video panels
 
+# Menu Preview Mode - only generates floor + video walls for main menu background
+var menu_preview_mode: bool = false
+
 # Video wall constants
 const VIDEO_WALL_PATH: String = "res://videos/arena_bg.ogv"
 const VIDEO_WALL_LOOP: bool = true
@@ -200,6 +203,16 @@ func generate_level() -> void:
 
 	# Clear previous data
 	clear_level()
+
+	# Menu preview mode: only floor + video walls (no structures, obstacles, etc.)
+	if menu_preview_mode:
+		generate_main_arena()
+		apply_procedural_textures()
+		# Always enable video walls in menu preview
+		enable_video_walls = true
+		apply_video_walls()
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "=== MENU PREVIEW GENERATION COMPLETE ===")
+		return
 
 	if use_bsp_layout:
 		# Generate using BSP algorithm

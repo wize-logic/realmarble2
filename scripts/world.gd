@@ -94,8 +94,8 @@ var skybox_generator: Node3D = null
 var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 
 func _ready() -> void:
-	# Generate procedural level (Q3 style)
-	generate_procedural_level()
+	# Generate menu preview level (floor + video walls only)
+	generate_procedural_level(false, 2, false, true)
 
 	# Initialize debug menu
 	var debug_menu_instance: Control = DebugMenu.instantiate()
@@ -1560,9 +1560,9 @@ func return_to_main_menu() -> void:
 	# Wait a frame for all queue_free() calls to complete
 	await get_tree().process_frame
 
-	# Regenerate map for menu preview (without spawning collectibles)
-	DebugLogger.dlog(DebugLogger.Category.UI, "Regenerating map preview")
-	await generate_procedural_level(false)
+	# Regenerate menu preview level (floor + video walls only)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Regenerating menu preview")
+	await generate_procedural_level(false, 2, false, true)
 
 	# Recreate marble preview after level regeneration
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Recreating marble preview for main menu")
@@ -2470,14 +2470,15 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false) -> void:
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false) -> void:
 	"""Generate a procedural Q3-style level with skybox
 	Args:
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 		video_walls: Enable video on perimeter walls
+		menu_preview: If true, only generates floor + video walls for main menu background
 	"""
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s" % [level_size, spawn_collectibles, video_walls])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s" % [level_size, spawn_collectibles, video_walls, menu_preview])
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
@@ -2512,6 +2513,11 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	if video_walls:
 		level_generator.enable_video_walls = true
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls enabled")
+
+	# Menu preview mode: only floor + video walls
+	if menu_preview:
+		level_generator.menu_preview_mode = true
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Menu preview mode enabled")
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Using Q3 Arena-style level generator (arena_size: %.1f, complexity: %d)" % [level_generator.arena_size, level_generator.complexity])
 
