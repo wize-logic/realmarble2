@@ -141,44 +141,10 @@ func _process(delta: float) -> void:
 
 			direction_indicator.visible = true
 
-			# Get player's camera/movement direction
-			var camera_arm: Node3D = player.get_node_or_null("CameraArm")
-			var target_direction: Vector3 = Vector3.FORWARD
+			# Position sphere at player's center (where the hitbox will be during dash)
+			direction_indicator.global_position = player.global_position
 
-			if camera_arm:
-				# Point in camera forward direction (works for both players and bots)
-				target_direction = -camera_arm.global_transform.basis.z
-				target_direction.y = 0
-				target_direction = target_direction.normalized()
-
-			# Position at player's feet, offset in dash direction
-			# Use raycasting to find ground below the indicator position
-			var base_position = player.global_position + target_direction * 2.0
-			var indicator_position = base_position
-
-			# Raycast downward to find ground below player
-			var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
-			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-				base_position + Vector3.UP * 50.0,  # Start well above
-				base_position + Vector3.DOWN * 100.0  # Check far below
-			)
-			query.exclude = [player]
-			query.collision_mask = 1  # Only check world geometry (layer 1)
-			var result: Dictionary = space_state.intersect_ray(query)
-
-			if result:
-				# Ground found - position indicator slightly above it
-				indicator_position = result.position + Vector3.UP * 0.15
-			else:
-				# No ground found - keep at player's Y level
-				indicator_position.y = player.global_position.y
-
-			direction_indicator.global_position = indicator_position
-
-			# Orient indicator to point in dash direction
-			direction_indicator.look_at(player.global_position + target_direction * 5.0, Vector3.UP)
-
-			# Scale based on charge level (longer arrow for higher charge)
+			# Scale based on charge level to match hitbox scaling (+30% per level)
 			var scale_factor = 1.0 + (charge_level - 1) * 0.3
 			direction_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -353,20 +319,17 @@ func play_attack_hit_sound() -> void:
 		hit_sound.queue_free()
 
 func create_direction_indicator() -> void:
-	"""Create an arrow indicator that shows the dash direction while charging"""
+	"""Create a sphere indicator that shows the dash hitbox area while charging"""
 	direction_indicator = MeshInstance3D.new()
-	direction_indicator.name = "DashDirectionIndicator"
+	direction_indicator.name = "DashHitboxIndicator"
 
-	# Create a cone mesh for the arrow (pointing forward)
-	var cone: CylinderMesh = CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 0.8
-	cone.height = 1.5
-	cone.radial_segments = 16
-	direction_indicator.mesh = cone
-
-	# Rotate so cone points in the -Z direction (forward)
-	direction_indicator.rotation_degrees = Vector3(90, 0, 0)
+	# Create a sphere mesh matching the hitbox radius (1.5)
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = 1.5  # Match hitbox radius
+	sphere.height = 3.0  # Diameter = 2 * radius
+	sphere.radial_segments = 24
+	sphere.rings = 12
+	direction_indicator.mesh = sphere
 
 	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -379,23 +342,23 @@ func create_direction_indicator() -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
 	direction_indicator.material_override = mat
 
-	# Add particles for extra visual feedback
-	var arrow_particles: CPUParticles3D = CPUParticles3D.new()
-	arrow_particles.name = "ArrowParticles"
-	direction_indicator.add_child(arrow_particles)
+	# Add particles around the sphere for extra visual feedback
+	var sphere_particles: CPUParticles3D = CPUParticles3D.new()
+	sphere_particles.name = "SphereParticles"
+	direction_indicator.add_child(sphere_particles)
 
-	# Configure particles - very subtle flowing forward
-	arrow_particles.emitting = true
-	arrow_particles.amount = 12  # Reduced from 20 for subtlety
-	arrow_particles.lifetime = 0.6
-	arrow_particles.explosiveness = 0.0
-	arrow_particles.randomness = 0.2
-	arrow_particles.local_coords = false
+	# Configure particles - orbiting around the sphere
+	sphere_particles.emitting = true
+	sphere_particles.amount = 16
+	sphere_particles.lifetime = 0.8
+	sphere_particles.explosiveness = 0.0
+	sphere_particles.randomness = 0.2
+	sphere_particles.local_coords = true
 
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	arrow_particles.mesh = particle_mesh
+	sphere_particles.mesh = particle_mesh
 
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -405,29 +368,29 @@ func create_direction_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	arrow_particles.mesh.material = particle_material
+	sphere_particles.mesh.material = particle_material
 
-	# Emission shape - sphere at arrow tip
-	arrow_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	arrow_particles.emission_sphere_radius = 0.3
+	# Emission shape - sphere surface matching hitbox
+	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	sphere_particles.emission_sphere_radius = 1.5  # Match hitbox radius
 
-	# Movement - flow forward along the arrow
-	arrow_particles.direction = Vector3(0, 0, -1)  # Forward
-	arrow_particles.spread = 15.0
-	arrow_particles.gravity = Vector3.ZERO
-	arrow_particles.initial_velocity_min = 1.0
-	arrow_particles.initial_velocity_max = 2.0
+	# Movement - slow drift outward
+	sphere_particles.direction = Vector3(0, 0, 0)
+	sphere_particles.spread = 180.0
+	sphere_particles.gravity = Vector3.ZERO
+	sphere_particles.initial_velocity_min = 0.3
+	sphere_particles.initial_velocity_max = 0.8
 
 	# Size
-	arrow_particles.scale_amount_min = 1.0
-	arrow_particles.scale_amount_max = 1.5
+	sphere_particles.scale_amount_min = 1.0
+	sphere_particles.scale_amount_max = 1.5
 
 	# Color - very subtle neutral purple gradient
 	var gradient: Gradient = Gradient.new()
 	gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))  # Subtle neutral purple
 	gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))  # Very subtle
 	gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))  # Transparent
-	arrow_particles.color_ramp = gradient
+	sphere_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)
 	direction_indicator.visible = false

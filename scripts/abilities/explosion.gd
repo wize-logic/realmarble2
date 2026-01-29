@@ -186,33 +186,13 @@ func _process(delta: float) -> void:
 
 			radius_indicator.visible = true
 
-			# Position at player's feet using raycasting to find ground
-			var base_position = player.global_position
-			var indicator_position = base_position
+			# Position sphere at player's center (where explosion hitbox will be)
+			radius_indicator.global_position = player.global_position
 
-			# Raycast downward to find ground below player
-			var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
-			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-				base_position + Vector3.UP * 50.0,  # Start well above
-				base_position + Vector3.DOWN * 100.0  # Check far below
-			)
-			query.exclude = [player]
-			query.collision_mask = 1  # Only check world geometry (layer 1)
-			var result: Dictionary = space_state.intersect_ray(query)
-
-			if result:
-				# Ground found - position indicator slightly above it
-				indicator_position = result.position + Vector3.UP * 0.1
-			else:
-				# No ground found - keep at player's Y level
-				indicator_position.y = player.global_position.y
-
-			radius_indicator.global_position = indicator_position
-
-			# Scale indicator based on charge level (radius increases with charge)
-			var current_radius = explosion_radius * (1.0 + (charge_level - 1) * 0.5)  # +50% per level
+			# Scale indicator uniformly based on charge level to match hitbox (+50% per level)
+			var current_radius = explosion_radius * (1.0 + (charge_level - 1) * 0.5)
 			var scale_factor = current_radius / explosion_radius
-			radius_indicator.scale = Vector3(scale_factor, 1.0, scale_factor)
+			radius_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
 			# Pulse effect while charging
 			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.005) * 0.1
@@ -376,17 +356,17 @@ func play_attack_hit_sound() -> void:
 		hit_sound.queue_free()
 
 func create_radius_indicator() -> void:
-	"""Create a ground circle indicator that shows the explosion radius while charging"""
+	"""Create a sphere indicator that shows the explosion hitbox while charging"""
 	radius_indicator = MeshInstance3D.new()
 	radius_indicator.name = "ExplosionRadiusIndicator"
 
-	# Create a cylinder mesh for the ground circle (very flat)
-	var cylinder: CylinderMesh = CylinderMesh.new()
-	cylinder.top_radius = explosion_radius
-	cylinder.bottom_radius = explosion_radius
-	cylinder.height = 0.05  # Very flat - just a ground decal
-	cylinder.radial_segments = 32
-	radius_indicator.mesh = cylinder
+	# Create a sphere mesh matching the actual hitbox (sphere with radius explosion_radius)
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = explosion_radius  # Match hitbox radius
+	sphere.height = explosion_radius * 2  # Diameter
+	sphere.radial_segments = 32
+	sphere.rings = 16
+	radius_indicator.mesh = sphere
 
 	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -396,26 +376,26 @@ func create_radius_indicator() -> void:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.disable_receive_shadows = true
 	mat.disable_fog = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides (inside and out)
 	radius_indicator.material_override = mat
 
-	# Add inner ring particles for extra visual feedback
-	var ring_particles: CPUParticles3D = CPUParticles3D.new()
-	ring_particles.name = "RingParticles"
-	radius_indicator.add_child(ring_particles)
+	# Add particles around the sphere surface for extra visual feedback
+	var sphere_particles: CPUParticles3D = CPUParticles3D.new()
+	sphere_particles.name = "SphereParticles"
+	radius_indicator.add_child(sphere_particles)
 
-	# Configure particles - very subtle rotating around the edge
-	ring_particles.emitting = true
-	ring_particles.amount = 18  # Reduced from 30 for subtlety
-	ring_particles.lifetime = 1.0
-	ring_particles.explosiveness = 0.0
-	ring_particles.randomness = 0.1
-	ring_particles.local_coords = true
+	# Configure particles - on the sphere surface
+	sphere_particles.emitting = true
+	sphere_particles.amount = 24
+	sphere_particles.lifetime = 1.0
+	sphere_particles.explosiveness = 0.0
+	sphere_particles.randomness = 0.1
+	sphere_particles.local_coords = true
 
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
-	ring_particles.mesh = particle_mesh
+	sphere_particles.mesh = particle_mesh
 
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -425,32 +405,29 @@ func create_radius_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	ring_particles.mesh.material = particle_material
+	sphere_particles.mesh.material = particle_material
 
-	# Emission shape - ring around the edge of the circle
-	ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	ring_particles.emission_ring_axis = Vector3(0, 1, 0)
-	ring_particles.emission_ring_height = 0.1
-	ring_particles.emission_ring_radius = explosion_radius
-	ring_particles.emission_ring_inner_radius = explosion_radius - 0.3
+	# Emission shape - sphere surface matching the hitbox
+	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
+	sphere_particles.emission_sphere_radius = explosion_radius
 
-	# Movement - orbit around the circle
-	ring_particles.direction = Vector3(0, 0, 0)
-	ring_particles.spread = 0.0
-	ring_particles.gravity = Vector3.ZERO
-	ring_particles.initial_velocity_min = 0.3
-	ring_particles.initial_velocity_max = 0.8
+	# Movement - slow drift outward
+	sphere_particles.direction = Vector3(0, 0, 0)
+	sphere_particles.spread = 180.0
+	sphere_particles.gravity = Vector3.ZERO
+	sphere_particles.initial_velocity_min = 0.2
+	sphere_particles.initial_velocity_max = 0.6
 
 	# Size
-	ring_particles.scale_amount_min = 1.0
-	ring_particles.scale_amount_max = 1.5
+	sphere_particles.scale_amount_min = 1.0
+	sphere_particles.scale_amount_max = 1.5
 
 	# Color - very subtle warm gradient
 	var gradient: Gradient = Gradient.new()
 	gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))  # Subtle warm tone
 	gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))  # Very subtle
 	gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))  # Transparent
-	ring_particles.color_ramp = gradient
+	sphere_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)
 	radius_indicator.visible = false
