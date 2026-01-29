@@ -19,8 +19,9 @@ var room_code: String = ""
 var max_players: int = 8  # 1 player + up to 7 bots/other players
 
 # Player info
-var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
+var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int, color_index: int}
 var local_player_name: String = "Player"
+var local_player_color: int = 0  # Local player's marble color index
 var bot_counter: int = 0  # Counter for generating bot IDs
 
 # Room settings (configured by host before starting)
@@ -56,9 +57,10 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 
-func create_game(player_name: String) -> String:
+func create_game(player_name: String, color_index: int = -1) -> String:
 	"""Create a new game lobby as host"""
 	local_player_name = player_name
+	local_player_color = color_index if color_index >= 0 else Global.marble_color_index
 	network_mode = NetworkMode.HOST
 
 	# Generate random room code
@@ -92,21 +94,24 @@ func create_game(player_name: String) -> String:
 	register_player(1, {
 		"name": player_name,
 		"ready": false,
-		"score": 0
+		"score": 0,
+		"color_index": local_player_color
 	})
 
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game created! Room code: %s" % room_code)
 	lobby_created.emit(room_code)
 	return room_code
 
-func join_game(player_name: String, join_room_code: String, host_address: String = "127.0.0.1") -> bool:
+func join_game(player_name: String, join_room_code: String, host_address: String = "127.0.0.1", color_index: int = -1) -> bool:
 	"""Join an existing game lobby
 	Args:
 		player_name: Display name for the joining player
 		join_room_code: Room code to join
 		host_address: Host IP address (used for ENet direct connections)
+		color_index: Player's marble color index (-1 uses Global setting)
 	"""
 	local_player_name = player_name
+	local_player_color = color_index if color_index >= 0 else Global.marble_color_index
 	room_code = join_room_code
 	network_mode = NetworkMode.CLIENT
 
@@ -224,12 +229,14 @@ func add_bot() -> bool:
 	bot_counter += 1
 	var bot_peer_id: int = 9000 + bot_counter
 
-	# Register bot in player list
+	# Register bot in player list with random color
+	var bot_color: int = randi() % 28  # 28 color schemes available
 	register_player(bot_peer_id, {
 		"name": "Bot %d" % bot_counter,
 		"ready": true,  # Bots are always ready
 		"score": 0,
-		"is_bot": true
+		"is_bot": true,
+		"color_index": bot_color
 	})
 
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot added to lobby: %d" % bot_peer_id)
@@ -388,7 +395,7 @@ func receive_player_list(player_list: Dictionary) -> void:
 	player_list_changed.emit()
 
 @rpc("any_peer", "reliable")
-func register_new_player(peer_id: int, player_name: String, client_room_code: String = "") -> void:
+func register_new_player(peer_id: int, player_name: String, client_room_code: String = "", color_index: int = 0) -> void:
 	"""Register a new player across the network"""
 	# Validate that the sender is registering themselves (prevent spoofing)
 	var sender_id: int = multiplayer.get_remote_sender_id()
@@ -406,7 +413,8 @@ func register_new_player(peer_id: int, player_name: String, client_room_code: St
 	register_player(peer_id, {
 		"name": player_name,
 		"ready": false,
-		"score": 0
+		"score": 0,
+		"color_index": color_index
 	})
 
 @rpc("authority", "reliable")
@@ -435,9 +443,9 @@ func _on_connected_to_server() -> void:
 	connection_retry_count = 0
 	_pending_retry_room_code = ""
 
-	# Register ourselves with the host, including room code for validation
+	# Register ourselves with the host, including room code and color for validation
 	var peer_id: int = multiplayer.get_unique_id()
-	rpc_id(1, "register_new_player", peer_id, local_player_name, room_code)
+	rpc_id(1, "register_new_player", peer_id, local_player_name, room_code, local_player_color)
 
 	connection_succeeded.emit()
 	lobby_joined.emit(room_code)

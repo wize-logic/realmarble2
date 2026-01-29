@@ -1059,9 +1059,18 @@ func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
 	player.name = str(peer_id)
 
-	# Apply custom marble color for local player from customize panel
+	# Get color from MultiplayerManager's synced player data
+	var player_color: int = -1
+	if MultiplayerManager.players.has(peer_id):
+		var player_info: Dictionary = MultiplayerManager.players[peer_id]
+		if player_info.has("color_index"):
+			player_color = player_info["color_index"]
+
+	# Apply the synced color (or local selection as fallback for local player)
 	var is_local_player = (peer_id == multiplayer.get_unique_id())
-	if is_local_player:
+	if player_color >= 0:
+		player.custom_color_index = player_color
+	elif is_local_player:
 		player.custom_color_index = selected_marble_color_index
 
 	add_child(player)
@@ -1862,6 +1871,10 @@ func spawn_bot() -> void:
 
 	var bot: Node = Player.instantiate()
 	bot.name = str(bot_id)
+
+	# Assign random color to bot
+	bot.custom_color_index = randi() % 28  # 28 color schemes available
+
 	add_child(bot)
 
 	# Update bot spawns from level generator
