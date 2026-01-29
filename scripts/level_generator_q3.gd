@@ -1695,37 +1695,18 @@ func _create_rail_visual(rail: Path3D) -> void:
 # ============================================================================
 
 func generate_perimeter_walls() -> void:
-	# Skip creating regular walls if video mode is enabled - video panels will replace them
-	if enable_video_walls:
-		print("[LevelGen] Video walls enabled - skipping regular perimeter walls")
-		return
-
-	var scale: float = arena_size / 140.0
-	var wall_distance: float = arena_size * 0.55
-	var perim_wall_height: float = 25.0 * scale
-	var perim_wall_thickness: float = 2.0
-
-	# Wall configs: North (front), South (back), East (right), West (left)
-	var wall_configs = [
-		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, perim_wall_thickness)},
-		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, perim_wall_thickness)},
-		{"pos": Vector3(wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(perim_wall_thickness, perim_wall_height, arena_size * 1.2)},
-		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(perim_wall_thickness, perim_wall_height, arena_size * 1.2)}
-	]
-
+	# Outer walls have been removed - only video walls are used now (when enabled or on main menu)
+	print("[LevelGen] Skipping perimeter walls - outer walls removed")
 	perimeter_walls.clear()
-	for i in range(wall_configs.size()):
-		var config = wall_configs[i]
-		var wall_mesh: MeshInstance3D = add_platform_with_collision(config.pos, config.size, "PerimeterWall%d" % i)
-		perimeter_walls.append(wall_mesh)
 
 
 func apply_video_walls() -> void:
-	## Create video panel meshes that replace perimeter walls
-	print("[LevelGen] apply_video_walls() called, enable_video_walls: %s" % enable_video_walls)
+	## Create video panel meshes - only shown when enabled OR on main menu
+	print("[LevelGen] apply_video_walls() called, enable_video_walls: %s, menu_preview_mode: %s" % [enable_video_walls, menu_preview_mode])
 
-	if not enable_video_walls:
-		print("[LevelGen] Video walls disabled - skipping")
+	# Only show video walls if explicitly enabled OR if we're on the main menu (menu preview mode)
+	if not enable_video_walls and not menu_preview_mode:
+		print("[LevelGen] Video walls disabled and not on main menu - skipping")
 		return
 
 	var scale: float = arena_size / 140.0
