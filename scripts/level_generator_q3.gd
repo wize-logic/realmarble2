@@ -53,8 +53,10 @@ extends Node3D
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
 @export var light_energy: float = 1.0  ## Base light energy
 @export var light_range: float = 20.0  ## Light range in units
-@export var light_color: Color = Color(1.0, 0.95, 0.9)  ## Warm white default
+@export var light_color: Color = Color(0.95, 0.85, 0.75)  ## Warm amber default (not white)
 @export var ambient_light_energy: float = 0.3  ## Ambient/fill light level
+@export var use_colored_lights: bool = true  ## Use varied colored lights per zone
+@export var light_color_variation: float = 0.15  ## Amount of color variation between rooms
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -2014,6 +2016,7 @@ func generate_hazard_zones() -> void:
 
 func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 	## Create a hazard zone (lava/slime) at the specified position
+	## Uses animated shader for flowing effect
 
 	var hazard_mesh: BoxMesh = BoxMesh.new()
 	hazard_mesh.size = size
@@ -2024,21 +2027,40 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 	hazard_instance.position = pos
 	add_child(hazard_instance)
 
-	# Create hazard material
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	if hazard_type == 0:  # Lava
-		material.albedo_color = Color(1.0, 0.3, 0.0)
-		material.emission_enabled = true
-		material.emission = Color(1.0, 0.4, 0.1)
-		material.emission_energy_multiplier = 3.0
-	else:  # Slime
-		material.albedo_color = Color(0.2, 0.8, 0.2)
-		material.emission_enabled = true
-		material.emission = Color(0.1, 0.5, 0.1)
-		material.emission_energy_multiplier = 1.5
+	# Try to load animated hazard shader
+	var hazard_shader: Shader = null
+	if ResourceLoader.exists("res://scripts/shaders/hazard_surface.gdshader"):
+		hazard_shader = load("res://scripts/shaders/hazard_surface.gdshader")
 
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	hazard_instance.set_surface_override_material(0, material)
+	if hazard_shader:
+		# Use animated shader material
+		var material: ShaderMaterial = ShaderMaterial.new()
+		material.shader = hazard_shader
+		material.set_shader_parameter("hazard_type", hazard_type)
+		if hazard_type == 0:  # Lava
+			material.set_shader_parameter("glow_intensity", 2.8)
+			material.set_shader_parameter("flow_speed", 0.5)
+			material.set_shader_parameter("bubble_amount", 0.6)
+		else:  # Slime
+			material.set_shader_parameter("glow_intensity", 1.8)
+			material.set_shader_parameter("flow_speed", 0.3)
+			material.set_shader_parameter("bubble_amount", 0.7)
+		hazard_instance.set_surface_override_material(0, material)
+	else:
+		# Fallback to standard material (no white glow)
+		var material: StandardMaterial3D = StandardMaterial3D.new()
+		if hazard_type == 0:  # Lava
+			material.albedo_color = Color(0.9, 0.25, 0.0)
+			material.emission_enabled = true
+			material.emission = Color(1.0, 0.4, 0.05)
+			material.emission_energy_multiplier = 2.8
+		else:  # Slime
+			material.albedo_color = Color(0.15, 0.65, 0.15)
+			material.emission_enabled = true
+			material.emission = Color(0.1, 0.5, 0.1)
+			material.emission_energy_multiplier = 1.5
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hazard_instance.set_surface_override_material(0, material)
 
 	# Create damage area
 	var damage_area: Area3D = Area3D.new()
@@ -2099,9 +2121,23 @@ func setup_materials() -> void:
 func generate_room_lights() -> void:
 	## Generate OmniLight3D nodes for each room
 	## Uses simple point lights compatible with all renderers
+	## Enhanced with colored lighting variations per zone
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating room lights...")
 
+	# Define color palettes for different zones (no pure white)
+	var zone_colors: Array[Color] = [
+		Color(0.95, 0.80, 0.65),  # Warm amber
+		Color(0.75, 0.85, 0.95),  # Cool blue
+		Color(0.85, 0.95, 0.80),  # Soft green
+		Color(0.95, 0.75, 0.85),  # Soft pink
+		Color(0.90, 0.90, 0.75),  # Warm yellow
+		Color(0.80, 0.75, 0.95),  # Soft purple
+		Color(0.95, 0.85, 0.80),  # Peach
+		Color(0.75, 0.90, 0.90),  # Cyan tint
+	]
+
+	var room_idx: int = 0
 	for room in bsp_rooms:
 		var room_center: Vector3 = room.get_center_3d(room_height)
 		room_center.y = room.height_offset + room_height * 0.8  # Near ceiling
@@ -2109,7 +2145,20 @@ func generate_room_lights() -> void:
 		var light: OmniLight3D = OmniLight3D.new()
 		light.name = "RoomLight_%d" % room.room_id
 		light.position = room_center
-		light.light_color = light_color
+
+		# Apply colored lighting if enabled
+		if use_colored_lights:
+			var zone_color: Color = zone_colors[room_idx % zone_colors.size()]
+			# Add slight random variation
+			var variation: float = light_color_variation
+			zone_color.r += rng.randf_range(-variation, variation)
+			zone_color.g += rng.randf_range(-variation, variation)
+			zone_color.b += rng.randf_range(-variation, variation)
+			zone_color = zone_color.clamp()
+			light.light_color = zone_color
+		else:
+			light.light_color = light_color
+
 		light.light_energy = light_energy
 
 		# Scale range based on room size
@@ -2122,8 +2171,10 @@ func generate_room_lights() -> void:
 
 		add_child(light)
 		lights.append(light)
+		room_idx += 1
 
-	# Add corridor lights
+	# Add corridor lights with transitional colors
+	var corridor_idx: int = 0
 	for corridor_data in corridors:
 		for segment in corridor_data.segments:
 			var seg_center: Vector2 = segment.position + segment.size / 2.0
@@ -2132,7 +2183,17 @@ func generate_room_lights() -> void:
 			var light: OmniLight3D = OmniLight3D.new()
 			light.name = "CorridorLight_%d" % corridor_data.from_room
 			light.position = Vector3(seg_center.x, level_z + room_height * 0.7, seg_center.y)
-			light.light_color = light_color
+
+			# Corridor lights use a neutral warm color
+			if use_colored_lights:
+				var corridor_color: Color = Color(0.90, 0.85, 0.80)  # Neutral warm
+				corridor_color.r += rng.randf_range(-0.05, 0.05)
+				corridor_color.g += rng.randf_range(-0.05, 0.05)
+				corridor_color.b += rng.randf_range(-0.03, 0.03)
+				light.light_color = corridor_color
+			else:
+				light.light_color = light_color
+
 			light.light_energy = light_energy * 0.7  # Slightly dimmer
 			light.omni_range = light_range * 0.6
 			light.omni_attenuation = 1.0
@@ -2140,8 +2201,9 @@ func generate_room_lights() -> void:
 
 			add_child(light)
 			lights.append(light)
+			corridor_idx += 1
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights" % lights.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights with colored variations" % lights.size())
 
 func generate_navigation_mesh() -> void:
 	## Generate NavigationRegion3D for AI pathfinding

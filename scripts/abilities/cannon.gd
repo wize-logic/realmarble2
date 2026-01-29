@@ -452,7 +452,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Color - bright lime green flash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 1.0, 0.7, 1.0))  # Bright white-green
+	gradient.add_point(0.0, Color(0.6, 0.95, 0.5, 1.0))  # Bright lime-green (no white)
 	gradient.add_point(0.3, Color(0.6, 1.0, 0.3, 0.9))  # Lime green
 	gradient.add_point(0.6, Color(0.4, 0.9, 0.2, 0.6))  # Green
 	gradient.add_point(1.0, Color(0.1, 0.3, 0.1, 0.0))  # Dark/transparent
@@ -518,7 +518,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Color - lime green explosion
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 1.0, 0.9, 1.0))  # Bright white-green center
+	gradient.add_point(0.0, Color(0.65, 1.0, 0.7, 1.0))  # Bright green center (no white)
 	gradient.add_point(0.2, Color(0.7, 1.0, 0.3, 1.0))  # Bright lime green
 	gradient.add_point(0.5, Color(0.4, 0.9, 0.2, 0.7))  # Green
 	gradient.add_point(0.8, Color(0.2, 0.4, 0.2, 0.3))  # Dark green smoke

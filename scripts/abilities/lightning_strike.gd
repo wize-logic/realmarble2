@@ -345,7 +345,7 @@ func spawn_lightning_bolt(position: Vector3) -> void:
 
 		# Bright electric material
 		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.albedo_color = Color(0.9, 0.95, 1.0)  # Near white core
+		mat.albedo_color = Color(0.6, 0.85, 1.0)  # Electric blue core (no white)
 		mat.emission_enabled = true
 		mat.emission = Color(0.5, 0.8, 1.0)  # Electric blue glow
 		mat.emission_energy_multiplier = 5.0
@@ -400,7 +400,7 @@ func spawn_lightning_bolt(position: Vector3) -> void:
 	impact_particles.scale_amount_max = 4.0
 
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # Bright white
+	gradient.add_point(0.0, Color(0.7, 0.9, 1.0, 1.0))  # Electric cyan-blue (no white)
 	gradient.add_point(0.2, Color(0.7, 0.9, 1.0, 1.0))  # Light cyan
 	gradient.add_point(0.5, Color(0.4, 0.7, 1.0, 0.8))  # Electric blue
 	gradient.add_point(0.8, Color(0.3, 0.5, 0.9, 0.4))  # Blue

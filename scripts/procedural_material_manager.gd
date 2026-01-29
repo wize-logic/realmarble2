@@ -2,11 +2,12 @@ extends Node
 
 ## Procedural Material Manager
 ## Creates and applies beautiful context-aware materials to level geometry
+## Enhanced with edge wear, ambient occlusion, wet areas, and color variation
 
 # Pre-load the shader
 const PROCEDURAL_SHADER = preload("res://scripts/shaders/procedural_surface.gdshader")
 
-# Material presets for different surface types
+# Material presets for different surface types with enhanced parameters
 const MATERIAL_PRESETS = {
 	"floor": {
 		"base_color": Color(0.35, 0.38, 0.42),  # Cool gray
@@ -16,7 +17,13 @@ const MATERIAL_PRESETS = {
 		"scale": 3.0,
 		"pattern_mix": 0.6,
 		"detail_strength": 0.4,
-		"wear_amount": 0.3
+		"wear_amount": 0.3,
+		"edge_wear_strength": 0.35,
+		"ao_strength": 0.5,
+		"wet_area_amount": 0.12,
+		"color_variation": 0.06,
+		"emission_strength": 0.01,
+		"emission_tint": Color(0.5, 0.6, 0.7)
 	},
 	"wall": {
 		"base_color": Color(0.45, 0.42, 0.38),  # Warm concrete
@@ -26,97 +33,205 @@ const MATERIAL_PRESETS = {
 		"scale": 2.5,
 		"pattern_mix": 0.4,
 		"detail_strength": 0.5,
-		"wear_amount": 0.4
+		"wear_amount": 0.4,
+		"edge_wear_strength": 0.5,
+		"ao_strength": 0.6,
+		"wet_area_amount": 0.08,
+		"color_variation": 0.05,
+		"emission_strength": 0.005,
+		"emission_tint": Color(0.6, 0.55, 0.5)
 	},
 	"platform": {
 		"base_color": Color(0.28, 0.42, 0.52),  # Blue-gray metal
 		"accent_color": Color(0.18, 0.32, 0.42),
 		"roughness": 0.7,
-		"metallic": 0.4,
+		"metallic": 0.5,
 		"scale": 4.0,
 		"pattern_mix": 0.7,
 		"detail_strength": 0.35,
-		"wear_amount": 0.25
+		"wear_amount": 0.25,
+		"edge_wear_strength": 0.6,
+		"ao_strength": 0.45,
+		"wet_area_amount": 0.2,
+		"color_variation": 0.08,
+		"emission_strength": 0.02,
+		"emission_tint": Color(0.5, 0.7, 0.85)
 	},
 	"ramp": {
 		"base_color": Color(0.48, 0.38, 0.28),  # Rust/copper
 		"accent_color": Color(0.38, 0.28, 0.18),
 		"roughness": 0.75,
-		"metallic": 0.3,
+		"metallic": 0.35,
 		"scale": 3.5,
 		"pattern_mix": 0.5,
 		"detail_strength": 0.4,
-		"wear_amount": 0.35
+		"wear_amount": 0.35,
+		"edge_wear_strength": 0.55,
+		"ao_strength": 0.5,
+		"wet_area_amount": 0.1,
+		"color_variation": 0.1,
+		"emission_strength": 0.015,
+		"emission_tint": Color(0.7, 0.55, 0.4)
 	},
 	"pillar": {
 		"base_color": Color(0.38, 0.35, 0.32),  # Dark stone
 		"accent_color": Color(0.28, 0.25, 0.22),
 		"roughness": 0.95,
-		"metallic": 0.0,
+		"metallic": 0.05,
 		"scale": 2.0,
 		"pattern_mix": 0.3,
 		"detail_strength": 0.6,
-		"wear_amount": 0.5
+		"wear_amount": 0.5,
+		"edge_wear_strength": 0.7,
+		"ao_strength": 0.65,
+		"wet_area_amount": 0.05,
+		"color_variation": 0.04,
+		"emission_strength": 0.0,
+		"emission_tint": Color(0.5, 0.5, 0.5)
 	},
 	"cover": {
 		"base_color": Color(0.42, 0.38, 0.32),  # Military gray-brown
 		"accent_color": Color(0.32, 0.28, 0.22),
 		"roughness": 0.8,
-		"metallic": 0.2,
+		"metallic": 0.25,
 		"scale": 5.0,
 		"pattern_mix": 0.45,
 		"detail_strength": 0.3,
-		"wear_amount": 0.4
+		"wear_amount": 0.4,
+		"edge_wear_strength": 0.5,
+		"ao_strength": 0.55,
+		"wet_area_amount": 0.15,
+		"color_variation": 0.07,
+		"emission_strength": 0.01,
+		"emission_tint": Color(0.6, 0.55, 0.5)
 	},
 	"room_floor": {
 		"base_color": Color(0.32, 0.35, 0.38),  # Cool industrial
 		"accent_color": Color(0.22, 0.25, 0.28),
 		"roughness": 0.85,
-		"metallic": 0.1,
+		"metallic": 0.15,
 		"scale": 4.5,
 		"pattern_mix": 0.65,
 		"detail_strength": 0.45,
-		"wear_amount": 0.35
+		"wear_amount": 0.35,
+		"edge_wear_strength": 0.4,
+		"ao_strength": 0.55,
+		"wet_area_amount": 0.18,
+		"color_variation": 0.06,
+		"emission_strength": 0.015,
+		"emission_tint": Color(0.55, 0.6, 0.7)
 	},
 	"room_wall": {
 		"base_color": Color(0.38, 0.42, 0.45),  # Tech facility
 		"accent_color": Color(0.28, 0.32, 0.35),
 		"roughness": 0.8,
-		"metallic": 0.25,
+		"metallic": 0.3,
 		"scale": 3.0,
 		"pattern_mix": 0.55,
 		"detail_strength": 0.4,
-		"wear_amount": 0.3
+		"wear_amount": 0.3,
+		"edge_wear_strength": 0.45,
+		"ao_strength": 0.5,
+		"wet_area_amount": 0.1,
+		"color_variation": 0.05,
+		"emission_strength": 0.02,
+		"emission_tint": Color(0.6, 0.7, 0.8)
 	},
 	"corridor": {
 		"base_color": Color(0.35, 0.38, 0.40),  # Neutral corridor
 		"accent_color": Color(0.25, 0.28, 0.30),
 		"roughness": 0.85,
-		"metallic": 0.15,
+		"metallic": 0.2,
 		"scale": 3.5,
 		"pattern_mix": 0.5,
 		"detail_strength": 0.35,
-		"wear_amount": 0.3
+		"wear_amount": 0.3,
+		"edge_wear_strength": 0.4,
+		"ao_strength": 0.5,
+		"wet_area_amount": 0.15,
+		"color_variation": 0.05,
+		"emission_strength": 0.01,
+		"emission_tint": Color(0.6, 0.65, 0.75)
 	},
 	"halfpipe": {
 		"base_color": Color(0.45, 0.48, 0.52),  # Smooth concrete
 		"accent_color": Color(0.35, 0.38, 0.42),
-		"roughness": 0.6,
-		"metallic": 0.1,
+		"roughness": 0.55,
+		"metallic": 0.15,
 		"scale": 4.0,
 		"pattern_mix": 0.3,
 		"detail_strength": 0.25,
-		"wear_amount": 0.2
+		"wear_amount": 0.2,
+		"edge_wear_strength": 0.3,
+		"ao_strength": 0.4,
+		"wet_area_amount": 0.25,  # More wet for smoother surface
+		"color_variation": 0.04,
+		"emission_strength": 0.01,
+		"emission_tint": Color(0.65, 0.7, 0.8)
 	},
 	"spring": {
-		"base_color": Color(0.8, 0.2, 0.2),  # Red base
-		"accent_color": Color(0.6, 0.1, 0.1),
-		"roughness": 0.4,
-		"metallic": 0.5,
+		"base_color": Color(0.75, 0.2, 0.2),  # Red base
+		"accent_color": Color(0.55, 0.1, 0.1),
+		"roughness": 0.35,
+		"metallic": 0.6,
 		"scale": 2.0,
 		"pattern_mix": 0.2,
 		"detail_strength": 0.3,
-		"wear_amount": 0.1
+		"wear_amount": 0.1,
+		"edge_wear_strength": 0.5,
+		"ao_strength": 0.35,
+		"wet_area_amount": 0.3,  # Glossy
+		"color_variation": 0.08,
+		"emission_strength": 0.03,
+		"emission_tint": Color(0.9, 0.4, 0.3)
+	},
+	"metal_grate": {
+		"base_color": Color(0.3, 0.32, 0.35),  # Dark metal
+		"accent_color": Color(0.2, 0.22, 0.25),
+		"roughness": 0.6,
+		"metallic": 0.7,
+		"scale": 6.0,
+		"pattern_mix": 0.8,
+		"detail_strength": 0.5,
+		"wear_amount": 0.35,
+		"edge_wear_strength": 0.65,
+		"ao_strength": 0.6,
+		"wet_area_amount": 0.2,
+		"color_variation": 0.05,
+		"emission_strength": 0.015,
+		"emission_tint": Color(0.5, 0.55, 0.65)
+	},
+	"tech_panel": {
+		"base_color": Color(0.25, 0.35, 0.45),  # Tech blue
+		"accent_color": Color(0.15, 0.25, 0.35),
+		"roughness": 0.5,
+		"metallic": 0.55,
+		"scale": 5.0,
+		"pattern_mix": 0.75,
+		"detail_strength": 0.3,
+		"wear_amount": 0.15,
+		"edge_wear_strength": 0.4,
+		"ao_strength": 0.4,
+		"wet_area_amount": 0.3,
+		"color_variation": 0.06,
+		"emission_strength": 0.04,
+		"emission_tint": Color(0.4, 0.6, 0.9)
+	},
+	"rusty_metal": {
+		"base_color": Color(0.5, 0.35, 0.2),  # Rusty orange-brown
+		"accent_color": Color(0.35, 0.2, 0.1),
+		"roughness": 0.9,
+		"metallic": 0.3,
+		"scale": 2.5,
+		"pattern_mix": 0.5,
+		"detail_strength": 0.65,
+		"wear_amount": 0.6,
+		"edge_wear_strength": 0.75,
+		"ao_strength": 0.6,
+		"wet_area_amount": 0.05,
+		"color_variation": 0.12,
+		"emission_strength": 0.0,
+		"emission_tint": Color(0.6, 0.4, 0.3)
 	}
 }
 
@@ -127,7 +242,7 @@ func create_material(preset_name: String, color_variation: float = 0.0) -> Shade
 
 	var preset = MATERIAL_PRESETS.get(preset_name, MATERIAL_PRESETS["floor"])
 
-	# Apply preset values
+	# Apply all preset values including new enhanced parameters
 	material.set_shader_parameter("base_color", preset.base_color)
 	material.set_shader_parameter("accent_color", preset.accent_color)
 	material.set_shader_parameter("roughness", preset.roughness)
@@ -137,7 +252,15 @@ func create_material(preset_name: String, color_variation: float = 0.0) -> Shade
 	material.set_shader_parameter("detail_strength", preset.detail_strength)
 	material.set_shader_parameter("wear_amount", preset.wear_amount)
 
-	# Add color variation if specified
+	# New enhanced parameters
+	material.set_shader_parameter("edge_wear_strength", preset.edge_wear_strength)
+	material.set_shader_parameter("ao_strength", preset.ao_strength)
+	material.set_shader_parameter("wet_area_amount", preset.wet_area_amount)
+	material.set_shader_parameter("color_variation", preset.color_variation)
+	material.set_shader_parameter("emission_strength", preset.emission_strength)
+	material.set_shader_parameter("emission_tint", preset.emission_tint)
+
+	# Add color variation if specified (additional to preset variation)
 	if color_variation > 0.0:
 		var varied_base = Color(
 			preset.base_color.r + randf_range(-color_variation, color_variation),
@@ -149,8 +272,8 @@ func create_material(preset_name: String, color_variation: float = 0.0) -> Shade
 			preset.accent_color.g + randf_range(-color_variation, color_variation),
 			preset.accent_color.b + randf_range(-color_variation, color_variation)
 		)
-		material.set_shader_parameter("base_color", varied_base)
-		material.set_shader_parameter("accent_color", varied_accent)
+		material.set_shader_parameter("base_color", varied_base.clamp())
+		material.set_shader_parameter("accent_color", varied_accent.clamp())
 
 	return material
 
@@ -192,6 +315,12 @@ func apply_material_by_name(mesh_instance: MeshInstance3D) -> void:
 		material = create_material("room_wall", 0.05)
 	elif mesh_name.contains("halfpipe") or parent_name.contains("halfpipe"):
 		material = create_material("halfpipe", 0.04)
+	elif mesh_name.contains("grate") or mesh_name.contains("metal"):
+		material = create_material("metal_grate", 0.05)
+	elif mesh_name.contains("tech") or mesh_name.contains("panel"):
+		material = create_material("tech_panel", 0.06)
+	elif mesh_name.contains("rust"):
+		material = create_material("rusty_metal", 0.08)
 	else:
 		# Default material with variation
 		material = create_material("floor", 0.1)
@@ -219,6 +348,7 @@ func _apply_materials_recursive(node: Node, depth: int = 0) -> int:
 			   not child_name.contains("teleporter") and \
 			   not child_name.contains("spring") and \
 			   not child_name.contains("rail") and \
+			   not child_name.contains("hazard") and \
 			   not child.material_override:  # Don't override existing materials
 				apply_material_by_name(child)
 				applied_count += 1
@@ -228,3 +358,10 @@ func _apply_materials_recursive(node: Node, depth: int = 0) -> int:
 			applied_count += _apply_materials_recursive(child, depth + 1)
 
 	return applied_count
+
+func get_preset_names() -> Array[String]:
+	"""Get all available preset names"""
+	var names: Array[String] = []
+	for key in MATERIAL_PRESETS.keys():
+		names.append(key)
+	return names

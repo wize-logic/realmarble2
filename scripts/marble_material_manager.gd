@@ -37,7 +37,7 @@ const COLOR_SCHEMES = [
 
 	# Additional special colors
 	{"name": "Deep Black", "primary": Color(0.1, 0.1, 0.15), "secondary": Color(0.2, 0.2, 0.3), "swirl": Color(0.35, 0.35, 0.45)},
-	{"name": "Pure White", "primary": Color(1.0, 1.0, 1.0), "secondary": Color(0.95, 0.95, 1.0), "swirl": Color(0.85, 0.85, 0.95)},
+	{"name": "Pearl", "primary": Color(0.92, 0.9, 0.95), "secondary": Color(0.88, 0.88, 0.95), "swirl": Color(0.82, 0.82, 0.9)},  # Pearlescent (not pure white)
 	{"name": "Bright Gold", "primary": Color(1.0, 0.75, 0.0), "secondary": Color(1.0, 0.85, 0.2), "swirl": Color(1.0, 0.95, 0.5)},
 	{"name": "Chrome Silver", "primary": Color(0.65, 0.7, 0.75), "secondary": Color(0.8, 0.85, 0.9), "swirl": Color(0.9, 0.95, 1.0)},
 

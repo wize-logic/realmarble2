@@ -79,9 +79,9 @@ func _ready() -> void:
 	explosion_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
 	explosion_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - explosion (bright orange/yellow -> dark red)
+	# Color - explosion (bright orange/yellow -> dark red) - no white
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright white-yellow
+	gradient.add_point(0.0, Color(1.0, 0.9, 0.35, 1.0))  # Bright golden-yellow (no white)
 	gradient.add_point(0.2, Color(1.0, 0.7, 0.0, 1.0))  # Orange
 	gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))  # Red-orange
 	gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
