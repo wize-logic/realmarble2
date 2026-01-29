@@ -81,6 +81,22 @@ func _ready() -> void:
 	_create_detection_areas()
 
 
+func _exit_tree() -> void:
+	# CRITICAL: Clean up all grinders when rail is freed to prevent stuck AIR state
+	# Without this, players grinding when rail is deleted would have is_grinding=true
+	# but current_rail pointing to a freed object
+	for grinder in active_grinders.duplicate():  # Duplicate to avoid modification during iteration
+		if is_instance_valid(grinder):
+			var data = grinder_data.get(grinder)
+			if data and data.rope_visual and is_instance_valid(data.rope_visual):
+				data.rope_visual.queue_free()
+			if grinder.has_method("stop_grinding"):
+				grinder.stop_grinding()
+	active_grinders.clear()
+	grinder_data.clear()
+	nearby_players.clear()
+
+
 func _create_detection_areas() -> void:
 	var length: float = curve.get_baked_length()
 	if length <= 0:
@@ -233,6 +249,10 @@ func _remove_grinder(grinder: RigidBody3D) -> void:
 
 	active_grinders.erase(grinder)
 	grinder_data.erase(grinder)
+
+	# CRITICAL: Also remove from nearby_players to prevent immediate re-attachment issues
+	# This fixes a bug where detached players could still be in nearby_players list
+	nearby_players.erase(grinder)
 
 	if is_instance_valid(grinder) and grinder.has_method("stop_grinding"):
 		grinder.stop_grinding()

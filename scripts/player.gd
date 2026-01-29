@@ -112,6 +112,7 @@ var targeted_rail: GrindRail = null  # The rail currently being looked at
 var rail_lock_raycast: RayCast3D = null  # Raycast for detecting rails
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
+var post_rail_detach_frames: int = 0  # Frames to force ground check after rail detachment (fixes AIR state bug)
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
 
 # Jump pad system (Q3 Arena style)
@@ -1117,6 +1118,14 @@ func check_ground() -> void:
 		is_grounded = false
 		return
 
+	# CRITICAL FIX: Handle post-rail-detach grace period
+	# This counter ensures proper ground detection for several frames after rail detachment,
+	# preventing the stuck AIR state bug caused by timing issues between rail physics and ground detection
+	if post_rail_detach_frames > 0:
+		post_rail_detach_frames -= 1
+		# During grace period, ALWAYS do a full ground check (don't allow early returns)
+		# This ensures we don't get stuck in AIR state due to stale grinding flags
+
 	# Grinding is a distinct state - not grounded, not airborne
 	# BUT: First verify the rail is still valid to prevent getting stuck in AIR state
 	if is_grinding:
@@ -1177,6 +1186,12 @@ func check_ground() -> void:
 	# Reset jump count when landing (transition from air to ground)
 	if is_grounded and not was_grounded:
 		jump_count = 0
+
+		# CRITICAL: Clear post-rail-detach grace period when we successfully land
+		# This confirms the ground detection is working properly after rail detachment
+		if post_rail_detach_frames > 0:
+			DebugLogger.dlog(DebugLogger.Category.RAILS, "Post-rail landing confirmed! Clearing grace period (had %d frames left)" % post_rail_detach_frames, false, get_entity_id())
+			post_rail_detach_frames = 0
 
 		# Clear particle trails immediately on landing - hide and stop emission
 		if jump_bounce_particles:
@@ -1409,6 +1424,7 @@ func respawn() -> void:
 	is_spin_dashing = false
 	spin_charge = 0.0
 	spin_dash_timer = 0.0
+	post_rail_detach_frames = 0  # Clear any pending grace period
 
 	# CRITICAL: Force grounded state on respawn (we spawn on ground)
 	# This fixes the stuck AIR state bug after grinding
@@ -2249,11 +2265,16 @@ func stop_grinding() -> void:
 	if not was_grinding:
 		return
 
+	# CRITICAL FIX: Set grace period frames to force proper ground detection
+	# This prevents the stuck AIR state bug by ensuring check_ground() runs
+	# properly for several frames after detachment, even during launch impulses
+	post_rail_detach_frames = 10  # ~166ms at 60fps - enough for physics to stabilize
+
 	# Only reset bounce state if we were actually grinding
 	# (prevents canceling a bounce that started after leaving the rail)
 	is_bouncing = false
 
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding! jump_count: %d" % jump_count, false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.RAILS, "Stopped grinding! jump_count: %d, post_rail_detach_frames: %d" % [jump_count, post_rail_detach_frames], false, get_entity_id())
 
 	# IMPORTANT: Always give player recovery jumps after leaving rail
 	# Reset to 0 so they have full double jump available for recovery
