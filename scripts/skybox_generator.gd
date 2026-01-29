@@ -99,12 +99,13 @@ func generate_skybox() -> void:
 	sky_material = create_enhanced_sky_shader(current_colors)
 	sky.sky_material = sky_material
 
-	# Keep existing environment settings, just add glow
+	# Don't override glow settings - they're configured in the scene
+	# Only enable minimal glow if completely disabled
 	if not environment.glow_enabled:
 		environment.glow_enabled = true
-		environment.glow_intensity = 0.8
-		environment.glow_strength = 1.2
-		environment.glow_bloom = 0.3
+		environment.glow_intensity = 0.15
+		environment.glow_strength = 0.3
+		environment.glow_bloom = 0.05
 
 	print("Enhanced skybox generated with stars, clouds, and gradual color transitions!")
 
