@@ -146,9 +146,9 @@ func _process(delta: float) -> void:
 				slash_direction.y = 0
 				slash_direction = slash_direction.normalized()
 
-			# Position at player's feet, offset in slash direction
-			# Use raycasting to find ground below the indicator position
-			var base_position = player.global_position + slash_direction * (slash_range / 2)
+			# Position at player's center (mesh child is already offset forward)
+			# Use raycasting to find ground below the player
+			var base_position = player.global_position
 			var indicator_position = base_position
 
 			# Raycast downward to find ground below player
@@ -171,9 +171,9 @@ func _process(delta: float) -> void:
 			arc_indicator.global_position = indicator_position
 
 			# Orient indicator to face slash direction
-			arc_indicator.look_at(player.global_position + slash_direction * 5.0, Vector3.UP)
+			arc_indicator.look_at(arc_indicator.global_position + slash_direction * 5.0, Vector3.UP)
 
-			# Scale based on charge level (larger arc for higher charge)
+			# Scale based on charge level to match hitbox scaling (+20% per level)
 			var scale_factor = 1.0 + (charge_level - 1) * 0.2
 			arc_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -321,21 +321,16 @@ func play_attack_hit_sound() -> void:
 		hit_sound.queue_free()
 
 func create_arc_indicator() -> void:
-	"""Create an arc indicator that shows the sword swing range while charging"""
+	"""Create a box indicator that shows the sword hitbox area while charging"""
 	arc_indicator = Node3D.new()
-	arc_indicator.name = "SwordArcIndicator"
+	arc_indicator.name = "SwordHitboxIndicator"
 
-	# Create a wedge/cone shape to represent the sword arc (90 degree sweep)
-	# We'll use a flat cylinder as a wedge pointing forward
+	# Create a box mesh matching the actual hitbox dimensions
+	# Hitbox is: Vector3(slash_range * 2, 0.3, slash_range) = Vector3(6.0, 0.3, 3.0)
 	var mesh_instance = MeshInstance3D.new()
-	var cylinder: CylinderMesh = CylinderMesh.new()
-	cylinder.top_radius = 0.0  # Point at the player
-	cylinder.bottom_radius = slash_range  # Wide arc at max range
-	cylinder.height = slash_range  # Distance from player
-	cylinder.radial_segments = 16
-	cylinder.cap_bottom = true
-	cylinder.cap_top = false
-	mesh_instance.mesh = cylinder
+	var box: BoxMesh = BoxMesh.new()
+	box.size = Vector3(slash_range * 2, 0.1, slash_range)  # Match hitbox width and depth, thin for visibility
+	mesh_instance.mesh = box
 
 	# Create material - very subtle, transparent, non-distracting
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -348,32 +343,29 @@ func create_arc_indicator() -> void:
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
 	mesh_instance.material_override = mat
 
-	# Rotate to be horizontal (ground plane) and position forward
-	mesh_instance.rotation_degrees = Vector3(90, 0, 0)
-	mesh_instance.position = Vector3(0, 0, -slash_range / 2)  # Move forward so point is at origin
-
-	# Scale to make it a narrow arc (90 degrees)
-	mesh_instance.scale = Vector3(0.5, 1.0, 1.0)  # Narrow in X to create ~90 degree arc
+	# Position in front of player to match hitbox position
+	# Hitbox collision_shape.position = Vector3(0, 0, -slash_range / 2)
+	mesh_instance.position = Vector3(0, 0, -slash_range / 2)
 
 	arc_indicator.add_child(mesh_instance)
 
-	# Add particles along the arc for extra visual feedback
-	var arc_particles: CPUParticles3D = CPUParticles3D.new()
-	arc_particles.name = "ArcParticles"
-	arc_indicator.add_child(arc_particles)
+	# Add particles along the edges for extra visual feedback
+	var edge_particles: CPUParticles3D = CPUParticles3D.new()
+	edge_particles.name = "EdgeParticles"
+	arc_indicator.add_child(edge_particles)
 
-	# Configure particles - very subtle flowing along the arc
-	arc_particles.emitting = true
-	arc_particles.amount = 15  # Reduced from 25 for subtlety
-	arc_particles.lifetime = 0.8
-	arc_particles.explosiveness = 0.0
-	arc_particles.randomness = 0.15
-	arc_particles.local_coords = true
+	# Configure particles - along the front edge of the hitbox
+	edge_particles.emitting = true
+	edge_particles.amount = 20
+	edge_particles.lifetime = 0.8
+	edge_particles.explosiveness = 0.0
+	edge_particles.randomness = 0.15
+	edge_particles.local_coords = true
 
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	arc_particles.mesh = particle_mesh
+	edge_particles.mesh = particle_mesh
 
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -383,29 +375,30 @@ func create_arc_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	arc_particles.mesh.material = particle_material
+	edge_particles.mesh.material = particle_material
 
-	# Emission shape - sphere at the arc edge
-	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	arc_particles.emission_sphere_radius = slash_range * 0.4
+	# Emission shape - box matching the hitbox area
+	edge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	edge_particles.emission_box_extents = Vector3(slash_range, 0.1, slash_range / 2)
+	edge_particles.position = Vector3(0, 0, -slash_range / 2)  # Match hitbox position
 
-	# Movement - orbit around the arc
-	arc_particles.direction = Vector3(0, 0, 0)
-	arc_particles.spread = 0.0
-	arc_particles.gravity = Vector3.ZERO
-	arc_particles.initial_velocity_min = 0.4
-	arc_particles.initial_velocity_max = 1.0
+	# Movement - slow upward drift
+	edge_particles.direction = Vector3(0, 1, 0)
+	edge_particles.spread = 30.0
+	edge_particles.gravity = Vector3.ZERO
+	edge_particles.initial_velocity_min = 0.3
+	edge_particles.initial_velocity_max = 0.8
 
 	# Size
-	arc_particles.scale_amount_min = 1.0
-	arc_particles.scale_amount_max = 1.5
+	edge_particles.scale_amount_min = 1.0
+	edge_particles.scale_amount_max = 1.5
 
 	# Color - very subtle cool gradient
 	var gradient: Gradient = Gradient.new()
 	gradient.add_point(0.0, Color(0.85, 0.9, 0.95, 0.35))  # Subtle cool tone
 	gradient.add_point(0.5, Color(0.8, 0.85, 0.9, 0.25))   # Very subtle
 	gradient.add_point(1.0, Color(0.75, 0.8, 0.85, 0.0))   # Transparent
-	arc_particles.color_ramp = gradient
+	edge_particles.color_ramp = gradient
 
 	# Initially hidden (will show when charging)
 	arc_indicator.visible = false
