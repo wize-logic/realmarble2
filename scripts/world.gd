@@ -4,7 +4,6 @@ extends Node
 @onready var main_menu: Control = $Menu/MainMenu if has_node("Menu/MainMenu") else null
 @onready var options_menu: PanelContainer = $Menu/Options if has_node("Menu/Options") else null
 @onready var pause_menu: PanelContainer = $Menu/PauseMenu if has_node("Menu/PauseMenu") else null
-@onready var address_entry: LineEdit = get_node_or_null("%AddressEntry")
 @onready var menu_music: AudioStreamPlayer = get_node_or_null("%MenuMusic")
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
 @onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
@@ -40,8 +39,6 @@ var controller_sensitivity: float = 0.010
 
 # Multiplayer
 const Player = preload("res://marble_player.tscn")  # Updated to marble player
-const PORT = 9999
-var enet_peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 
 # Menu State
 var paused: bool = false
@@ -1037,86 +1034,6 @@ func _on_friends_pressed() -> void:
 	if has_node("Menu/Blur"):
 		$Menu/Blur.show()
 
-func _on_host_button_pressed() -> void:
-	if main_menu:
-		main_menu.hide()
-		# Disable practice button to prevent spam during gameplay
-		_set_practice_button_disabled(true)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
-
-	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
-	if preview_camera and is_instance_valid(preview_camera):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for host mode")
-		preview_camera.current = false
-		preview_camera.queue_free()
-		preview_camera = null
-
-	if has_node("MarblePreview"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
-		var marble_preview_node: Node = get_node("MarblePreview")
-		marble_preview_node.queue_free()
-
-	if menu_music:
-		menu_music.stop()
-
-	# Capture mouse for gameplay
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	# Start gameplay music
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
-		gameplay_music.start_playlist()
-
-	enet_peer.create_server(PORT)
-	multiplayer.multiplayer_peer = enet_peer
-	multiplayer.peer_connected.connect(add_player)
-	multiplayer.peer_disconnected.connect(remove_player)
-
-	if options_menu and options_menu.visible:
-		options_menu.hide()
-
-	add_player(multiplayer.get_unique_id())
-
-	# Start the deathmatch
-	start_deathmatch()
-
-	upnp_setup()
-
-func _on_join_button_pressed() -> void:
-	if main_menu:
-		main_menu.hide()
-		# Disable practice button to prevent spam during gameplay
-		_set_practice_button_disabled(true)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
-
-	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
-	if preview_camera and is_instance_valid(preview_camera):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for join mode")
-		preview_camera.current = false
-		preview_camera.queue_free()
-		preview_camera = null
-
-	if has_node("MarblePreview"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
-		var marble_preview_node: Node = get_node("MarblePreview")
-		marble_preview_node.queue_free()
-
-	if menu_music:
-		menu_music.stop()
-
-	# Capture mouse for gameplay
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	# Start gameplay music
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
-		gameplay_music.start_playlist()
-
-	enet_peer.create_client(address_entry.text if address_entry else "127.0.0.1", PORT)
-	if options_menu and options_menu.visible:
-		options_menu.hide()
-	multiplayer.multiplayer_peer = enet_peer
-
 func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
 		if toggled_on:
@@ -1258,21 +1175,84 @@ func show_main_menu() -> void:
 	# Ensure mouse is visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
-func upnp_setup() -> void:
-	var upnp: UPNP = UPNP.new()
-
-	upnp.discover()
-	upnp.add_port_mapping(PORT)
-
-	var ip: String = upnp.query_external_address()
-	if ip == "":
-		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to establish upnp connection!")
-	else:
-		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Success! Join Address: %s" % upnp.query_external_address())
-
 # ============================================================================
 # DEATHMATCH GAME LOGIC
 # ============================================================================
+
+func start_multiplayer_match(settings: Dictionary) -> void:
+	"""Start a multiplayer match with the specified room settings.
+	Args:
+		settings: Dictionary with level_size, match_time, video_walls, and level_seed
+	"""
+	var level_size: int = settings.get("level_size", 2)
+	var match_time: float = settings.get("match_time", 300.0)
+	var video_walls: bool = settings.get("video_walls", false)
+	var level_seed: int = settings.get("level_seed", 0)
+
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s, seed: %d" % [level_size, match_time, video_walls, level_seed])
+
+	# Store settings for level generation
+	current_level_size = level_size
+
+	# Prevent starting a new match if one is already active or counting down
+	if game_active or countdown_active:
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: Match already active or counting down! Ignoring start_multiplayer_match() call.")
+		return
+
+	# Hide lobby UI and show game
+	hide_multiplayer_lobby()
+
+	# Destroy preview camera and marble since we're starting the game
+	if preview_camera and is_instance_valid(preview_camera):
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for multiplayer match")
+		preview_camera.current = false
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
+	# Hide main menu
+	if main_menu:
+		main_menu.hide()
+
+	# Stop menu music, start gameplay music
+	if menu_music:
+		menu_music.stop()
+	if gameplay_music and gameplay_music.has_method("start_playlist"):
+		gameplay_music.start_playlist()
+
+	# Regenerate level with multiplayer settings (using shared seed for sync)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s, Seed: %d)..." % [level_size, video_walls, level_seed])
+	await generate_procedural_level(true, level_size, video_walls, false, level_seed)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
+
+	# Capture mouse for gameplay
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	# Spawn all players from multiplayer manager
+	if MultiplayerManager and MultiplayerManager.players:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Spawning %d multiplayer players..." % MultiplayerManager.players.size())
+		for peer_id in MultiplayerManager.players.keys():
+			add_player(peer_id)
+
+	game_active = false  # Don't start until countdown finishes
+	game_time_remaining = match_time  # Use the time setting from room
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Notify CrazyGames SDK that gameplay is about to start
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()  # Ensure clean state
+
+	# Start countdown
+	countdown_active = true
+	countdown_time = 2.0  # 2 seconds: "READY" (1s), "GO!" (1s)
+	if countdown_label:
+		countdown_label.visible = true
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting countdown with %.0f second match time..." % match_time)
 
 func start_deathmatch(skip_level_regen: bool = false) -> void:
 	"""Start a 5-minute deathmatch with countdown
@@ -2733,15 +2713,16 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false) -> void:
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false, level_seed: int = 0) -> void:
 	"""Generate a procedural Q3-style level with skybox
 	Args:
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 		video_walls: Enable video on perimeter walls
 		menu_preview: If true, only generates floor + video walls for main menu background
+		level_seed: Seed for level generation (0 = random, use same seed for multiplayer sync)
 	"""
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s" % [level_size, spawn_collectibles, video_walls, menu_preview])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s, seed: %d" % [level_size, spawn_collectibles, video_walls, menu_preview, level_seed])
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
@@ -2771,6 +2752,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.set_script(LevelGeneratorQ3)
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
+	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
 
 	# Configure video walls if enabled
 	if video_walls:
