@@ -102,7 +102,7 @@ func _ready() -> void:
 
 	# Color - silver/blue sword slash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 0.9, 1.0, 1.0))  # Bright white-blue
+	gradient.add_point(0.0, Color(0.6, 0.75, 1.0, 1.0))  # Bright cyan-blue (no white)
 	gradient.add_point(0.3, Color(0.7, 0.8, 1.0, 0.8))  # Light blue
 	gradient.add_point(0.7, Color(0.5, 0.6, 0.9, 0.4))  # Darker blue
 	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent

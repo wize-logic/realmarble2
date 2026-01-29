@@ -5,7 +5,7 @@ extends Area3D
 
 @export var ability_scene: PackedScene  # The ability to grant
 @export var ability_name: String = "Unknown Ability"
-@export var ability_color: Color = Color.WHITE
+@export var ability_color: Color = Color(0.7, 0.85, 1.0)  # Soft cyan default (no white)
 
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D

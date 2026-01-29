@@ -345,7 +345,7 @@ func create_visual_effects() -> void:
 	trail_particles.scale_amount_max = 5.0
 
 	var trail_gradient: Gradient = Gradient.new()
-	trail_gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright white-yellow
+	trail_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright golden-yellow (no white)
 	trail_gradient.add_point(0.2, Color(1.0, 0.8, 0.2, 1.0))  # Golden
 	trail_gradient.add_point(0.5, Color(1.0, 0.4, 0.1, 0.8))  # Orange
 	trail_gradient.add_point(0.8, Color(0.8, 0.2, 0.1, 0.4))  # Red
@@ -415,10 +415,10 @@ func spawn_activation_explosion() -> void:
 	player.get_parent().add_child(explosion_container)
 	explosion_container.global_position = player.global_position
 
-	# Central flash
+	# Central flash (warm golden, not white)
 	var flash_light: OmniLight3D = OmniLight3D.new()
-	flash_light.light_color = Color(1.0, 0.9, 0.5)
-	flash_light.light_energy = 20.0
+	flash_light.light_color = Color(1.0, 0.75, 0.35)
+	flash_light.light_energy = 18.0
 	flash_light.omni_range = 25.0
 	explosion_container.add_child(flash_light)
 
@@ -474,8 +474,8 @@ func spawn_activation_explosion() -> void:
 	burst.scale_amount_max = 5.0
 
 	var burst_gradient: Gradient = Gradient.new()
-	burst_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White center
-	burst_gradient.add_point(0.2, Color(1.0, 0.9, 0.3, 1.0))  # Yellow
+	burst_gradient.add_point(0.0, Color(1.0, 0.95, 0.5, 1.0))  # Bright golden center (no white)
+	burst_gradient.add_point(0.2, Color(1.0, 0.85, 0.3, 1.0))  # Yellow
 	burst_gradient.add_point(0.5, Color(1.0, 0.5, 0.1, 0.8))  # Orange
 	burst_gradient.add_point(0.8, Color(1.0, 0.2, 0.0, 0.4))  # Red
 	burst_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Fade
@@ -571,7 +571,7 @@ func spawn_hit_impact(position: Vector3) -> void:
 	impact.scale_amount_max = 4.0
 
 	var impact_gradient: Gradient = Gradient.new()
-	impact_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))
+	impact_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright golden (no white)
 	impact_gradient.add_point(0.3, Color(1.0, 0.7, 0.2, 1.0))
 	impact_gradient.add_point(0.7, Color(1.0, 0.3, 0.1, 0.5))
 	impact_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))

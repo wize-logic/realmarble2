@@ -47,8 +47,8 @@ func create_poof_effect() -> void:
 	material.scale_max = 4.0
 	material.scale_curve = create_scale_curve()
 
-	# Color - white puffy cloud with transparency
-	material.color = Color(1.0, 1.0, 1.0, 0.9)
+	# Color - soft cream-tinted puffy cloud (no pure white)
+	material.color = Color(0.95, 0.92, 0.88, 0.85)
 	material.color_ramp = create_color_ramp()
 
 	particles.process_material = material
@@ -72,10 +72,10 @@ func create_scale_curve() -> Curve:
 func create_color_ramp() -> Gradient:
 	"""Create a color gradient for particle fade"""
 	var gradient = Gradient.new()
-	# Start white and opaque
-	gradient.set_color(0, Color(1.0, 1.0, 1.0, 0.9))
-	# Fade to transparent white
-	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	# Start soft cream and opaque (no pure white)
+	gradient.set_color(0, Color(0.95, 0.92, 0.88, 0.85))
+	# Fade to transparent warm gray
+	gradient.set_color(1, Color(0.9, 0.88, 0.85, 0.0))
 	return gradient
 
 func play_poof() -> void:

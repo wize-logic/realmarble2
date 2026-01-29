@@ -556,9 +556,9 @@ func _ready() -> void:
 		grind_scale_curve.add_point(Vector2(1, 0.0))
 		grind_particles.scale_amount_curve = grind_scale_curve
 
-		# Color gradient - bright yellow/orange sparks
+		# Color gradient - bright yellow/orange sparks (no white)
 		var grind_gradient: Gradient = Gradient.new()
-		grind_gradient.add_point(0.0, Color(1.0, 1.0, 0.8, 1.0))  # Bright yellow-white
+		grind_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright golden-yellow (no white)
 		grind_gradient.add_point(0.2, Color(1.0, 0.8, 0.2, 1.0))  # Yellow
 		grind_gradient.add_point(0.5, Color(1.0, 0.4, 0.1, 0.8))  # Orange
 		grind_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Dark red fade

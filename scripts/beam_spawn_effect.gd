@@ -53,8 +53,8 @@ func create_beam_effect() -> void:
 	material.scale_max = 0.5
 	material.scale_curve = create_scale_curve()
 
-	# Color - bright blue-white transporter beam with glow
-	material.color = Color(0.6, 0.8, 1.0, 0.9)  # Light blue
+	# Color - cyan-blue transporter beam with glow (no white)
+	material.color = Color(0.4, 0.7, 0.95, 0.9)  # Cyan-blue
 	material.color_ramp = create_color_ramp()
 
 	beam_particles.process_material = material
@@ -120,8 +120,8 @@ func create_glow_particles() -> void:
 	material.scale_max = 1.0
 	material.scale_curve = create_glow_scale_curve()
 
-	# Color - bright white-blue glow
-	material.color = Color(0.8, 0.9, 1.0, 0.7)
+	# Color - soft cyan-blue glow (no white)
+	material.color = Color(0.5, 0.75, 0.95, 0.7)
 	material.color_ramp = create_glow_color_ramp()
 
 	glow_particles.process_material = material
@@ -158,23 +158,27 @@ func create_glow_scale_curve() -> Curve:
 func create_color_ramp() -> Gradient:
 	"""Create a color gradient for beam particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
-	# Start with transparent blue
-	gradient.set_color(0, Color(0.6, 0.8, 1.0, 0.0))
-	# Peak brightness
-	gradient.set_color(0.5, Color(0.7, 0.9, 1.0, 0.9))
-	# Fade to transparent
-	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	# Start with transparent cyan-blue
+	gradient.set_offset(0, 0.0)
+	gradient.set_color(0, Color(0.4, 0.7, 0.95, 0.0))
+	# Peak brightness (cyan-blue, not white)
+	gradient.add_point(0.5, Color(0.5, 0.8, 0.95, 0.9))
+	# Fade to transparent blue
+	gradient.set_offset(1, 1.0)
+	gradient.set_color(1, Color(0.3, 0.6, 0.9, 0.0))
 	return gradient
 
 func create_glow_color_ramp() -> Gradient:
 	"""Create a color gradient for glow particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
-	# Start transparent
-	gradient.set_color(0, Color(0.8, 0.9, 1.0, 0.0))
-	# Peak brightness
-	gradient.set_color(0.4, Color(1.0, 1.0, 1.0, 0.7))
-	# Fade to transparent
-	gradient.set_color(1, Color(0.8, 0.9, 1.0, 0.0))
+	# Start transparent cyan
+	gradient.set_offset(0, 0.0)
+	gradient.set_color(0, Color(0.5, 0.75, 0.95, 0.0))
+	# Peak brightness (soft cyan, not white)
+	gradient.add_point(0.4, Color(0.6, 0.85, 0.95, 0.7))
+	# Fade to transparent blue
+	gradient.set_offset(1, 1.0)
+	gradient.set_color(1, Color(0.4, 0.7, 0.9, 0.0))
 	return gradient
 
 func play_beam() -> void:
