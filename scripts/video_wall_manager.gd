@@ -133,29 +133,20 @@ func _create_video_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_name: 
 	mesh_instance.position = pos
 	mesh_instance.rotation = rot
 
-	# Use the custom shader for clean, artifact-free rendering
-	if _video_shader:
-		var material = ShaderMaterial.new()
-		material.shader = _video_shader
-		material.set_shader_parameter("video_texture", viewport_texture)
-		material.set_shader_parameter("flip_h", false)
-		material.set_shader_parameter("flip_v", false)
-		mesh_instance.material_override = material
-	else:
-		# Fallback: StandardMaterial3D with explicit linear filtering
-		var material = StandardMaterial3D.new()
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		material.albedo_texture = viewport_texture
-		material.albedo_color = Color.WHITE
-		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-		material.disable_ambient_light = true
-		material.disable_fog = true
-		material.disable_receive_shadows = true
-		material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-		material.emission_enabled = false
-		material.metallic = 0.0
-		material.roughness = 1.0
-		mesh_instance.material_override = material
+	# Always use StandardMaterial3D for maximum compatibility with GL Compatibility renderer
+	# ShaderMaterial with viewport textures can have issues in WebGL
+	var material = StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_texture = viewport_texture
+	material.albedo_color = Color(1.0, 1.0, 1.0)  # Full brightness
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_BACK
+	material.metallic = 0.0
+	material.roughness = 1.0
+	mesh_instance.material_override = material
+
+	print("[VideoWallManager] Created panel: %s with viewport texture" % panel_name)
 
 	# Add collision for gameplay
 	var static_body = StaticBody3D.new()
