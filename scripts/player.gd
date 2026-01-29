@@ -1214,6 +1214,14 @@ func check_ground() -> void:
 	if is_grounded and jump_count > 0:
 		jump_count = 0
 
+	# SAFETY: Clear is_bouncing if grounded for consecutive frames (catches stuck bounce state)
+	# The bounce landing detection (above) should handle normal cases, but this catches edge cases
+	# where was_grounded was somehow already true when landing
+	if is_grounded and was_grounded and is_bouncing:
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "SAFETY: Clearing stuck bounce state (grounded for consecutive frames)", false, get_entity_id())
+		is_bouncing = false
+		bounce_count = 0
+
 	# Debug logging every 60 frames (about once per second)
 	if Engine.get_physics_frames() % 60 == 0:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Ground check: %s | Y-pos: %.11f | Jumps: %d/%d" % [is_grounded, global_position.y, jump_count, max_jumps], false, get_entity_id())
@@ -2238,6 +2246,16 @@ func start_grinding(rail: GrindRail) -> void:
 	is_grinding = true
 	current_rail = rail
 	jump_count = 0  # Reset jumps when starting grind
+
+	# CRITICAL FIX: Clear bounce state when attaching to rail mid-bounce
+	# This prevents is_bouncing from staying true while grinding, which could cause
+	# stuck AIR state issues after detachment due to inconsistent state
+	is_bouncing = false
+	bounce_count = 0  # Reset bounce streak when starting to grind
+
+	# CRITICAL FIX: Clear post-rail grace period when starting new grind
+	# Prevents stale grace period from interfering with new rail attachment
+	post_rail_detach_frames = 0
 
 	# Keep physics active (SA2 style - gravity affects grinding!)
 	# Only reduce damping slightly for smoother grinding
