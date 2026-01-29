@@ -4,7 +4,6 @@ extends Node
 @onready var main_menu: Control = $Menu/MainMenu if has_node("Menu/MainMenu") else null
 @onready var options_menu: PanelContainer = $Menu/Options if has_node("Menu/Options") else null
 @onready var pause_menu: PanelContainer = $Menu/PauseMenu if has_node("Menu/PauseMenu") else null
-@onready var address_entry: LineEdit = get_node_or_null("%AddressEntry")
 @onready var menu_music: AudioStreamPlayer = get_node_or_null("%MenuMusic")
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
 @onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
@@ -40,8 +39,6 @@ var controller_sensitivity: float = 0.010
 
 # Multiplayer
 const Player = preload("res://marble_player.tscn")  # Updated to marble player
-const PORT = 9999
-var enet_peer: ENetMultiplayerPeer = ENetMultiplayerPeer.new()
 
 # Menu State
 var paused: bool = false
@@ -1037,86 +1034,6 @@ func _on_friends_pressed() -> void:
 	if has_node("Menu/Blur"):
 		$Menu/Blur.show()
 
-func _on_host_button_pressed() -> void:
-	if main_menu:
-		main_menu.hide()
-		# Disable practice button to prevent spam during gameplay
-		_set_practice_button_disabled(true)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
-
-	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
-	if preview_camera and is_instance_valid(preview_camera):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for host mode")
-		preview_camera.current = false
-		preview_camera.queue_free()
-		preview_camera = null
-
-	if has_node("MarblePreview"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
-		var marble_preview_node: Node = get_node("MarblePreview")
-		marble_preview_node.queue_free()
-
-	if menu_music:
-		menu_music.stop()
-
-	# Capture mouse for gameplay
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	# Start gameplay music
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
-		gameplay_music.start_playlist()
-
-	enet_peer.create_server(PORT)
-	multiplayer.multiplayer_peer = enet_peer
-	multiplayer.peer_connected.connect(add_player)
-	multiplayer.peer_disconnected.connect(remove_player)
-
-	if options_menu and options_menu.visible:
-		options_menu.hide()
-
-	add_player(multiplayer.get_unique_id())
-
-	# Start the deathmatch
-	start_deathmatch()
-
-	upnp_setup()
-
-func _on_join_button_pressed() -> void:
-	if main_menu:
-		main_menu.hide()
-		# Disable practice button to prevent spam during gameplay
-		_set_practice_button_disabled(true)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
-
-	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
-	if preview_camera and is_instance_valid(preview_camera):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for join mode")
-		preview_camera.current = false
-		preview_camera.queue_free()
-		preview_camera = null
-
-	if has_node("MarblePreview"):
-		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
-		var marble_preview_node: Node = get_node("MarblePreview")
-		marble_preview_node.queue_free()
-
-	if menu_music:
-		menu_music.stop()
-
-	# Capture mouse for gameplay
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	# Start gameplay music
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
-		gameplay_music.start_playlist()
-
-	enet_peer.create_client(address_entry.text if address_entry else "127.0.0.1", PORT)
-	if options_menu and options_menu.visible:
-		options_menu.hide()
-	multiplayer.multiplayer_peer = enet_peer
-
 func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
 		if toggled_on:
@@ -1257,18 +1174,6 @@ func show_main_menu() -> void:
 
 	# Ensure mouse is visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-func upnp_setup() -> void:
-	var upnp: UPNP = UPNP.new()
-
-	upnp.discover()
-	upnp.add_port_mapping(PORT)
-
-	var ip: String = upnp.query_external_address()
-	if ip == "":
-		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to establish upnp connection!")
-	else:
-		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Success! Join Address: %s" % upnp.query_external_address())
 
 # ============================================================================
 # DEATHMATCH GAME LOGIC
