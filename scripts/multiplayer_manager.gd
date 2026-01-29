@@ -23,6 +23,15 @@ var players: Dictionary = {}  # peer_id: {name: String, ready: bool, score: int}
 var local_player_name: String = "Player"
 var bot_counter: int = 0  # Counter for generating bot IDs
 
+# Room settings (configured by host before starting)
+var room_settings: Dictionary = {
+	"level_size": 2,        # 1=Small, 2=Medium, 3=Large, 4=Huge
+	"match_time": 300.0,    # Match duration in seconds (default 5 minutes)
+	"video_walls": false    # Enable video on perimeter walls
+}
+
+signal room_settings_changed(settings: Dictionary)
+
 # WebSocket settings (for production, point to your relay server)
 # CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
 var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force WebSocket
@@ -166,6 +175,7 @@ func leave_game() -> void:
 	players.clear()
 	room_code = ""
 	bot_counter = 0  # Reset bot counter
+	reset_room_settings()  # Reset room settings to defaults
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Left game")
 
 func set_player_ready(ready: bool) -> void:
@@ -245,6 +255,53 @@ func reset_bots() -> void:
 	"""Reset bot counter (call when leaving lobby)"""
 	bot_counter = 0
 
+# Room settings management
+func set_room_setting(key: String, value: Variant) -> void:
+	"""Set a room setting (host only). Syncs to all clients."""
+	if network_mode != NetworkMode.HOST:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Only host can change room settings")
+		return
+
+	room_settings[key] = value
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Room setting changed: %s = %s" % [key, value])
+	room_settings_changed.emit(room_settings)
+
+	# Sync to all clients
+	rpc("sync_room_settings", room_settings)
+
+func set_room_settings(settings: Dictionary) -> void:
+	"""Set all room settings at once (host only). Syncs to all clients."""
+	if network_mode != NetworkMode.HOST:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Only host can change room settings")
+		return
+
+	room_settings = settings
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Room settings updated: %s" % room_settings)
+	room_settings_changed.emit(room_settings)
+
+	# Sync to all clients
+	rpc("sync_room_settings", room_settings)
+
+func get_room_settings() -> Dictionary:
+	"""Get current room settings"""
+	return room_settings.duplicate()
+
+func reset_room_settings() -> void:
+	"""Reset room settings to defaults"""
+	room_settings = {
+		"level_size": 2,
+		"match_time": 300.0,
+		"video_walls": false
+	}
+	room_settings_changed.emit(room_settings)
+
+@rpc("authority", "reliable")
+func sync_room_settings(settings: Dictionary) -> void:
+	"""Sync room settings from host to clients"""
+	room_settings = settings
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Room settings synced from host: %s" % room_settings)
+	room_settings_changed.emit(room_settings)
+
 func start_game() -> void:
 	"""Start the game (host only)"""
 	if network_mode != NetworkMode.HOST:
@@ -255,16 +312,21 @@ func start_game() -> void:
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Not all players ready")
 		return
 
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Starting game!")
-	rpc("on_game_started")
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Starting game with settings: %s" % room_settings)
+	rpc("on_game_started", room_settings)
 
 @rpc("authority", "call_local", "reliable")
-func on_game_started() -> void:
+func on_game_started(settings: Dictionary) -> void:
 	"""Called on all peers when game starts"""
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game starting!")
-	# Signal to world to start match
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game starting with settings: %s" % settings)
+	# Store settings locally in case they weren't synced
+	room_settings = settings
+	# Signal to world to start match with settings
 	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and world.has_method("start_deathmatch"):
+	if world and world.has_method("start_multiplayer_match"):
+		world.start_multiplayer_match(settings)
+	elif world and world.has_method("start_deathmatch"):
+		# Fallback to old method
 		world.start_deathmatch()
 
 func register_player(peer_id: int, player_info: Dictionary) -> void:
@@ -308,10 +370,12 @@ func _on_peer_connected(peer_id: int) -> void:
 	"""Called when a peer connects"""
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Peer connected: %d" % peer_id)
 
-	# If we're the host, send them our player list
+	# If we're the host, send them our player list and room settings
 	if network_mode == NetworkMode.HOST:
 		# Send existing players to new peer
 		rpc_id(peer_id, "receive_player_list", players)
+		# Send room settings to new peer
+		rpc_id(peer_id, "sync_room_settings", room_settings)
 
 @rpc("any_peer", "reliable")
 func receive_player_list(player_list: Dictionary) -> void:

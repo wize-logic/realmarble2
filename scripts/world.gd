@@ -1274,6 +1274,80 @@ func upnp_setup() -> void:
 # DEATHMATCH GAME LOGIC
 # ============================================================================
 
+func start_multiplayer_match(settings: Dictionary) -> void:
+	"""Start a multiplayer match with the specified room settings.
+	Args:
+		settings: Dictionary with level_size, match_time, and video_walls
+	"""
+	var level_size: int = settings.get("level_size", 2)
+	var match_time: float = settings.get("match_time", 300.0)
+	var video_walls: bool = settings.get("video_walls", false)
+
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s" % [level_size, match_time, video_walls])
+
+	# Store settings for level generation
+	current_level_size = level_size
+
+	# Prevent starting a new match if one is already active or counting down
+	if game_active or countdown_active:
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "WARNING: Match already active or counting down! Ignoring start_multiplayer_match() call.")
+		return
+
+	# Hide lobby UI and show game
+	hide_multiplayer_lobby()
+
+	# Destroy preview camera and marble since we're starting the game
+	if preview_camera and is_instance_valid(preview_camera):
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for multiplayer match")
+		preview_camera.current = false
+		preview_camera.queue_free()
+		preview_camera = null
+
+	if has_node("MarblePreview"):
+		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying MarblePreview node")
+		var marble_preview_node: Node = get_node("MarblePreview")
+		marble_preview_node.queue_free()
+
+	# Hide main menu
+	if main_menu:
+		main_menu.hide()
+
+	# Stop menu music, start gameplay music
+	if menu_music:
+		menu_music.stop()
+	if gameplay_music and gameplay_music.has_method("start_playlist"):
+		gameplay_music.start_playlist()
+
+	# Regenerate level with multiplayer settings
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s)..." % [level_size, video_walls])
+	await generate_procedural_level(true, level_size, video_walls)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
+
+	# Capture mouse for gameplay
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	# Spawn all players from multiplayer manager
+	if MultiplayerManager and MultiplayerManager.players:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Spawning %d multiplayer players..." % MultiplayerManager.players.size())
+		for peer_id in MultiplayerManager.players.keys():
+			add_player(peer_id)
+
+	game_active = false  # Don't start until countdown finishes
+	game_time_remaining = match_time  # Use the time setting from room
+	player_scores.clear()
+	player_deaths.clear()
+
+	# Notify CrazyGames SDK that gameplay is about to start
+	if CrazyGamesSDK:
+		CrazyGamesSDK.gameplay_stop()  # Ensure clean state
+
+	# Start countdown
+	countdown_active = true
+	countdown_time = 2.0  # 2 seconds: "READY" (1s), "GO!" (1s)
+	if countdown_label:
+		countdown_label.visible = true
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting countdown with %.0f second match time..." % match_time)
+
 func start_deathmatch(skip_level_regen: bool = false) -> void:
 	"""Start a 5-minute deathmatch with countdown
 	Args:

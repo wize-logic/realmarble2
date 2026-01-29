@@ -25,6 +25,15 @@ var multiplayer_manager: Node = null
 var is_ready: bool = false
 var spawn_bot_button: Button = null  # Created programmatically
 
+# Room settings UI (created programmatically)
+var room_settings_container: VBoxContainer = null
+var size_slider: HSlider = null
+var size_value_label: Label = null
+var time_slider: HSlider = null
+var time_value_label: Label = null
+var video_walls_checkbox: CheckBox = null
+var settings_display_label: Label = null  # For clients to see current settings
+
 func _ready() -> void:
 	# Get multiplayer manager
 	multiplayer_manager = get_node("/root/MultiplayerManager")
@@ -64,6 +73,10 @@ func _ready() -> void:
 		multiplayer_manager.lobby_joined.connect(_on_lobby_joined)
 		multiplayer_manager.connection_failed.connect(_on_connection_failed)
 		multiplayer_manager.player_list_changed.connect(_update_player_list)
+		multiplayer_manager.room_settings_changed.connect(_on_room_settings_changed)
+
+	# Create room settings UI
+	_create_room_settings_ui()
 
 	# Initial state
 	show_main_lobby()
@@ -79,6 +92,11 @@ func show_main_lobby() -> void:
 	main_lobby_panel.visible = true
 	game_lobby_panel.visible = false
 	start_game_button.visible = false
+	# Hide room settings UI when leaving game lobby
+	if room_settings_container:
+		room_settings_container.visible = false
+	if settings_display_label:
+		settings_display_label.visible = false
 
 func show_game_lobby() -> void:
 	"""Show the game lobby screen"""
@@ -95,10 +113,25 @@ func show_game_lobby() -> void:
 		start_game_button.visible = true
 		if spawn_bot_button:
 			spawn_bot_button.visible = true
+		# Show room settings controls for host
+		if room_settings_container:
+			room_settings_container.visible = true
+		if settings_display_label:
+			settings_display_label.visible = false
+		# Reset sliders to current settings
+		_update_settings_display(multiplayer_manager.get_room_settings())
 	else:
 		start_game_button.visible = false
 		if spawn_bot_button:
 			spawn_bot_button.visible = false
+		# Hide room settings controls for clients, show display label instead
+		if room_settings_container:
+			room_settings_container.visible = false
+		if settings_display_label:
+			settings_display_label.visible = true
+		# Update display with current settings
+		if multiplayer_manager:
+			_update_settings_display(multiplayer_manager.get_room_settings())
 
 	_update_player_list()
 
@@ -289,3 +322,224 @@ func _update_player_list() -> void:
 	# Update start button availability for host
 	if multiplayer_manager.is_host() and start_game_button:
 		start_game_button.disabled = not multiplayer_manager.all_players_ready()
+
+func _create_room_settings_ui() -> void:
+	"""Create the room settings UI elements"""
+	var vbox: VBoxContainer = $GameLobbyPanel/MarginContainer/VBox
+
+	# Create container for room settings
+	room_settings_container = VBoxContainer.new()
+	room_settings_container.add_theme_constant_override("separation", 8)
+	room_settings_container.visible = false
+
+	# Find position after player list (before ready button)
+	var ready_button_index: int = ready_button.get_index()
+	vbox.add_child(room_settings_container)
+	vbox.move_child(room_settings_container, ready_button_index)
+
+	# Settings title
+	var settings_title = Label.new()
+	settings_title.text = "ROOM SETTINGS"
+	settings_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	settings_title.add_theme_font_size_override("font_size", 18)
+	settings_title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	room_settings_container.add_child(settings_title)
+
+	# Add separator
+	var separator = HSeparator.new()
+	room_settings_container.add_child(separator)
+
+	# === LEVEL SIZE ===
+	var size_section = VBoxContainer.new()
+	size_section.add_theme_constant_override("separation", 4)
+	room_settings_container.add_child(size_section)
+
+	var size_label = Label.new()
+	size_label.text = "Level Size"
+	size_label.add_theme_font_size_override("font_size", 14)
+	size_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	size_section.add_child(size_label)
+
+	var size_hbox = HBoxContainer.new()
+	size_hbox.add_theme_constant_override("separation", 10)
+	size_section.add_child(size_hbox)
+
+	var size_left = Label.new()
+	size_left.text = "Small"
+	size_left.add_theme_font_size_override("font_size", 12)
+	size_left.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	size_hbox.add_child(size_left)
+
+	size_slider = HSlider.new()
+	size_slider.min_value = 1
+	size_slider.max_value = 4
+	size_slider.step = 1
+	size_slider.value = 2
+	size_slider.custom_minimum_size = Vector2(150, 20)
+	size_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_slider.value_changed.connect(_on_size_slider_changed)
+	size_hbox.add_child(size_slider)
+
+	var size_right = Label.new()
+	size_right.text = "Huge"
+	size_right.add_theme_font_size_override("font_size", 12)
+	size_right.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	size_hbox.add_child(size_right)
+
+	size_value_label = Label.new()
+	size_value_label.text = "Medium"
+	size_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	size_value_label.add_theme_font_size_override("font_size", 12)
+	size_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	size_section.add_child(size_value_label)
+
+	# === MATCH TIME ===
+	var time_section = VBoxContainer.new()
+	time_section.add_theme_constant_override("separation", 4)
+	room_settings_container.add_child(time_section)
+
+	var time_label = Label.new()
+	time_label.text = "Match Duration"
+	time_label.add_theme_font_size_override("font_size", 14)
+	time_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+	time_section.add_child(time_label)
+
+	var time_hbox = HBoxContainer.new()
+	time_hbox.add_theme_constant_override("separation", 10)
+	time_section.add_child(time_hbox)
+
+	var time_left = Label.new()
+	time_left.text = "1 min"
+	time_left.add_theme_font_size_override("font_size", 12)
+	time_left.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	time_hbox.add_child(time_left)
+
+	time_slider = HSlider.new()
+	time_slider.min_value = 1
+	time_slider.max_value = 5
+	time_slider.step = 1
+	time_slider.value = 3  # 5 minutes default
+	time_slider.custom_minimum_size = Vector2(150, 20)
+	time_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	time_slider.value_changed.connect(_on_time_slider_changed)
+	time_hbox.add_child(time_slider)
+
+	var time_right = Label.new()
+	time_right.text = "15 min"
+	time_right.add_theme_font_size_override("font_size", 12)
+	time_right.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1))
+	time_hbox.add_child(time_right)
+
+	time_value_label = Label.new()
+	time_value_label.text = "5 Minutes"
+	time_value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	time_value_label.add_theme_font_size_override("font_size", 12)
+	time_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	time_section.add_child(time_value_label)
+
+	# === VIDEO WALLS ===
+	var video_section = HBoxContainer.new()
+	video_section.add_theme_constant_override("separation", 10)
+	video_section.alignment = BoxContainer.ALIGNMENT_CENTER
+	room_settings_container.add_child(video_section)
+
+	video_walls_checkbox = CheckBox.new()
+	video_walls_checkbox.text = "Enable Video Walls"
+	video_walls_checkbox.button_pressed = false
+	video_walls_checkbox.add_theme_font_size_override("font_size", 14)
+	video_walls_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	video_walls_checkbox.toggled.connect(_on_video_walls_toggled)
+	video_section.add_child(video_walls_checkbox)
+
+	# Add separator after settings
+	var separator2 = HSeparator.new()
+	room_settings_container.add_child(separator2)
+
+	# === CLIENT-ONLY SETTINGS DISPLAY ===
+	settings_display_label = Label.new()
+	settings_display_label.text = ""
+	settings_display_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	settings_display_label.add_theme_font_size_override("font_size", 12)
+	settings_display_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+	settings_display_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	settings_display_label.visible = false
+	# Add to the main vbox, after room_settings_container position
+	vbox.add_child(settings_display_label)
+	vbox.move_child(settings_display_label, ready_button_index + 1)
+
+func _on_size_slider_changed(value: float) -> void:
+	"""Handle size slider value change"""
+	if not multiplayer_manager or not multiplayer_manager.is_host():
+		return
+
+	var size_names: Array[String] = ["", "Small", "Medium", "Large", "Huge"]
+	if size_value_label:
+		size_value_label.text = size_names[int(value)]
+
+	multiplayer_manager.set_room_setting("level_size", int(value))
+
+func _on_time_slider_changed(value: float) -> void:
+	"""Handle time slider value change"""
+	if not multiplayer_manager or not multiplayer_manager.is_host():
+		return
+
+	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]
+	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+	var index: int = int(value) - 1
+
+	if time_value_label:
+		time_value_label.text = time_labels[index]
+
+	multiplayer_manager.set_room_setting("match_time", time_values[index])
+
+func _on_video_walls_toggled(enabled: bool) -> void:
+	"""Handle video walls checkbox toggle"""
+	if not multiplayer_manager or not multiplayer_manager.is_host():
+		return
+
+	multiplayer_manager.set_room_setting("video_walls", enabled)
+
+func _on_room_settings_changed(settings: Dictionary) -> void:
+	"""Called when room settings are updated (host or received from host)"""
+	_update_settings_display(settings)
+
+func _update_settings_display(settings: Dictionary) -> void:
+	"""Update the UI to show current room settings"""
+	var level_size: int = settings.get("level_size", 2)
+	var match_time: float = settings.get("match_time", 300.0)
+	var video_walls: bool = settings.get("video_walls", false)
+
+	# Update sliders/checkbox if we're host
+	if multiplayer_manager and multiplayer_manager.is_host():
+		if size_slider and int(size_slider.value) != level_size:
+			size_slider.value = level_size
+		if time_slider:
+			var time_index: int = _time_to_slider_index(match_time)
+			if int(time_slider.value) != time_index:
+				time_slider.value = time_index
+		if video_walls_checkbox and video_walls_checkbox.button_pressed != video_walls:
+			video_walls_checkbox.button_pressed = video_walls
+
+	# Update value labels
+	var size_names: Array[String] = ["", "Small", "Medium", "Large", "Huge"]
+	if size_value_label:
+		size_value_label.text = size_names[level_size]
+
+	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+	var time_index: int = _time_to_slider_index(match_time) - 1  # Convert slider index (1-5) to array index (0-4)
+	if time_value_label and time_index >= 0 and time_index < time_labels.size():
+		time_value_label.text = time_labels[time_index]
+
+	# Update client display label
+	if settings_display_label:
+		var video_str: String = "On" if video_walls else "Off"
+		var time_display: String = time_labels[time_index] if time_index >= 0 and time_index < time_labels.size() else "5 Minutes"
+		settings_display_label.text = "Settings: %s map, %s, Video Walls: %s" % [size_names[level_size], time_display, video_str]
+
+func _time_to_slider_index(time: float) -> int:
+	"""Convert time in seconds to slider index (1-5)"""
+	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]
+	for i in range(time_values.size()):
+		if abs(time - time_values[i]) < 1.0:
+			return i + 1
+	return 3  # Default to 5 minutes
