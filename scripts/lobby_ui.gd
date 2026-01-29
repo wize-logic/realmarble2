@@ -522,8 +522,9 @@ func _update_settings_display(settings: Dictionary) -> void:
 
 	# Update value labels
 	var size_names: Array[String] = ["", "Small", "Medium", "Large", "Huge"]
+	var size_display: String = size_names[level_size] if level_size >= 0 and level_size < size_names.size() else "Medium"
 	if size_value_label:
-		size_value_label.text = size_names[level_size]
+		size_value_label.text = size_display
 
 	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
 	var time_index: int = _time_to_slider_index(match_time) - 1  # Convert slider index (1-5) to array index (0-4)
@@ -534,7 +535,7 @@ func _update_settings_display(settings: Dictionary) -> void:
 	if settings_display_label:
 		var video_str: String = "On" if video_walls else "Off"
 		var time_display: String = time_labels[time_index] if time_index >= 0 and time_index < time_labels.size() else "5 Minutes"
-		settings_display_label.text = "Settings: %s map, %s, Video Walls: %s" % [size_names[level_size], time_display, video_str]
+		settings_display_label.text = "Settings: %s map, %s, Video Walls: %s" % [size_display, time_display, video_str]
 
 func _time_to_slider_index(time: float) -> int:
 	"""Convert time in seconds to slider index (1-5)"""
