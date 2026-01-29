@@ -15,30 +15,63 @@ The game uses Godot's built-in peer-to-peer multiplayer. One player acts as the 
 2. Click **MULTIPLAYER**
 3. Click **QUICK PLAY**
 4. A game is created with 3 bots automatically added
-5. You are auto-readied as host - click **START GAME** when ready
+5. Configure room settings (level size, match duration, video walls)
+6. Click **START GAME** when ready
 
 ### Hosting a Game
 
 1. Click **PLAY** > **MULTIPLAYER**
 2. Click **CREATE GAME**
 3. Share the 6-character **Room Code** with friends
-4. Optionally click **ADD BOT** to fill slots with AI opponents (up to 7 total)
-5. Click **READY** when you're set
-6. Click **START GAME** once all players are ready
+4. Configure **Room Settings** (see below)
+5. Optionally click **ADD BOT** to fill slots with AI opponents (up to 7 total)
+6. Click **READY** when you're set
+7. Click **START GAME** once all players are ready
 
 ### Joining a Game
 
 1. Click **PLAY** > **MULTIPLAYER**
 2. Enter the host's **Room Code**
 3. Click **JOIN GAME**
-4. Click **READY** when you're set
-5. Wait for the host to start the game
+4. View the host's room settings (displayed as read-only)
+5. Click **READY** when you're set
+6. Wait for the host to start the game
 
-### Connecting on a Local Network (LAN)
+## Room Settings
+
+The host can configure match settings before starting. These settings are automatically synced to all connected players.
+
+### Level Size
+Controls the arena dimensions and complexity:
+| Setting | Description |
+|---------|-------------|
+| **Small** | Compact arena (0.7x size) |
+| **Medium** | Standard arena (default) |
+| **Large** | Expanded arena (1.5x size) |
+| **Huge** | Massive arena (2x size) |
+
+### Match Duration
+| Setting | Time |
+|---------|------|
+| 1 | 1 minute |
+| 2 | 3 minutes |
+| 3 | 5 minutes (default) |
+| 4 | 10 minutes |
+| 5 | 15 minutes |
+
+### Video Walls
+Toggle to enable/disable video panels on the arena perimeter walls for visual atmosphere.
+
+### Level Synchronization
+When the game starts, the host generates a random seed that is shared with all players. This ensures everyone generates the exact same level layout despite using procedural generation.
+
+## Connecting
+
+### Local Network (LAN)
 
 Players on the same local network can connect directly. The joining player needs the host's local IP address (e.g. `192.168.1.x`). The game connects on port `9999` by default using ENet.
 
-### Connecting Over the Internet
+### Over the Internet
 
 For internet play, the host needs to either:
 
@@ -51,10 +84,10 @@ For internet play, the host needs to either:
 Main Menu > PLAY > MULTIPLAYER > Create/Join/Quick Play
     |
     v
-Game Lobby (add bots, ready up, start game)
+Game Lobby (configure settings, add bots, ready up)
     |
     v
-Deathmatch (5 minutes)
+Deathmatch (1-15 minutes based on room settings)
     |
     v
 Scoreboard (10 seconds)
