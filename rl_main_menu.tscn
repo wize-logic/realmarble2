@@ -70,7 +70,7 @@ button_text = "ITEM SHOP"
 
 [node name="GarageButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2
-button_text = "GARAGE"
+button_text = "CUSTOMIZE"
 
 [node name="ProfileButton" parent="BottomLeftMenu/MarginContainer/VBoxContainer/MenuButtons" instance=ExtResource("2")]
 layout_mode = 2

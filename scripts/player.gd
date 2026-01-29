@@ -20,6 +20,9 @@ const BeamSpawnEffect = preload("res://scripts/beam_spawn_effect.gd")
 # Marble material manager for unique player colors
 var marble_material_manager = preload("res://scripts/marble_material_manager.gd").new()
 
+# Custom color index set from customize panel (-1 means use default logic)
+var custom_color_index: int = -1
+
 @onready var camera: Camera3D = get_node_or_null("CameraArm/Camera3D")
 @onready var camera_arm: Node3D = get_node_or_null("CameraArm")
 @onready var ground_ray: RayCast3D = get_node_or_null("GroundRay")
@@ -2479,11 +2482,14 @@ func apply_marble_material() -> void:
 	if not marble_mesh:
 		return
 
-	# Generate unique material based on player ID
+	# Generate unique material based on player ID or custom selection
 	var material: ShaderMaterial
 
+	# Check if a custom color was set from the customize panel
+	if custom_color_index >= 0:
+		material = marble_material_manager.create_marble_material(custom_color_index)
 	# Try to use a consistent color for the same player
-	if name.is_valid_int():
+	elif name.is_valid_int():
 		var player_id = int(name)
 		material = marble_material_manager.create_marble_material(player_id % marble_material_manager.get_color_scheme_count())
 	elif str(multiplayer.get_unique_id()) != "0":
