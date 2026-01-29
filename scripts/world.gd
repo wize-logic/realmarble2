@@ -1277,13 +1277,14 @@ func upnp_setup() -> void:
 func start_multiplayer_match(settings: Dictionary) -> void:
 	"""Start a multiplayer match with the specified room settings.
 	Args:
-		settings: Dictionary with level_size, match_time, and video_walls
+		settings: Dictionary with level_size, match_time, video_walls, and level_seed
 	"""
 	var level_size: int = settings.get("level_size", 2)
 	var match_time: float = settings.get("match_time", 300.0)
 	var video_walls: bool = settings.get("video_walls", false)
+	var level_seed: int = settings.get("level_seed", 0)
 
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s" % [level_size, match_time, video_walls])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s, seed: %d" % [level_size, match_time, video_walls, level_seed])
 
 	# Store settings for level generation
 	current_level_size = level_size
@@ -1318,9 +1319,9 @@ func start_multiplayer_match(settings: Dictionary) -> void:
 	if gameplay_music and gameplay_music.has_method("start_playlist"):
 		gameplay_music.start_playlist()
 
-	# Regenerate level with multiplayer settings
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s)..." % [level_size, video_walls])
-	await generate_procedural_level(true, level_size, video_walls)
+	# Regenerate level with multiplayer settings (using shared seed for sync)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s, Seed: %d)..." % [level_size, video_walls, level_seed])
+	await generate_procedural_level(true, level_size, video_walls, false, level_seed)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -2807,15 +2808,16 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false) -> void:
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false, level_seed: int = 0) -> void:
 	"""Generate a procedural Q3-style level with skybox
 	Args:
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge (affects arena_size AND complexity)
 		video_walls: Enable video on perimeter walls
 		menu_preview: If true, only generates floor + video walls for main menu background
+		level_seed: Seed for level generation (0 = random, use same seed for multiplayer sync)
 	"""
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s" % [level_size, spawn_collectibles, video_walls, menu_preview])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s, seed: %d" % [level_size, spawn_collectibles, video_walls, menu_preview, level_seed])
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
@@ -2845,6 +2847,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.set_script(LevelGeneratorQ3)
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
+	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
 
 	# Configure video walls if enabled
 	if video_walls:

@@ -27,7 +27,8 @@ var bot_counter: int = 0  # Counter for generating bot IDs
 var room_settings: Dictionary = {
 	"level_size": 2,        # 1=Small, 2=Medium, 3=Large, 4=Huge
 	"match_time": 300.0,    # Match duration in seconds (default 5 minutes)
-	"video_walls": false    # Enable video on perimeter walls
+	"video_walls": false,   # Enable video on perimeter walls
+	"level_seed": 0         # Level generation seed (0 = will be set on game start)
 }
 
 signal room_settings_changed(settings: Dictionary)
@@ -291,7 +292,8 @@ func reset_room_settings() -> void:
 	room_settings = {
 		"level_size": 2,
 		"match_time": 300.0,
-		"video_walls": false
+		"video_walls": false,
+		"level_seed": 0
 	}
 	room_settings_changed.emit(room_settings)
 
@@ -312,6 +314,8 @@ func start_game() -> void:
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Not all players ready")
 		return
 
+	# Generate a random seed for level generation so all clients generate the same level
+	room_settings["level_seed"] = randi()
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Starting game with settings: %s" % room_settings)
 	rpc("on_game_started", room_settings)
 
