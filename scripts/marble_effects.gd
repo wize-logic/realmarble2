@@ -217,8 +217,10 @@ func create_fade_curve() -> Curve:
 func create_trail_gradient() -> Gradient:
 	"""Create trail color gradient (no white)"""
 	var gradient = Gradient.new()
+	gradient.set_offset(0, 0.0)
 	gradient.set_color(0, Color(marble_color.r, marble_color.g, marble_color.b, 0.0))
-	gradient.set_color(0.3, Color(marble_color.r, marble_color.g, marble_color.b, 0.6))
+	gradient.add_point(0.3, Color(marble_color.r, marble_color.g, marble_color.b, 0.6))
+	gradient.set_offset(1, 1.0)
 	gradient.set_color(1, Color(marble_color.r * 0.6, marble_color.g * 0.6, marble_color.b * 0.6, 0.0))
 	return gradient
 
@@ -226,17 +228,21 @@ func create_speed_gradient() -> Gradient:
 	"""Create speed trail color gradient (no white)"""
 	var gradient = Gradient.new()
 	var bright = marble_color.lightened(0.2)
+	gradient.set_offset(0, 0.0)
 	gradient.set_color(0, Color(bright.r, bright.g, bright.b, 0.0))
-	gradient.set_color(0.2, Color(bright.r, bright.g, bright.b, 0.8))
+	gradient.add_point(0.2, Color(bright.r, bright.g, bright.b, 0.8))
+	gradient.set_offset(1, 1.0)
 	gradient.set_color(1, Color(marble_color.r * 0.5, marble_color.g * 0.5, marble_color.b * 0.5, 0.0))
 	return gradient
 
 func create_impact_gradient() -> Gradient:
 	"""Create impact spark gradient (no white)"""
 	var gradient = Gradient.new()
+	gradient.set_offset(0, 0.0)
 	gradient.set_color(0, Color(1.0, 0.9, 0.5, 0.9))  # Warm golden
-	gradient.set_color(0.3, Color(1.0, 0.7, 0.3, 0.8))  # Orange
-	gradient.set_color(0.7, Color(0.8, 0.4, 0.2, 0.4))  # Rust
+	gradient.add_point(0.3, Color(1.0, 0.7, 0.3, 0.8))  # Orange
+	gradient.add_point(0.7, Color(0.8, 0.4, 0.2, 0.4))  # Rust
+	gradient.set_offset(1, 1.0)
 	gradient.set_color(1, Color(0.4, 0.2, 0.1, 0.0))  # Fade
 	return gradient
 

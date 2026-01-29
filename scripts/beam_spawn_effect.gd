@@ -159,10 +159,12 @@ func create_color_ramp() -> Gradient:
 	"""Create a color gradient for beam particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
 	# Start with transparent cyan-blue
+	gradient.set_offset(0, 0.0)
 	gradient.set_color(0, Color(0.4, 0.7, 0.95, 0.0))
 	# Peak brightness (cyan-blue, not white)
-	gradient.set_color(0.5, Color(0.5, 0.8, 0.95, 0.9))
+	gradient.add_point(0.5, Color(0.5, 0.8, 0.95, 0.9))
 	# Fade to transparent blue
+	gradient.set_offset(1, 1.0)
 	gradient.set_color(1, Color(0.3, 0.6, 0.9, 0.0))
 	return gradient
 
@@ -170,10 +172,12 @@ func create_glow_color_ramp() -> Gradient:
 	"""Create a color gradient for glow particles (simplified for HTML5)"""
 	var gradient = Gradient.new()
 	# Start transparent cyan
+	gradient.set_offset(0, 0.0)
 	gradient.set_color(0, Color(0.5, 0.75, 0.95, 0.0))
 	# Peak brightness (soft cyan, not white)
-	gradient.set_color(0.4, Color(0.6, 0.85, 0.95, 0.7))
+	gradient.add_point(0.4, Color(0.6, 0.85, 0.95, 0.7))
 	# Fade to transparent blue
+	gradient.set_offset(1, 1.0)
 	gradient.set_color(1, Color(0.4, 0.7, 0.9, 0.0))
 	return gradient
 
