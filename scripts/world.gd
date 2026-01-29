@@ -17,8 +17,10 @@ const LobbyUI = preload("res://lobby_ui.tscn")
 # Profile and Friends UI
 var profile_panel: PanelContainer = null
 var friends_panel: PanelContainer = null
+var customize_panel: PanelContainer = null
 const ProfilePanelScript = preload("res://scripts/ui/profile_panel.gd")
 const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
+const CustomizePanelScript = preload("res://scripts/ui/customize_panel.gd")
 
 # Countdown UI (created dynamically)
 var countdown_label: Label = null
@@ -75,6 +77,9 @@ var bot_count_selected: int = 3
 # Level configuration dialog state
 var level_config_dialog_closed: bool = false
 var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
+
+# Player marble customization
+var selected_marble_color_index: int = 0  # Default to first color (Ruby Red)
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
 var level_config_video_walls: bool = false  # Enable video on perimeter walls
 
@@ -94,6 +99,9 @@ var skybox_generator: Node3D = null
 var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 
 func _ready() -> void:
+	# Load saved marble color preference from Global settings
+	selected_marble_color_index = Global.marble_color_index
+
 	# Generate menu preview level (floor + video walls only)
 	generate_procedural_level(false, 2, false, true)
 
@@ -119,6 +127,9 @@ func _ready() -> void:
 
 	# Initialize friends panel
 	_create_friends_panel()
+
+	# Initialize customize panel
+	_create_customize_panel()
 
 	# Initialize marble preview (replaces dolly camera)
 	_create_marble_preview()
@@ -924,6 +935,8 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 	# Add local player without multiplayer
 	var local_player: Node = Player.instantiate()
 	local_player.name = "1"
+	# Apply custom marble color from customize panel
+	local_player.custom_color_index = selected_marble_color_index
 	add_child(local_player)
 	local_player.add_to_group("players")
 
@@ -995,8 +1008,14 @@ func _on_item_shop_pressed() -> void:
 	DebugLogger.dlog(DebugLogger.Category.UI, "Item Shop - Not implemented yet")
 
 func _on_garage_pressed() -> void:
-	"""Garage placeholder"""
-	DebugLogger.dlog(DebugLogger.Category.UI, "Garage - Not implemented yet")
+	"""Show customize panel"""
+	if customize_panel:
+		customize_panel.show_panel()
+	if main_menu:
+		main_menu.hide()
+	# Show blur to focus attention on the panel
+	if has_node("Menu/Blur"):
+		$Menu/Blur.show()
 
 func _on_profile_pressed() -> void:
 	"""Show profile panel"""
@@ -1120,6 +1139,12 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
 	player.name = str(peer_id)
+
+	# Apply custom marble color for local player from customize panel
+	var is_local_player = (peer_id == multiplayer.get_unique_id())
+	if is_local_player:
+		player.custom_color_index = selected_marble_color_index
+
 	add_child(player)
 
 	# Add to players group for AI targeting
@@ -2248,6 +2273,244 @@ func _create_friends_panel() -> void:
 	friends_panel.visible = false
 
 	DebugLogger.dlog(DebugLogger.Category.UI, "Friends panel created")
+
+func _create_customize_panel() -> void:
+	"""Create the customize panel UI following style guide"""
+	# Create the panel
+	customize_panel = PanelContainer.new()
+	customize_panel.name = "CustomizePanel"
+	customize_panel.set_script(CustomizePanelScript)
+
+	# Center the panel (700x650px for marble preview + color grid)
+	customize_panel.set_anchors_preset(Control.PRESET_CENTER)
+	customize_panel.anchor_left = 0.5
+	customize_panel.anchor_right = 0.5
+	customize_panel.anchor_top = 0.5
+	customize_panel.anchor_bottom = 0.5
+	customize_panel.offset_left = -350
+	customize_panel.offset_right = 350
+	customize_panel.offset_top = -325
+	customize_panel.offset_bottom = 325
+	customize_panel.custom_minimum_size = Vector2(700, 650)
+
+	# Apply panel style from style guide
+	var panel_style = StyleBoxFlat.new()
+	panel_style.bg_color = Color(0, 0, 0, 0.85)
+	panel_style.set_corner_radius_all(12)
+	panel_style.border_color = Color(0.3, 0.7, 1, 0.6)
+	panel_style.set_border_width_all(3)
+	customize_panel.add_theme_stylebox_override("panel", panel_style)
+
+	# 25px margins as per style guide
+	var margin = MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 25)
+	margin.add_theme_constant_override("margin_right", 25)
+	margin.add_theme_constant_override("margin_top", 25)
+	margin.add_theme_constant_override("margin_bottom", 25)
+	customize_panel.add_child(margin)
+
+	var vbox = VBoxContainer.new()
+	vbox.name = "VBox"
+	vbox.add_theme_constant_override("separation", 15)
+	margin.add_child(vbox)
+
+	# Header with title
+	var header = HBoxContainer.new()
+	header.name = "Header"
+	vbox.add_child(header)
+
+	var title_label = Label.new()
+	title_label.text = "CUSTOMIZE"
+	title_label.add_theme_font_size_override("font_size", 32)
+	title_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title_label)
+
+	# Close button with style
+	var close_btn = Button.new()
+	close_btn.name = "CloseButton"
+	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(50, 50)
+	_apply_button_style(close_btn, 20)
+	close_btn.pressed.connect(_on_customize_panel_close_pressed)
+	header.add_child(close_btn)
+
+	# Separator
+	var sep1 = HSeparator.new()
+	vbox.add_child(sep1)
+
+	# Create HBox for preview and colors
+	var content_hbox = HBoxContainer.new()
+	content_hbox.add_theme_constant_override("separation", 20)
+	content_hbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(content_hbox)
+
+	# Left side: Marble Preview using SubViewportContainer
+	var preview_container = VBoxContainer.new()
+	preview_container.add_theme_constant_override("separation", 10)
+	preview_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_hbox.add_child(preview_container)
+
+	var preview_label = Label.new()
+	preview_label.text = "PREVIEW"
+	preview_label.add_theme_font_size_override("font_size", 20)
+	preview_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preview_container.add_child(preview_label)
+
+	# SubViewportContainer for 3D marble preview
+	var viewport_container = SubViewportContainer.new()
+	viewport_container.custom_minimum_size = Vector2(280, 280)
+	viewport_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	viewport_container.stretch = true
+
+	# Style the viewport container background
+	var viewport_panel = PanelContainer.new()
+	var viewport_style = StyleBoxFlat.new()
+	viewport_style.bg_color = Color(0.05, 0.05, 0.1, 1)
+	viewport_style.set_corner_radius_all(8)
+	viewport_style.border_color = Color(0.3, 0.7, 1, 0.4)
+	viewport_style.set_border_width_all(2)
+	viewport_panel.add_theme_stylebox_override("panel", viewport_style)
+	preview_container.add_child(viewport_panel)
+
+	viewport_panel.add_child(viewport_container)
+
+	# Create SubViewport for 3D rendering
+	var sub_viewport = SubViewport.new()
+	sub_viewport.size = Vector2i(280, 280)
+	sub_viewport.transparent_bg = false
+	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	sub_viewport.own_world_3d = true
+	viewport_container.add_child(sub_viewport)
+
+	# Create 3D scene inside SubViewport
+	var scene_root = Node3D.new()
+	scene_root.name = "PreviewScene"
+	sub_viewport.add_child(scene_root)
+
+	# Create the marble preview mesh
+	var marble_mesh = MeshInstance3D.new()
+	marble_mesh.name = "PreviewMarble"
+	marble_mesh.mesh = SphereMesh.new()
+	marble_mesh.mesh.radius = 0.5
+	marble_mesh.mesh.height = 1.0
+	marble_mesh.mesh.radial_segments = 32
+	marble_mesh.mesh.rings = 16
+	marble_mesh.position = Vector3(0, 0, 0)
+	scene_root.add_child(marble_mesh)
+
+	# Create camera for the preview
+	var preview_cam = Camera3D.new()
+	preview_cam.name = "PreviewCamera"
+	preview_cam.position = Vector3(0, 0.3, 1.8)
+	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
+	scene_root.add_child(preview_cam)
+	preview_cam.current = true
+
+	# Create lighting for the preview
+	var light = DirectionalLight3D.new()
+	light.name = "PreviewLight"
+	light.position = Vector3(2, 3, 2)
+	light.look_at(Vector3(0, 0, 0), Vector3.UP)
+	light.light_energy = 1.2
+	scene_root.add_child(light)
+
+	# Add ambient light
+	var ambient_light = DirectionalLight3D.new()
+	ambient_light.name = "AmbientLight"
+	ambient_light.position = Vector3(-2, 1, -2)
+	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
+	ambient_light.light_energy = 0.4
+	scene_root.add_child(ambient_light)
+
+	# Store references in the panel script
+	customize_panel.preview_viewport = sub_viewport
+	customize_panel.preview_marble_mesh = marble_mesh
+	customize_panel.preview_camera = preview_cam
+	customize_panel.preview_light = light
+
+	# Color name label
+	var color_name = Label.new()
+	color_name.name = "ColorName"
+	color_name.text = "Ruby Red"
+	color_name.add_theme_font_size_override("font_size", 18)
+	color_name.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	color_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	preview_container.add_child(color_name)
+	customize_panel.color_name_label = color_name
+
+	# Right side: Color selection grid
+	var colors_container = VBoxContainer.new()
+	colors_container.add_theme_constant_override("separation", 10)
+	colors_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_hbox.add_child(colors_container)
+
+	var colors_label = Label.new()
+	colors_label.text = "COLORS"
+	colors_label.add_theme_font_size_override("font_size", 20)
+	colors_label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	colors_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	colors_container.add_child(colors_label)
+
+	# Scroll container for color grid (in case there are many colors)
+	var color_scroll = ScrollContainer.new()
+	color_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	color_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	colors_container.add_child(color_scroll)
+
+	# Color grid (6 columns x 5 rows = 30 slots, we have 27 colors)
+	var color_grid = GridContainer.new()
+	color_grid.name = "ColorGrid"
+	color_grid.columns = 5
+	color_grid.add_theme_constant_override("h_separation", 8)
+	color_grid.add_theme_constant_override("v_separation", 8)
+	color_scroll.add_child(color_grid)
+	customize_panel.color_grid = color_grid
+
+	# Set up the color grid with buttons
+	customize_panel.setup_color_grid()
+
+	# Initialize with saved color preference
+	customize_panel.set_selected_color(selected_marble_color_index)
+
+	# Set mouse filter to stop clicks from going through
+	customize_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Connect close button reference
+	customize_panel.close_button = close_btn
+
+	# Add panel to Menu CanvasLayer (same as options_menu and pause_menu)
+	if has_node("Menu"):
+		get_node("Menu").add_child(customize_panel)
+	else:
+		add_child(customize_panel)
+
+	# Start hidden
+	customize_panel.visible = false
+
+	# Connect color selected signal to update player's preference
+	customize_panel.color_selected.connect(_on_marble_color_selected)
+
+	DebugLogger.dlog(DebugLogger.Category.UI, "Customize panel created")
+
+func _on_customize_panel_close_pressed() -> void:
+	"""Handle customize panel close"""
+	if customize_panel:
+		customize_panel.hide()
+	if main_menu:
+		main_menu.show()
+	# Hide blur
+	if has_node("Menu/Blur"):
+		$Menu/Blur.hide()
+
+func _on_marble_color_selected(color_index: int) -> void:
+	"""Handle marble color selection - store player preference"""
+	DebugLogger.dlog(DebugLogger.Category.UI, "Marble color selected: %d" % color_index)
+	# Store the selected color for spawning (both locally and in Global for persistence)
+	selected_marble_color_index = color_index
+	Global.marble_color_index = color_index
+	Global.save_settings()
 
 func _create_marble_preview() -> void:
 	"""Create marble preview for main menu - actual player marble"""

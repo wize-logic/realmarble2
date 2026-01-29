@@ -7,6 +7,7 @@ extends Node
 var player_name: String = "Player"
 var sensitivity: float = 0.005
 var controller_sensitivity: float = 0.010
+var marble_color_index: int = 0  # Selected marble color (0 = Ruby Red)
 
 # Game settings
 var music_directory: String = _get_default_music_directory()
@@ -35,6 +36,7 @@ func save_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 
 	config.set_value("player", "name", player_name)
+	config.set_value("player", "marble_color", marble_color_index)
 	config.set_value("settings", "sensitivity", sensitivity)
 	config.set_value("settings", "controller_sensitivity", controller_sensitivity)
 	config.set_value("settings", "music_directory", music_directory)
@@ -53,6 +55,7 @@ func load_settings() -> void:
 		return
 
 	player_name = config.get_value("player", "name", "Player")
+	marble_color_index = config.get_value("player", "marble_color", 0)
 	sensitivity = config.get_value("settings", "sensitivity", 0.005)
 	controller_sensitivity = config.get_value("settings", "controller_sensitivity", 0.010)
 	music_directory = config.get_value("settings", "music_directory", _get_default_music_directory())
