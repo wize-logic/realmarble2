@@ -20,6 +20,8 @@ var customize_panel: PanelContainer = null
 const ProfilePanelScript = preload("res://scripts/ui/profile_panel.gd")
 const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
 const CustomizePanelScript = preload("res://scripts/ui/customize_panel.gd")
+const MarbleMaterialManagerScript = preload("res://scripts/marble_material_manager.gd")
+var marble_material_manager = MarbleMaterialManagerScript.new()
 
 # Countdown UI (created dynamically)
 var countdown_label: Label = null
@@ -1057,9 +1059,18 @@ func add_player(peer_id: int) -> void:
 	var player: Node = Player.instantiate()
 	player.name = str(peer_id)
 
-	# Apply custom marble color for local player from customize panel
+	# Get color from MultiplayerManager's synced player data
+	var player_color: int = -1
+	if MultiplayerManager.players.has(peer_id):
+		var player_info: Dictionary = MultiplayerManager.players[peer_id]
+		if player_info.has("color_index"):
+			player_color = player_info["color_index"]
+
+	# Apply the synced color (or local selection as fallback for local player)
 	var is_local_player = (peer_id == multiplayer.get_unique_id())
-	if is_local_player:
+	if player_color >= 0:
+		player.custom_color_index = player_color
+	elif is_local_player:
 		player.custom_color_index = selected_marble_color_index
 
 	add_child(player)
@@ -1860,6 +1871,10 @@ func spawn_bot() -> void:
 
 	var bot: Node = Player.instantiate()
 	bot.name = str(bot_id)
+
+	# Assign random color to bot
+	bot.custom_color_index = randi() % 28  # 28 color schemes available
+
 	add_child(bot)
 
 	# Update bot spawns from level generator
@@ -2369,6 +2384,20 @@ func _create_customize_panel() -> void:
 	scene_root.name = "PreviewScene"
 	sub_viewport.add_child(scene_root)
 
+	# Add WorldEnvironment for proper shader rendering in isolated viewport
+	var world_env = WorldEnvironment.new()
+	world_env.name = "PreviewWorldEnvironment"
+	var env = Environment.new()
+	env.background_mode = Environment.BG_COLOR
+	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.4, 0.4, 0.5)  # Soft ambient for marble visibility
+	env.ambient_light_energy = 0.8
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_white = 6.0
+	world_env.environment = env
+	scene_root.add_child(world_env)
+
 	# Create the marble preview mesh
 	var marble_mesh = MeshInstance3D.new()
 	marble_mesh.name = "PreviewMarble"
@@ -2492,6 +2521,12 @@ func _on_marble_color_selected(color_index: int) -> void:
 	Global.marble_color_index = color_index
 	Global.save_settings()
 
+	# Update main menu marble preview with new color
+	if marble_preview and is_instance_valid(marble_preview):
+		var material = marble_material_manager.create_marble_material(color_index)
+		marble_preview.material_override = material
+		DebugLogger.dlog(DebugLogger.Category.UI, "Updated main menu preview with color: %d" % color_index)
+
 func _create_marble_preview() -> void:
 	"""Create marble preview for main menu - actual player marble"""
 	# Create a container for the marble preview
@@ -2532,6 +2567,9 @@ func _create_marble_preview() -> void:
 	var crosshair = marble.get_node_or_null("TextureRect")
 	if crosshair:
 		crosshair.queue_free()  # Remove crosshair UI
+
+	# Set the saved color before adding to tree (so _ready uses correct color)
+	marble.custom_color_index = selected_marble_color_index
 
 	preview_container.add_child(marble)
 	marble_preview = marble.get_node_or_null("MeshInstance3D")
