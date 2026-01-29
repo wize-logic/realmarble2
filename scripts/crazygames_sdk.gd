@@ -116,7 +116,8 @@ func _on_crazygames_event(event_type: String, data_json: String) -> void:
 		"account_linked":
 			account_linked.emit(data.get("success", false))
 		"user_token_received":
-			user_token_received.emit(data.get("success", false), data.get("token", ""))
+			var token = data.get("token", "")
+			user_token_received.emit(data.get("success", false), "" if token == null else token)
 		"system_info_loaded":
 			system_info = data
 			system_info_loaded.emit(system_info)
@@ -154,9 +155,12 @@ func _on_crazygames_event(event_type: String, data_json: String) -> void:
 
 		# Invite events
 		"invite_link_result":
-			invite_link_result.emit(data.get("success", false), data.get("link", ""))
+			var link = data.get("link", "")
+			invite_link_result.emit(data.get("success", false), "" if link == null else link)
 		"invite_param_result":
-			invite_param_result.emit(data.get("key", ""), data.get("value", ""))
+			var param_key = data.get("key", "")
+			var param_value = data.get("value", "")
+			invite_param_result.emit("" if param_key == null else param_key, "" if param_value == null else param_value)
 		"invite_button_shown":
 			invite_button_shown.emit(data.get("success", false))
 
@@ -180,7 +184,8 @@ func _on_crazygames_event(event_type: String, data_json: String) -> void:
 
 		# In-Game Purchases events
 		"xsolla_token_result":
-			xsolla_token_result.emit(data.get("success", false), data.get("token", ""))
+			var xsolla_token = data.get("token", "")
+			xsolla_token_result.emit(data.get("success", false), "" if xsolla_token == null else xsolla_token)
 		"track_order_result":
 			track_order_result.emit(data.get("success", false))
 
@@ -482,7 +487,7 @@ func _js_call(js_code: String) -> void:
 
 ## Escape string for safe JavaScript injection
 func _escape_js(value: String) -> String:
-	return value.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"").replace("\n", "\\n")
+	return value.replace("\\", "\\\\").replace("'", "\\'").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
 
 # =====================
 # Mock Data (for testing outside CrazyGames)

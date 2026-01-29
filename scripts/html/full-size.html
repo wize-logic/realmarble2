@@ -496,11 +496,11 @@ body {
 					try {
 						var link = this.sdk.game.inviteLink(params || {});
 						console.log('Invite link generated:', link);
-						this.notifyGodot('invite_link_result', {success: true, link: link});
+						this.notifyGodot('invite_link_result', {success: !!link, link: link || ''});
 						return link;
 					} catch (error) {
 						console.error('Failed to generate invite link:', error);
-						this.notifyGodot('invite_link_result', {success: false, error: error.message});
+						this.notifyGodot('invite_link_result', {success: false, error: error.message || ''});
 						return null;
 					}
 				},
@@ -509,7 +509,7 @@ body {
 					if (!this.initialized || !this.sdk.game) return null;
 					try {
 						var value = this.sdk.game.getInviteParam(key);
-						this.notifyGodot('invite_param_result', {key: key, value: value});
+						this.notifyGodot('invite_param_result', {key: key || '', value: value || ''});
 						return value;
 					} catch (error) {
 						console.error('Failed to get invite param:', error);
