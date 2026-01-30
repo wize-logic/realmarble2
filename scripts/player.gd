@@ -184,6 +184,18 @@ var fall_camera_position: Vector3 = Vector3.ZERO
 var god_mode: bool = false
 
 # ============================================================================
+# MULTIPLAYER POSITION SYNC
+# ============================================================================
+# CRITICAL FIX: Periodic position synchronization to prevent desync
+# Bots and remote players need their positions broadcast to all clients
+
+const POSITION_SYNC_INTERVAL: float = 0.1  # Sync position 10 times per second
+var position_sync_timer: float = 0.0
+var target_sync_position: Vector3 = Vector3.ZERO  # Position to interpolate to (for non-authority)
+var target_sync_velocity: Vector3 = Vector3.ZERO  # Velocity for prediction
+var has_received_sync: bool = false  # True after first sync received
+
+# ============================================================================
 # DEBUG HELPERS
 # ============================================================================
 
@@ -194,6 +206,53 @@ func get_entity_id() -> int:
 func is_bot() -> bool:
 	"""Check if this entity is a bot"""
 	return get_entity_id() >= 9000
+
+# ============================================================================
+# MULTIPLAYER POSITION SYNC METHODS
+# ============================================================================
+
+func _sync_position_to_clients(delta: float) -> void:
+	"""Called by authority to periodically broadcast position to all clients"""
+	if not multiplayer.has_multiplayer_peer():
+		return
+
+	# Only the authority should broadcast position
+	if not is_multiplayer_authority():
+		return
+
+	position_sync_timer += delta
+	if position_sync_timer >= POSITION_SYNC_INTERVAL:
+		position_sync_timer = 0.0
+		# Broadcast position and velocity to all clients
+		_receive_position_sync.rpc(global_position, linear_velocity)
+
+@rpc("authority", "unreliable_ordered", "call_remote")
+func _receive_position_sync(pos: Vector3, vel: Vector3) -> void:
+	"""Called on non-authority clients to receive position updates"""
+	target_sync_position = pos
+	target_sync_velocity = vel
+	has_received_sync = true
+
+func _apply_position_sync(delta: float) -> void:
+	"""Called by non-authority to interpolate toward synced position"""
+	if not has_received_sync:
+		return
+
+	# Predict position based on velocity
+	var predicted_pos: Vector3 = target_sync_position + target_sync_velocity * delta
+
+	# Interpolate toward predicted position (smooth correction)
+	var distance: float = global_position.distance_to(predicted_pos)
+
+	# If too far off, snap to position (teleport threshold)
+	if distance > 5.0:
+		global_position = predicted_pos
+		linear_velocity = target_sync_velocity
+	else:
+		# Smooth interpolation for small corrections
+		global_position = global_position.lerp(predicted_pos, 10.0 * delta)
+		# Also sync velocity for better physics prediction
+		linear_velocity = linear_velocity.lerp(target_sync_velocity, 5.0 * delta)
 
 # ============================================================================
 # LIFECYCLE
@@ -987,9 +1046,15 @@ func _physics_process(delta: float) -> void:
 	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
+	# MULTIPLAYER POSITION SYNC FIX: Handle position synchronization
 	if multiplayer.multiplayer_peer != null:
-		if not is_multiplayer_authority():
-			return
+		if is_multiplayer_authority():
+			# Authority broadcasts position to all clients
+			_sync_position_to_clients(delta)
+		else:
+			# Non-authority applies interpolated position from sync
+			_apply_position_sync(delta)
+			return  # Non-authority doesn't process physics locally
 
 	# Check if marble is on ground using raycast
 	check_ground()
@@ -1361,6 +1426,19 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 	"""Receive damage from a specific player"""
 	if god_mode:
 		return  # Immune to damage
+
+	# MULTIPLAYER SYNC FIX: Validate damage by checking attacker distance
+	# This prevents invalid damage from desync or exploits
+	var world: Node = get_parent()
+	if world and multiplayer.has_multiplayer_peer():
+		var attacker: Node = world.get_node_or_null(str(attacker_id))
+		if attacker and is_instance_valid(attacker):
+			var distance: float = global_position.distance_to(attacker.global_position)
+			# Maximum valid attack distance (dash attack + hitbox + network tolerance)
+			const MAX_VALID_ATTACK_DISTANCE: float = 15.0
+			if distance > MAX_VALID_ATTACK_DISTANCE:
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "DAMAGE REJECTED: Attacker %d too far (%.1f > %.1f)" % [attacker_id, distance, MAX_VALID_ATTACK_DISTANCE], false, get_entity_id())
+				return  # Reject damage from too far
 
 	# Track last attacker for knockoff kills
 	last_attacker_id = attacker_id

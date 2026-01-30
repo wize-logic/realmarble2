@@ -161,6 +161,15 @@ var cached_space_state: PhysicsDirectSpaceState3D = null
 var last_seen_targets: Dictionary = {}
 
 # ============================================================================
+# SEEDED RNG FOR MULTIPLAYER SYNC
+# ============================================================================
+# CRITICAL: All bot randomness must use this seeded RNG to ensure identical
+# behavior across all clients in multiplayer. Using global randf()/randi()
+# causes desync because each client generates different random numbers.
+
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
+# ============================================================================
 # PLATFORM NAVIGATION
 # ============================================================================
 
@@ -187,27 +196,31 @@ func _ready() -> void:
 		push_error("ERROR: BotAI could not find parent bot!")
 		return
 
+	# CRITICAL MULTIPLAYER FIX: Seed RNG for deterministic behavior across all clients
+	# Uses level_seed + bot entity ID to ensure each bot has unique but consistent behavior
+	_initialize_seeded_rng()
+
 	wander_target = bot.global_position
 	last_position = bot.global_position
 	target_stuck_position = bot.global_position
 
-	# Randomize aggression for personality variety
-	aggression_level = randf_range(0.6, 0.9)
+	# Randomize aggression for personality variety (using seeded RNG)
+	aggression_level = rng.randf_range(0.6, 0.9)
 
 	# Initialize personality traits
 	initialize_personality()
 
-	# Stagger timer initialization to prevent simultaneous processing
-	cache_refresh_timer = randf_range(0.0, CACHE_REFRESH_INTERVAL)
-	platform_check_timer = randf_range(0.0, PLATFORM_CHECK_INTERVAL)
-	orb_check_timer = randf_range(0.0, 1.0)
-	player_search_timer = randf_range(0.0, 0.5)
-	vision_update_timer = randf_range(0.0, VISION_UPDATE_INTERVAL)
-	edge_check_timer = randf_range(0.0, EDGE_CHECK_INTERVAL)
-	player_avoidance_timer = randf_range(0.0, PLAYER_AVOIDANCE_CHECK_INTERVAL)
-	ability_check_timer = randf_range(0.0, 1.0)  # NEW
-	bot_repulsion_timer = randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
-	ult_check_timer = randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
+	# Stagger timer initialization to prevent simultaneous processing (using seeded RNG)
+	cache_refresh_timer = rng.randf_range(0.0, CACHE_REFRESH_INTERVAL)
+	platform_check_timer = rng.randf_range(0.0, PLATFORM_CHECK_INTERVAL)
+	orb_check_timer = rng.randf_range(0.0, 1.0)
+	player_search_timer = rng.randf_range(0.0, 0.5)
+	vision_update_timer = rng.randf_range(0.0, VISION_UPDATE_INTERVAL)
+	edge_check_timer = rng.randf_range(0.0, EDGE_CHECK_INTERVAL)
+	player_avoidance_timer = rng.randf_range(0.0, PLAYER_AVOIDANCE_CHECK_INTERVAL)
+	ability_check_timer = rng.randf_range(0.0, 1.0)  # NEW
+	bot_repulsion_timer = rng.randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
+	ult_check_timer = rng.randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
 
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
@@ -217,6 +230,26 @@ func _ready() -> void:
 	call_deferred("create_bot_camera")
 
 	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Initialized - Skill: %.2f, Aggression: %.2f, Strategy: %s" % [get_ai_type(), bot_skill, aggression_level, strategic_preference], false, get_entity_id())
+
+func _initialize_seeded_rng() -> void:
+	"""Initialize seeded RNG for deterministic multiplayer behavior"""
+	# Get level seed from MultiplayerManager room settings, or use a default
+	var level_seed: int = 0
+	if MultiplayerManager and MultiplayerManager.room_settings.has("level_seed"):
+		level_seed = MultiplayerManager.room_settings["level_seed"]
+
+	# If no level_seed available (practice mode), get from World's level generator
+	if level_seed == 0:
+		var world: Node = get_tree().get_root().get_node_or_null("World")
+		if world and world.level_generator and "level_seed" in world.level_generator:
+			level_seed = world.level_generator.level_seed
+
+	# Combine level_seed with bot's entity ID for unique but deterministic seed per bot
+	var bot_id: int = get_entity_id()
+	var combined_seed: int = level_seed ^ (bot_id * 31337)  # XOR with prime multiplied ID
+
+	rng.seed = combined_seed
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] RNG seeded with %d (level_seed=%d, bot_id=%d)" % [get_ai_type(), combined_seed, level_seed, bot_id], false, get_entity_id())
 
 # ============================================================================
 # VIRTUAL METHODS (Override in subclasses)
@@ -459,29 +492,29 @@ func update_timers(delta: float) -> void:
 # ============================================================================
 
 func initialize_personality() -> void:
-	"""Initialize bot personality traits (OpenArena-inspired)"""
-	bot_skill = randf_range(0.5, 0.95)
-	aim_accuracy = randf_range(0.70, 0.95)
-	turn_speed_factor = randf_range(0.8, 1.2)
-	caution_level = randf_range(0.2, 0.8)
+	"""Initialize bot personality traits (OpenArena-inspired) - uses seeded RNG for multiplayer sync"""
+	bot_skill = rng.randf_range(0.5, 0.95)
+	aim_accuracy = rng.randf_range(0.70, 0.95)
+	turn_speed_factor = rng.randf_range(0.8, 1.2)
+	caution_level = rng.randf_range(0.2, 0.8)
 
-	var preference_roll: float = randf()
+	var preference_roll: float = rng.randf()
 	if preference_roll < 0.25:
 		strategic_preference = "aggressive"
-		aggression_level = randf_range(0.75, 0.95)
-		caution_level = randf_range(0.2, 0.4)
+		aggression_level = rng.randf_range(0.75, 0.95)
+		caution_level = rng.randf_range(0.2, 0.4)
 	elif preference_roll < 0.5:
 		strategic_preference = "defensive"
-		aggression_level = randf_range(0.5, 0.7)
-		caution_level = randf_range(0.6, 0.85)
+		aggression_level = rng.randf_range(0.5, 0.7)
+		caution_level = rng.randf_range(0.6, 0.85)
 	elif preference_roll < 0.75:
 		strategic_preference = "support"
-		aggression_level = randf_range(0.55, 0.75)
-		caution_level = randf_range(0.5, 0.7)
+		aggression_level = rng.randf_range(0.55, 0.75)
+		caution_level = rng.randf_range(0.5, 0.7)
 	else:
 		strategic_preference = "balanced"
-		aggression_level = randf_range(0.6, 0.85)
-		caution_level = randf_range(0.4, 0.6)
+		aggression_level = rng.randf_range(0.6, 0.85)
+		caution_level = rng.randf_range(0.4, 0.6)
 
 # ============================================================================
 # CACHING SYSTEMS
@@ -714,13 +747,13 @@ func check_if_stuck() -> void:
 
 		if consecutive_stuck_checks >= 3:
 			is_stuck = true
-			unstuck_timer = randf_range(0.8, 1.5)
+			unstuck_timer = rng.randf_range(0.8, 1.5)
 
-			# Set random escape direction
+			# Set random escape direction (using seeded RNG)
 			var opposite_dir: Vector3 = bot.global_transform.basis.z
 			opposite_dir.y = 0
 			opposite_dir = opposite_dir.normalized()
-			var random_side: float = 1.0 if randf() > 0.5 else -1.0
+			var random_side: float = 1.0 if rng.randf() > 0.5 else -1.0
 			var perpendicular: Vector3 = bot.global_transform.basis.x * random_side
 			perpendicular.y = 0
 			perpendicular = perpendicular.normalized()
@@ -753,13 +786,13 @@ func handle_stuck_under_terrain(delta: float) -> void:
 		# Trigger unstuck if not already
 		if not is_stuck:
 			is_stuck = true
-			unstuck_timer = randf_range(0.8, 1.5)
+			unstuck_timer = rng.randf_range(0.8, 1.5)
 			consecutive_stuck_checks = max(consecutive_stuck_checks, 3)
 
 			var opposite_dir: Vector3 = bot.global_transform.basis.z
 			opposite_dir.y = 0
 			opposite_dir = opposite_dir.normalized()
-			var random_side: float = 1.0 if randf() > 0.5 else -1.0
+			var random_side: float = 1.0 if rng.randf() > 0.5 else -1.0
 			var perpendicular: Vector3 = bot.global_transform.basis.x * random_side
 			perpendicular.y = 0
 			perpendicular = perpendicular.normalized()
@@ -839,9 +872,9 @@ func teleport_to_safe_position() -> void:
 	if not world:
 		return
 
-	# Try to use world spawns
+	# Try to use world spawns (using seeded RNG for deterministic spawn selection)
 	if "spawns" in world and world.spawns.size() > 0:
-		var spawn_pos: Vector3 = world.spawns[randi() % world.spawns.size()]
+		var spawn_pos: Vector3 = world.spawns[rng.randi() % world.spawns.size()]
 		bot.global_position = spawn_pos
 		bot.linear_velocity = Vector3.ZERO
 		bot.angular_velocity = Vector3.ZERO
@@ -1218,31 +1251,31 @@ func count_bots_on_platform(platform_data: Dictionary) -> int:
 # ============================================================================
 
 func do_wander(delta: float) -> void:
-	"""Wander behavior with hotspot bias"""
+	"""Wander behavior with hotspot bias - uses seeded RNG for multiplayer sync"""
 	if wander_timer <= 0.0:
 		# NEW: Bias wander toward arena hotspots (orbs, abilities, high ground)
-		var use_hotspot: bool = randf() < 0.6  # 60% chance to wander toward hotspot
+		var use_hotspot: bool = rng.randf() < 0.6  # 60% chance to wander toward hotspot
 
 		if use_hotspot and (target_orb or target_ability):
 			# Wander toward collectible
 			var target_pos: Vector3 = target_orb.global_position if target_orb else target_ability.global_position
-			var offset: Vector3 = Vector3(randf_range(-10, 10), 0, randf_range(-10, 10))
+			var offset: Vector3 = Vector3(rng.randf_range(-10, 10), 0, rng.randf_range(-10, 10))
 			wander_target = target_pos + offset
 		elif use_hotspot and not cached_platforms.is_empty():
 			# Wander toward a random elevated platform
-			var random_platform: Dictionary = cached_platforms[randi() % cached_platforms.size()]
-			var offset: Vector3 = Vector3(randf_range(-8, 8), 0, randf_range(-8, 8))
+			var random_platform: Dictionary = cached_platforms[rng.randi() % cached_platforms.size()]
+			var offset: Vector3 = Vector3(rng.randf_range(-8, 8), 0, rng.randf_range(-8, 8))
 			wander_target = random_platform.position + offset
 		else:
 			# Random wander
 			var random_offset: Vector3 = Vector3(
-				randf_range(-wander_radius, wander_radius),
+				rng.randf_range(-wander_radius, wander_radius),
 				0,
-				randf_range(-wander_radius, wander_radius)
+				rng.randf_range(-wander_radius, wander_radius)
 			)
 			wander_target = bot.global_position + random_offset
 
-		wander_timer = randf_range(3.0, 6.0)
+		wander_timer = rng.randf_range(3.0, 6.0)
 
 	# Move toward wander target
 	move_towards(wander_target, 0.7)
@@ -1277,7 +1310,7 @@ func do_chase(delta: float) -> void:
 			var chase_ult_chance: float = 0.3 if enemy_health > 2 else 0.6
 			if strategic_preference == "aggressive":
 				chase_ult_chance += 0.2
-			if randf() < chase_ult_chance:
+			if rng.randf() < chase_ult_chance:
 				activate_bot_ult()
 
 func do_attack(delta: float) -> void:
@@ -1296,10 +1329,10 @@ func do_attack(delta: float) -> void:
 			has_lightning = true
 			optimal_distance = LIGHTNING_OPTIMAL_RANGE
 
-	# Strafe around target
+	# Strafe around target (using seeded RNG)
 	if strafe_timer <= 0.0:
-		strafe_direction = 1.0 if randf() > 0.5 else -1.0
-		strafe_timer = randf_range(1.0, 2.5)
+		strafe_direction = 1.0 if rng.randf() > 0.5 else -1.0
+		strafe_timer = rng.randf_range(1.0, 2.5)
 
 	# Calculate strafe position - stay at optimal range for current ability
 	var to_target: Vector3 = target_player.global_position - bot.global_position
@@ -1318,9 +1351,9 @@ func do_attack(delta: float) -> void:
 	move_towards(strafe_pos, 0.8)
 	rotate_to_target(target_player.global_position)
 
-	# Priority 1: Try to use ult if ready and good opportunity
+	# Priority 1: Try to use ult if ready and good opportunity (using seeded RNG)
 	if "ult_system" in bot and bot.ult_system and bot.ult_system.is_ready():
-		if distance < ULT_OPTIMAL_RANGE and randf() < aggression_level:
+		if distance < ULT_OPTIMAL_RANGE and rng.randf() < aggression_level:
 			activate_bot_ult()
 			return
 
@@ -1353,7 +1386,7 @@ func do_retreat(delta: float) -> void:
 	if not target_platform.is_empty():
 		move_towards(target_platform.position, 1.0)
 
-	# Desperation ult: If enemy is close while retreating, counter with ult
+	# Desperation ult: If enemy is close while retreating, counter with ult (using seeded RNG)
 	if "ult_system" in bot and bot.ult_system and bot.ult_system.is_ready():
 		if distance < ULT_OPTIMAL_RANGE * 0.8:
 			# Last resort counter-attack
@@ -1362,13 +1395,13 @@ func do_retreat(delta: float) -> void:
 				counter_chance = 0.7
 			elif strategic_preference == "defensive":
 				counter_chance = 0.4  # Even defensive bots will ult as last resort
-			if randf() < counter_chance:
+			if rng.randf() < counter_chance:
 				DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Desperation ult during retreat!" % get_ai_type(), false, get_entity_id())
 				activate_bot_ult()
 				return
 
 	# Use defensive abilities (including lightning to keep distance)
-	if bot.current_ability and randf() < 0.3:
+	if bot.current_ability and rng.randf() < 0.3:
 		use_ability_smart()
 
 	# Stop retreating after timer
@@ -1445,10 +1478,10 @@ func do_collect_ability(delta: float) -> void:
 
 func update_state() -> void:
 	"""Update state based on priorities"""
-	# PRIORITY 1: Retreat if low health and cautious
+	# PRIORITY 1: Retreat if low health and cautious (using seeded RNG)
 	if should_retreat() and retreat_cooldown <= 0.0:
 		if state != "RETREAT":
-			retreat_timer = randf_range(4.0, 7.0)
+			retreat_timer = rng.randf_range(4.0, 7.0)
 			change_state("RETREAT", "Low health retreat")
 		return
 
@@ -1508,7 +1541,7 @@ func update_state() -> void:
 # ============================================================================
 
 func should_retreat() -> bool:
-	"""NEW: Determine if bot should retreat (health <= 2 with caution modifier)"""
+	"""NEW: Determine if bot should retreat (health <= 2 with caution modifier) - uses seeded RNG"""
 	if not bot:
 		return false
 
@@ -1518,12 +1551,12 @@ func should_retreat() -> bool:
 	if bot_health <= 1:
 		return true
 
-	# Retreat if health is low and bot is cautious
+	# Retreat if health is low and bot is cautious (using seeded RNG)
 	if bot_health == 2:
 		# Caution level affects retreat threshold
 		# High caution (0.8) = 80% chance to retreat
 		# Low caution (0.2) = 20% chance to retreat
-		return randf() < caution_level
+		return rng.randf() < caution_level
 
 	return false
 
@@ -1568,7 +1601,7 @@ func use_ability_smart() -> void:
 	if "ability_name" in bot.current_ability:
 		ability_name = bot.current_ability.ability_name
 
-	# Lightning-specific logic: use when target is in range and visible
+	# Lightning-specific logic: use when target is in range and visible (using seeded RNG)
 	if ability_name == "Lightning":
 		if target_player and is_instance_valid(target_player):
 			var distance: float = bot.global_position.distance_to(target_player.global_position)
@@ -1576,18 +1609,18 @@ func use_ability_smart() -> void:
 			if distance < LIGHTNING_OPTIMAL_RANGE * 2.0:
 				# Higher chance to use lightning due to auto-aim
 				var use_chance: float = aggression_level + 0.15  # +15% for auto-aim
-				if randf() < use_chance:
+				if rng.randf() < use_chance:
 					bot.current_ability.use()
-					action_timer = randf_range(1.5, 2.5)  # Slightly longer cooldown
+					action_timer = rng.randf_range(1.5, 2.5)  # Slightly longer cooldown
 					return
 		return  # Don't use lightning without a target
 
-	# Default ability usage based on aggression
-	var should_use: bool = randf() < aggression_level
+	# Default ability usage based on aggression (using seeded RNG)
+	var should_use: bool = rng.randf() < aggression_level
 
 	if should_use:
 		bot.current_ability.use()
-		action_timer = randf_range(0.5, 1.5)
+		action_timer = rng.randf_range(0.5, 1.5)
 
 func try_use_ult() -> void:
 	"""Check and attempt to use ultimate attack"""
@@ -1673,7 +1706,7 @@ func should_use_ult() -> bool:
 	# Clamp to valid range
 	base_chance = clamp(base_chance, 0.0, 0.95)
 
-	return randf() < base_chance
+	return rng.randf() < base_chance
 
 func activate_bot_ult() -> void:
 	"""Activate the bot's ultimate attack"""
