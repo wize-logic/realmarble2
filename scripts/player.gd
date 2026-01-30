@@ -1452,7 +1452,6 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		ult_system.on_damage_taken(damage)
 
 	# Give attacker ult charge for dealing damage
-	var world: Node = get_parent()
 	if world:
 		var attacker: Node = world.get_node_or_null(str(attacker_id))
 		if attacker and "ult_system" in attacker and attacker.ult_system:
