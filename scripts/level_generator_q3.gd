@@ -57,6 +57,10 @@ extends Node3D
 @export var ambient_light_energy: float = 0.45  ## Ambient/fill light level
 @export var use_colored_lights: bool = true  ## Use varied colored lights per zone
 @export var light_color_variation: float = 0.15  ## Amount of color variation between rooms
+@export var fill_lights_enabled: bool = true  ## Add corner/edge fill lights in large rooms
+@export var fill_light_room_threshold: float = 25.0  ## Room size threshold for adding fill lights
+@export var fill_light_energy_factor: float = 0.5  ## Fill light energy relative to main light
+@export var edge_lights_room_threshold: float = 40.0  ## Room size threshold for edge lights
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -2237,6 +2241,65 @@ func generate_room_lights() -> void:
 
 		add_child(light)
 		lights.append(light)
+
+		# Add fill lights for large rooms to illuminate dark corners and edges
+		if fill_lights_enabled and room_size >= fill_light_room_threshold:
+			var fill_color: Color = light.light_color
+			var fill_energy: float = light_energy * fill_light_energy_factor
+			var fill_range: float = light_range * 0.7
+			var fill_height: float = room.height_offset + room_height * 0.6  # Lower than main light
+
+			# Calculate corner positions (inset from actual corners)
+			var corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.25
+			var corners: Array[Vector3] = [
+				Vector3(room.room.position.x + corner_inset, fill_height, room.room.position.y + corner_inset),
+				Vector3(room.room.position.x + room.room.size.x - corner_inset, fill_height, room.room.position.y + corner_inset),
+				Vector3(room.room.position.x + corner_inset, fill_height, room.room.position.y + room.room.size.y - corner_inset),
+				Vector3(room.room.position.x + room.room.size.x - corner_inset, fill_height, room.room.position.y + room.room.size.y - corner_inset),
+			]
+
+			for corner_idx in range(corners.size()):
+				var corner_light: OmniLight3D = OmniLight3D.new()
+				corner_light.name = "RoomFillLight_%d_%d" % [room.room_id, corner_idx]
+				corner_light.position = corners[corner_idx]
+				corner_light.light_color = fill_color
+				corner_light.light_energy = fill_energy
+				corner_light.omni_range = fill_range
+				corner_light.omni_attenuation = 1.0
+				corner_light.shadow_enabled = false
+				add_child(corner_light)
+				lights.append(corner_light)
+
+			# Add edge lights for very large rooms
+			if room_size >= edge_lights_room_threshold:
+				var edge_height: float = room.height_offset + room_height * 0.5
+				var edge_energy: float = fill_energy * 0.7
+				var edge_range: float = fill_range * 0.8
+
+				# Calculate midpoint positions along each edge
+				var mid_x: float = room.room.position.x + room.room.size.x / 2.0
+				var mid_z: float = room.room.position.y + room.room.size.y / 2.0
+				var edge_inset: float = 3.0  # Distance from wall
+
+				var edges: Array[Vector3] = [
+					Vector3(mid_x, edge_height, room.room.position.y + edge_inset),  # North edge
+					Vector3(mid_x, edge_height, room.room.position.y + room.room.size.y - edge_inset),  # South edge
+					Vector3(room.room.position.x + edge_inset, edge_height, mid_z),  # West edge
+					Vector3(room.room.position.x + room.room.size.x - edge_inset, edge_height, mid_z),  # East edge
+				]
+
+				for edge_idx in range(edges.size()):
+					var edge_light: OmniLight3D = OmniLight3D.new()
+					edge_light.name = "RoomEdgeLight_%d_%d" % [room.room_id, edge_idx]
+					edge_light.position = edges[edge_idx]
+					edge_light.light_color = fill_color
+					edge_light.light_energy = edge_energy
+					edge_light.omni_range = edge_range
+					edge_light.omni_attenuation = 1.0
+					edge_light.shadow_enabled = false
+					add_child(edge_light)
+					lights.append(edge_light)
+
 		room_idx += 1
 
 	# Add corridor lights with transitional colors
@@ -2269,7 +2332,7 @@ func generate_room_lights() -> void:
 			lights.append(light)
 			corridor_idx += 1
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights with colored variations" % lights.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights (room, corridor, and fill lights)" % lights.size())
 
 func generate_navigation_mesh() -> void:
 	## Generate NavigationRegion3D for AI pathfinding
