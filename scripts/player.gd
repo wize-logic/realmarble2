@@ -114,6 +114,8 @@ var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refres
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 var post_rail_detach_frames: int = 0  # Frames to force ground check after rail detachment (fixes AIR state bug)
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
+var consecutive_air_frames: int = 0  # Safety: track consecutive frames in AIR state to detect stuck state
+const MAX_AIR_FRAMES_BEFORE_SAFETY: int = 180  # ~3 seconds at 60fps - if airborne this long with low velocity, force check
 
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
@@ -235,7 +237,7 @@ func _ready() -> void:
 		add_child(ground_ray)
 
 	ground_ray.enabled = true
-	ground_ray.target_position = Vector3.DOWN * 0.6  # Cast down 0.6 units (slightly more than radius)
+	ground_ray.target_position = Vector3.DOWN * 0.85  # Cast down 0.85 units to detect ground on slopes up to 45°
 	ground_ray.collision_mask = 0xFFFFFFFF  # Check all layers
 	ground_ray.collide_with_areas = false
 	ground_ray.collide_with_bodies = true
@@ -1123,12 +1125,12 @@ func check_ground() -> void:
 	# preventing the stuck AIR state bug caused by timing issues between rail physics and ground detection
 	if post_rail_detach_frames > 0:
 		post_rail_detach_frames -= 1
-		# During grace period, ALWAYS do a full ground check (don't allow early returns)
+		# During grace period, SKIP the is_grinding check entirely and always do raycast
 		# This ensures we don't get stuck in AIR state due to stale grinding flags
-
-	# Grinding is a distinct state - not grounded, not airborne
-	# BUT: First verify the rail is still valid to prevent getting stuck in AIR state
-	if is_grinding:
+		# NOTE: Using elif below ensures this block causes us to skip to raycast
+	elif is_grinding:
+		# Grinding is a distinct state - not grounded, not airborne
+		# BUT: First verify the rail is still valid to prevent getting stuck in AIR state
 		# SAFETY CHECK: If grinding but rail is invalid, force stop grinding
 		if not is_instance_valid(current_rail) or current_rail == null:
 			DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY (check_ground): Rail invalid while is_grinding=true - forcing stop_grinding()", false, get_entity_id())
@@ -1144,6 +1146,34 @@ func check_ground() -> void:
 
 	var was_grounded: bool = is_grounded
 	is_grounded = ground_ray.is_colliding()
+
+	# SAFETY TIMEOUT: Track consecutive air frames to detect stuck AIR state
+	if not is_grounded:
+		consecutive_air_frames += 1
+
+		# If airborne for too long with low vertical velocity, try extended ground check
+		# This catches edge cases where normal raycast misses (slopes, physics quirks)
+		if consecutive_air_frames >= MAX_AIR_FRAMES_BEFORE_SAFETY and abs(linear_velocity.y) < 5.0:
+			# Try extended raycast (1.5 units down - catches steep slopes and edge cases)
+			var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+				global_position,
+				global_position + Vector3.DOWN * 1.5
+			)
+			query.exclude = [self]
+			query.collide_with_bodies = true
+			query.collide_with_areas = false
+
+			var result: Dictionary = space_state.intersect_ray(query)
+			if result:
+				# Found ground with extended check - we're actually grounded
+				is_grounded = true
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "SAFETY: Extended raycast found ground after %d air frames! Hit: %s" % [consecutive_air_frames, result.collider], false, get_entity_id())
+				consecutive_air_frames = 0
+			elif consecutive_air_frames % 60 == 0:  # Log every second while stuck
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "WARNING: Stuck in AIR for %d frames (%.1fs) | Velocity: %s | Position: %s" % [consecutive_air_frames, consecutive_air_frames / 60.0, linear_velocity, global_position], false, get_entity_id())
+	else:
+		consecutive_air_frames = 0
 
 	# Track if we just landed from a bounce (before modifying is_bouncing)
 	var just_bounce_landed: bool = false
@@ -1433,6 +1463,7 @@ func respawn() -> void:
 	spin_charge = 0.0
 	spin_dash_timer = 0.0
 	post_rail_detach_frames = 0  # Clear any pending grace period
+	consecutive_air_frames = 0  # Clear air frame counter
 
 	# CRITICAL: Force grounded state on respawn (we spawn on ground)
 	# This fixes the stuck AIR state bug after grinding
@@ -2270,6 +2301,11 @@ func start_grinding(rail: GrindRail) -> void:
 		spin_sound.pitch_scale = 0.8
 		spin_sound.play()
 
+	# SYNC: Notify bot AI if this is a bot (keeps bot AI state in sync with player state)
+	var bot_ai: Node = get_node_or_null("BotAI")
+	if bot_ai and bot_ai.has_method("start_grinding"):
+		bot_ai.start_grinding(rail)
+
 func stop_grinding() -> void:
 	"""Called by rail when player exits grinding state"""
 	# Always clear current_rail reference even if not grinding (safety)
@@ -2302,16 +2338,26 @@ func stop_grinding() -> void:
 	if grind_particles:
 		grind_particles.emitting = false
 
+	# SYNC: Notify bot AI if this is a bot (keeps bot AI state in sync with player state)
+	var bot_ai: Node = get_node_or_null("BotAI")
+	if bot_ai and bot_ai.has_method("stop_grinding"):
+		bot_ai.stop_grinding()
+
 func launch_from_rail(velocity: Vector3) -> void:
 	"""Called by rail when player reaches the end of the rail"""
 	if not is_grinding:
 		return
 
 	DebugLogger.dlog(DebugLogger.Category.RAILS, "Launched from rail end with velocity: %s" % velocity, false, get_entity_id())
-	stop_grinding()  # This resets jump_count to 0
+	stop_grinding()  # This resets jump_count to 0 and syncs bot AI
 
 	# Player already has velocity from physics, just add upward boost
 	apply_central_impulse(Vector3.UP * 15.0)
+
+	# SYNC: Notify bot AI to activate aerial recovery mode
+	var bot_ai: Node = get_node_or_null("BotAI")
+	if bot_ai and bot_ai.has_method("launch_from_rail"):
+		bot_ai.launch_from_rail(velocity)
 
 func jump_off_rail() -> void:
 	"""Player manually jumps off the rail"""

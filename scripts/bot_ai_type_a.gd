@@ -398,11 +398,13 @@ func stop_grinding() -> void:
 	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type A] Stopped grinding", false, get_entity_id())
 
 func launch_from_rail(velocity: Vector3) -> void:
-	"""Called by rail when bot reaches the end - activates aerial recovery"""
-	if not is_grinding:
-		return
+	"""Called when bot is launched from rail end - activates aerial recovery
+	Note: This is now called by player.gd after stop_grinding(), so is_grinding may already be false.
+	We still want to activate aerial recovery mode regardless."""
 
-	stop_grinding()
+	# Ensure grinding state is cleared (may already be done by player.gd sync)
+	if is_grinding:
+		stop_grinding()
 
 	# Find safe landing zone FIRST
 	find_safe_landing_zone()
