@@ -553,17 +553,17 @@ func _ready() -> void:
 	# Apply beautiful procedural marble material
 	apply_marble_material()
 
-	# Set up aura light effect for player visibility
+	# Set up aura light effect for player visibility - makes marbles stand out
 	if not aura_light:
 		aura_light = OmniLight3D.new()
 		aura_light.name = "AuraLight"
 		add_child(aura_light)
 
-		# Configure light properties
-		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Soft cyan-white
-		aura_light.light_energy = 1.5  # Moderate brightness
-		aura_light.omni_range = 3.5  # Illumination radius around player
-		aura_light.omni_attenuation = 2.0  # Smooth falloff
+		# Configure light properties - enhanced for marble visibility
+		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Will be updated to match marble color
+		aura_light.light_energy = 2.5  # Brighter to make marble stand out
+		aura_light.omni_range = 5.0  # Larger illumination radius
+		aura_light.omni_attenuation = 1.5  # Softer falloff for wider glow
 
 		# Shadow settings - disable for performance
 		aura_light.shadow_enabled = false
@@ -2669,11 +2669,20 @@ func apply_marble_material() -> void:
 	# Ensure shadow casting is enabled for proper lighting
 	marble_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	# Update aura light color to match marble primary color
+	# Update aura light color to match marble - enhanced for visibility
 	if aura_light and material:
 		var primary_color = material.get_shader_parameter("primary_color")
+		var secondary_color = material.get_shader_parameter("secondary_color")
 		if primary_color:
-			aura_light.light_color = primary_color
+			# Blend primary and secondary for a more vibrant glow
+			var glow_color: Color = primary_color
+			if secondary_color:
+				glow_color = primary_color.lerp(secondary_color, 0.3)
+			# Boost saturation and brightness for visibility
+			var h: float = glow_color.h
+			var s: float = minf(glow_color.s * 1.2, 1.0)  # Boost saturation
+			var v: float = minf(glow_color.v * 1.3, 1.0)  # Boost brightness
+			aura_light.light_color = Color.from_hsv(h, s, v)
 
 	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Applied marble material to player: %s" % name, false, get_entity_id())
 

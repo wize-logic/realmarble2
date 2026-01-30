@@ -93,6 +93,14 @@ func create_marble_material(color_index: int = -1) -> ShaderMaterial:
 	material.set_shader_parameter("bubble_density", randf_range(0.3, 0.5))
 	material.set_shader_parameter("time_speed", randf_range(0.15, 0.25))
 
+	# Special marble lighting - makes marbles stand out from environment
+	material.set_shader_parameter("glow_strength", randf_range(0.5, 0.7))
+	material.set_shader_parameter("glow_pulse_speed", randf_range(1.2, 1.8))
+	material.set_shader_parameter("glow_pulse_amount", randf_range(0.25, 0.35))
+	material.set_shader_parameter("outer_rim_power", randf_range(1.6, 2.0))
+	material.set_shader_parameter("outer_rim_intensity", randf_range(0.7, 0.9))
+	material.set_shader_parameter("rim_intensity", randf_range(0.6, 0.8))
+
 	return material
 
 func create_marble_material_from_hue(hue: float) -> ShaderMaterial:
@@ -117,6 +125,14 @@ func create_marble_material_from_hue(hue: float) -> ShaderMaterial:
 	material.set_shader_parameter("swirl_intensity", 0.6)
 	material.set_shader_parameter("bubble_density", 0.4)
 	material.set_shader_parameter("time_speed", 0.2)
+
+	# Special marble lighting - makes marbles stand out from environment
+	material.set_shader_parameter("glow_strength", 0.6)
+	material.set_shader_parameter("glow_pulse_speed", 1.5)
+	material.set_shader_parameter("glow_pulse_amount", 0.3)
+	material.set_shader_parameter("outer_rim_power", 1.8)
+	material.set_shader_parameter("outer_rim_intensity", 0.8)
+	material.set_shader_parameter("rim_intensity", 0.7)
 
 	return material
 
