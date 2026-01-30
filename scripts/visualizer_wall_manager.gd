@@ -447,24 +447,30 @@ func get_current_mode_name() -> String:
 
 
 func cleanup() -> void:
+	# Prevent double-cleanup
+	if not is_initialized:
+		return
+
 	print("[VisualizerWallManager] Cleaning up")
+	is_initialized = false
 
 	for panel in visualizer_panels:
-		if is_instance_valid(panel):
+		if is_instance_valid(panel) and panel.is_inside_tree():
 			panel.queue_free()
 	visualizer_panels.clear()
 
-	if viz_control:
-		viz_control.queue_free()
+	if viz_control and is_instance_valid(viz_control):
+		if viz_control.is_inside_tree():
+			viz_control.queue_free()
 		viz_control = null
 
-	if sub_viewport:
-		sub_viewport.queue_free()
+	if sub_viewport and is_instance_valid(sub_viewport):
+		if sub_viewport.is_inside_tree():
+			sub_viewport.queue_free()
 		sub_viewport = null
 
 	viewport_texture = null
 	_shader_material = null
-	is_initialized = false
 
 
 func _exit_tree() -> void:

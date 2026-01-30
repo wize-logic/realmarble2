@@ -286,8 +286,21 @@ func generate_level() -> void:
 
 func clear_level() -> void:
 	## Remove all generated content
+
+	# Clean up wall managers FIRST (before clearing other children)
+	# This ensures proper cleanup of collision shapes and resources
+	if video_wall_manager != null and is_instance_valid(video_wall_manager):
+		video_wall_manager.cleanup()
+		video_wall_manager = null  # Clear reference - loop below will queue_free
+
+	if visualizer_wall_manager != null and is_instance_valid(visualizer_wall_manager):
+		visualizer_wall_manager.cleanup()
+		visualizer_wall_manager = null  # Clear reference - loop below will queue_free
+
+	# Now free all children (including the wall managers)
 	for child in get_children():
-		child.queue_free()
+		if is_instance_valid(child):
+			child.queue_free()
 
 	platforms.clear()
 	teleporters.clear()
@@ -299,18 +312,6 @@ func clear_level() -> void:
 	jump_pad_positions.clear()
 	teleporter_positions.clear()
 	perimeter_walls.clear()
-
-	# Clean up video wall manager
-	if video_wall_manager != null:
-		video_wall_manager.cleanup()
-		video_wall_manager.queue_free()
-		video_wall_manager = null
-
-	# Clean up visualizer wall manager
-	if visualizer_wall_manager != null:
-		visualizer_wall_manager.cleanup()
-		visualizer_wall_manager.queue_free()
-		visualizer_wall_manager = null
 
 	# Clear Godot-specific nodes
 	lights.clear()
