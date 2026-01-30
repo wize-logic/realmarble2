@@ -81,6 +81,7 @@ var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var selected_marble_color_index: int = 0  # Default to first color (Ruby Red)
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
 var level_config_video_walls: bool = false  # Enable video on perimeter walls
+var level_config_music_walls: bool = false  # Enable WMP9-style music visualizer on walls
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
@@ -385,8 +386,9 @@ func _on_practice_button_pressed() -> void:
 
 	# Now start practice mode with the chosen settings (Q3 generator only)
 	var video_walls_enabled: bool = level_config.get("video_walls", false)
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s..." % [bot_count_choice, level_config.size, level_config.time, video_walls_enabled])
-	start_practice_mode(bot_count_choice, level_config.size, level_config.time, video_walls_enabled)
+	var music_walls_enabled: bool = level_config.get("music_walls", false)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s, music_walls: %s..." % [bot_count_choice, level_config.size, level_config.time, video_walls_enabled, music_walls_enabled])
+	start_practice_mode(bot_count_choice, level_config.size, level_config.time, video_walls_enabled, music_walls_enabled)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -615,6 +617,7 @@ func ask_level_config() -> Dictionary:
 	level_config_size = 2  # Default: Medium
 	level_config_time = 300.0  # Default: 5 minutes
 	level_config_video_walls = false  # Default: disabled
+	level_config_music_walls = false  # Default: disabled
 
 	# === LEVEL SIZE/COMPLEXITY SECTION ===
 	var size_section = VBoxContainer.new()
@@ -744,35 +747,56 @@ func ask_level_config() -> Dictionary:
 	separator3.add_theme_constant_override("separation", 2)
 	vbox.add_child(separator3)
 
-	# === VIDEO WALLS SECTION ===
-	var video_section = VBoxContainer.new()
-	video_section.add_theme_constant_override("separation", 10)
-	vbox.add_child(video_section)
+	# === WALL DISPLAY SECTION ===
+	var wall_section = VBoxContainer.new()
+	wall_section.add_theme_constant_override("separation", 10)
+	vbox.add_child(wall_section)
 
-	var video_title = Label.new()
-	video_title.text = "VIDEO WALLS"
-	video_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	video_title.add_theme_font_size_override("font_size", 18)
-	video_title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
-	video_section.add_child(video_title)
+	var wall_title = Label.new()
+	wall_title.text = "ARENA WALLS"
+	wall_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wall_title.add_theme_font_size_override("font_size", 18)
+	wall_title.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	wall_section.add_child(wall_title)
 
-	# Video walls toggle container
-	var video_toggle_container = HBoxContainer.new()
-	video_toggle_container.add_theme_constant_override("separation", 15)
-	video_toggle_container.alignment = BoxContainer.ALIGNMENT_CENTER
-	video_section.add_child(video_toggle_container)
+	# Wall options toggle container
+	var wall_toggle_container = HBoxContainer.new()
+	wall_toggle_container.add_theme_constant_override("separation", 15)
+	wall_toggle_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	wall_section.add_child(wall_toggle_container)
 
 	var video_checkbox = CheckBox.new()
-	video_checkbox.text = "Enable video on arena walls"
+	video_checkbox.text = "Video Walls"
 	video_checkbox.button_pressed = false
 	video_checkbox.add_theme_font_size_override("font_size", 14)
 	video_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	video_toggle_container.add_child(video_checkbox)
+	wall_toggle_container.add_child(video_checkbox)
 
-	# Connect video checkbox to toggle
+	var music_checkbox = CheckBox.new()
+	music_checkbox.text = "Music Visualizer"
+	music_checkbox.button_pressed = false
+	music_checkbox.add_theme_font_size_override("font_size", 14)
+	music_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	wall_toggle_container.add_child(music_checkbox)
+
+	# Connect video checkbox to toggle (with mutual exclusivity)
 	video_checkbox.toggled.connect(func(enabled: bool):
 		level_config_video_walls = enabled
 		DebugLogger.dlog(DebugLogger.Category.UI, "Video walls toggled: %s" % enabled)
+		# Disable music walls if video walls is enabled
+		if enabled and music_checkbox.button_pressed:
+			music_checkbox.button_pressed = false
+			level_config_music_walls = false
+	)
+
+	# Connect music checkbox to toggle (with mutual exclusivity)
+	music_checkbox.toggled.connect(func(enabled: bool):
+		level_config_music_walls = enabled
+		DebugLogger.dlog(DebugLogger.Category.UI, "Music walls toggled: %s" % enabled)
+		# Disable video walls if music walls is enabled
+		if enabled and video_checkbox.button_pressed:
+			video_checkbox.button_pressed = false
+			level_config_video_walls = false
 	)
 
 	# Add separator before start button
@@ -861,8 +885,8 @@ func ask_level_config() -> Dictionary:
 		DebugLogger.dlog(DebugLogger.Category.UI, "Level config cancelled")
 		return {}
 
-	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f, video_walls: %s" % [level_config_size, level_config_time, level_config_video_walls])
-	return {"size": level_config_size, "time": level_config_time, "video_walls": level_config_video_walls}
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f, video_walls: %s, music_walls: %s" % [level_config_size, level_config_time, level_config_video_walls, level_config_music_walls])
+	return {"size": level_config_size, "time": level_config_time, "video_walls": level_config_video_walls, "music_walls": level_config_music_walls}
 
 func _on_size_slider_changed(value: float, label: Label) -> void:
 	"""Callback for size slider - properly sets instance variable"""
@@ -883,15 +907,16 @@ func _on_time_slider_changed(value: float, label: Label) -> void:
 	label.text = time_labels[index]
 	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
-func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0, video_walls: bool = false) -> void:
+func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0, video_walls: bool = false, music_walls: bool = false) -> void:
 	"""Start practice mode with specified settings.
 	Args:
 		bot_count: Number of bots to spawn
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
 		match_time: Match duration in seconds
 		video_walls: Enable video on perimeter walls
+		music_walls: Enable WMP9-style music visualizer on walls
 	"""
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s" % [bot_count, level_size, match_time, video_walls])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, video_walls: %s, music_walls: %s" % [bot_count, level_size, match_time, video_walls, music_walls])
 
 	if main_menu:
 		main_menu.hide()
@@ -918,10 +943,10 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 	game_time_remaining = match_time
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Match duration set to %.0f seconds (%.1f minutes)" % [match_time, match_time / 60.0])
 
-	# Regenerate level with selected size and video wall settings
+	# Regenerate level with selected size and wall settings
 	current_level_size = level_size
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d, video_walls: %s..." % [level_size, video_walls])
-	await generate_procedural_level(true, level_size, video_walls)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d, video_walls: %s, music_walls: %s..." % [level_size, video_walls, music_walls])
+	await generate_procedural_level(true, level_size, video_walls, false, 0, music_walls)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -1193,14 +1218,15 @@ func show_main_menu() -> void:
 func start_multiplayer_match(settings: Dictionary) -> void:
 	"""Start a multiplayer match with the specified room settings.
 	Args:
-		settings: Dictionary with level_size, match_time, video_walls, and level_seed
+		settings: Dictionary with level_size, match_time, video_walls, music_walls, and level_seed
 	"""
 	var level_size: int = settings.get("level_size", 2)
 	var match_time: float = settings.get("match_time", 300.0)
 	var video_walls: bool = settings.get("video_walls", false)
+	var music_walls: bool = settings.get("music_walls", false)
 	var level_seed: int = settings.get("level_seed", 0)
 
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s, seed: %d" % [level_size, match_time, video_walls, level_seed])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, video_walls: %s, music_walls: %s, seed: %d" % [level_size, match_time, video_walls, music_walls, level_seed])
 
 	# Store settings for level generation
 	current_level_size = level_size
@@ -1236,8 +1262,8 @@ func start_multiplayer_match(settings: Dictionary) -> void:
 		gameplay_music.start_playlist()
 
 	# Regenerate level with multiplayer settings (using shared seed for sync)
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s, Seed: %d)..." % [level_size, video_walls, level_seed])
-	await generate_procedural_level(true, level_size, video_walls, false, level_seed)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Video Walls: %s, Music Walls: %s, Seed: %d)..." % [level_size, video_walls, music_walls, level_seed])
+	await generate_procedural_level(true, level_size, video_walls, false, level_seed, music_walls)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -2751,7 +2777,7 @@ func play_countdown_beep(text: String) -> void:
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
 
-func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false, level_seed: int = 0) -> void:
+func generate_procedural_level(spawn_collectibles: bool = true, level_size: int = 2, video_walls: bool = false, menu_preview: bool = false, level_seed: int = 0, music_walls: bool = false) -> void:
 	"""Generate a procedural Q3-style level with skybox
 	Args:
 		spawn_collectibles: Whether to spawn abilities and orbs (false for menu preview)
@@ -2759,8 +2785,9 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 		video_walls: Enable video on perimeter walls
 		menu_preview: If true, only generates floor + video walls for main menu background
 		level_seed: Seed for level generation (0 = random, use same seed for multiplayer sync)
+		music_walls: Enable WMP9-style music visualizer on walls
 	"""
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, menu_preview: %s, seed: %d" % [level_size, spawn_collectibles, video_walls, menu_preview, level_seed])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating level - size: %d, spawn_collectibles: %s, video_walls: %s, music_walls: %s, menu_preview: %s, seed: %d" % [level_size, spawn_collectibles, video_walls, music_walls, menu_preview, level_seed])
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
@@ -2796,6 +2823,11 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	if video_walls:
 		level_generator.enable_video_walls = true
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls enabled")
+
+	# Configure music walls if enabled (mutually exclusive with video walls)
+	if music_walls and not video_walls:
+		level_generator.enable_visualizer_walls = true
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Music visualizer walls enabled")
 
 	# Menu preview mode: only floor + video walls
 	if menu_preview:
