@@ -169,24 +169,30 @@ func _on_video_finished() -> void:
 
 
 func cleanup() -> void:
-	print("[VideoWallManager] Cleaning up")
+	# Prevent double-cleanup
+	if not is_initialized:
+		return
 
-	if video_player:
+	print("[VideoWallManager] Cleaning up")
+	is_initialized = false
+
+	if video_player and is_instance_valid(video_player):
 		video_player.stop()
-		video_player.queue_free()
+		if video_player.is_inside_tree():
+			video_player.queue_free()
 		video_player = null
 
 	for panel in video_panels:
-		if is_instance_valid(panel):
+		if is_instance_valid(panel) and panel.is_inside_tree():
 			panel.queue_free()
 	video_panels.clear()
 
-	if sub_viewport:
-		sub_viewport.queue_free()
+	if sub_viewport and is_instance_valid(sub_viewport):
+		if sub_viewport.is_inside_tree():
+			sub_viewport.queue_free()
 		sub_viewport = null
 
 	viewport_texture = null
-	is_initialized = false
 
 
 func _exit_tree() -> void:
