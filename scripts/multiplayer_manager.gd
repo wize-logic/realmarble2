@@ -230,8 +230,17 @@ func add_bot() -> bool:
 	bot_counter += 1
 	var bot_peer_id: int = 9000 + bot_counter
 
-	# Register bot in player list with random color
-	var bot_color: int = randi() % 28  # 28 color schemes available
+	# MULTIPLAYER SYNC FIX: Use seeded RNG for deterministic bot color assignment
+	# This ensures all clients see the same bot colors
+	var bot_color_rng: RandomNumberGenerator = RandomNumberGenerator.new()
+	# Seed with level_seed XOR bot_peer_id for unique but deterministic color per bot
+	var seed_value: int = room_settings.get("level_seed", 0)
+	if seed_value == 0:
+		# Use a fallback seed based on room_code hash if level_seed not set yet
+		seed_value = room_code.hash()
+	bot_color_rng.seed = seed_value ^ (bot_peer_id * 7919)  # XOR with prime multiplied ID
+	var bot_color: int = bot_color_rng.randi() % 28  # 28 color schemes available
+
 	register_player(bot_peer_id, {
 		"name": "Bot %d" % bot_counter,
 		"ready": true,  # Bots are always ready
@@ -240,7 +249,7 @@ func add_bot() -> bool:
 		"color_index": bot_color
 	})
 
-	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot added to lobby: %d" % bot_peer_id)
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Bot added to lobby: %d (color: %d)" % [bot_peer_id, bot_color])
 	return true
 
 func remove_bot(bot_id: int) -> bool:

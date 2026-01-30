@@ -19,8 +19,14 @@ var respawn_time: float = 15.0  # Respawn after 15 seconds
 var is_collected: bool = false
 var respawn_timer: float = 0.0
 
+# MULTIPLAYER SYNC FIX: Prevent race condition in orb collection
+var collection_pending: bool = false  # True while waiting for server response
+
 # Visual effects
 var glow_material: StandardMaterial3D
+
+# MULTIPLAYER SYNC FIX: Seeded RNG for deterministic animation across clients
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
 	# Add to orbs group for bot AI
@@ -28,6 +34,10 @@ func _ready() -> void:
 
 	# Store initial height
 	base_height = global_position.y
+
+	# MULTIPLAYER SYNC FIX: Seed RNG based on orb position for deterministic animation
+	# Position is determined by level generator, so all clients get the same seed
+	_initialize_seeded_rng()
 
 	# Set up collision detection
 	body_entered.connect(_on_body_entered)
@@ -42,8 +52,20 @@ func _ready() -> void:
 		glow_material.roughness = 0.3
 		mesh_instance.material_override = glow_material
 
-	# Randomize starting animation phase
-	time = randf() * TAU
+	# Use seeded RNG for starting animation phase (deterministic across clients)
+	time = rng.randf() * TAU
+
+func _initialize_seeded_rng() -> void:
+	"""Initialize seeded RNG for deterministic animation across all clients"""
+	# Use orb position as seed - position is deterministic from level generator
+	var pos_hash: int = int(global_position.x * 1000) ^ int(global_position.y * 1000) ^ int(global_position.z * 1000)
+
+	# Also incorporate level_seed if available for extra determinism
+	var level_seed: int = 0
+	if MultiplayerManager and MultiplayerManager.room_settings.has("level_seed"):
+		level_seed = MultiplayerManager.room_settings["level_seed"]
+
+	rng.seed = pos_hash ^ level_seed
 
 func _process(delta: float) -> void:
 	if is_collected:
@@ -73,6 +95,10 @@ func _on_body_entered(body: Node3D) -> void:
 	if is_collected:
 		return
 
+	# MULTIPLAYER SYNC FIX: Check if collection is already pending to prevent race condition
+	if collection_pending:
+		return
+
 	# Check if body is a player (RigidBody3D with player script)
 	# Allow collection regardless of level - even max level players can collect orbs
 	if body is RigidBody3D and body.has_method("collect_orb"):
@@ -82,6 +108,8 @@ func _on_body_entered(body: Node3D) -> void:
 			if multiplayer.is_server():
 				collect(body, player_id)
 			else:
+				# Mark as pending before sending request to prevent double-requests
+				collection_pending = true
 				# Client requests server to collect
 				_request_collect.rpc_id(1, player_id)
 		else:
@@ -125,6 +153,9 @@ func collect(player: Node, player_id: int = -1) -> void:
 func _set_collected(collected: bool) -> void:
 	"""Internal: Set collection state locally"""
 	is_collected = collected
+	# MULTIPLAYER SYNC FIX: Reset pending flag when collection state is confirmed
+	collection_pending = false
+
 	if collected:
 		respawn_timer = respawn_time
 		# Hide the orb
@@ -138,7 +169,8 @@ func _set_collected(collected: bool) -> void:
 			mesh_instance.visible = true
 		if collision_shape:
 			collision_shape.set_deferred("disabled", false)
-		time += randf() * 2.0
+		# MULTIPLAYER SYNC FIX: Use seeded RNG for deterministic time offset
+		time += rng.randf() * 2.0
 
 @rpc("authority", "call_local", "reliable")
 func _sync_collected(collected: bool) -> void:
@@ -161,5 +193,6 @@ func respawn_orb() -> void:
 func play_collection_sound() -> void:
 	"""Play collection sound effect"""
 	if collection_sound and collection_sound.stream:
-		collection_sound.pitch_scale = randf_range(0.9, 1.1)
+		# MULTIPLAYER SYNC FIX: Use seeded RNG for consistent pitch across clients
+		collection_sound.pitch_scale = rng.randf_range(0.9, 1.1)
 		collection_sound.play()
