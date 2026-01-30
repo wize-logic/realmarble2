@@ -1,10 +1,8 @@
-shader_type spatial;
+shader_type canvas_item;
 
 // Windows Media Player 9 Style Audio Visualizer
 // Projects audio-reactive visuals onto walls like the classic WMP visualizers
 // Compatible with GL Compatibility renderer
-
-render_mode unshaded, cull_back, depth_draw_opaque;
 
 // Visualization mode: 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
 uniform int viz_mode : hint_range(0, 4) = 0;
@@ -499,6 +497,6 @@ void fragment() {
 	vec3 bloom = max(final_color - vec3(0.5), vec3(0.0));
 	final_color += bloom * 0.5;
 
-	// Clamp final output
-	ALBEDO = clamp(final_color, vec3(0.0), vec3(2.0));
+	// Clamp final output and set color with full opacity
+	COLOR = vec4(clamp(final_color, vec3(0.0), vec3(1.0)), 1.0);
 }
