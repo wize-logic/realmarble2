@@ -80,6 +80,13 @@ extends Node3D
 @export_group("Video Walls")
 @export var enable_video_walls: bool = false  ## Replace perimeter walls with video panels
 
+# Visualizer Walls - WMP9 style audio visualizer on walls
+@export_group("Visualizer Walls")
+@export var enable_visualizer_walls: bool = false  ## Project audio visualizer onto walls
+@export_range(0, 4) var visualizer_mode: int = 0  ## 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
+@export var visualizer_color_preset: String = "synthwave"  ## Color scheme (ocean, sunset, matrix, synthwave, neon, ice, fire, aurora)
+@export var visualizer_sensitivity: float = 2.0  ## Audio reactivity sensitivity
+
 # Menu Preview Mode - only generates floor + video walls for main menu background
 var menu_preview_mode: bool = false
 
@@ -87,6 +94,10 @@ var menu_preview_mode: bool = false
 const VIDEO_WALL_PATH: String = "res://videos/arena_bg.ogv"
 const VIDEO_WALL_LOOP: bool = true
 const VIDEO_WALL_RESOLUTION: Vector2i = Vector2i(1920, 1080)
+
+# Visualizer wall constants
+const VISUALIZER_RESOLUTION: Vector2i = Vector2i(1920, 1080)
+const VISUALIZER_AUDIO_BUS: String = "Music"
 
 # ============================================================================
 # BSP NODE CLASS
@@ -175,6 +186,8 @@ var material_manager = null
 
 # Video wall manager for WebM display on perimeter walls
 var video_wall_manager = null
+# Visualizer wall manager for WMP9 style audio visualizer
+var visualizer_wall_manager = null
 var perimeter_walls: Array[MeshInstance3D] = []
 
 # Grind rail system
@@ -247,6 +260,9 @@ func generate_level() -> void:
 	# Apply video walls if enabled (after procedural textures to override them)
 	apply_video_walls()
 
+	# Apply visualizer walls if enabled (WMP9 style audio visualizer)
+	apply_visualizer_walls()
+
 	# Godot-specific features
 	if generate_lights:
 		generate_room_lights()
@@ -289,6 +305,12 @@ func clear_level() -> void:
 		video_wall_manager.cleanup()
 		video_wall_manager.queue_free()
 		video_wall_manager = null
+
+	# Clean up visualizer wall manager
+	if visualizer_wall_manager != null:
+		visualizer_wall_manager.cleanup()
+		visualizer_wall_manager.queue_free()
+		visualizer_wall_manager = null
 
 	# Clear Godot-specific nodes
 	lights.clear()
@@ -1744,6 +1766,68 @@ func apply_video_walls() -> void:
 		push_warning("Failed to initialize video walls")
 		video_wall_manager.queue_free()
 		video_wall_manager = null
+
+
+func apply_visualizer_walls() -> void:
+	## Create WMP9-style audio visualizer projected onto walls
+	print("[LevelGen] apply_visualizer_walls() called, enable_visualizer_walls: %s" % enable_visualizer_walls)
+
+	if not enable_visualizer_walls:
+		print("[LevelGen] Visualizer walls disabled - skipping")
+		return
+
+	# Don't create visualizer walls if video walls are already enabled
+	if enable_video_walls:
+		print("[LevelGen] Video walls enabled, skipping visualizer walls")
+		return
+
+	var scale: float = arena_size / 140.0
+	var wall_distance: float = arena_size * 0.55
+	var perim_wall_height: float = 25.0 * scale
+
+	# Wall configs with rotation for visualizer panels facing inward
+	var wall_configs = [
+		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, PI, 0)},  # North
+		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, 0, 0)},  # South
+		{"pos": Vector3(wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, -PI/2, 0)},  # East
+		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, PI/2, 0)}  # West
+	]
+
+	# Load and initialize visualizer wall manager
+	print("[LevelGen] Loading VisualizerWallManager...")
+	var VisualizerWallManagerScript = load("res://scripts/visualizer_wall_manager.gd")
+	if VisualizerWallManagerScript == null:
+		push_error("Failed to load VisualizerWallManager script")
+		return
+
+	visualizer_wall_manager = Node3D.new()
+	visualizer_wall_manager.set_script(VisualizerWallManagerScript)
+	visualizer_wall_manager.name = "VisualizerWallManager"
+
+	# Configure visualizer settings
+	visualizer_wall_manager.current_mode = visualizer_mode
+	visualizer_wall_manager.sensitivity = visualizer_sensitivity
+	add_child(visualizer_wall_manager)
+
+	# Initialize visualizer and create panels
+	if visualizer_wall_manager.initialize(VISUALIZER_AUDIO_BUS, VISUALIZER_RESOLUTION):
+		print("[LevelGen] Creating visualizer panels...")
+		visualizer_wall_manager.create_visualizer_panels(wall_configs)
+
+		# Apply color preset
+		visualizer_wall_manager.set_color_preset(visualizer_color_preset)
+
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Visualizer walls created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
+	else:
+		push_warning("Failed to initialize visualizer walls")
+		visualizer_wall_manager.queue_free()
+		visualizer_wall_manager = null
+
+
+func get_visualizer_wall_manager():
+	## Get the visualizer wall manager for external control
+	return visualizer_wall_manager
+
 
 func generate_death_zone() -> void:
 	var death_zone: Area3D = Area3D.new()

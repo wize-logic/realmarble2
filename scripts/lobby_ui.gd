@@ -32,6 +32,7 @@ var size_value_label: Label = null
 var time_slider: HSlider = null
 var time_value_label: Label = null
 var video_walls_checkbox: CheckBox = null
+var music_walls_checkbox: CheckBox = null
 var settings_display_label: Label = null  # For clients to see current settings
 
 func _ready() -> void:
@@ -444,12 +445,21 @@ func _create_room_settings_ui() -> void:
 	room_settings_container.add_child(video_section)
 
 	video_walls_checkbox = CheckBox.new()
-	video_walls_checkbox.text = "Enable Video Walls"
+	video_walls_checkbox.text = "Video Walls"
 	video_walls_checkbox.button_pressed = false
 	video_walls_checkbox.add_theme_font_size_override("font_size", 14)
 	video_walls_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	video_walls_checkbox.toggled.connect(_on_video_walls_toggled)
 	video_section.add_child(video_walls_checkbox)
+
+	# === MUSIC WALLS (WMP9 VISUALIZER) ===
+	music_walls_checkbox = CheckBox.new()
+	music_walls_checkbox.text = "Music Visualizer"
+	music_walls_checkbox.button_pressed = false
+	music_walls_checkbox.add_theme_font_size_override("font_size", 14)
+	music_walls_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+	music_walls_checkbox.toggled.connect(_on_music_walls_toggled)
+	video_section.add_child(music_walls_checkbox)
 
 	# Add separator after settings
 	var separator2 = HSeparator.new()
@@ -499,6 +509,25 @@ func _on_video_walls_toggled(enabled: bool) -> void:
 
 	multiplayer_manager.set_room_setting("video_walls", enabled)
 
+	# Mutual exclusivity: disable music walls if video walls is enabled
+	if enabled and music_walls_checkbox and music_walls_checkbox.button_pressed:
+		music_walls_checkbox.button_pressed = false
+		multiplayer_manager.set_room_setting("music_walls", false)
+
+
+func _on_music_walls_toggled(enabled: bool) -> void:
+	"""Handle music walls (visualizer) checkbox toggle"""
+	if not multiplayer_manager or not multiplayer_manager.is_host():
+		return
+
+	multiplayer_manager.set_room_setting("music_walls", enabled)
+
+	# Mutual exclusivity: disable video walls if music walls is enabled
+	if enabled and video_walls_checkbox and video_walls_checkbox.button_pressed:
+		video_walls_checkbox.button_pressed = false
+		multiplayer_manager.set_room_setting("video_walls", false)
+
+
 func _on_room_settings_changed(settings: Dictionary) -> void:
 	"""Called when room settings are updated (host or received from host)"""
 	_update_settings_display(settings)
@@ -508,6 +537,7 @@ func _update_settings_display(settings: Dictionary) -> void:
 	var level_size: int = settings.get("level_size", 2)
 	var match_time: float = settings.get("match_time", 300.0)
 	var video_walls: bool = settings.get("video_walls", false)
+	var music_walls: bool = settings.get("music_walls", false)
 
 	# Update sliders/checkbox if we're host
 	if multiplayer_manager and multiplayer_manager.is_host():
@@ -519,6 +549,8 @@ func _update_settings_display(settings: Dictionary) -> void:
 				time_slider.value = time_index
 		if video_walls_checkbox and video_walls_checkbox.button_pressed != video_walls:
 			video_walls_checkbox.button_pressed = video_walls
+		if music_walls_checkbox and music_walls_checkbox.button_pressed != music_walls:
+			music_walls_checkbox.button_pressed = music_walls
 
 	# Update value labels
 	var size_names: Array[String] = ["", "Small", "Medium", "Large", "Huge"]
@@ -533,9 +565,13 @@ func _update_settings_display(settings: Dictionary) -> void:
 
 	# Update client display label
 	if settings_display_label:
-		var video_str: String = "On" if video_walls else "Off"
+		var walls_str: String = "Off"
+		if video_walls:
+			walls_str = "Video"
+		elif music_walls:
+			walls_str = "Music Visualizer"
 		var time_display: String = time_labels[time_index] if time_index >= 0 and time_index < time_labels.size() else "5 Minutes"
-		settings_display_label.text = "Settings: %s map, %s, Video Walls: %s" % [size_display, time_display, video_str]
+		settings_display_label.text = "Settings: %s map, %s, Walls: %s" % [size_display, time_display, walls_str]
 
 func _time_to_slider_index(time: float) -> int:
 	"""Convert time in seconds to slider index (1-5)"""
