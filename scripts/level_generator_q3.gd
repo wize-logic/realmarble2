@@ -51,10 +51,10 @@ extends Node3D
 
 @export_group("Lighting")
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
-@export var light_energy: float = 1.0  ## Base light energy
+@export var light_energy: float = 1.4  ## Base light energy
 @export var light_range: float = 20.0  ## Light range in units
 @export var light_color: Color = Color(0.95, 0.85, 0.75)  ## Warm amber default (not white)
-@export var ambient_light_energy: float = 0.3  ## Ambient/fill light level
+@export var ambient_light_energy: float = 0.45  ## Ambient/fill light level
 @export var use_colored_lights: bool = true  ## Use varied colored lights per zone
 @export var light_color_variation: float = 0.15  ## Amount of color variation between rooms
 
