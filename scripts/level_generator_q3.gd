@@ -57,10 +57,11 @@ extends Node3D
 @export var ambient_light_energy: float = 0.45  ## Ambient/fill light level
 @export var use_colored_lights: bool = true  ## Use varied colored lights per zone
 @export var light_color_variation: float = 0.15  ## Amount of color variation between rooms
-@export var fill_lights_enabled: bool = true  ## Add corner/edge fill lights in large rooms
-@export var fill_light_room_threshold: float = 25.0  ## Room size threshold for adding fill lights
-@export var fill_light_energy_factor: float = 0.5  ## Fill light energy relative to main light
-@export var edge_lights_room_threshold: float = 40.0  ## Room size threshold for edge lights
+@export var fill_lights_enabled: bool = true  ## Add corner/edge fill lights in rooms
+@export var fill_light_room_threshold: float = 10.0  ## Room size threshold for adding fill lights (lowered for more coverage)
+@export var fill_light_energy_factor: float = 0.6  ## Fill light energy relative to main light
+@export var edge_lights_room_threshold: float = 20.0  ## Room size threshold for edge lights (lowered for more coverage)
+@export var small_room_extra_lights: bool = true  ## Add extra lights even to small rooms
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -932,28 +933,85 @@ func get_structure_cell_radius(type: int) -> int:
 			return 1
 	return 0
 
+func add_structure_light(pos: Vector3, height: float, structure_size: float, index: int) -> void:
+	## Add lighting to a structure to ensure it's well-illuminated
+	## This adds ambient lighting near and around structures
+	if not generate_lights:
+		return
+
+	# Main structure light - positioned above the structure
+	var main_light: OmniLight3D = OmniLight3D.new()
+	main_light.name = "StructureLight_%d" % index
+	main_light.position = Vector3(pos.x, height + 2.0, pos.z)
+	main_light.light_color = light_color
+	main_light.light_energy = light_energy * 0.6
+	main_light.omni_range = maxf(structure_size * 1.5, 8.0)
+	main_light.omni_attenuation = 1.0
+	main_light.shadow_enabled = false
+	add_child(main_light)
+	lights.append(main_light)
+
+	# Add ground-level ambient light for areas under/around structure
+	var ground_light: OmniLight3D = OmniLight3D.new()
+	ground_light.name = "StructureGroundLight_%d" % index
+	ground_light.position = Vector3(pos.x, 1.5, pos.z)
+	ground_light.light_color = light_color
+	ground_light.light_energy = light_energy * 0.4
+	ground_light.omni_range = maxf(structure_size * 1.2, 6.0)
+	ground_light.omni_attenuation = 1.0
+	ground_light.shadow_enabled = false
+	add_child(ground_light)
+	lights.append(ground_light)
+
 func generate_structure(type: int, pos: Vector3, scale: float, index: int) -> void:
+	# Generate the structure
+	var structure_height: float = 6.0 * scale  # Default height estimate
+	var structure_size: float = 4.0 * scale    # Default size estimate
+
 	match type:
 		StructureType.PILLAR:
 			generate_pillar(pos, scale, index)
+			structure_height = 10.0 * scale
+			structure_size = 3.0 * scale
 		StructureType.TIERED_PLATFORM:
 			generate_tiered_platform(pos, scale, index)
+			structure_height = 8.0 * scale
+			structure_size = 8.0 * scale
 		StructureType.L_WALL:
 			generate_l_wall(pos, scale, index)
+			structure_height = 4.5 * scale
+			structure_size = 9.0 * scale
 		StructureType.BUNKER:
 			generate_bunker(pos, scale, index)
+			structure_height = 5.5 * scale
+			structure_size = 11.0 * scale
 		StructureType.JUMP_TOWER:
 			generate_jump_tower(pos, scale, index)
+			structure_height = 4.5 * scale
+			structure_size = 5.0 * scale
 		StructureType.CATWALK:
 			generate_catwalk(pos, scale, index)
+			structure_height = 7.5 * scale
+			structure_size = 18.0 * scale
 		StructureType.RAMP_PLATFORM:
 			generate_ramp_platform(pos, scale, index)
+			structure_height = 4.5 * scale
+			structure_size = 8.0 * scale
 		StructureType.SPLIT_LEVEL:
 			generate_split_level(pos, scale, index)
+			structure_height = 6.0 * scale
+			structure_size = 12.0 * scale
 		StructureType.ARCHWAY:
 			generate_archway(pos, scale, index)
+			structure_height = 6.0 * scale
+			structure_size = 10.0 * scale
 		StructureType.SNIPER_NEST:
 			generate_sniper_nest(pos, scale, index)
+			structure_height = 10.0 * scale
+			structure_size = 6.0 * scale
+
+	# Add lighting to the structure
+	add_structure_light(pos, structure_height, structure_size, index)
 
 # ============================================================================
 # INDIVIDUAL STRUCTURE GENERATORS
@@ -2242,7 +2300,33 @@ func generate_room_lights() -> void:
 		add_child(light)
 		lights.append(light)
 
-		# Add fill lights for large rooms to illuminate dark corners and edges
+		# Add extra lights for small rooms to ensure adequate illumination
+		if small_room_extra_lights and room_size < fill_light_room_threshold:
+			# Small rooms get 2 extra fill lights at opposite corners
+			var small_fill_color: Color = light.light_color
+			var small_fill_energy: float = light_energy * 0.7
+			var small_fill_range: float = maxf(light_range * 0.5, room_size * 0.6)
+			var small_fill_height: float = room.height_offset + room_height * 0.5
+
+			var small_corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.2
+			var small_corners: Array[Vector3] = [
+				Vector3(room.room.position.x + small_corner_inset, small_fill_height, room.room.position.y + small_corner_inset),
+				Vector3(room.room.position.x + room.room.size.x - small_corner_inset, small_fill_height, room.room.position.y + room.room.size.y - small_corner_inset),
+			]
+
+			for sc_idx in range(small_corners.size()):
+				var small_corner_light: OmniLight3D = OmniLight3D.new()
+				small_corner_light.name = "SmallRoomLight_%d_%d" % [room.room_id, sc_idx]
+				small_corner_light.position = small_corners[sc_idx]
+				small_corner_light.light_color = small_fill_color
+				small_corner_light.light_energy = small_fill_energy
+				small_corner_light.omni_range = small_fill_range
+				small_corner_light.omni_attenuation = 1.0
+				small_corner_light.shadow_enabled = false
+				add_child(small_corner_light)
+				lights.append(small_corner_light)
+
+		# Add fill lights for rooms above threshold to illuminate dark corners and edges
 		if fill_lights_enabled and room_size >= fill_light_room_threshold:
 			var fill_color: Color = light.light_color
 			var fill_energy: float = light_energy * fill_light_energy_factor
@@ -2270,7 +2354,7 @@ func generate_room_lights() -> void:
 				add_child(corner_light)
 				lights.append(corner_light)
 
-			# Add edge lights for very large rooms
+			# Add edge lights for larger rooms
 			if room_size >= edge_lights_room_threshold:
 				var edge_height: float = room.height_offset + room_height * 0.5
 				var edge_energy: float = fill_energy * 0.7

@@ -22,14 +22,14 @@ uniform float iridescence_strength : hint_range(0.0, 1.0) = 0.3;
 uniform float sss_strength : hint_range(0.0, 1.0) = 0.4;
 uniform float specular_intensity : hint_range(0.0, 2.0) = 0.8;
 uniform float rim_power : hint_range(1.0, 8.0) = 2.5;
-uniform float rim_intensity : hint_range(0.0, 1.0) = 0.7;
+uniform float rim_intensity : hint_range(0.0, 1.0) = 0.15;
 
-// Special marble lighting - makes marbles stand out from environment
-uniform float glow_strength : hint_range(0.0, 2.0) = 0.6;
-uniform float glow_pulse_speed : hint_range(0.0, 5.0) = 1.5;
-uniform float glow_pulse_amount : hint_range(0.0, 1.0) = 0.3;
-uniform float outer_rim_power : hint_range(1.0, 5.0) = 1.8;
-uniform float outer_rim_intensity : hint_range(0.0, 2.0) = 0.8;
+// Special marble lighting - subtle glow to help marbles stand out (reduced values)
+uniform float glow_strength : hint_range(0.0, 1.0) = 0.12;
+uniform float glow_pulse_speed : hint_range(0.0, 5.0) = 1.2;
+uniform float glow_pulse_amount : hint_range(0.0, 0.5) = 0.08;
+uniform float outer_rim_power : hint_range(1.0, 5.0) = 2.2;
+uniform float outer_rim_intensity : hint_range(0.0, 1.0) = 0.2;
 
 // Simple hash function
 float hash(vec3 p) {
@@ -165,13 +165,13 @@ void fragment() {
 	// Calculate enhanced fresnel for rim lighting
 	float fresnel_amount = fresnel(rim_power, NORMAL, view_dir);
 
-	// Add rim highlight with color tint (not white)
-	vec3 rim_color = mix(secondary_color, swirl_color, 0.5) * 1.5;
+	// Add rim highlight with color tint (not white) - reduced intensity
+	vec3 rim_color = mix(secondary_color, swirl_color, 0.5) * 1.2;
 	final_color += fresnel_amount * rim_intensity * rim_color;
 
-	// Calculate outer rim glow - softer, wider glow that makes marbles pop
+	// Calculate outer rim glow - subtle wider glow (reduced intensity)
 	float outer_fresnel = fresnel(outer_rim_power, NORMAL, view_dir);
-	vec3 outer_glow_color = mix(primary_color, secondary_color, 0.3) * 1.8;
+	vec3 outer_glow_color = mix(primary_color, secondary_color, 0.3) * 1.3;
 	final_color += outer_fresnel * outer_rim_intensity * outer_glow_color;
 
 	// Output material properties
@@ -189,24 +189,24 @@ void fragment() {
 	NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
 	NORMAL_MAP_DEPTH = 0.8;
 
-	// === SPECIAL MARBLE LIGHTING - Makes marbles easy to differentiate ===
-	// Pulsing glow animation
+	// === SPECIAL MARBLE LIGHTING - Subtle glow to help differentiate marbles ===
+	// Pulsing glow animation (subtle)
 	float pulse = 1.0 + sin(TIME * glow_pulse_speed) * glow_pulse_amount;
 
 	// Base emission color from marble colors
 	vec3 emission_base = mix(primary_color, secondary_color, 0.4);
 
-	// Core glow - always visible inner light
+	// Core glow - subtle inner light
 	float core_glow = glow_strength * pulse;
 
-	// Rim emission - stronger glow at edges for halo effect
-	float rim_emission = fresnel_amount * 1.5 + outer_fresnel * 0.8;
+	// Rim emission - gentle glow at edges (significantly reduced)
+	float rim_emission = fresnel_amount * 0.3 + outer_fresnel * 0.15;
 
-	// Combine emission components
-	vec3 total_emission = emission_base * core_glow * (0.4 + rim_emission * 0.6);
+	// Combine emission components (reduced multipliers)
+	vec3 total_emission = emission_base * core_glow * (0.15 + rim_emission * 0.2);
 
-	// Add a subtle bright highlight at steep angles for extra pop
-	total_emission += swirl_color * outer_fresnel * outer_fresnel * 0.4 * pulse;
+	// Add a very subtle highlight at steep angles
+	total_emission += swirl_color * outer_fresnel * outer_fresnel * 0.08 * pulse;
 
 	EMISSION = total_emission;
 }
