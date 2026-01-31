@@ -18,8 +18,9 @@ signal quit_pressed
 @onready var player_name_label: Label = $BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox/PlayerName
 @onready var player_level_label: Label = $BottomLeftMenu/MarginContainer/VBoxContainer/PlayerInfo/VBox/Level
 @onready var music_notification: PanelContainer = $BottomRight/MusicNotification
-@onready var track_title_label: Label = $BottomRight/MusicNotification/HBox/VBox/TrackTitle
-@onready var track_artist_label: Label = $BottomRight/MusicNotification/HBox/VBox/TrackArtist
+@onready var track_title_label: Label = $BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox/VBox/TrackTitle
+@onready var track_artist_label: Label = $BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox/VBox/TrackArtist
+@onready var album_art_rect: TextureRect = $BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox/AlbumArt
 @onready var hover_sound: AudioStreamPlayer = $HoverSound
 @onready var select_sound: AudioStreamPlayer = $SelectSound
 
@@ -27,6 +28,11 @@ var menu_buttons: Array[RLMenuButton] = []
 var submenu_buttons: Array[RLMenuButton] = []
 var current_focus_index: int = 0
 var in_submenu: bool = false
+
+# Music notification state
+var music_notification_tween: Tween
+var music_notification_visible: bool = false
+var placeholder_texture: ImageTexture
 
 func _ready() -> void:
 	# Generate placeholder sounds
@@ -52,7 +58,11 @@ func _ready() -> void:
 	if play_submenu:
 		play_submenu.visible = false
 	if music_notification:
+		music_notification.modulate.a = 0.0
 		music_notification.visible = false
+
+	# Create placeholder texture for album art
+	_create_placeholder_texture()
 
 func generate_sounds() -> void:
 	const SoundGen = preload("res://scripts/ui/menu/sound_generator.gd")
@@ -200,13 +210,99 @@ func setup_player_card() -> void:
 	if player_level_label:
 		player_level_label.text = "Level 25"
 
-func show_music_notification(track_title: String, artist: String) -> void:
-	if music_notification and track_title_label and track_artist_label:
-		track_title_label.text = track_title
-		track_artist_label.text = artist
-		music_notification.visible = true
+func _create_placeholder_texture() -> void:
+	"""Create a simple placeholder for songs without album art"""
+	var img := Image.create(50, 50, false, Image.FORMAT_RGBA8)
 
-		# Auto-hide after 5 seconds
-		await get_tree().create_timer(5.0).timeout
-		if music_notification:
-			music_notification.visible = false
+	# Fill with gradient background
+	for y in range(50):
+		for x in range(50):
+			var gradient := float(y) / 50.0
+			var color := Color(0.15 + gradient * 0.1, 0.15 + gradient * 0.08, 0.2 + gradient * 0.1, 1.0)
+			img.set_pixel(x, y, color)
+
+	# Draw simple music note
+	var note_color := Color(0.5, 0.5, 0.6, 1.0)
+	for y in range(28, 36):
+		for x in range(18, 28):
+			var dx := x - 23
+			var dy := y - 32
+			if dx * dx + dy * dy <= 20:
+				img.set_pixel(x, y, note_color)
+	for y in range(15, 32):
+		for x in range(26, 29):
+			img.set_pixel(x, y, note_color)
+
+	placeholder_texture = ImageTexture.create_from_image(img)
+
+func show_music_notification(track_title: String, artist: String, album_art: Texture2D = null) -> void:
+	"""Show music notification with proper tween animation"""
+	if not music_notification or not track_title_label or not track_artist_label:
+		return
+
+	# Cancel any existing tween
+	if music_notification_tween and music_notification_tween.is_valid():
+		music_notification_tween.kill()
+
+	# Cap text length for display
+	if track_title.length() > 35:
+		track_title_label.text = track_title.substr(0, 35) + "..."
+	else:
+		track_title_label.text = track_title
+
+	if artist.length() > 30:
+		track_artist_label.text = artist.substr(0, 30) + "..."
+	else:
+		track_artist_label.text = artist if not artist.is_empty() else "Unknown Artist"
+
+	# Set album art if available
+	if album_art_rect:
+		if album_art and album_art is Texture2D:
+			album_art_rect.texture = album_art
+		elif placeholder_texture:
+			album_art_rect.texture = placeholder_texture
+
+	# Show and animate
+	music_notification.visible = true
+	music_notification_visible = true
+
+	music_notification_tween = create_tween()
+	music_notification_tween.set_ease(Tween.EASE_OUT)
+	music_notification_tween.set_trans(Tween.TRANS_CUBIC)
+
+	# Fade in
+	music_notification_tween.tween_property(music_notification, "modulate:a", 1.0, 0.4)
+	# Hold for display
+	music_notification_tween.tween_interval(4.5)
+	# Fade out
+	music_notification_tween.set_ease(Tween.EASE_IN)
+	music_notification_tween.tween_property(music_notification, "modulate:a", 0.0, 0.4)
+	# Hide when done
+	music_notification_tween.tween_callback(_on_music_notification_finished)
+
+func show_music_notification_with_metadata(metadata: Dictionary) -> void:
+	"""Show music notification using metadata dictionary (for integration with music player)"""
+	var title: String = metadata.get("title", "Unknown Track")
+	var artist: String = metadata.get("artist", "")
+	var album_art: Texture2D = metadata.get("album_art", null)
+	show_music_notification(title, artist, album_art)
+
+func hide_music_notification() -> void:
+	"""Immediately hide the music notification"""
+	if not music_notification_visible:
+		return
+
+	if music_notification_tween and music_notification_tween.is_valid():
+		music_notification_tween.kill()
+
+	music_notification_tween = create_tween()
+	music_notification_tween.set_ease(Tween.EASE_IN)
+	music_notification_tween.set_trans(Tween.TRANS_CUBIC)
+	music_notification_tween.tween_property(music_notification, "modulate:a", 0.0, 0.2)
+	music_notification_tween.tween_callback(_on_music_notification_finished)
+
+func _on_music_notification_finished() -> void:
+	"""Called when music notification animation completes"""
+	if music_notification:
+		music_notification.visible = false
+	music_notification_visible = false
