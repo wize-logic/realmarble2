@@ -354,10 +354,15 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 	var static_body = StaticBody3D.new()
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	if abs(size.x) > abs(size.z):
+	# Determine if this is a North/South wall (wider in X) or East/West wall (wider in Z)
+	var is_ns_wall = abs(size.x) > abs(size.z)
+	if is_ns_wall:
+		# N/S walls: no 90-degree rotation, collision stays wide in X, thin in Z
 		shape.size = Vector3(size.x, size.y, 0.1)
 	else:
-		shape.size = Vector3(0.1, size.y, size.z)
+		# E/W walls: rotated 90 degrees, so we need collision wide in X locally
+		# so that after rotation it becomes wide in Z (parallel to wall) in world space
+		shape.size = Vector3(size.z, size.y, 0.1)
 	collision.shape = shape
 	static_body.add_child(collision)
 	mesh_instance.add_child(static_body)
