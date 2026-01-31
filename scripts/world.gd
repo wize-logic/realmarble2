@@ -145,6 +145,11 @@ func _ready() -> void:
 	# Connect music notification
 	if gameplay_music and music_notification and gameplay_music.has_signal("track_started"):
 		gameplay_music.track_started.connect(_on_track_started)
+		# Connect track control signals from notification
+		if music_notification.has_signal("track_skip_requested"):
+			music_notification.track_skip_requested.connect(_on_track_skip_requested)
+		if music_notification.has_signal("track_prev_requested"):
+			music_notification.track_prev_requested.connect(_on_track_prev_requested)
 
 	# Auto-load music from default directory with fallback
 	_auto_load_music()
@@ -2885,6 +2890,16 @@ func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
 	if music_notification and music_notification.has_method("show_notification"):
 		music_notification.show_notification(metadata)
+
+func _on_track_skip_requested() -> void:
+	"""Called when user requests to skip to next track"""
+	if gameplay_music and gameplay_music.has_method("next_track"):
+		gameplay_music.next_track()
+
+func _on_track_prev_requested() -> void:
+	"""Called when user requests to go to previous track"""
+	if gameplay_music and gameplay_music.has_method("previous_track"):
+		gameplay_music.previous_track()
 
 # ============================================================================
 # MID-ROUND EXPANSION SYSTEM

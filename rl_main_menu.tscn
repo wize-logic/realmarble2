@@ -187,37 +187,64 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -400.0
-offset_top = -80.0
+offset_left = -320.0
+offset_top = -95.0
 offset_right = -20.0
 offset_bottom = -20.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_music")
 
-[node name="HBox" type="HBoxContainer" parent="BottomRight/MusicNotification"]
+[node name="MarginContainer" type="MarginContainer" parent="BottomRight/MusicNotification"]
 layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
 
-[node name="AlbumArt" type="ColorRect" parent="BottomRight/MusicNotification/HBox"]
+[node name="VBoxOuter" type="VBoxContainer" parent="BottomRight/MusicNotification/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NowPlayingLabel" type="Label" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.8, 1.0, 1)
+theme_override_font_sizes/font_size = 10
+text = "NOW PLAYING"
+
+[node name="HBox" type="HBoxContainer" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AlbumArt" type="TextureRect" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox"]
 custom_minimum_size = Vector2(50, 50)
 layout_mode = 2
-color = Color(0.2, 0.2, 0.3, 1)
+size_flags_vertical = 4
+expand_mode = 1
+stretch_mode = 5
 
-[node name="VBox" type="VBoxContainer" parent="BottomRight/MusicNotification/HBox"]
+[node name="VBox" type="VBoxContainer" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox"]
 layout_mode = 2
 size_flags_horizontal = 3
+size_flags_vertical = 4
 
-[node name="TrackTitle" type="Label" parent="BottomRight/MusicNotification/HBox/VBox"]
+[node name="TrackTitle" type="Label" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 1
 theme_override_font_sizes/font_size = 14
 text = "Track Title"
+text_overrun_behavior = 3
 
-[node name="TrackArtist" type="Label" parent="BottomRight/MusicNotification/HBox/VBox"]
+[node name="TrackArtist" type="Label" parent="BottomRight/MusicNotification/MarginContainer/VBoxOuter/HBox/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 1
 theme_override_font_sizes/font_size = 12
-text = "🎵 Listen on Spotify"
+text = "Artist Name"
+text_overrun_behavior = 3
 
 [node name="HoverSound" type="AudioStreamPlayer" parent="."]
 volume_db = -10.0
