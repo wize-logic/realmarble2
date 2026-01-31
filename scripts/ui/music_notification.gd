@@ -9,9 +9,10 @@ signal track_skip_requested
 signal track_prev_requested
 
 @onready var panel: PanelContainer = $Panel
-@onready var album_art: TextureRect = $Panel/MarginContainer/VBoxContainer/AlbumArt
-@onready var artist_label: Label = $Panel/MarginContainer/VBoxContainer/Artist
-@onready var title_label: Label = $Panel/MarginContainer/VBoxContainer/Title
+@onready var album_art: TextureRect = $Panel/MarginContainer/VBoxOuter/HBox/AlbumArt
+@onready var title_label: Label = $Panel/MarginContainer/VBoxOuter/HBox/VBoxContainer/Title
+@onready var artist_label: Label = $Panel/MarginContainer/VBoxOuter/HBox/VBoxContainer/Artist
+@onready var track_info_label: Label = $Panel/MarginContainer/VBoxOuter/HBox/VBoxContainer/TrackInfo
 
 var tween: Tween
 var display_duration: float = 4.0
@@ -107,28 +108,38 @@ func show_notification(metadata: Dictionary) -> void:
 	var title: String = metadata.get("title", "Unknown Track")
 	var artist: String = metadata.get("artist", "")
 	var album_art_texture: Texture2D = metadata.get("album_art", null)
+	var track_number: int = metadata.get("track_number", 0)
+	var total_tracks: int = metadata.get("total_tracks", 0)
 
 	# Validate UI elements exist
 	if not title_label or not artist_label or not album_art:
 		push_warning("MusicNotification: Missing UI elements")
 		return
 
-	# Set the song title (cap at 30 characters for better readability)
-	if title.length() > 30:
-		title_label.text = title.substr(0, 30) + "..."
+	# Set the song title (cap at 25 characters for better readability)
+	if title.length() > 25:
+		title_label.text = title.substr(0, 25) + "..."
 	else:
 		title_label.text = title
 
-	# Set the artist (if available, cap at 27 characters)
+	# Set the artist (if available, cap at 22 characters)
 	if artist and not artist.is_empty():
-		if artist.length() > 27:
-			artist_label.text = artist.substr(0, 27) + "..."
+		if artist.length() > 22:
+			artist_label.text = artist.substr(0, 22) + "..."
 		else:
 			artist_label.text = artist
 		artist_label.show()
 	else:
 		artist_label.text = ""
 		artist_label.hide()
+
+	# Set track info if available
+	if track_info_label:
+		if track_number > 0 and total_tracks > 0:
+			track_info_label.text = "Track %d/%d" % [track_number, total_tracks]
+			track_info_label.show()
+		else:
+			track_info_label.hide()
 
 	# Set album art or placeholder
 	if album_art_texture and album_art_texture is Texture2D:
