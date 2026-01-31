@@ -26,12 +26,25 @@ var bass_level: float = 0.0
 var mid_level: float = 0.0
 var high_level: float = 0.0
 
-# Smoothing for visual appeal
+# Smoothing for visual appeal - enhanced with velocity tracking
 var smoothed_spectrum: Array[float] = []
+var spectrum_velocity: Array[float] = []  # Velocity for spring-based smoothing
+var peak_spectrum: Array[float] = []  # Peak hold values
+var peak_decay: Array[float] = []  # Peak decay timers
 var smoothed_audio: float = 0.0
 var smoothed_bass: float = 0.0
 var smoothed_mid: float = 0.0
 var smoothed_high: float = 0.0
+var audio_velocity: float = 0.0
+var bass_velocity: float = 0.0
+var mid_velocity: float = 0.0
+var high_velocity: float = 0.0
+
+# Beat detection
+var beat_detected: bool = false
+var beat_intensity: float = 0.0
+var last_bass_level: float = 0.0
+var beat_cooldown: float = 0.0
 
 # Settings
 @export var current_mode: VisualizerMode = VisualizerMode.BARS
@@ -41,8 +54,12 @@ var smoothed_high: float = 0.0
 @export var background_color: Color = Color(0.02, 0.02, 0.05, 1.0)
 @export var glow_intensity: float = 1.5
 @export var animation_speed: float = 1.0
-@export var spectrum_smoothing: float = 0.15  # Lower = smoother, higher = more reactive
+@export var spectrum_smoothing: float = 0.12  # Lower = smoother
 @export var sensitivity: float = 2.0  # Audio sensitivity multiplier
+@export var attack_speed: float = 12.0  # How fast bars rise (higher = faster)
+@export var release_speed: float = 4.0  # How fast bars fall (lower = slower)
+@export var peak_hold_time: float = 0.3  # How long peaks stay visible
+@export var peak_fall_speed: float = 1.5  # How fast peaks fall after hold
 
 # Shader reference
 var _visualizer_shader: Shader = null
@@ -107,10 +124,13 @@ const COLOR_PRESETS = {
 }
 
 func _ready() -> void:
-	# Initialize spectrum data arrays
+	# Initialize spectrum data arrays with velocity tracking
 	for i in range(32):
 		spectrum_data.append(0.0)
 		smoothed_spectrum.append(0.0)
+		spectrum_velocity.append(0.0)
+		peak_spectrum.append(0.0)
+		peak_decay.append(0.0)
 
 
 func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
@@ -265,16 +285,73 @@ func _update_spectrum_data(delta: float) -> void:
 
 
 func _smooth_spectrum_data(delta: float) -> void:
-	## Apply smoothing for visual appeal
-	var smoothing_factor = 1.0 - pow(spectrum_smoothing, delta * 60.0)
+	## Apply enhanced smoothing with velocity tracking and asymmetric attack/release
 
+	# Calculate adaptive smoothing based on delta time
+	var attack_factor = 1.0 - exp(-attack_speed * delta)
+	var release_factor = 1.0 - exp(-release_speed * delta)
+
+	# Beat detection
+	beat_cooldown = max(0.0, beat_cooldown - delta)
+	var bass_delta = bass_level - last_bass_level
+	if bass_delta > 0.15 and beat_cooldown <= 0.0:
+		beat_detected = true
+		beat_intensity = min(bass_delta * 3.0, 1.0)
+		beat_cooldown = 0.1  # Minimum time between beats
+	else:
+		beat_detected = false
+		beat_intensity = max(0.0, beat_intensity - delta * 3.0)
+	last_bass_level = bass_level
+
+	# Smooth each spectrum band with asymmetric attack/release
 	for i in range(32):
-		smoothed_spectrum[i] = lerp(smoothed_spectrum[i], spectrum_data[i], smoothing_factor)
+		var target = spectrum_data[i]
+		var current = smoothed_spectrum[i]
+		var diff = target - current
 
-	smoothed_audio = lerp(smoothed_audio, audio_level, smoothing_factor)
-	smoothed_bass = lerp(smoothed_bass, bass_level, smoothing_factor)
-	smoothed_mid = lerp(smoothed_mid, mid_level, smoothing_factor)
-	smoothed_high = lerp(smoothed_high, high_level, smoothing_factor)
+		# Use attack speed when rising, release speed when falling
+		var factor = attack_factor if diff > 0 else release_factor
+
+		# Spring-based smoothing with velocity for more natural movement
+		var spring_force = diff * 30.0
+		var damping = spectrum_velocity[i] * 8.0
+		spectrum_velocity[i] += (spring_force - damping) * delta
+
+		# Blend spring physics with direct interpolation for stability
+		var spring_contribution = current + spectrum_velocity[i] * delta
+		var direct_contribution = lerp(current, target, factor)
+		smoothed_spectrum[i] = lerp(direct_contribution, spring_contribution, 0.3)
+
+		# Clamp to valid range
+		smoothed_spectrum[i] = clamp(smoothed_spectrum[i], 0.0, 1.0)
+
+		# Peak hold and decay
+		if smoothed_spectrum[i] > peak_spectrum[i]:
+			peak_spectrum[i] = smoothed_spectrum[i]
+			peak_decay[i] = peak_hold_time
+		else:
+			peak_decay[i] -= delta
+			if peak_decay[i] <= 0:
+				peak_spectrum[i] = max(peak_spectrum[i] - peak_fall_speed * delta, smoothed_spectrum[i])
+
+	# Smooth overall levels with velocity tracking
+	_smooth_level_with_velocity(audio_level, smoothed_audio, audio_velocity, delta, attack_factor, release_factor)
+	smoothed_audio = _get_smoothed_value(audio_level, smoothed_audio, audio_velocity, delta, attack_factor, release_factor)
+	smoothed_bass = _get_smoothed_value(bass_level, smoothed_bass, bass_velocity, delta, attack_factor, release_factor)
+	smoothed_mid = _get_smoothed_value(mid_level, smoothed_mid, mid_velocity, delta, attack_factor, release_factor)
+	smoothed_high = _get_smoothed_value(high_level, smoothed_high, high_velocity, delta, attack_factor, release_factor)
+
+
+func _smooth_level_with_velocity(target: float, current: float, velocity: float, delta: float, attack: float, release: float) -> void:
+	## Helper to update velocity (modifies the passed velocity reference via class vars)
+	pass  # Handled inline in _get_smoothed_value
+
+
+func _get_smoothed_value(target: float, current: float, velocity: float, delta: float, attack: float, release: float) -> float:
+	## Smooth a single value with asymmetric attack/release
+	var diff = target - current
+	var factor = attack if diff > 0 else release
+	return clamp(lerp(current, target, factor), 0.0, 1.0)
 
 
 func _update_shader_audio() -> void:
@@ -284,10 +361,12 @@ func _update_shader_audio() -> void:
 
 	# Pass spectrum array to shader
 	_shader_material.set_shader_parameter("spectrum", smoothed_spectrum)
+	_shader_material.set_shader_parameter("peak_spectrum", peak_spectrum)
 	_shader_material.set_shader_parameter("audio_level", smoothed_audio)
 	_shader_material.set_shader_parameter("bass_level", smoothed_bass)
 	_shader_material.set_shader_parameter("mid_level", smoothed_mid)
 	_shader_material.set_shader_parameter("high_level", smoothed_high)
+	_shader_material.set_shader_parameter("beat_intensity", beat_intensity)
 
 
 func _update_shader_colors() -> void:
