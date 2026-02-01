@@ -52,18 +52,18 @@ extends Node3D
 @export_group("Lighting")
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
 ## Grid-based lighting for good coverage with proper shadows
-@export var q3_light_energy: float = 0.85  ## Base light energy for grid lights
-@export var q3_light_range: float = 14.0  ## Light range for coverage
+@export var q3_light_energy: float = 1.5  ## Base light energy for grid lights
+@export var q3_light_range: float = 20.0  ## Light range for coverage
 @export var q3_light_color: Color = Color(0.92, 0.88, 0.82)  ## Warm white default
 @export var q3_grid_spacing: float = 14.0  ## Distance between grid lights
-@export var q3_ambient_energy: float = 0.35  ## Ambient fill for dark areas
+@export var q3_ambient_energy: float = 0.5  ## Ambient fill for dark areas
 @export var q3_bounce_enabled: bool = true  ## Add bounce lights near walls/ceilings
-@export var q3_bounce_energy: float = 0.3  ## Bounce light intensity
+@export var q3_bounce_energy: float = 0.5  ## Bounce light intensity
 @export var q3_use_colored_zones: bool = true  ## Apply subtle color tints per zone
 @export var q3_color_intensity: float = 0.12  ## How much zone color affects lights
 @export var q3_ceiling_lights: bool = true  ## Add ceiling-mounted lights
 @export var q3_floor_fill: bool = true  ## Add floor-level fill lights
-@export var q3_structure_boost: float = 1.2  ## Extra lighting on structures
+@export var q3_structure_boost: float = 1.5  ## Extra lighting on structures
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -943,9 +943,9 @@ func add_interior_light(position: Vector3, index: int, suffix: String = "") -> v
 	light.name = "InteriorLight_%d%s" % [index, suffix]
 	light.position = position
 	light.light_color = Color(1.0, 0.9, 0.75)  # Warm amber torch color
-	light.light_energy = q3_light_energy * 1.2
-	light.omni_range = q3_light_range * 1.0
-	light.omni_attenuation = 0.5
+	light.light_energy = q3_light_energy * 1.5
+	light.omni_range = q3_light_range * 1.2
+	light.omni_attenuation = 1.0  # Linear falloff for full coverage
 	light.shadow_enabled = false
 	add_child(light)
 	lights.append(light)
@@ -957,7 +957,7 @@ func add_structure_light(pos: Vector3, height: float, structure_size: float, ind
 		return
 
 	var base_energy: float = q3_light_energy * q3_structure_boost
-	var base_range: float = maxf(structure_size * 2.0, q3_light_range)
+	var base_range: float = maxf(structure_size * 2.5, q3_light_range * 1.5)
 
 	# Top light - bright overhead illumination
 	var top_light: OmniLight3D = OmniLight3D.new()
@@ -966,7 +966,7 @@ func add_structure_light(pos: Vector3, height: float, structure_size: float, ind
 	top_light.light_color = q3_light_color
 	top_light.light_energy = base_energy
 	top_light.omni_range = base_range
-	top_light.omni_attenuation = 0.8  # Softer falloff for better coverage
+	top_light.omni_attenuation = 1.0  # Linear falloff for full range coverage
 	top_light.shadow_enabled = false
 	add_child(top_light)
 	lights.append(top_light)
@@ -986,9 +986,9 @@ func add_structure_light(pos: Vector3, height: float, structure_size: float, ind
 		side_light.name = "StructureSideLight_%d_%d" % [index, i]
 		side_light.position = side_positions[i]
 		side_light.light_color = q3_light_color
-		side_light.light_energy = base_energy * 0.7
-		side_light.omni_range = base_range * 0.8
-		side_light.omni_attenuation = 0.8
+		side_light.light_energy = base_energy * 0.8
+		side_light.omni_range = base_range
+		side_light.omni_attenuation = 1.0  # Linear falloff
 		side_light.shadow_enabled = false
 		add_child(side_light)
 		lights.append(side_light)
@@ -998,9 +998,9 @@ func add_structure_light(pos: Vector3, height: float, structure_size: float, ind
 	ground_light.name = "StructureGroundLight_%d" % index
 	ground_light.position = Vector3(pos.x, 1.0, pos.z)
 	ground_light.light_color = q3_light_color
-	ground_light.light_energy = base_energy * 0.8
-	ground_light.omni_range = base_range * 1.2
-	ground_light.omni_attenuation = 0.7
+	ground_light.light_energy = base_energy
+	ground_light.omni_range = base_range * 1.5
+	ground_light.omni_attenuation = 1.0  # Linear falloff
 	ground_light.shadow_enabled = false
 	add_child(ground_light)
 	lights.append(ground_light)
@@ -1019,9 +1019,9 @@ func add_structure_light(pos: Vector3, height: float, structure_size: float, ind
 		corner_light.name = "StructureCornerLight_%d_%d" % [index, i]
 		corner_light.position = corner_positions[i]
 		corner_light.light_color = q3_light_color
-		corner_light.light_energy = base_energy * 0.5
-		corner_light.omni_range = base_range * 0.6
-		corner_light.omni_attenuation = 0.8
+		corner_light.light_energy = base_energy * 0.7
+		corner_light.omni_range = base_range * 0.8
+		corner_light.omni_attenuation = 1.0  # Linear falloff
 		corner_light.shadow_enabled = false
 		add_child(corner_light)
 		lights.append(corner_light)
