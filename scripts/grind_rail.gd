@@ -174,13 +174,10 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	var tangent: Vector3 = get_tangent_at_offset(state.offset)
 	var rail_pos: Vector3 = get_point_at_offset(state.offset)
 
-	# Check for player input direction
-	if "movement_input_direction" in grinder:
-		var input_dir: Vector3 = grinder.movement_input_direction
-		if input_dir.length_squared() > 0.01:
-			var dot: float = input_dir.dot(tangent)
-			if absf(dot) > 0.2:
-				state.direction = 1 if dot > 0 else -1
+	# Check for player input direction - use forward/backward keys directly
+	var input_forward: float = Input.get_axis("move_backward", "move_forward")
+	if absf(input_forward) > 0.1:
+		state.direction = 1 if input_forward > 0 else -1
 
 	# Check for boost (shift key)
 	state.is_boosting = Input.is_key_pressed(KEY_SHIFT)
