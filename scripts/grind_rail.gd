@@ -175,21 +175,26 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	var rail_pos: Vector3 = get_point_at_offset(state.offset)
 
 	# Check for player input direction - use forward/backward keys directly
-	var input_forward: float = Input.get_axis("move_backward", "move_forward")
+	# "up" = W key (forward), "down" = S key (backward)
+	var input_forward: float = Input.get_axis("down", "up")
 	if absf(input_forward) > 0.1:
 		state.direction = 1 if input_forward > 0 else -1
 
 	# Check for boost (shift key)
 	state.is_boosting = Input.is_key_pressed(KEY_SHIFT)
 
-	# Check if at edge and trying to move off - stop completely
+	# Check if at edge - detach smoothly without launch
 	var at_start_edge: bool = state.offset <= 0.5 and state.direction == -1
 	var at_end_edge: bool = state.offset >= length - 0.5 and state.direction == 1
 
 	if at_start_edge or at_end_edge:
-		# At edge pointing toward it - stay stopped
-		state.speed = 0.0
-		state.offset = clamp(state.offset, 0.5, length - 0.5)
+		# At edge - detach smoothly (no launch impulse)
+		var exit_velocity: Vector3 = tangent * state.direction * state.speed
+		grinder.linear_velocity = exit_velocity
+		active_grinders.erase(grinder)
+		if grinder.has_method("stop_grinding"):
+			grinder.stop_grinding()
+		return
 	else:
 		# Calculate slope influence
 		var look_ahead: float = clamp(state.offset + state.direction * 2.0, 0, length)
