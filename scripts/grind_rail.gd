@@ -16,9 +16,6 @@ class_name GrindRail
 @export var boost_acceleration: float = 40.0  # Additional acceleration when shift held
 @export var boost_max_speed: float = 70.0  # Max speed when boosting
 
-# Launch settings
-@export var end_launch_upward: float = 18.0  # Upward impulse at rail end
-@export var end_launch_forward_mult: float = 0.8  # Forward velocity multiplier at end
 
 # Targeting
 @export var max_attach_distance: float = 25.0  # Max distance for E key attachment
@@ -212,16 +209,17 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Move along rail
 	state.offset += state.direction * state.speed * delta
 
-	# Check for end of rail
-	var min_grind_time: float = 0.3
-	var time_grinding: float = Time.get_ticks_msec() / 1000.0 - state.attach_time
-
-	if time_grinding > min_grind_time and (state.offset <= 0.5 or state.offset >= length - 0.5):
-		_launch_grinder(grinder, state, tangent)
-		return
-
-	# Clamp offset
-	state.offset = clamp(state.offset, 0.5, length - 0.5)
+	# Check for end of rail - stop at edge and allow direction reversal
+	if state.offset <= 0.5:
+		state.offset = 0.5
+		# Stop if moving toward the edge
+		if state.direction == -1:
+			state.speed = 0.0
+	elif state.offset >= length - 0.5:
+		state.offset = length - 0.5
+		# Stop if moving toward the edge
+		if state.direction == 1:
+			state.speed = 0.0
 
 	# Position player on rail
 	var target_pos: Vector3 = get_point_at_offset(state.offset)
@@ -242,23 +240,3 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 		grinder.angular_velocity = grinder.angular_velocity.lerp(Vector3.ZERO, 5.0 * delta)
 
 
-func _launch_grinder(grinder: RigidBody3D, state: GrinderState, tangent: Vector3) -> void:
-	"""Launch player at end of rail"""
-	DebugLogger.dlog(DebugLogger.Category.RAILS, "[%s] End of rail - launching!" % name)
-
-	# Calculate exit velocity
-	var exit_velocity: Vector3 = tangent * state.direction * state.speed * end_launch_forward_mult
-	exit_velocity.y += end_launch_upward
-
-	# Notify player before clearing state
-	if grinder.has_method("launch_from_rail"):
-		grinder.launch_from_rail(exit_velocity)
-
-	# Apply impulse
-	grinder.linear_velocity = exit_velocity
-
-	# Clean up
-	active_grinders.erase(grinder)
-
-	if grinder.has_method("stop_grinding"):
-		grinder.stop_grinding()
