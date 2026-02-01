@@ -182,41 +182,39 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Check for boost (shift key)
 	state.is_boosting = Input.is_key_pressed(KEY_SHIFT)
 
-	# Calculate slope influence
-	var look_ahead: float = clamp(state.offset + state.direction * 2.0, 0, length)
-	var ahead_pos: Vector3 = get_point_at_offset(look_ahead)
-	var slope: float = (rail_pos.y - ahead_pos.y) * state.direction  # Positive = downhill
+	# Check if at edge and trying to move off - stop completely
+	var at_start_edge: bool = state.offset <= 0.5 and state.direction == -1
+	var at_end_edge: bool = state.offset >= length - 0.5 and state.direction == 1
 
-	# Apply acceleration
-	var accel: float = rail_acceleration
-	if state.is_boosting:
-		accel += boost_acceleration
+	if at_start_edge or at_end_edge:
+		# At edge pointing toward it - stay stopped
+		state.speed = 0.0
+		state.offset = clamp(state.offset, 0.5, length - 0.5)
+	else:
+		# Calculate slope influence
+		var look_ahead: float = clamp(state.offset + state.direction * 2.0, 0, length)
+		var ahead_pos: Vector3 = get_point_at_offset(look_ahead)
+		var slope: float = (rail_pos.y - ahead_pos.y) * state.direction  # Positive = downhill
 
-	# Slope affects speed
-	accel += slope * gravity_influence * 50.0
+		# Apply acceleration
+		var accel: float = rail_acceleration
+		if state.is_boosting:
+			accel += boost_acceleration
 
-	# Accelerate
-	var target_speed: float = max_rail_speed
-	if state.is_boosting:
-		target_speed = boost_max_speed
+		# Slope affects speed
+		accel += slope * gravity_influence * 50.0
 
-	state.speed = minf(state.speed + accel * delta, target_speed)
-	state.speed = maxf(state.speed, rail_speed * 0.5)  # Minimum speed
+		# Accelerate
+		var target_speed: float = max_rail_speed
+		if state.is_boosting:
+			target_speed = boost_max_speed
 
-	# Move along rail
-	state.offset += state.direction * state.speed * delta
+		state.speed = minf(state.speed + accel * delta, target_speed)
+		state.speed = maxf(state.speed, rail_speed * 0.5)  # Minimum speed
 
-	# Check for end of rail - stop at edge and allow direction reversal
-	if state.offset <= 0.5:
-		state.offset = 0.5
-		# Stop if moving toward the edge
-		if state.direction == -1:
-			state.speed = 0.0
-	elif state.offset >= length - 0.5:
-		state.offset = length - 0.5
-		# Stop if moving toward the edge
-		if state.direction == 1:
-			state.speed = 0.0
+		# Move along rail
+		state.offset += state.direction * state.speed * delta
+		state.offset = clamp(state.offset, 0.5, length - 0.5)
 
 	# Position player on rail
 	var target_pos: Vector3 = get_point_at_offset(state.offset)
