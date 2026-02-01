@@ -15,11 +15,15 @@ uniform float wear_amount : hint_range(0.0, 1.0) = 0.2;
 
 // Enhanced visual controls
 uniform float edge_wear_strength : hint_range(0.0, 1.0) = 0.4;
-uniform float ao_strength : hint_range(0.0, 1.0) = 0.5;
+uniform float ao_strength : hint_range(0.0, 1.0) = 0.25;  // Reduced for Q3-style bright lighting
 uniform float wet_area_amount : hint_range(0.0, 1.0) = 0.15;
 uniform float color_variation : hint_range(0.0, 0.3) = 0.08;
-uniform float emission_strength : hint_range(0.0, 0.5) = 0.02;
-uniform vec3 emission_tint : source_color = vec3(0.6, 0.7, 0.8);
+uniform float emission_strength : hint_range(0.0, 0.5) = 0.05;  // Increased base emission
+uniform vec3 emission_tint : source_color = vec3(0.8, 0.85, 0.9);  // Brighter emission tint
+
+// Q3-style lighting controls - ensures no dark spots
+uniform float min_brightness : hint_range(0.0, 0.5) = 0.15;  // Minimum surface brightness
+uniform float ambient_boost : hint_range(0.0, 0.5) = 0.1;  // Extra ambient for dark areas
 
 // Simple hash function for noise
 float hash(vec2 p) {
@@ -117,15 +121,16 @@ float edge_factor(vec3 normal, vec3 world_pos) {
 	return smoothstep(0.0, 0.15, normal_variance * pos_noise);
 }
 
-// Ambient occlusion approximation from noise
+// Ambient occlusion approximation from noise - Q3-style (minimal darkening)
 float calculate_ao(vec3 world_pos, vec3 normal) {
-	// Use multiple noise octaves to simulate AO in crevices
+	// Use reduced noise for very subtle AO - Q3 had minimal dark spots
 	float ao = 1.0;
-	ao -= fbm(world_pos.xz * 2.0) * 0.3;
-	ao -= noise3d(world_pos * 1.5) * 0.2;
-	// Darken areas where normal points down (under overhangs)
-	ao *= 0.7 + 0.3 * max(0.0, normal.y);
-	return clamp(ao, 0.3, 1.0);
+	ao -= fbm(world_pos.xz * 2.0) * 0.15;  // Reduced from 0.3
+	ao -= noise3d(world_pos * 1.5) * 0.1;   // Reduced from 0.2
+	// Minimal darkening under overhangs - keep surfaces bright
+	ao *= 0.85 + 0.15 * max(0.0, normal.y);  // Less aggressive
+	// Q3-style: ensure high minimum brightness
+	return clamp(ao, 0.6, 1.0);  // Raised minimum from 0.3 to 0.6
 }
 
 // Wet/glossy puddle effect
@@ -197,11 +202,22 @@ void fragment() {
 	vec3 edge_highlight = mix(varied_base, varied_accent, 0.3) * 1.3;
 	final_color = mix(final_color, edge_highlight, edge * 0.6);
 
-	// Apply ambient occlusion
+	// Apply ambient occlusion (reduced strength for Q3-style)
 	final_color *= mix(1.0, ao, ao_strength);
 
 	// Apply wet areas (darken slightly, will increase glossiness)
-	final_color = mix(final_color, final_color * 0.85, wet);
+	final_color = mix(final_color, final_color * 0.9, wet);  // Less darkening
+
+	// Q3-style minimum brightness - ensure no surface goes too dark
+	float brightness = max(final_color.r, max(final_color.g, final_color.b));
+	if (brightness < min_brightness) {
+		float boost = min_brightness / max(brightness, 0.001);
+		final_color *= boost;
+	}
+
+	// Add ambient boost to ensure surfaces catch light
+	final_color += vec3(ambient_boost);
+	final_color = clamp(final_color, vec3(0.0), vec3(1.0));
 
 	// Output
 	ALBEDO = final_color;
@@ -224,12 +240,14 @@ void fragment() {
 	NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
 	NORMAL_MAP_DEPTH = 0.6;
 
-	// Subtle emission on edges and wet areas (colored, not white)
+	// Q3-style emission - subtle self-illumination to prevent dark spots
 	vec3 emit_color = emission_tint * final_color;
-	float emit_amount = (edge * 0.5 + wet * 0.3) * emission_strength;
-	EMISSION = emit_color * emit_amount;
+	// Base emission plus edge/wet emphasis
+	float base_emit = emission_strength * 0.5;  // Constant base emission
+	float detail_emit = (edge * 0.3 + wet * 0.2) * emission_strength;
+	EMISSION = emit_color * (base_emit + detail_emit);
 
-	// Apply AO to the final output
+	// Apply AO to the final output - reduced influence for Q3-style
 	AO = ao;
-	AO_LIGHT_AFFECT = 0.5;
+	AO_LIGHT_AFFECT = 0.3;  // Reduced from 0.5 - less shadow influence
 }

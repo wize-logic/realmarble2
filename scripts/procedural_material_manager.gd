@@ -2,176 +2,196 @@ extends Node
 
 ## Procedural Material Manager
 ## Creates and applies beautiful context-aware materials to level geometry
-## Enhanced with edge wear, ambient occlusion, wet areas, and color variation
+## Enhanced with Quake 3-style lighting: bright surfaces with no dark spots
 
 # Pre-load the shader
 const PROCEDURAL_SHADER = preload("res://scripts/shaders/procedural_surface.gdshader")
 
-# Material presets for different surface types with enhanced parameters
+# Q3-style material presets - reduced AO, increased emission, brighter overall
 const MATERIAL_PRESETS = {
 	"floor": {
-		"base_color": Color(0.35, 0.38, 0.42),  # Cool gray
-		"accent_color": Color(0.25, 0.28, 0.32),
+		"base_color": Color(0.42, 0.45, 0.50),  # Brighter cool gray
+		"accent_color": Color(0.32, 0.35, 0.40),
 		"roughness": 0.85,
 		"metallic": 0.15,
 		"scale": 3.0,
 		"pattern_mix": 0.6,
 		"detail_strength": 0.4,
-		"wear_amount": 0.3,
+		"wear_amount": 0.25,
 		"edge_wear_strength": 0.35,
-		"ao_strength": 0.5,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.12,
 		"color_variation": 0.06,
-		"emission_strength": 0.01,
-		"emission_tint": Color(0.5, 0.6, 0.7)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.7, 0.75, 0.8),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"wall": {
-		"base_color": Color(0.45, 0.42, 0.38),  # Warm concrete
-		"accent_color": Color(0.35, 0.32, 0.28),
+		"base_color": Color(0.52, 0.50, 0.46),  # Brighter warm concrete
+		"accent_color": Color(0.42, 0.40, 0.36),
 		"roughness": 0.9,
 		"metallic": 0.0,
 		"scale": 2.5,
 		"pattern_mix": 0.4,
 		"detail_strength": 0.5,
-		"wear_amount": 0.4,
+		"wear_amount": 0.35,
 		"edge_wear_strength": 0.5,
-		"ao_strength": 0.6,
+		"ao_strength": 0.25,  # Reduced for Q3-style
 		"wet_area_amount": 0.08,
 		"color_variation": 0.05,
-		"emission_strength": 0.005,
-		"emission_tint": Color(0.6, 0.55, 0.5)
+		"emission_strength": 0.03,  # Increased for Q3-style
+		"emission_tint": Color(0.75, 0.7, 0.65),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"platform": {
-		"base_color": Color(0.28, 0.42, 0.52),  # Blue-gray metal
-		"accent_color": Color(0.18, 0.32, 0.42),
+		"base_color": Color(0.38, 0.52, 0.62),  # Brighter blue-gray metal
+		"accent_color": Color(0.28, 0.42, 0.52),
 		"roughness": 0.7,
 		"metallic": 0.5,
 		"scale": 4.0,
 		"pattern_mix": 0.7,
 		"detail_strength": 0.35,
-		"wear_amount": 0.25,
+		"wear_amount": 0.2,
 		"edge_wear_strength": 0.6,
-		"ao_strength": 0.45,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.2,
 		"color_variation": 0.08,
-		"emission_strength": 0.02,
-		"emission_tint": Color(0.5, 0.7, 0.85)
+		"emission_strength": 0.05,  # Increased for Q3-style
+		"emission_tint": Color(0.6, 0.8, 0.95),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.12
 	},
 	"ramp": {
-		"base_color": Color(0.48, 0.38, 0.28),  # Rust/copper
-		"accent_color": Color(0.38, 0.28, 0.18),
+		"base_color": Color(0.55, 0.45, 0.35),  # Brighter rust/copper
+		"accent_color": Color(0.45, 0.35, 0.25),
 		"roughness": 0.75,
 		"metallic": 0.35,
 		"scale": 3.5,
 		"pattern_mix": 0.5,
 		"detail_strength": 0.4,
-		"wear_amount": 0.35,
+		"wear_amount": 0.3,
 		"edge_wear_strength": 0.55,
-		"ao_strength": 0.5,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.1,
 		"color_variation": 0.1,
-		"emission_strength": 0.015,
-		"emission_tint": Color(0.7, 0.55, 0.4)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.8, 0.65, 0.5),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"pillar": {
-		"base_color": Color(0.38, 0.35, 0.32),  # Dark stone
-		"accent_color": Color(0.28, 0.25, 0.22),
+		"base_color": Color(0.48, 0.45, 0.42),  # Brighter dark stone
+		"accent_color": Color(0.38, 0.35, 0.32),
 		"roughness": 0.95,
 		"metallic": 0.05,
 		"scale": 2.0,
 		"pattern_mix": 0.3,
 		"detail_strength": 0.6,
-		"wear_amount": 0.5,
+		"wear_amount": 0.4,
 		"edge_wear_strength": 0.7,
-		"ao_strength": 0.65,
+		"ao_strength": 0.25,  # Reduced for Q3-style
 		"wet_area_amount": 0.05,
 		"color_variation": 0.04,
-		"emission_strength": 0.0,
-		"emission_tint": Color(0.5, 0.5, 0.5)
+		"emission_strength": 0.03,  # Added emission for Q3-style
+		"emission_tint": Color(0.65, 0.65, 0.65),
+		"min_brightness": 0.18,
+		"ambient_boost": 0.12
 	},
 	"cover": {
-		"base_color": Color(0.42, 0.38, 0.32),  # Military gray-brown
-		"accent_color": Color(0.32, 0.28, 0.22),
+		"base_color": Color(0.50, 0.46, 0.40),  # Brighter military gray-brown
+		"accent_color": Color(0.40, 0.36, 0.30),
 		"roughness": 0.8,
 		"metallic": 0.25,
 		"scale": 5.0,
 		"pattern_mix": 0.45,
 		"detail_strength": 0.3,
-		"wear_amount": 0.4,
+		"wear_amount": 0.35,
 		"edge_wear_strength": 0.5,
-		"ao_strength": 0.55,
+		"ao_strength": 0.22,  # Reduced for Q3-style
 		"wet_area_amount": 0.15,
 		"color_variation": 0.07,
-		"emission_strength": 0.01,
-		"emission_tint": Color(0.6, 0.55, 0.5)
+		"emission_strength": 0.035,  # Increased for Q3-style
+		"emission_tint": Color(0.7, 0.65, 0.6),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"room_floor": {
-		"base_color": Color(0.32, 0.35, 0.38),  # Cool industrial
-		"accent_color": Color(0.22, 0.25, 0.28),
+		"base_color": Color(0.42, 0.45, 0.48),  # Brighter cool industrial
+		"accent_color": Color(0.32, 0.35, 0.38),
 		"roughness": 0.85,
 		"metallic": 0.15,
 		"scale": 4.5,
 		"pattern_mix": 0.65,
 		"detail_strength": 0.45,
-		"wear_amount": 0.35,
+		"wear_amount": 0.3,
 		"edge_wear_strength": 0.4,
-		"ao_strength": 0.55,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.18,
 		"color_variation": 0.06,
-		"emission_strength": 0.015,
-		"emission_tint": Color(0.55, 0.6, 0.7)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.65, 0.7, 0.8),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"room_wall": {
-		"base_color": Color(0.38, 0.42, 0.45),  # Tech facility
-		"accent_color": Color(0.28, 0.32, 0.35),
+		"base_color": Color(0.48, 0.52, 0.55),  # Brighter tech facility
+		"accent_color": Color(0.38, 0.42, 0.45),
 		"roughness": 0.8,
 		"metallic": 0.3,
 		"scale": 3.0,
 		"pattern_mix": 0.55,
 		"detail_strength": 0.4,
-		"wear_amount": 0.3,
+		"wear_amount": 0.25,
 		"edge_wear_strength": 0.45,
-		"ao_strength": 0.5,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.1,
 		"color_variation": 0.05,
-		"emission_strength": 0.02,
-		"emission_tint": Color(0.6, 0.7, 0.8)
+		"emission_strength": 0.045,  # Increased for Q3-style
+		"emission_tint": Color(0.7, 0.8, 0.9),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"corridor": {
-		"base_color": Color(0.35, 0.38, 0.40),  # Neutral corridor
-		"accent_color": Color(0.25, 0.28, 0.30),
+		"base_color": Color(0.45, 0.48, 0.50),  # Brighter neutral corridor
+		"accent_color": Color(0.35, 0.38, 0.40),
 		"roughness": 0.85,
 		"metallic": 0.2,
 		"scale": 3.5,
 		"pattern_mix": 0.5,
 		"detail_strength": 0.35,
-		"wear_amount": 0.3,
+		"wear_amount": 0.25,
 		"edge_wear_strength": 0.4,
-		"ao_strength": 0.5,
+		"ao_strength": 0.2,  # Reduced for Q3-style
 		"wet_area_amount": 0.15,
 		"color_variation": 0.05,
-		"emission_strength": 0.01,
-		"emission_tint": Color(0.6, 0.65, 0.75)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.7, 0.75, 0.85),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"halfpipe": {
-		"base_color": Color(0.45, 0.48, 0.52),  # Smooth concrete
-		"accent_color": Color(0.35, 0.38, 0.42),
+		"base_color": Color(0.52, 0.55, 0.60),  # Brighter smooth concrete
+		"accent_color": Color(0.42, 0.45, 0.50),
 		"roughness": 0.55,
 		"metallic": 0.15,
 		"scale": 4.0,
 		"pattern_mix": 0.3,
 		"detail_strength": 0.25,
-		"wear_amount": 0.2,
+		"wear_amount": 0.15,
 		"edge_wear_strength": 0.3,
-		"ao_strength": 0.4,
-		"wet_area_amount": 0.25,  # More wet for smoother surface
+		"ao_strength": 0.18,  # Reduced for Q3-style
+		"wet_area_amount": 0.25,
 		"color_variation": 0.04,
-		"emission_strength": 0.01,
-		"emission_tint": Color(0.65, 0.7, 0.8)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.75, 0.8, 0.9),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"spring": {
-		"base_color": Color(0.75, 0.2, 0.2),  # Red base
-		"accent_color": Color(0.55, 0.1, 0.1),
+		"base_color": Color(0.80, 0.28, 0.28),  # Brighter red base
+		"accent_color": Color(0.60, 0.18, 0.18),
 		"roughness": 0.35,
 		"metallic": 0.6,
 		"scale": 2.0,
@@ -179,59 +199,67 @@ const MATERIAL_PRESETS = {
 		"detail_strength": 0.3,
 		"wear_amount": 0.1,
 		"edge_wear_strength": 0.5,
-		"ao_strength": 0.35,
-		"wet_area_amount": 0.3,  # Glossy
+		"ao_strength": 0.15,  # Reduced for Q3-style
+		"wet_area_amount": 0.3,
 		"color_variation": 0.08,
-		"emission_strength": 0.03,
-		"emission_tint": Color(0.9, 0.4, 0.3)
+		"emission_strength": 0.06,  # Increased for Q3-style
+		"emission_tint": Color(0.95, 0.5, 0.4),
+		"min_brightness": 0.2,
+		"ambient_boost": 0.12
 	},
 	"metal_grate": {
-		"base_color": Color(0.3, 0.32, 0.35),  # Dark metal
-		"accent_color": Color(0.2, 0.22, 0.25),
+		"base_color": Color(0.40, 0.42, 0.45),  # Brighter dark metal
+		"accent_color": Color(0.30, 0.32, 0.35),
 		"roughness": 0.6,
 		"metallic": 0.7,
 		"scale": 6.0,
 		"pattern_mix": 0.8,
 		"detail_strength": 0.5,
-		"wear_amount": 0.35,
+		"wear_amount": 0.3,
 		"edge_wear_strength": 0.65,
-		"ao_strength": 0.6,
+		"ao_strength": 0.22,  # Reduced for Q3-style
 		"wet_area_amount": 0.2,
 		"color_variation": 0.05,
-		"emission_strength": 0.015,
-		"emission_tint": Color(0.5, 0.55, 0.65)
+		"emission_strength": 0.04,  # Increased for Q3-style
+		"emission_tint": Color(0.6, 0.65, 0.75),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	},
 	"tech_panel": {
-		"base_color": Color(0.25, 0.35, 0.45),  # Tech blue
-		"accent_color": Color(0.15, 0.25, 0.35),
+		"base_color": Color(0.35, 0.45, 0.55),  # Brighter tech blue
+		"accent_color": Color(0.25, 0.35, 0.45),
 		"roughness": 0.5,
 		"metallic": 0.55,
 		"scale": 5.0,
 		"pattern_mix": 0.75,
 		"detail_strength": 0.3,
-		"wear_amount": 0.15,
+		"wear_amount": 0.12,
 		"edge_wear_strength": 0.4,
-		"ao_strength": 0.4,
+		"ao_strength": 0.18,  # Reduced for Q3-style
 		"wet_area_amount": 0.3,
 		"color_variation": 0.06,
-		"emission_strength": 0.04,
-		"emission_tint": Color(0.4, 0.6, 0.9)
+		"emission_strength": 0.06,  # Increased for Q3-style
+		"emission_tint": Color(0.5, 0.7, 0.95),
+		"min_brightness": 0.18,
+		"ambient_boost": 0.12
 	},
 	"rusty_metal": {
-		"base_color": Color(0.5, 0.35, 0.2),  # Rusty orange-brown
-		"accent_color": Color(0.35, 0.2, 0.1),
+		"base_color": Color(0.55, 0.42, 0.28),  # Brighter rusty orange-brown
+		"accent_color": Color(0.42, 0.28, 0.18),
 		"roughness": 0.9,
 		"metallic": 0.3,
 		"scale": 2.5,
 		"pattern_mix": 0.5,
 		"detail_strength": 0.65,
-		"wear_amount": 0.6,
+		"wear_amount": 0.5,
 		"edge_wear_strength": 0.75,
-		"ao_strength": 0.6,
+		"ao_strength": 0.25,  # Reduced for Q3-style
 		"wet_area_amount": 0.05,
 		"color_variation": 0.12,
-		"emission_strength": 0.0,
-		"emission_tint": Color(0.6, 0.4, 0.3)
+		"emission_strength": 0.025,  # Added emission for Q3-style
+		"emission_tint": Color(0.7, 0.5, 0.4),
+		"min_brightness": 0.15,
+		"ambient_boost": 0.1
 	}
 }
 
@@ -259,6 +287,10 @@ func create_material(preset_name: String, color_variation: float = 0.0) -> Shade
 	material.set_shader_parameter("color_variation", preset.color_variation)
 	material.set_shader_parameter("emission_strength", preset.emission_strength)
 	material.set_shader_parameter("emission_tint", preset.emission_tint)
+
+	# Q3-style lighting parameters
+	material.set_shader_parameter("min_brightness", preset.min_brightness)
+	material.set_shader_parameter("ambient_boost", preset.ambient_boost)
 
 	# Add color variation if specified (additional to preset variation)
 	if color_variation > 0.0:
