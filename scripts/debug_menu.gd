@@ -8,7 +8,7 @@ var vbox: VBoxContainer = null
 
 # Pagination system
 var current_page: int = 0
-var total_pages: int = 5  # Added bot AI status page (v5.0)
+var total_pages: int = 6  # Added visualizer controls page
 var page_title: Label = null
 var page_indicator: Label = null
 var prev_button: Button = null
@@ -165,6 +165,8 @@ func show_page(page: int) -> void:
 			build_page_3()  # Debug Logging Controls
 		4:
 			build_page_4()  # Bot AI Status (v5.0)
+		5:
+			build_page_5()  # Visualizer Controls
 
 func _on_prev_page() -> void:
 	"""Go to previous page"""
@@ -680,6 +682,144 @@ func build_page_4() -> void:
 	legend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	page_content.add_child(legend_label)
 
+func build_page_5() -> void:
+	"""Build Page 5: Visualizer Controls"""
+	if not page_content:
+		return
+
+	# Section label
+	var section_label = Label.new()
+	section_label.text = "VISUALIZER CONTROLS"
+	section_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.8))
+	page_content.add_child(section_label)
+
+	page_content.add_child(HSeparator.new())
+
+	# Get visualizer manager
+	var visualizer = _get_visualizer_manager()
+
+	if not visualizer:
+		var no_viz_label = Label.new()
+		no_viz_label.text = "No visualizer active.\nEnable visualizer walls in level settings."
+		no_viz_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		no_viz_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+		page_content.add_child(no_viz_label)
+		return
+
+	# Current mode display
+	var mode_label = Label.new()
+	mode_label.text = "Current Mode: %s" % visualizer.get_current_mode_name()
+	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mode_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.8))
+	page_content.add_child(mode_label)
+
+	# Mode cycle buttons
+	var mode_hbox = HBoxContainer.new()
+	mode_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	page_content.add_child(mode_hbox)
+
+	var prev_mode_btn = Button.new()
+	prev_mode_btn.text = "< Prev Mode"
+	prev_mode_btn.pressed.connect(_on_prev_visualizer_mode)
+	mode_hbox.add_child(prev_mode_btn)
+
+	var next_mode_btn = Button.new()
+	next_mode_btn.text = "Next Mode >"
+	next_mode_btn.pressed.connect(_on_next_visualizer_mode)
+	mode_hbox.add_child(next_mode_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Direct mode selection
+	var modes_label = Label.new()
+	modes_label.text = "Select Mode:"
+	modes_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	page_content.add_child(modes_label)
+
+	var modes_grid = GridContainer.new()
+	modes_grid.columns = 3
+	page_content.add_child(modes_grid)
+
+	var mode_names = ["BARS", "SCOPE", "AMBIENCE", "BATTERY", "PLENOPTIC"]
+	for i in range(mode_names.size()):
+		var mode_btn = Button.new()
+		mode_btn.text = mode_names[i]
+		mode_btn.pressed.connect(_on_set_visualizer_mode.bind(i))
+		modes_grid.add_child(mode_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Color presets
+	var presets_label = Label.new()
+	presets_label.text = "Color Presets:"
+	presets_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	page_content.add_child(presets_label)
+
+	# Create scrollable container for presets
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 120)
+	page_content.add_child(scroll)
+
+	var presets_grid = GridContainer.new()
+	presets_grid.columns = 4
+	presets_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(presets_grid)
+
+	var presets = visualizer.get_available_presets()
+	for preset_name in presets:
+		var preset_btn = Button.new()
+		preset_btn.text = preset_name.capitalize()
+		preset_btn.pressed.connect(_on_set_visualizer_preset.bind(preset_name))
+		presets_grid.add_child(preset_btn)
+
+	page_content.add_child(HSeparator.new())
+
+	# Glow intensity slider
+	var glow_hbox = HBoxContainer.new()
+	page_content.add_child(glow_hbox)
+
+	var glow_label = Label.new()
+	glow_label.text = "Glow: %.1f" % visualizer.glow_intensity
+	glow_label.custom_minimum_size = Vector2(80, 0)
+	glow_hbox.add_child(glow_label)
+
+	var glow_slider = HSlider.new()
+	glow_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	glow_slider.min_value = 0.0
+	glow_slider.max_value = 3.0
+	glow_slider.step = 0.1
+	glow_slider.value = visualizer.glow_intensity
+	glow_slider.value_changed.connect(_on_visualizer_glow_changed.bind(glow_label))
+	glow_hbox.add_child(glow_slider)
+
+	# Sensitivity slider
+	var sens_hbox = HBoxContainer.new()
+	page_content.add_child(sens_hbox)
+
+	var sens_label = Label.new()
+	sens_label.text = "Sensitivity: %.1f" % visualizer.sensitivity
+	sens_label.custom_minimum_size = Vector2(80, 0)
+	sens_hbox.add_child(sens_label)
+
+	var sens_slider = HSlider.new()
+	sens_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sens_slider.min_value = 0.5
+	sens_slider.max_value = 5.0
+	sens_slider.step = 0.1
+	sens_slider.value = visualizer.sensitivity
+	sens_slider.value_changed.connect(_on_visualizer_sensitivity_changed.bind(sens_label))
+	sens_hbox.add_child(sens_slider)
+
+	# Info
+	page_content.add_child(HSeparator.new())
+	var info_label = Label.new()
+	info_label.text = "Visualizer reacts to music on 'Music' audio bus"
+	info_label.add_theme_font_size_override("font_size", 10)
+	info_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	page_content.add_child(info_label)
+
 # ============================================================================
 # BUTTON HANDLERS
 # ============================================================================
@@ -1060,3 +1200,79 @@ func _on_watch_player() -> void:
 		show_page(current_page)
 	else:
 		print("Error: No local player found")
+
+# ============================================================================
+# VISUALIZER HANDLERS
+# ============================================================================
+
+func _get_visualizer_manager() -> Node:
+	"""Get the active visualizer wall manager"""
+	var world: Node = get_tree().get_root().get_node_or_null("World")
+	if not world:
+		return null
+
+	# Check for visualizer_manager directly on world
+	if "visualizer_manager" in world and world.visualizer_manager:
+		return world.visualizer_manager
+
+	# Search in level generator
+	var level_gen: Node = world.get_node_or_null("LevelGenerator")
+	if level_gen and "visualizer_manager" in level_gen and level_gen.visualizer_manager:
+		return level_gen.visualizer_manager
+
+	# Search for VisualizerWallManager in the tree
+	var visualizers = get_tree().get_nodes_in_group("visualizer_managers")
+	if visualizers.size() > 0:
+		return visualizers[0]
+
+	# Last resort: search by class name
+	for child in world.get_children():
+		if child.name.contains("Visualizer") and child.has_method("set_mode"):
+			return child
+
+	return null
+
+func _on_prev_visualizer_mode() -> void:
+	"""Switch to previous visualizer mode"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.previous_mode()
+		show_page(current_page)  # Refresh to update mode label
+		print("Visualizer mode: %s" % visualizer.get_current_mode_name())
+
+func _on_next_visualizer_mode() -> void:
+	"""Switch to next visualizer mode"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.next_mode()
+		show_page(current_page)  # Refresh to update mode label
+		print("Visualizer mode: %s" % visualizer.get_current_mode_name())
+
+func _on_set_visualizer_mode(mode: int) -> void:
+	"""Set a specific visualizer mode"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.set_mode(mode)
+		show_page(current_page)  # Refresh to update mode label
+		print("Visualizer mode set to: %s" % visualizer.get_current_mode_name())
+
+func _on_set_visualizer_preset(preset_name: String) -> void:
+	"""Set a color preset"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.set_color_preset(preset_name)
+		print("Visualizer preset: %s" % preset_name)
+
+func _on_visualizer_glow_changed(value: float, label: Label) -> void:
+	"""Change glow intensity"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.set_glow_intensity(value)
+		label.text = "Glow: %.1f" % value
+
+func _on_visualizer_sensitivity_changed(value: float, label: Label) -> void:
+	"""Change audio sensitivity"""
+	var visualizer = _get_visualizer_manager()
+	if visualizer:
+		visualizer.set_sensitivity(value)
+		label.text = "Sensitivity: %.1f" % value
