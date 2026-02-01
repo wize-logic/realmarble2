@@ -112,6 +112,8 @@ var targeted_rail: GrindRail = null  # The rail currently being looked at
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
+var post_rail_detach_frames: int = 0  # Grace period frames after detaching from rail
+var consecutive_air_frames: int = 0  # Counter for consecutive frames in the air
 
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
