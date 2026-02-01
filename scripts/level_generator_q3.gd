@@ -51,19 +51,19 @@ extends Node3D
 
 @export_group("Lighting")
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
-## Quake 3 Style Lighting - Grid-based full coverage with no dark spots
-@export var q3_light_energy: float = 1.2  ## Base light energy for grid lights
-@export var q3_light_range: float = 16.0  ## Light range - overlapping for full coverage
-@export var q3_light_color: Color = Color(0.95, 0.90, 0.85)  ## Warm white default
-@export var q3_grid_spacing: float = 12.0  ## Distance between grid lights (smaller = more coverage)
-@export var q3_ambient_energy: float = 0.6  ## Strong ambient fill to eliminate dark spots
+## Grid-based lighting for good coverage with proper shadows
+@export var q3_light_energy: float = 0.85  ## Base light energy for grid lights
+@export var q3_light_range: float = 14.0  ## Light range for coverage
+@export var q3_light_color: Color = Color(0.92, 0.88, 0.82)  ## Warm white default
+@export var q3_grid_spacing: float = 14.0  ## Distance between grid lights
+@export var q3_ambient_energy: float = 0.35  ## Ambient fill for dark areas
 @export var q3_bounce_enabled: bool = true  ## Add bounce lights near walls/ceilings
-@export var q3_bounce_energy: float = 0.5  ## Bounce light intensity
+@export var q3_bounce_energy: float = 0.3  ## Bounce light intensity
 @export var q3_use_colored_zones: bool = true  ## Apply subtle color tints per zone
-@export var q3_color_intensity: float = 0.15  ## How much zone color affects lights
+@export var q3_color_intensity: float = 0.12  ## How much zone color affects lights
 @export var q3_ceiling_lights: bool = true  ## Add ceiling-mounted lights
 @export var q3_floor_fill: bool = true  ## Add floor-level fill lights
-@export var q3_structure_boost: float = 1.5  ## Extra lighting on structures
+@export var q3_structure_boost: float = 1.2  ## Extra lighting on structures
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
