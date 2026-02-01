@@ -26,22 +26,26 @@ sky_material = SubResource("PhysicalSkyMaterial_r06yd")
 [sub_resource type="Environment" id="Environment_v7lsv"]
 background_mode = 2
 sky = SubResource("Sky_78err")
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.72, 0.68, 1)
+ambient_light_energy = 0.12
+reflected_light_source = 2
 tonemap_mode = 2
 tonemap_white = 6.0
-tonemap_exposure = 1.15
+tonemap_exposure = 1.0
 glow_enabled = true
-glow_intensity = 0.15
-glow_strength = 0.3
-glow_bloom = 0.05
+glow_intensity = 0.12
+glow_strength = 0.25
+glow_bloom = 0.03
 glow_blend_mode = 0
-glow_hdr_threshold = 2.5
-glow_hdr_scale = 0.4
-glow_hdr_luminance_cap = 12.0
+glow_hdr_threshold = 2.0
+glow_hdr_scale = 0.35
+glow_hdr_luminance_cap = 10.0
 fog_enabled = false
 adjustment_enabled = true
-adjustment_brightness = 1.1
+adjustment_brightness = 1.0
 adjustment_contrast = 1.15
-adjustment_saturation = 1.05
+adjustment_saturation = 1.02
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
 
@@ -115,11 +119,11 @@ camera_attributes = SubResource("CameraAttributesPractical_wntx8")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.835807, -0.47011, 0.283589, -0.375944, 0.866496, 0.328406, -0.400115, 0.167871, -0.900959, 0, 4.88489, 0)
-light_color = Color(0.95, 0.85, 0.75, 1)
-light_energy = 0.95
-light_indirect_energy = 0.7
+light_color = Color(0.95, 0.90, 0.82, 1)
+light_energy = 0.85
+light_indirect_energy = 0.5
 shadow_enabled = true
-shadow_bias = 0.05
+shadow_bias = 0.04
 directional_shadow_mode = 1
 
 [node name="FpsCounter" type="Label" parent="."]

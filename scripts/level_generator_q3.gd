@@ -51,17 +51,19 @@ extends Node3D
 
 @export_group("Lighting")
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
-@export var light_energy: float = 1.4  ## Base light energy
-@export var light_range: float = 20.0  ## Light range in units
-@export var light_color: Color = Color(0.95, 0.85, 0.75)  ## Warm amber default (not white)
-@export var ambient_light_energy: float = 0.45  ## Ambient/fill light level
-@export var use_colored_lights: bool = true  ## Use varied colored lights per zone
-@export var light_color_variation: float = 0.15  ## Amount of color variation between rooms
-@export var fill_lights_enabled: bool = true  ## Add corner/edge fill lights in rooms
-@export var fill_light_room_threshold: float = 10.0  ## Room size threshold for adding fill lights (lowered for more coverage)
-@export var fill_light_energy_factor: float = 0.6  ## Fill light energy relative to main light
-@export var edge_lights_room_threshold: float = 20.0  ## Room size threshold for edge lights (lowered for more coverage)
-@export var small_room_extra_lights: bool = true  ## Add extra lights even to small rooms
+## Grid-based lighting for good coverage with proper shadows
+@export var q3_light_energy: float = 0.85  ## Base light energy for grid lights
+@export var q3_light_range: float = 14.0  ## Light range for coverage
+@export var q3_light_color: Color = Color(0.92, 0.88, 0.82)  ## Warm white default
+@export var q3_grid_spacing: float = 14.0  ## Distance between grid lights
+@export var q3_ambient_energy: float = 0.35  ## Ambient fill for dark areas
+@export var q3_bounce_enabled: bool = true  ## Add bounce lights near walls/ceilings
+@export var q3_bounce_energy: float = 0.3  ## Bounce light intensity
+@export var q3_use_colored_zones: bool = true  ## Apply subtle color tints per zone
+@export var q3_color_intensity: float = 0.12  ## How much zone color affects lights
+@export var q3_ceiling_lights: bool = true  ## Add ceiling-mounted lights
+@export var q3_floor_fill: bool = true  ## Add floor-level fill lights
+@export var q3_structure_boost: float = 1.2  ## Extra lighting on structures
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -934,34 +936,80 @@ func get_structure_cell_radius(type: int) -> int:
 	return 0
 
 func add_structure_light(pos: Vector3, height: float, structure_size: float, index: int) -> void:
-	## Add lighting to a structure to ensure it's well-illuminated
-	## This adds ambient lighting near and around structures
+	## Quake 3 style structure lighting - fully illuminate all surfaces
+	## Uses multiple overlapping lights to ensure no dark spots on structures
 	if not generate_lights:
 		return
 
-	# Main structure light - positioned above the structure
-	var main_light: OmniLight3D = OmniLight3D.new()
-	main_light.name = "StructureLight_%d" % index
-	main_light.position = Vector3(pos.x, height + 2.0, pos.z)
-	main_light.light_color = light_color
-	main_light.light_energy = light_energy * 0.6
-	main_light.omni_range = maxf(structure_size * 1.5, 8.0)
-	main_light.omni_attenuation = 1.0
-	main_light.shadow_enabled = false
-	add_child(main_light)
-	lights.append(main_light)
+	var base_energy: float = q3_light_energy * q3_structure_boost
+	var base_range: float = maxf(structure_size * 2.0, q3_light_range)
 
-	# Add ground-level ambient light for areas under/around structure
+	# Top light - bright overhead illumination
+	var top_light: OmniLight3D = OmniLight3D.new()
+	top_light.name = "StructureTopLight_%d" % index
+	top_light.position = Vector3(pos.x, height + 3.0, pos.z)
+	top_light.light_color = q3_light_color
+	top_light.light_energy = base_energy
+	top_light.omni_range = base_range
+	top_light.omni_attenuation = 0.8  # Softer falloff for better coverage
+	top_light.shadow_enabled = false
+	add_child(top_light)
+	lights.append(top_light)
+
+	# Mid-height lights at 4 cardinal directions - illuminate sides
+	var mid_height: float = height * 0.5
+	var offset: float = structure_size * 0.6
+	var side_positions: Array[Vector3] = [
+		Vector3(pos.x + offset, mid_height, pos.z),
+		Vector3(pos.x - offset, mid_height, pos.z),
+		Vector3(pos.x, mid_height, pos.z + offset),
+		Vector3(pos.x, mid_height, pos.z - offset),
+	]
+
+	for i in range(side_positions.size()):
+		var side_light: OmniLight3D = OmniLight3D.new()
+		side_light.name = "StructureSideLight_%d_%d" % [index, i]
+		side_light.position = side_positions[i]
+		side_light.light_color = q3_light_color
+		side_light.light_energy = base_energy * 0.7
+		side_light.omni_range = base_range * 0.8
+		side_light.omni_attenuation = 0.8
+		side_light.shadow_enabled = false
+		add_child(side_light)
+		lights.append(side_light)
+
+	# Ground-level fill - illuminate base and underneath
 	var ground_light: OmniLight3D = OmniLight3D.new()
 	ground_light.name = "StructureGroundLight_%d" % index
-	ground_light.position = Vector3(pos.x, 1.5, pos.z)
-	ground_light.light_color = light_color
-	ground_light.light_energy = light_energy * 0.4
-	ground_light.omni_range = maxf(structure_size * 1.2, 6.0)
-	ground_light.omni_attenuation = 1.0
+	ground_light.position = Vector3(pos.x, 1.0, pos.z)
+	ground_light.light_color = q3_light_color
+	ground_light.light_energy = base_energy * 0.8
+	ground_light.omni_range = base_range * 1.2
+	ground_light.omni_attenuation = 0.7
 	ground_light.shadow_enabled = false
 	add_child(ground_light)
 	lights.append(ground_light)
+
+	# Corner fill lights for complete coverage
+	var corner_offset: float = structure_size * 0.5
+	var corner_positions: Array[Vector3] = [
+		Vector3(pos.x + corner_offset, 2.0, pos.z + corner_offset),
+		Vector3(pos.x - corner_offset, 2.0, pos.z + corner_offset),
+		Vector3(pos.x + corner_offset, 2.0, pos.z - corner_offset),
+		Vector3(pos.x - corner_offset, 2.0, pos.z - corner_offset),
+	]
+
+	for i in range(corner_positions.size()):
+		var corner_light: OmniLight3D = OmniLight3D.new()
+		corner_light.name = "StructureCornerLight_%d_%d" % [index, i]
+		corner_light.position = corner_positions[i]
+		corner_light.light_color = q3_light_color
+		corner_light.light_energy = base_energy * 0.5
+		corner_light.omni_range = base_range * 0.6
+		corner_light.omni_attenuation = 0.8
+		corner_light.shadow_enabled = false
+		add_child(corner_light)
+		lights.append(corner_light)
 
 func generate_structure(type: int, pos: Vector3, scale: float, index: int) -> void:
 	# Generate the structure
@@ -2247,176 +2295,335 @@ func setup_materials() -> void:
 			material_manager = manager_script.new()
 
 func generate_room_lights() -> void:
-	## Generate OmniLight3D nodes for each room
-	## Uses simple point lights compatible with all renderers
-	## Enhanced with colored lighting variations per zone
+	## Quake 3 Style Lighting System
+	## Creates uniform, bright illumination across all surfaces with no dark spots
+	## Uses grid-based light placement with overlapping coverage zones
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating room lights...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generating Quake 3 style lighting...")
 
-	# Define color palettes for different zones (no pure white)
+	# Zone color palette for subtle color variation (still bright, just tinted)
 	var zone_colors: Array[Color] = [
-		Color(0.95, 0.80, 0.65),  # Warm amber
-		Color(0.75, 0.85, 0.95),  # Cool blue
-		Color(0.85, 0.95, 0.80),  # Soft green
-		Color(0.95, 0.75, 0.85),  # Soft pink
-		Color(0.90, 0.90, 0.75),  # Warm yellow
-		Color(0.80, 0.75, 0.95),  # Soft purple
-		Color(0.95, 0.85, 0.80),  # Peach
-		Color(0.75, 0.90, 0.90),  # Cyan tint
+		Color(1.0, 0.95, 0.90),   # Warm white
+		Color(0.90, 0.95, 1.0),   # Cool white
+		Color(0.95, 1.0, 0.92),   # Mint white
+		Color(1.0, 0.92, 0.95),   # Rose white
+		Color(0.98, 0.98, 0.90),  # Cream
+		Color(0.92, 0.90, 1.0),   # Lavender white
+		Color(1.0, 0.95, 0.92),   # Peach white
+		Color(0.90, 0.98, 0.98),  # Ice white
 	]
 
+	# First pass: Generate grid-based ambient lighting across entire arena
+	_generate_arena_light_grid()
+
+	# Second pass: Room-specific lighting for BSP rooms
 	var room_idx: int = 0
 	for room in bsp_rooms:
-		var room_center: Vector3 = room.get_center_3d(room_height)
-		room_center.y = room.height_offset + room_height * 0.8  # Near ceiling
-
-		var light: OmniLight3D = OmniLight3D.new()
-		light.name = "RoomLight_%d" % room.room_id
-		light.position = room_center
-
-		# Apply colored lighting if enabled
-		if use_colored_lights:
-			var zone_color: Color = zone_colors[room_idx % zone_colors.size()]
-			# Add slight random variation
-			var variation: float = light_color_variation
-			zone_color.r += rng.randf_range(-variation, variation)
-			zone_color.g += rng.randf_range(-variation, variation)
-			zone_color.b += rng.randf_range(-variation, variation)
-			zone_color = zone_color.clamp()
-			light.light_color = zone_color
-		else:
-			light.light_color = light_color
-
-		light.light_energy = light_energy
-
-		# Scale range based on room size
-		var room_size: float = maxf(room.room.size.x, room.room.size.y)
-		light.omni_range = maxf(light_range, room_size * 0.8)
-
-		# Compatibility renderer friendly settings
-		light.omni_attenuation = 1.0  # Linear falloff
-		light.shadow_enabled = false  # Shadows are expensive
-
-		add_child(light)
-		lights.append(light)
-
-		# Add extra lights for small rooms to ensure adequate illumination
-		if small_room_extra_lights and room_size < fill_light_room_threshold:
-			# Small rooms get 2 extra fill lights at opposite corners
-			var small_fill_color: Color = light.light_color
-			var small_fill_energy: float = light_energy * 0.7
-			var small_fill_range: float = maxf(light_range * 0.5, room_size * 0.6)
-			var small_fill_height: float = room.height_offset + room_height * 0.5
-
-			var small_corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.2
-			var small_corners: Array[Vector3] = [
-				Vector3(room.room.position.x + small_corner_inset, small_fill_height, room.room.position.y + small_corner_inset),
-				Vector3(room.room.position.x + room.room.size.x - small_corner_inset, small_fill_height, room.room.position.y + room.room.size.y - small_corner_inset),
-			]
-
-			for sc_idx in range(small_corners.size()):
-				var small_corner_light: OmniLight3D = OmniLight3D.new()
-				small_corner_light.name = "SmallRoomLight_%d_%d" % [room.room_id, sc_idx]
-				small_corner_light.position = small_corners[sc_idx]
-				small_corner_light.light_color = small_fill_color
-				small_corner_light.light_energy = small_fill_energy
-				small_corner_light.omni_range = small_fill_range
-				small_corner_light.omni_attenuation = 1.0
-				small_corner_light.shadow_enabled = false
-				add_child(small_corner_light)
-				lights.append(small_corner_light)
-
-		# Add fill lights for rooms above threshold to illuminate dark corners and edges
-		if fill_lights_enabled and room_size >= fill_light_room_threshold:
-			var fill_color: Color = light.light_color
-			var fill_energy: float = light_energy * fill_light_energy_factor
-			var fill_range: float = light_range * 0.7
-			var fill_height: float = room.height_offset + room_height * 0.6  # Lower than main light
-
-			# Calculate corner positions (inset from actual corners)
-			var corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.25
-			var corners: Array[Vector3] = [
-				Vector3(room.room.position.x + corner_inset, fill_height, room.room.position.y + corner_inset),
-				Vector3(room.room.position.x + room.room.size.x - corner_inset, fill_height, room.room.position.y + corner_inset),
-				Vector3(room.room.position.x + corner_inset, fill_height, room.room.position.y + room.room.size.y - corner_inset),
-				Vector3(room.room.position.x + room.room.size.x - corner_inset, fill_height, room.room.position.y + room.room.size.y - corner_inset),
-			]
-
-			for corner_idx in range(corners.size()):
-				var corner_light: OmniLight3D = OmniLight3D.new()
-				corner_light.name = "RoomFillLight_%d_%d" % [room.room_id, corner_idx]
-				corner_light.position = corners[corner_idx]
-				corner_light.light_color = fill_color
-				corner_light.light_energy = fill_energy
-				corner_light.omni_range = fill_range
-				corner_light.omni_attenuation = 1.0
-				corner_light.shadow_enabled = false
-				add_child(corner_light)
-				lights.append(corner_light)
-
-			# Add edge lights for larger rooms
-			if room_size >= edge_lights_room_threshold:
-				var edge_height: float = room.height_offset + room_height * 0.5
-				var edge_energy: float = fill_energy * 0.7
-				var edge_range: float = fill_range * 0.8
-
-				# Calculate midpoint positions along each edge
-				var mid_x: float = room.room.position.x + room.room.size.x / 2.0
-				var mid_z: float = room.room.position.y + room.room.size.y / 2.0
-				var edge_inset: float = 3.0  # Distance from wall
-
-				var edges: Array[Vector3] = [
-					Vector3(mid_x, edge_height, room.room.position.y + edge_inset),  # North edge
-					Vector3(mid_x, edge_height, room.room.position.y + room.room.size.y - edge_inset),  # South edge
-					Vector3(room.room.position.x + edge_inset, edge_height, mid_z),  # West edge
-					Vector3(room.room.position.x + room.room.size.x - edge_inset, edge_height, mid_z),  # East edge
-				]
-
-				for edge_idx in range(edges.size()):
-					var edge_light: OmniLight3D = OmniLight3D.new()
-					edge_light.name = "RoomEdgeLight_%d_%d" % [room.room_id, edge_idx]
-					edge_light.position = edges[edge_idx]
-					edge_light.light_color = fill_color
-					edge_light.light_energy = edge_energy
-					edge_light.omni_range = edge_range
-					edge_light.omni_attenuation = 1.0
-					edge_light.shadow_enabled = false
-					add_child(edge_light)
-					lights.append(edge_light)
-
+		_generate_room_q3_lights(room, zone_colors[room_idx % zone_colors.size()], room_idx)
 		room_idx += 1
 
-	# Add corridor lights with transitional colors
+	# Third pass: Corridor lighting
+	_generate_corridor_q3_lights()
+
+	# Fourth pass: Wall bounce lights for radiosity simulation
+	if q3_bounce_enabled:
+		_generate_bounce_lights()
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d Q3-style lights (grid + room + corridor + bounce)" % lights.size())
+
+
+func _generate_arena_light_grid() -> void:
+	## Generate a uniform grid of lights across the entire arena
+	## This ensures base illumination everywhere - the Q3 "lightmap" approach
+
+	var half_arena: float = arena_size * 0.5
+	var grid_step: float = q3_grid_spacing
+	var grid_count_x: int = int(arena_size / grid_step) + 1
+	var grid_count_z: int = int(arena_size / grid_step) + 1
+
+	# Calculate starting position (centered on arena)
+	var start_x: float = -half_arena + (arena_size - (grid_count_x - 1) * grid_step) * 0.5
+	var start_z: float = -half_arena + (arena_size - (grid_count_z - 1) * grid_step) * 0.5
+
+	var grid_idx: int = 0
+	for gx in range(grid_count_x):
+		for gz in range(grid_count_z):
+			var pos_x: float = start_x + gx * grid_step
+			var pos_z: float = start_z + gz * grid_step
+
+			# Ceiling light - primary illumination
+			if q3_ceiling_lights:
+				var ceiling_light: OmniLight3D = OmniLight3D.new()
+				ceiling_light.name = "GridCeilingLight_%d" % grid_idx
+				ceiling_light.position = Vector3(pos_x, room_height * 0.85, pos_z)
+				ceiling_light.light_color = q3_light_color
+				ceiling_light.light_energy = q3_light_energy
+				ceiling_light.omni_range = q3_light_range * 1.2  # Overlap for seamless coverage
+				ceiling_light.omni_attenuation = 0.7  # Softer falloff
+				ceiling_light.shadow_enabled = false
+				add_child(ceiling_light)
+				lights.append(ceiling_light)
+
+			# Floor fill light - eliminates ground-level dark spots
+			if q3_floor_fill:
+				var floor_light: OmniLight3D = OmniLight3D.new()
+				floor_light.name = "GridFloorLight_%d" % grid_idx
+				floor_light.position = Vector3(pos_x, 1.5, pos_z)
+				floor_light.light_color = q3_light_color
+				floor_light.light_energy = q3_ambient_energy
+				floor_light.omni_range = q3_light_range
+				floor_light.omni_attenuation = 0.6  # Very soft falloff
+				floor_light.shadow_enabled = false
+				add_child(floor_light)
+				lights.append(floor_light)
+
+			# Mid-height ambient light - fills vertical space
+			var mid_light: OmniLight3D = OmniLight3D.new()
+			mid_light.name = "GridMidLight_%d" % grid_idx
+			mid_light.position = Vector3(pos_x, room_height * 0.4, pos_z)
+			mid_light.light_color = q3_light_color
+			mid_light.light_energy = q3_ambient_energy * 0.7
+			mid_light.omni_range = q3_light_range * 0.9
+			mid_light.omni_attenuation = 0.6
+			mid_light.shadow_enabled = false
+			add_child(mid_light)
+			lights.append(mid_light)
+
+			grid_idx += 1
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "  Grid lights: %d (%dx%d grid)" % [grid_idx * 3, grid_count_x, grid_count_z])
+
+
+func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -> void:
+	## Generate Q3-style lighting for a specific room
+	## Adds additional lights to ensure complete room coverage
+
+	var room_center: Vector3 = room.get_center_3d(room_height)
+	var room_size: float = maxf(room.room.size.x, room.room.size.y)
+
+	# Calculate zone tint (subtle color influence)
+	var tinted_color: Color = q3_light_color
+	if q3_use_colored_zones:
+		tinted_color = q3_light_color.lerp(zone_color, q3_color_intensity)
+
+	# Primary room light - bright central illumination
+	var main_light: OmniLight3D = OmniLight3D.new()
+	main_light.name = "RoomMainLight_%d" % room.room_id
+	main_light.position = Vector3(room_center.x, room.height_offset + room_height * 0.85, room_center.z)
+	main_light.light_color = tinted_color
+	main_light.light_energy = q3_light_energy * 1.3
+	main_light.omni_range = maxf(q3_light_range * 1.5, room_size)
+	main_light.omni_attenuation = 0.7
+	main_light.shadow_enabled = false
+	add_child(main_light)
+	lights.append(main_light)
+
+	# Corner lights - 4 corners to eliminate dark spots
+	var corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.2
+	var corner_height: float = room.height_offset + room_height * 0.6
+	var corners: Array[Vector3] = [
+		Vector3(room.room.position.x + corner_inset, corner_height, room.room.position.y + corner_inset),
+		Vector3(room.room.position.x + room.room.size.x - corner_inset, corner_height, room.room.position.y + corner_inset),
+		Vector3(room.room.position.x + corner_inset, corner_height, room.room.position.y + room.room.size.y - corner_inset),
+		Vector3(room.room.position.x + room.room.size.x - corner_inset, corner_height, room.room.position.y + room.room.size.y - corner_inset),
+	]
+
+	for c_idx in range(corners.size()):
+		var corner_light: OmniLight3D = OmniLight3D.new()
+		corner_light.name = "RoomCornerLight_%d_%d" % [room.room_id, c_idx]
+		corner_light.position = corners[c_idx]
+		corner_light.light_color = tinted_color
+		corner_light.light_energy = q3_light_energy * 0.8
+		corner_light.omni_range = q3_light_range * 0.9
+		corner_light.omni_attenuation = 0.7
+		corner_light.shadow_enabled = false
+		add_child(corner_light)
+		lights.append(corner_light)
+
+	# Floor-level corner lights - brighten ground in corners
+	for c_idx in range(corners.size()):
+		var floor_corner: OmniLight3D = OmniLight3D.new()
+		floor_corner.name = "RoomFloorCorner_%d_%d" % [room.room_id, c_idx]
+		floor_corner.position = Vector3(corners[c_idx].x, room.height_offset + 1.0, corners[c_idx].z)
+		floor_corner.light_color = tinted_color
+		floor_corner.light_energy = q3_ambient_energy * 0.9
+		floor_corner.omni_range = q3_light_range * 0.7
+		floor_corner.omni_attenuation = 0.6
+		floor_corner.shadow_enabled = false
+		add_child(floor_corner)
+		lights.append(floor_corner)
+
+	# Edge midpoint lights for larger rooms
+	if room_size >= 15.0:
+		var mid_x: float = room.room.position.x + room.room.size.x / 2.0
+		var mid_z: float = room.room.position.y + room.room.size.y / 2.0
+		var edge_inset: float = 2.5
+		var edge_height: float = room.height_offset + room_height * 0.5
+
+		var edges: Array[Vector3] = [
+			Vector3(mid_x, edge_height, room.room.position.y + edge_inset),
+			Vector3(mid_x, edge_height, room.room.position.y + room.room.size.y - edge_inset),
+			Vector3(room.room.position.x + edge_inset, edge_height, mid_z),
+			Vector3(room.room.position.x + room.room.size.x - edge_inset, edge_height, mid_z),
+		]
+
+		for e_idx in range(edges.size()):
+			var edge_light: OmniLight3D = OmniLight3D.new()
+			edge_light.name = "RoomEdgeLight_%d_%d" % [room.room_id, e_idx]
+			edge_light.position = edges[e_idx]
+			edge_light.light_color = tinted_color
+			edge_light.light_energy = q3_light_energy * 0.7
+			edge_light.omni_range = q3_light_range * 0.85
+			edge_light.omni_attenuation = 0.7
+			edge_light.shadow_enabled = false
+			add_child(edge_light)
+			lights.append(edge_light)
+
+	# Additional sub-grid lights for very large rooms
+	if room_size >= 25.0:
+		var sub_step: float = q3_grid_spacing * 0.75
+		var sub_count_x: int = int(room.room.size.x / sub_step)
+		var sub_count_z: int = int(room.room.size.y / sub_step)
+
+		for sx in range(1, sub_count_x):
+			for sz in range(1, sub_count_z):
+				var sub_pos: Vector3 = Vector3(
+					room.room.position.x + sx * sub_step,
+					room.height_offset + room_height * 0.7,
+					room.room.position.y + sz * sub_step
+				)
+				var sub_light: OmniLight3D = OmniLight3D.new()
+				sub_light.name = "RoomSubLight_%d_%d_%d" % [room.room_id, sx, sz]
+				sub_light.position = sub_pos
+				sub_light.light_color = tinted_color
+				sub_light.light_energy = q3_light_energy * 0.6
+				sub_light.omni_range = q3_light_range * 0.75
+				sub_light.omni_attenuation = 0.7
+				sub_light.shadow_enabled = false
+				add_child(sub_light)
+				lights.append(sub_light)
+
+
+func _generate_corridor_q3_lights() -> void:
+	## Generate Q3-style corridor lighting with full coverage
+
 	var corridor_idx: int = 0
 	for corridor_data in corridors:
 		for segment in corridor_data.segments:
 			var seg_center: Vector2 = segment.position + segment.size / 2.0
 			var level_z: float = corridor_data.level * level_height_offset
+			var seg_length: float = maxf(segment.size.x, segment.size.y)
 
-			var light: OmniLight3D = OmniLight3D.new()
-			light.name = "CorridorLight_%d" % corridor_data.from_room
-			light.position = Vector3(seg_center.x, level_z + room_height * 0.7, seg_center.y)
+			# Primary corridor light
+			var main_light: OmniLight3D = OmniLight3D.new()
+			main_light.name = "CorridorMainLight_%d" % corridor_idx
+			main_light.position = Vector3(seg_center.x, level_z + room_height * 0.75, seg_center.y)
+			main_light.light_color = q3_light_color
+			main_light.light_energy = q3_light_energy * 1.1
+			main_light.omni_range = q3_light_range * 1.2
+			main_light.omni_attenuation = 0.7
+			main_light.shadow_enabled = false
+			add_child(main_light)
+			lights.append(main_light)
 
-			# Corridor lights use a neutral warm color
-			if use_colored_lights:
-				var corridor_color: Color = Color(0.90, 0.85, 0.80)  # Neutral warm
-				corridor_color.r += rng.randf_range(-0.05, 0.05)
-				corridor_color.g += rng.randf_range(-0.05, 0.05)
-				corridor_color.b += rng.randf_range(-0.03, 0.03)
-				light.light_color = corridor_color
-			else:
-				light.light_color = light_color
+			# Floor light for corridor
+			var floor_light: OmniLight3D = OmniLight3D.new()
+			floor_light.name = "CorridorFloorLight_%d" % corridor_idx
+			floor_light.position = Vector3(seg_center.x, level_z + 1.0, seg_center.y)
+			floor_light.light_color = q3_light_color
+			floor_light.light_energy = q3_ambient_energy
+			floor_light.omni_range = q3_light_range * 0.9
+			floor_light.omni_attenuation = 0.6
+			floor_light.shadow_enabled = false
+			add_child(floor_light)
+			lights.append(floor_light)
 
-			light.light_energy = light_energy * 0.7  # Slightly dimmer
-			light.omni_range = light_range * 0.6
-			light.omni_attenuation = 1.0
-			light.shadow_enabled = false
+			# Additional lights for long corridors
+			if seg_length > q3_grid_spacing:
+				var is_horizontal: bool = segment.size.x > segment.size.y
+				var num_extra: int = int(seg_length / q3_grid_spacing)
 
-			add_child(light)
-			lights.append(light)
+				for i in range(1, num_extra + 1):
+					var offset_ratio: float = float(i) / float(num_extra + 1)
+					var extra_pos: Vector3
+
+					if is_horizontal:
+						extra_pos = Vector3(
+							segment.position.x + segment.size.x * offset_ratio,
+							level_z + room_height * 0.65,
+							seg_center.y
+						)
+					else:
+						extra_pos = Vector3(
+							seg_center.x,
+							level_z + room_height * 0.65,
+							segment.position.y + segment.size.y * offset_ratio
+						)
+
+					var extra_light: OmniLight3D = OmniLight3D.new()
+					extra_light.name = "CorridorExtraLight_%d_%d" % [corridor_idx, i]
+					extra_light.position = extra_pos
+					extra_light.light_color = q3_light_color
+					extra_light.light_energy = q3_light_energy * 0.85
+					extra_light.omni_range = q3_light_range
+					extra_light.omni_attenuation = 0.7
+					extra_light.shadow_enabled = false
+					add_child(extra_light)
+					lights.append(extra_light)
+
 			corridor_idx += 1
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d lights (room, corridor, and fill lights)" % lights.size())
+
+func _generate_bounce_lights() -> void:
+	## Generate bounce lights near walls to simulate radiosity
+	## This fills in areas where direct lighting might not reach
+
+	var half_arena: float = arena_size * 0.5
+	var wall_offset: float = 3.0
+	var bounce_step: float = q3_grid_spacing * 1.5
+	var num_per_wall: int = int(arena_size / bounce_step) + 1
+
+	# Bounce lights along each wall
+	var walls: Array[Dictionary] = [
+		{"start": Vector3(-half_arena + wall_offset, 0, -half_arena), "dir": Vector3(0, 0, 1)},  # West wall
+		{"start": Vector3(half_arena - wall_offset, 0, -half_arena), "dir": Vector3(0, 0, 1)},   # East wall
+		{"start": Vector3(-half_arena, 0, -half_arena + wall_offset), "dir": Vector3(1, 0, 0)},  # North wall
+		{"start": Vector3(-half_arena, 0, half_arena - wall_offset), "dir": Vector3(1, 0, 0)},   # South wall
+	]
+
+	var bounce_idx: int = 0
+	for wall in walls:
+		for i in range(num_per_wall):
+			var offset: float = i * bounce_step
+			var pos: Vector3 = wall.start + wall.dir * offset
+
+			# Low bounce light
+			var low_bounce: OmniLight3D = OmniLight3D.new()
+			low_bounce.name = "BounceLight_Low_%d" % bounce_idx
+			low_bounce.position = Vector3(pos.x, 2.5, pos.z)
+			low_bounce.light_color = q3_light_color
+			low_bounce.light_energy = q3_bounce_energy
+			low_bounce.omni_range = q3_light_range * 0.8
+			low_bounce.omni_attenuation = 0.6
+			low_bounce.shadow_enabled = false
+			add_child(low_bounce)
+			lights.append(low_bounce)
+
+			# High bounce light
+			var high_bounce: OmniLight3D = OmniLight3D.new()
+			high_bounce.name = "BounceLight_High_%d" % bounce_idx
+			high_bounce.position = Vector3(pos.x, room_height * 0.6, pos.z)
+			high_bounce.light_color = q3_light_color
+			high_bounce.light_energy = q3_bounce_energy * 0.8
+			high_bounce.omni_range = q3_light_range * 0.7
+			high_bounce.omni_attenuation = 0.6
+			high_bounce.shadow_enabled = false
+			add_child(high_bounce)
+			lights.append(high_bounce)
+
+			bounce_idx += 1
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "  Bounce lights: %d" % (bounce_idx * 2))
 
 func generate_navigation_mesh() -> void:
 	## Generate NavigationRegion3D for AI pathfinding
