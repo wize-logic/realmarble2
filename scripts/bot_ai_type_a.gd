@@ -361,7 +361,7 @@ func try_attach_to_rail(rail: GrindRail) -> bool:
 # ============================================================================
 
 func start_grinding(rail: GrindRail) -> void:
-	"""Called by rail when bot enters grinding state"""
+	"""Called when bot enters grinding state (synced from player.gd)"""
 	if is_grinding:
 		return
 
@@ -373,27 +373,16 @@ func start_grinding(rail: GrindRail) -> void:
 	post_rail_launch = false
 	rail_launch_timer = 0.0
 
-	# Reset jump count
-	if "jump_count" in bot:
-		bot.jump_count = 0
-
-	# Reduce physics damping for smoother grinding
-	if bot is RigidBody3D:
-		bot.linear_damp = 0.2
-
 	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type A] Started grinding on rail", false, get_entity_id())
 
+
 func stop_grinding() -> void:
-	"""Called by rail when bot exits grinding state"""
+	"""Called when bot exits grinding state (synced from player.gd)"""
 	if not is_grinding:
 		return
 
 	is_grinding = false
 	current_rail = null
-
-	# Restore normal physics damping
-	if bot and bot is RigidBody3D:
-		bot.linear_damp = 0.5
 
 	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[Type A] Stopped grinding", false, get_entity_id())
 
