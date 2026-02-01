@@ -935,6 +935,21 @@ func get_structure_cell_radius(type: int) -> int:
 			return 1
 	return 0
 
+func add_interior_light(position: Vector3, index: int, suffix: String = "") -> void:
+	## Add a warm interior light for enclosed spaces (like torches in a cave)
+	if not generate_lights:
+		return
+	var light: OmniLight3D = OmniLight3D.new()
+	light.name = "InteriorLight_%d%s" % [index, suffix]
+	light.position = position
+	light.light_color = Color(1.0, 0.9, 0.75)  # Warm amber torch color
+	light.light_energy = q3_light_energy * 1.2
+	light.omni_range = q3_light_range * 1.0
+	light.omni_attenuation = 0.5
+	light.shadow_enabled = false
+	add_child(light)
+	lights.append(light)
+
 func add_structure_light(pos: Vector3, height: float, structure_size: float, index: int) -> void:
 	## Quake 3 style structure lighting - fully illuminate all surfaces
 	## Uses multiple overlapping lights to ensure no dark spots on structures
@@ -1150,7 +1165,8 @@ func generate_bunker(pos: Vector3, scale: float, index: int) -> void:
 			"BunkerWall%d_%d" % [index, i]
 		)
 
-	if rng.randf() > 0.5:
+	var has_roof: bool = rng.randf() > 0.5
+	if has_roof:
 		add_platform_with_collision(
 			Vector3(pos.x, bunk_wall_height + 0.5, pos.z),
 			Vector3(bunker_size, 1.0, bunker_size),
@@ -1159,6 +1175,10 @@ func generate_bunker(pos: Vector3, scale: float, index: int) -> void:
 		clear_positions.append(Vector3(pos.x, bunk_wall_height + 1.5, pos.z))
 
 	clear_positions.append(Vector3(pos.x, 1.0, pos.z))
+
+	# Interior torch light for bunker
+	var light_height: float = bunk_wall_height * 0.5 if has_roof else bunk_wall_height * 0.3
+	add_interior_light(Vector3(pos.x, light_height, pos.z), index, "_bunker")
 
 func generate_jump_tower(pos: Vector3, scale: float, index: int) -> void:
 	var tower_size: float = rng.randf_range(4.0, 6.0) * scale
@@ -1207,6 +1227,9 @@ func generate_catwalk(pos: Vector3, scale: float, index: int) -> void:
 	)
 
 	clear_positions.append(Vector3(pos.x, height + 1.0, pos.z))
+
+	# Interior torch light under the catwalk
+	add_interior_light(Vector3(pos.x, height * 0.5, pos.z), index, "_catwalk")
 
 func generate_ramp_platform(pos: Vector3, scale: float, index: int) -> void:
 	var platform_size: float = rng.randf_range(6.0, 10.0) * scale
@@ -1306,6 +1329,9 @@ func generate_archway(pos: Vector3, scale: float, index: int) -> void:
 
 	clear_positions.append(Vector3(pos.x, arch_height + 1.5, pos.z))
 
+	# Interior torch light under the archway beam
+	add_interior_light(Vector3(pos.x, arch_height * 0.6, pos.z), index, "_archway")
+
 func generate_sniper_nest(pos: Vector3, scale: float, index: int) -> void:
 	var base_width: float = 3.0 * scale
 	var height: float = rng.randf_range(12.0, 18.0) * scale
@@ -1344,6 +1370,9 @@ func generate_sniper_nest(pos: Vector3, scale: float, index: int) -> void:
 		add_platform_with_collision(wall_pos, wall_size, "SniperWall%d_%d" % [index, i])
 
 	clear_positions.append(Vector3(pos.x, height + 2.0, pos.z))
+
+	# Interior torch light under the tall sniper platform
+	add_interior_light(Vector3(pos.x, height * 0.4, pos.z), index, "_sniper")
 
 # ============================================================================
 # PROCEDURAL BRIDGES
