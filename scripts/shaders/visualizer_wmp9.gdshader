@@ -1,18 +1,19 @@
 shader_type canvas_item;
 
-// Windows Media Player 9 Style Audio Visualizer
-// Projects audio-reactive visuals onto walls like the classic WMP visualizers
-// Compatible with GL Compatibility renderer
+// Enhanced Windows Media Player 9 Style Audio Visualizer
+// Beautiful, smooth audio-reactive visuals with modern effects
 
 // Visualization mode: 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
 uniform int viz_mode : hint_range(0, 4) = 0;
 
 // Audio spectrum data (32 frequency bands)
 uniform float spectrum[32];
+uniform float peak_spectrum[32];  // Peak hold values
 uniform float audio_level : hint_range(0.0, 1.0) = 0.0;
 uniform float bass_level : hint_range(0.0, 1.0) = 0.0;
 uniform float mid_level : hint_range(0.0, 1.0) = 0.0;
 uniform float high_level : hint_range(0.0, 1.0) = 0.0;
+uniform float beat_intensity : hint_range(0.0, 1.0) = 0.0;
 
 // Colors (WMP9 style palettes)
 uniform vec4 color_primary : source_color = vec4(0.0, 0.7, 1.0, 1.0);
@@ -29,6 +30,10 @@ uniform float reflection_amount : hint_range(0.0, 1.0) = 0.3;
 // Time passed in
 uniform float time_offset = 0.0;
 
+// Constants
+const float PI = 3.14159265359;
+const float TAU = 6.28318530718;
+
 // =============================================================================
 // NOISE AND UTILITY FUNCTIONS
 // =============================================================================
@@ -37,10 +42,15 @@ float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float hash3(vec3 p) {
+	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+
 float noise(vec2 p) {
 	vec2 i = floor(p);
 	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f);
+	// Smooth interpolation
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
 
 	float a = hash(i);
 	float b = hash(i + vec2(1.0, 0.0));
@@ -48,6 +58,25 @@ float noise(vec2 p) {
 	float d = hash(i + vec2(1.0, 1.0));
 
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float noise3d(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+	float a = hash3(i);
+	float b = hash3(i + vec3(1.0, 0.0, 0.0));
+	float c = hash3(i + vec3(0.0, 1.0, 0.0));
+	float d = hash3(i + vec3(1.0, 1.0, 0.0));
+	float e = hash3(i + vec3(0.0, 0.0, 1.0));
+	float f1 = hash3(i + vec3(1.0, 0.0, 1.0));
+	float g = hash3(i + vec3(0.0, 1.0, 1.0));
+	float h = hash3(i + vec3(1.0, 1.0, 1.0));
+
+	float z1 = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+	float z2 = mix(mix(e, f1, f.x), mix(g, h, f.x), f.y);
+	return mix(z1, z2, f.z);
 }
 
 float fbm(vec2 p, int octaves) {
@@ -64,24 +93,54 @@ float fbm(vec2 p, int octaves) {
 	return value;
 }
 
-// Get spectrum value with interpolation
+// Smooth minimum for blending shapes
+float smin(float a, float b, float k) {
+	float h = max(k - abs(a - b), 0.0) / k;
+	return min(a, b) - h * h * k * 0.25;
+}
+
+// Get spectrum value with smooth cubic interpolation
 float get_spectrum(float x) {
 	float idx = x * 31.0;
 	int i0 = int(floor(idx));
 	int i1 = min(i0 + 1, 31);
+	int i2 = min(i0 + 2, 31);
+	int im1 = max(i0 - 1, 0);
 	float t = fract(idx);
-	return mix(spectrum[i0], spectrum[i1], t);
+
+	// Catmull-Rom spline interpolation for super smooth curves
+	float p0 = spectrum[im1];
+	float p1 = spectrum[i0];
+	float p2 = spectrum[i1];
+	float p3 = spectrum[i2];
+
+	float t2 = t * t;
+	float t3 = t2 * t;
+
+	return 0.5 * ((2.0 * p1) +
+		(-p0 + p2) * t +
+		(2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
+		(-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
 }
 
-// Smooth spectrum sampling
+// Get peak spectrum with interpolation
+float get_peak(float x) {
+	float idx = x * 31.0;
+	int i0 = int(floor(idx));
+	int i1 = min(i0 + 1, 31);
+	float t = fract(idx);
+	return mix(peak_spectrum[i0], peak_spectrum[i1], t);
+}
+
+// Smooth spectrum sampling with wider kernel
 float get_spectrum_smooth(float x, float smoothness) {
 	float total = 0.0;
 	float weight_sum = 0.0;
-	int samples = 3;
+	int samples = 5;
 
 	for (int i = -samples; i <= samples; i++) {
 		float offset = float(i) * smoothness / 32.0;
-		float weight = 1.0 - abs(float(i)) / float(samples + 1);
+		float weight = exp(-float(i * i) / (2.0 * smoothness * smoothness));
 		total += get_spectrum(clamp(x + offset, 0.0, 1.0)) * weight;
 		weight_sum += weight;
 	}
@@ -89,8 +148,20 @@ float get_spectrum_smooth(float x, float smoothness) {
 	return total / weight_sum;
 }
 
+// Soft glow function with customizable falloff
+float soft_glow(float dist, float radius, float softness) {
+	return pow(max(0.0, 1.0 - dist / radius), softness);
+}
+
+// HSV to RGB conversion for color cycling
+vec3 hsv2rgb(vec3 c) {
+	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 // =============================================================================
-// MODE 0: FREQUENCY BARS (Classic WMP Bars)
+// MODE 0: FREQUENCY BARS (Enhanced with rounded tops and peaks)
 // =============================================================================
 
 vec3 render_bars(vec2 uv, float time) {
@@ -98,172 +169,300 @@ vec3 render_bars(vec2 uv, float time) {
 
 	int num_bars = 32;
 	float bar_spacing = 1.0 / float(num_bars);
+	float half_spacing = bar_spacing * 0.5;
+
+	// Background glow based on audio
+	float bg_glow = audio_level * 0.15;
+	color += mix(color_primary.rgb, color_secondary.rgb, uv.x) * bg_glow * (1.0 - uv.y);
+
+	// Beat pulse effect
+	if (beat_intensity > 0.0) {
+		float pulse = beat_intensity * 0.2;
+		color += color_accent.rgb * pulse * (1.0 - length(uv - vec2(0.5)) * 1.5);
+	}
 
 	for (int i = 0; i < num_bars; i++) {
-		float bar_x = (float(i) + 0.5) * bar_spacing;
-		float bar_center = bar_x;
+		float fi = float(i);
+		float bar_x = (fi + 0.5) * bar_spacing;
 		float half_width = bar_spacing * bar_width * 0.5;
 
-		// Check if UV is within bar bounds
-		if (uv.x >= bar_center - half_width && uv.x <= bar_center + half_width) {
+		float dist_to_bar = abs(uv.x - bar_x);
+
+		// Only process if within bar influence area (optimization + glow)
+		if (dist_to_bar < half_width * 3.0) {
 			float spec = spectrum[i];
-			float bar_height = spec * 0.85 + 0.02; // Minimum height for visibility
+			float peak = peak_spectrum[i];
+			float bar_height = spec * 0.82 + 0.03;
 
-			// Main bar
-			if (uv.y < bar_height) {
-				// Gradient from primary to accent based on height
-				float height_ratio = uv.y / bar_height;
-				vec3 bar_color = mix(color_primary.rgb, color_accent.rgb, height_ratio);
+			// Normalized position within bar
+			float x_in_bar = (uv.x - (bar_x - half_width)) / (half_width * 2.0);
 
-				// Add peak glow
-				if (uv.y > bar_height - 0.05) {
-					bar_color += color_secondary.rgb * glow_intensity * 0.5;
+			// Rounded top calculation
+			float round_radius = half_width * 0.8;
+			float top_center_y = bar_height - round_radius;
+			float effective_height = bar_height;
+
+			if (uv.y > top_center_y && dist_to_bar < half_width) {
+				// Check if in rounded cap area
+				vec2 cap_center = vec2(bar_x, top_center_y);
+				float cap_dist = length(vec2(uv.x, uv.y) - cap_center);
+				if (cap_dist > round_radius) {
+					effective_height = -1.0; // Outside rounded cap
 				}
+			}
 
-				// Edge glow
-				float edge_dist = abs(uv.x - bar_center) / half_width;
-				bar_color += color_primary.rgb * (1.0 - edge_dist) * 0.3 * glow_intensity;
+			// Main bar body
+			if (dist_to_bar < half_width && uv.y < effective_height && uv.y > 0.0) {
+				// Height-based gradient
+				float height_ratio = uv.y / bar_height;
+
+				// Smooth color transition
+				vec3 bar_color = mix(color_primary.rgb, color_secondary.rgb, height_ratio);
+				bar_color = mix(bar_color, color_accent.rgb, pow(height_ratio, 2.0) * 0.5);
+
+				// Inner highlight (3D effect)
+				float inner_highlight = 1.0 - abs(x_in_bar - 0.5) * 1.5;
+				inner_highlight = pow(max(0.0, inner_highlight), 1.5);
+				bar_color += vec3(0.2) * inner_highlight;
+
+				// Edge darkening for depth
+				float edge = 1.0 - pow(abs(x_in_bar - 0.5) * 2.0, 3.0) * 0.3;
+				bar_color *= edge;
+
+				// Top glow
+				if (uv.y > bar_height - 0.08) {
+					float top_glow = (uv.y - (bar_height - 0.08)) / 0.08;
+					bar_color += color_accent.rgb * top_glow * glow_intensity * 0.6;
+				}
 
 				color = bar_color;
 			}
 
-			// Reflection below
-			if (uv.y > 0.0 && uv.y < bar_height * reflection_amount * 0.3) {
-				float ref_y = 1.0 - (uv.y / (bar_height * reflection_amount * 0.3));
-				vec3 ref_color = mix(color_primary.rgb, color_accent.rgb, ref_y) * 0.2;
-				color = mix(color, ref_color, 0.5 * (1.0 - uv.y / (bar_height * reflection_amount * 0.3)));
+			// Bar glow (soft light around bars)
+			float glow_dist = max(dist_to_bar - half_width, 0.0);
+			if (uv.y < bar_height + 0.05 && uv.y > 0.0) {
+				float glow = soft_glow(glow_dist, half_width * 1.5, 2.5);
+				glow *= (1.0 - uv.y / (bar_height + 0.1));
+				vec3 glow_color = mix(color_primary.rgb, color_accent.rgb, uv.y / bar_height);
+				color += glow_color * glow * glow_intensity * 0.25;
+			}
+
+			// Peak indicator (floating marker)
+			if (peak > spec + 0.02) {
+				float peak_y = peak * 0.82 + 0.03;
+				float peak_dist = abs(uv.y - peak_y);
+				if (peak_dist < 0.015 && dist_to_bar < half_width) {
+					float peak_intensity = 1.0 - peak_dist / 0.015;
+					peak_intensity = pow(peak_intensity, 1.5);
+					color = mix(color, color_accent.rgb * 1.5, peak_intensity);
+				}
+				// Peak glow
+				if (peak_dist < 0.04 && dist_to_bar < half_width * 1.2) {
+					float peak_glow = soft_glow(peak_dist, 0.04, 2.0);
+					color += color_accent.rgb * peak_glow * 0.3;
+				}
+			}
+
+			// Reflection (subtle mirror effect)
+			if (uv.y < bar_height * reflection_amount * 0.25 && dist_to_bar < half_width) {
+				float ref_y = uv.y / (bar_height * reflection_amount * 0.25);
+				float ref_intensity = (1.0 - ref_y) * 0.25;
+				vec3 ref_color = mix(color_primary.rgb, color_secondary.rgb, 1.0 - ref_y) * ref_intensity;
+				color = mix(color, ref_color, ref_intensity * 0.6);
 			}
 		}
 	}
 
-	// Add overall bass pulse to background
-	color += background_color.rgb * bass_level * 0.5;
+	// Floor reflection line
+	float floor_line = smoothstep(0.003, 0.0, abs(uv.y - 0.002));
+	color += vec3(0.15) * floor_line * audio_level;
 
 	return color;
 }
 
 // =============================================================================
-// MODE 1: OSCILLOSCOPE / SCOPE (Waveform visualization)
+// MODE 1: OSCILLOSCOPE / SCOPE (Enhanced waveform with trails)
 // =============================================================================
 
 vec3 render_scope(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
-	// Center the waveform
+	// Subtle animated background
+	float bg_noise = fbm(uv * 3.0 + vec2(time * 0.1, 0.0), 2) * 0.05;
+	color += mix(color_primary.rgb, color_secondary.rgb, uv.x) * bg_noise * audio_level;
+
 	float center_y = 0.5;
 
-	// Get waveform value at this x position
-	float wave_val = get_spectrum_smooth(uv.x, 2.0);
+	// Multiple wave layers for depth
+	for (int layer = 2; layer >= 0; layer--) {
+		float layer_offset = float(layer) * 0.02;
+		float layer_alpha = 1.0 - float(layer) * 0.3;
+		float layer_width = 1.0 + float(layer) * 0.5;
 
-	// Add some sine modulation for visual interest
-	wave_val += sin(uv.x * 20.0 + time * 3.0) * mid_level * 0.15;
-	wave_val += sin(uv.x * 8.0 - time * 2.0) * bass_level * 0.2;
+		// Get waveform value at this x position
+		float wave_val = get_spectrum_smooth(uv.x + layer_offset, 1.5);
 
-	// Calculate waveform position
-	float wave_y = center_y + (wave_val - 0.5) * 0.8;
+		// Add flowing sine modulation
+		wave_val += sin(uv.x * 25.0 + time * 4.0 - float(layer)) * mid_level * 0.12;
+		wave_val += sin(uv.x * 10.0 - time * 2.5 + float(layer) * 0.5) * bass_level * 0.18;
+		wave_val += sin(uv.x * 40.0 + time * 6.0) * high_level * 0.06;
 
-	// Distance to waveform line
-	float dist = abs(uv.y - wave_y);
+		// Calculate waveform position
+		float wave_y = center_y + (wave_val - 0.5) * 0.75;
 
-	// Main line with glow
-	float line_width = 0.008;
-	float glow_width = 0.08;
+		// Distance to waveform line
+		float dist = abs(uv.y - wave_y);
 
-	// Core line
-	if (dist < line_width) {
-		color = mix(color_primary.rgb, color_accent.rgb, uv.x) * glow_intensity;
-	}
-	// Glow effect
-	else if (dist < glow_width) {
-		float glow = 1.0 - (dist - line_width) / (glow_width - line_width);
-		glow = pow(glow, 2.0);
-		vec3 glow_color = mix(color_primary.rgb, color_secondary.rgb, uv.x);
-		color += glow_color * glow * glow_intensity * 0.5;
-	}
+		// Line width varies with audio
+		float line_width = 0.006 * layer_width + audio_level * 0.004;
+		float glow_width = 0.06 * layer_width + audio_level * 0.03;
 
-	// Add trailing echoes
-	for (int i = 1; i <= 3; i++) {
-		float echo_offset = float(i) * 0.015;
-		float echo_wave_y = center_y + (get_spectrum_smooth(uv.x + echo_offset, 2.0) - 0.5) * 0.8;
-		float echo_dist = abs(uv.y - echo_wave_y);
+		// Color based on layer and position
+		vec3 wave_color = mix(color_primary.rgb, color_secondary.rgb, uv.x);
+		wave_color = mix(wave_color, color_accent.rgb, float(layer) * 0.3);
 
-		if (echo_dist < glow_width * 0.5) {
-			float echo_glow = (1.0 - echo_dist / (glow_width * 0.5)) * (1.0 - float(i) * 0.25);
-			color += color_secondary.rgb * echo_glow * 0.2;
-		}
+		// Core line with smooth anti-aliasing
+		float line_intensity = smoothstep(line_width, line_width * 0.3, dist);
+		color += wave_color * line_intensity * glow_intensity * layer_alpha;
+
+		// Glow effect with exponential falloff
+		float glow = exp(-dist * dist / (glow_width * glow_width * 0.5));
+		color += wave_color * glow * glow_intensity * 0.3 * layer_alpha;
 	}
 
-	// Center line
+	// Trailing echoes with fade
+	for (int i = 1; i <= 5; i++) {
+		float echo_offset = float(i) * 0.025;
+		float echo_alpha = 1.0 - float(i) * 0.18;
+
+		float echo_val = get_spectrum_smooth(uv.x + echo_offset, 2.0);
+		echo_val += sin((uv.x + echo_offset) * 20.0 + time * 3.0 - float(i) * 0.5) * mid_level * 0.1;
+		float echo_y = center_y + (echo_val - 0.5) * 0.7;
+
+		float echo_dist = abs(uv.y - echo_y);
+		float echo_glow = exp(-echo_dist * echo_dist / 0.002);
+		color += color_secondary.rgb * echo_glow * echo_alpha * 0.15;
+	}
+
+	// Center reference line (subtle)
 	float center_dist = abs(uv.y - center_y);
-	if (center_dist < 0.002) {
-		color += vec3(0.1);
-	}
+	float center_line = smoothstep(0.002, 0.0005, center_dist);
+	color += vec3(0.08) * center_line;
+
+	// Grid lines (very subtle)
+	float grid_x = smoothstep(0.002, 0.0, abs(mod(uv.x, 0.1) - 0.05) - 0.048);
+	float grid_y = smoothstep(0.002, 0.0, abs(mod(uv.y, 0.1) - 0.05) - 0.048);
+	color += vec3(0.03) * max(grid_x, grid_y);
 
 	return color;
 }
 
 // =============================================================================
-// MODE 2: AMBIENCE (Flowing particles and gradients)
+// MODE 2: AMBIENCE (Layered particles and plasma)
 // =============================================================================
 
 vec3 render_ambience(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
-	// Create flowing plasma background
-	vec2 plasma_uv = uv * 3.0;
-	float plasma = 0.0;
-	plasma += sin(plasma_uv.x * 2.0 + time) * 0.5;
-	plasma += sin(plasma_uv.y * 2.5 + time * 0.7) * 0.5;
-	plasma += sin((plasma_uv.x + plasma_uv.y) * 1.5 + time * 0.5) * 0.5;
-	plasma += sin(length(plasma_uv - vec2(0.5)) * 3.0 - time) * 0.5;
-	plasma = (plasma + 2.0) / 4.0;
+	// Multi-layer plasma background
+	for (int layer = 0; layer < 3; layer++) {
+		float fl = float(layer);
+		float layer_speed = 1.0 - fl * 0.3;
+		float layer_scale = 2.0 + fl * 1.5;
 
-	// Modulate with audio
-	plasma *= 0.5 + audio_level * 0.5;
+		vec2 plasma_uv = uv * layer_scale + vec2(time * 0.1 * layer_speed, fl);
 
-	// Color gradient based on plasma and audio
-	vec3 plasma_color = mix(color_primary.rgb, color_secondary.rgb, plasma);
-	plasma_color = mix(plasma_color, color_accent.rgb, bass_level * 0.5);
+		float plasma = 0.0;
+		plasma += sin(plasma_uv.x * 2.5 + time * layer_speed) * 0.5;
+		plasma += sin(plasma_uv.y * 3.0 + time * 0.8 * layer_speed) * 0.5;
+		plasma += sin((plasma_uv.x + plasma_uv.y) * 2.0 + time * 0.6) * 0.5;
+		plasma += sin(length(plasma_uv - vec2(0.5 + fl * 0.2)) * 4.0 - time * layer_speed) * 0.5;
+		plasma = (plasma + 2.0) / 4.0;
 
-	color = plasma_color * 0.3;
+		// Modulate with audio bands
+		float band_mod = layer == 0 ? bass_level : (layer == 1 ? mid_level : high_level);
+		plasma *= 0.4 + band_mod * 0.6;
 
-	// Add floating particles
-	for (int i = 0; i < 20; i++) {
+		// Layer color
+		vec3 layer_color = layer == 0 ? color_primary.rgb :
+						   (layer == 1 ? color_secondary.rgb : color_accent.rgb);
+
+		color += layer_color * plasma * (0.15 - fl * 0.03);
+	}
+
+	// Nebula-like clouds
+	float nebula = fbm(uv * 4.0 + vec2(time * 0.05, time * 0.03), 4);
+	nebula = pow(nebula, 1.5) * audio_level;
+	vec3 nebula_color = mix(color_primary.rgb, color_accent.rgb, nebula);
+	color += nebula_color * nebula * 0.3;
+
+	// Floating particles with trails
+	for (int i = 0; i < 30; i++) {
 		float fi = float(i);
 		float seed = hash(vec2(fi, fi * 0.7));
+		float seed2 = hash(vec2(fi * 1.3, fi * 0.5));
 
-		// Particle position (float upward, react to bass)
+		// Particle motion with audio influence
 		vec2 particle_pos;
-		particle_pos.x = fract(seed + time * 0.05 * (0.5 + seed));
-		particle_pos.y = fract(seed * 2.0 + time * 0.1 * (0.3 + seed * 0.7) + bass_level * 0.1);
+		float speed_mod = 0.5 + seed * 0.5;
+		particle_pos.x = fract(seed + time * 0.03 * speed_mod + bass_level * 0.02 * sin(time + fi));
+		particle_pos.y = fract(seed2 + time * 0.05 * speed_mod + seed * 0.2);
 
-		// Particle size based on spectrum
+		// Particle size based on spectrum and distance
 		int spec_idx = int(fi) % 32;
-		float particle_size = 0.02 + spectrum[spec_idx] * 0.04;
+		float base_size = 0.008 + seed * 0.015;
+		float audio_size = spectrum[spec_idx] * 0.025;
+		float particle_size = base_size + audio_size;
 
 		// Distance to particle
 		float dist = length(uv - particle_pos);
 
+		// Particle core
 		if (dist < particle_size) {
 			float intensity = 1.0 - dist / particle_size;
-			intensity = pow(intensity, 1.5);
+			intensity = pow(intensity, 2.0);
 
 			vec3 particle_color = mix(color_primary.rgb, color_accent.rgb, seed);
-			color += particle_color * intensity * glow_intensity * 0.7;
+			particle_color = mix(particle_color, vec3(1.0), intensity * 0.5);
+			color += particle_color * intensity * glow_intensity * 0.8;
 		}
 
-		// Glow around particles
-		if (dist < particle_size * 3.0) {
-			float glow = 1.0 - dist / (particle_size * 3.0);
-			glow = pow(glow, 3.0);
-			color += color_secondary.rgb * glow * 0.15;
+		// Particle glow (soft halo)
+		float glow_size = particle_size * 4.0;
+		if (dist < glow_size) {
+			float glow = exp(-dist * dist / (glow_size * glow_size * 0.3));
+			vec3 glow_color = mix(color_secondary.rgb, color_primary.rgb, seed2);
+			color += glow_color * glow * 0.15;
+		}
+
+		// Particle trail
+		float trail_length = 0.05 + spectrum[spec_idx] * 0.03;
+		vec2 trail_dir = vec2(-0.03 * speed_mod, -0.05 * speed_mod);
+		for (int t = 1; t <= 5; t++) {
+			vec2 trail_pos = particle_pos + trail_dir * float(t) * 0.2;
+			float trail_dist = length(uv - trail_pos);
+			float trail_size = particle_size * (1.0 - float(t) * 0.15);
+			if (trail_dist < trail_size * 2.0) {
+				float trail_glow = exp(-trail_dist * trail_dist / (trail_size * trail_size * 2.0));
+				color += color_secondary.rgb * trail_glow * 0.08 * (1.0 - float(t) * 0.18);
+			}
 		}
 	}
 
-	// Add vertical streaks on bass hits
-	float streak_intensity = pow(bass_level, 2.0) * 0.3;
-	float streak = fbm(vec2(uv.x * 10.0, time * 2.0), 3);
-	color += color_primary.rgb * streak * streak_intensity;
+	// Bass-reactive vertical energy streaks
+	float streak_intensity = pow(bass_level, 1.5) * 0.4;
+	if (streak_intensity > 0.01) {
+		float streak = fbm(vec2(uv.x * 15.0, time * 3.0), 3);
+		streak = pow(streak, 2.0);
+		vec3 streak_color = mix(color_primary.rgb, color_accent.rgb, uv.y);
+		color += streak_color * streak * streak_intensity * (1.0 - abs(uv.y - 0.5) * 1.5);
+	}
+
+	// Beat flash
+	if (beat_intensity > 0.1) {
+		float flash = beat_intensity * 0.3;
+		color += color_accent.rgb * flash * (1.0 - length(uv - vec2(0.5)) * 1.2);
+	}
 
 	return color;
 }
@@ -275,83 +474,112 @@ vec3 render_ambience(vec2 uv, float time) {
 vec3 render_battery(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
-	// Center coordinates
 	vec2 center = vec2(0.5, 0.5);
 	vec2 centered_uv = uv - center;
 
-	// Polar coordinates
 	float angle = atan(centered_uv.y, centered_uv.x);
 	float radius = length(centered_uv);
 
-	// Number of segments based on bass
-	float segments = 6.0 + bass_level * 6.0;
+	// Background energy field
+	float field = fbm(centered_uv * 5.0 + vec2(time * 0.2), 3);
+	field *= audio_level * 0.2;
+	color += mix(color_primary.rgb, color_secondary.rgb, field) * field;
 
-	// Rotating energy beams
-	for (int i = 0; i < 12; i++) {
+	// Rotating energy beams with smooth edges
+	int num_beams = 12;
+	for (int i = 0; i < num_beams; i++) {
 		float fi = float(i);
-		float beam_angle = (fi / 12.0) * 6.28318 + time * (0.5 + fi * 0.1);
+		float beam_angle = (fi / float(num_beams)) * TAU + time * (0.4 + fi * 0.05);
 
-		// Spectrum affects beam length
+		// Spectrum affects beam properties
 		int spec_idx = i % 32;
-		float beam_length = 0.2 + spectrum[spec_idx] * 0.5;
+		float beam_length = 0.15 + spectrum[spec_idx] * 0.55;
+		float beam_width = 0.08 + mid_level * 0.06;
 
-		// Angle difference
-		float angle_diff = abs(mod(angle - beam_angle + 3.14159, 6.28318) - 3.14159);
+		// Angle difference with smooth wrapping
+		float angle_diff = abs(mod(angle - beam_angle + PI, TAU) - PI);
 
-		// Beam width
-		float beam_width = 0.1 + mid_level * 0.1;
+		// Smooth beam edges
+		float beam_intensity = smoothstep(beam_width, beam_width * 0.3, angle_diff);
+		beam_intensity *= smoothstep(beam_length, beam_length * 0.7, radius);
+		beam_intensity *= smoothstep(0.0, 0.08, radius); // Fade near center
 
-		if (angle_diff < beam_width && radius < beam_length) {
-			float intensity = (1.0 - angle_diff / beam_width) * (1.0 - radius / beam_length);
-			intensity = pow(intensity, 1.5);
+		if (beam_intensity > 0.0) {
+			// Color gradient along beam
+			float color_phase = fi / float(num_beams);
+			vec3 beam_color = mix(color_primary.rgb, color_accent.rgb, color_phase);
+			beam_color = mix(beam_color, color_secondary.rgb, radius / beam_length);
 
-			vec3 beam_color = mix(color_primary.rgb, color_accent.rgb, fi / 12.0);
-			color += beam_color * intensity * glow_intensity;
+			// Inner glow
+			float inner_glow = pow(beam_intensity, 1.5);
+			beam_color += vec3(0.3) * inner_glow;
+
+			color += beam_color * beam_intensity * glow_intensity * 0.7;
 		}
 
-		// Beam glow
-		if (angle_diff < beam_width * 2.0 && radius < beam_length * 1.2) {
-			float glow = (1.0 - angle_diff / (beam_width * 2.0)) * (1.0 - radius / (beam_length * 1.2));
-			glow = pow(glow, 3.0);
-			color += color_secondary.rgb * glow * 0.3;
-		}
+		// Beam glow/halo
+		float halo_intensity = smoothstep(beam_width * 2.5, beam_width, angle_diff);
+		halo_intensity *= smoothstep(beam_length * 1.3, beam_length * 0.5, radius);
+		halo_intensity *= smoothstep(0.0, 0.1, radius);
+		color += color_secondary.rgb * halo_intensity * 0.12;
 	}
 
-	// Center orb pulsing with audio
-	float orb_radius = 0.08 + audio_level * 0.05;
+	// Pulsing center orb
+	float orb_radius = 0.06 + audio_level * 0.04 + beat_intensity * 0.02;
+	float orb_glow_radius = orb_radius * 3.0;
+
+	// Orb core
 	if (radius < orb_radius) {
 		float orb_intensity = 1.0 - radius / orb_radius;
-		orb_intensity = pow(orb_intensity, 2.0);
-		vec3 orb_color = mix(color_accent.rgb, vec3(1.0), orb_intensity);
-		color += orb_color * orb_intensity * glow_intensity;
+		orb_intensity = pow(orb_intensity, 1.5);
+		vec3 orb_color = mix(color_accent.rgb, vec3(1.0), orb_intensity * 0.8);
+		color = mix(color, orb_color, orb_intensity);
 	}
 
-	// Outer ring
-	float ring_radius = 0.45 + bass_level * 0.05;
-	float ring_width = 0.02 + high_level * 0.02;
-	float ring_dist = abs(radius - ring_radius);
-	if (ring_dist < ring_width) {
-		float ring_intensity = 1.0 - ring_dist / ring_width;
-		ring_intensity = pow(ring_intensity, 2.0);
+	// Orb glow
+	float orb_glow = exp(-radius * radius / (orb_glow_radius * orb_glow_radius * 0.15));
+	color += color_accent.rgb * orb_glow * glow_intensity * 0.5;
 
-		// Color varies around the ring
-		vec3 ring_color = mix(color_primary.rgb, color_secondary.rgb, (angle + 3.14159) / 6.28318);
+	// Multiple concentric rings
+	for (int ring = 0; ring < 3; ring++) {
+		float fr = float(ring);
+		float ring_radius = 0.2 + fr * 0.12 + bass_level * 0.03 * (1.0 + fr * 0.5);
+		float ring_width = 0.015 + high_level * 0.01;
+
+		float ring_dist = abs(radius - ring_radius);
+		float ring_intensity = smoothstep(ring_width, ring_width * 0.2, ring_dist);
+
+		// Animated color around ring
+		float ring_hue = (angle + PI) / TAU + time * 0.1 * (1.0 + fr * 0.3);
+		vec3 ring_color = mix(color_primary.rgb, color_secondary.rgb, fract(ring_hue));
+
+		// Add spectrum modulation
+		int ring_spec_idx = int(((angle + PI) / TAU) * 32.0) % 32;
+		ring_intensity *= 0.5 + spectrum[ring_spec_idx] * 0.5;
+
 		color += ring_color * ring_intensity * 0.8;
+
+		// Ring glow
+		float ring_glow = exp(-ring_dist * ring_dist / (ring_width * ring_width * 8.0));
+		color += color_secondary.rgb * ring_glow * 0.1;
 	}
 
-	// Radial spectrum bars
+	// Outer radial spectrum bars
+	float bar_start = 0.42;
 	for (int i = 0; i < 32; i++) {
-		float bar_angle = (float(i) / 32.0) * 6.28318 - 1.5708;
-		float angle_diff = abs(mod(angle - bar_angle + 3.14159, 6.28318) - 3.14159);
+		float bar_angle = (float(i) / 32.0) * TAU - PI * 0.5;
+		float angle_diff = abs(mod(angle - bar_angle + PI, TAU) - PI);
 
-		if (angle_diff < 0.06) {
-			float bar_start = ring_radius + ring_width;
-			float bar_length = spectrum[i] * 0.2;
-
+		float bar_angular_width = 0.05;
+		if (angle_diff < bar_angular_width) {
+			float bar_length = spectrum[i] * 0.15;
 			if (radius > bar_start && radius < bar_start + bar_length) {
-				float intensity = (1.0 - angle_diff / 0.06);
+				float intensity = smoothstep(bar_angular_width, bar_angular_width * 0.3, angle_diff);
+				intensity *= smoothstep(bar_start, bar_start + 0.02, radius);
+				intensity *= smoothstep(bar_start + bar_length, bar_start + bar_length - 0.02, radius);
+
 				vec3 bar_color = mix(color_primary.rgb, color_accent.rgb, float(i) / 32.0);
-				color += bar_color * intensity * 0.6;
+				color += bar_color * intensity * 0.7;
 			}
 		}
 	}
@@ -372,91 +600,151 @@ vec3 render_plenoptic(vec2 uv, float time) {
 	float angle = atan(centered_uv.y, centered_uv.x);
 	float radius = length(centered_uv);
 
-	// Kaleidoscope effect
+	// Kaleidoscope effect with smooth transitions
 	float num_segments = 8.0;
-	float segment_angle = 6.28318 / num_segments;
+	float segment_angle = TAU / num_segments;
+	float segment_idx = floor(angle / segment_angle + 0.5);
 	float mirrored_angle = mod(angle, segment_angle);
-	if (mod(floor(angle / segment_angle), 2.0) == 1.0) {
+	if (mod(segment_idx, 2.0) == 1.0) {
 		mirrored_angle = segment_angle - mirrored_angle;
 	}
 
-	// Convert back to cartesian for pattern
-	vec2 pattern_uv = vec2(cos(mirrored_angle), sin(mirrored_angle)) * radius;
-	pattern_uv = pattern_uv * 2.0 + vec2(0.5);
+	// Background swirl
+	float swirl_angle = angle + radius * 3.0 * sin(time * 0.3) + time * 0.2;
+	float swirl = sin(swirl_angle * 5.0 + time) * 0.5 + 0.5;
+	swirl *= audio_level * 0.15;
+	color += mix(color_primary.rgb, color_secondary.rgb, swirl) * swirl;
 
-	// Concentric circles pulsing with spectrum
-	for (int i = 0; i < 8; i++) {
+	// Concentric pulsing rings
+	for (int i = 0; i < 10; i++) {
 		float fi = float(i);
-		float circle_radius = 0.1 + fi * 0.06;
+		float base_radius = 0.05 + fi * 0.045;
 
-		// Modulate with spectrum
-		int spec_idx = (i * 4) % 32;
-		circle_radius += spectrum[spec_idx] * 0.03;
+		// Spectrum modulation
+		int spec_idx = (i * 3) % 32;
+		float spec_mod = spectrum[spec_idx];
+		float circle_radius = base_radius + spec_mod * 0.02;
 
-		// Animate
-		circle_radius += sin(time * 2.0 + fi) * 0.02 * audio_level;
+		// Time-based animation
+		circle_radius += sin(time * 2.5 + fi * 0.8) * 0.015 * audio_level;
 
+		float ring_width = 0.012 + spec_mod * 0.008;
 		float circle_dist = abs(radius - circle_radius);
-		float ring_width = 0.015 + spectrum[spec_idx] * 0.01;
 
-		if (circle_dist < ring_width) {
-			float intensity = 1.0 - circle_dist / ring_width;
-			intensity = pow(intensity, 1.5);
+		// Smooth ring with glow
+		float ring_intensity = smoothstep(ring_width, ring_width * 0.15, circle_dist);
 
-			// Angle-based color variation
-			float color_phase = mirrored_angle / segment_angle + time * 0.2 + fi * 0.5;
-			vec3 ring_color = mix(color_primary.rgb, color_secondary.rgb, sin(color_phase) * 0.5 + 0.5);
-			ring_color = mix(ring_color, color_accent.rgb, cos(color_phase * 2.0) * 0.3 + 0.3);
+		if (ring_intensity > 0.0) {
+			// Angle-based color variation with kaleidoscope
+			float color_phase = mirrored_angle / segment_angle + time * 0.15 + fi * 0.4;
+			vec3 ring_color = mix(color_primary.rgb, color_secondary.rgb, sin(color_phase * PI) * 0.5 + 0.5);
+			ring_color = mix(ring_color, color_accent.rgb, cos(color_phase * PI * 2.0) * 0.25 + 0.25);
 
-			color += ring_color * intensity * glow_intensity;
+			// Brightness variation
+			ring_color *= 0.8 + spec_mod * 0.4;
+
+			color += ring_color * ring_intensity * glow_intensity * 0.8;
+		}
+
+		// Soft outer glow
+		float glow = exp(-circle_dist * circle_dist / (ring_width * ring_width * 6.0));
+		color += color_secondary.rgb * glow * 0.06;
+	}
+
+	// Radial lines with spectrum
+	float num_lines = 32.0;
+	float line_angle = TAU / num_lines;
+	for (int i = 0; i < 32; i++) {
+		float fi = float(i);
+		float target_angle = fi * line_angle - PI;
+		float angle_diff = abs(mod(angle - target_angle + PI, TAU) - PI);
+
+		float line_width = 0.025 + spectrum[i] * 0.015;
+		float line_intensity = smoothstep(line_width, line_width * 0.2, angle_diff);
+		line_intensity *= spectrum[i];
+		line_intensity *= smoothstep(0.5, 0.1, radius); // Fade at edges
+
+		if (line_intensity > 0.01) {
+			vec3 line_color = mix(color_accent.rgb, color_primary.rgb, fi / 32.0);
+			color += line_color * line_intensity * 0.4;
 		}
 	}
 
-	// Radial lines
-	float num_lines = 16.0;
-	float line_angle = 6.28318 / num_lines;
-	float nearest_line = round(angle / line_angle) * line_angle;
-	float line_dist = abs(angle - nearest_line);
+	// Center mandala glow
+	float center_glow = exp(-radius * radius / 0.015) * (0.6 + audio_level * 0.4);
+	vec3 center_color = mix(color_primary.rgb, vec3(1.0), center_glow * 0.7);
+	color += center_color * center_glow * glow_intensity * 0.8;
 
-	if (line_dist < 0.03) {
-		int line_idx = int(round(angle / line_angle)) % 32;
-		float line_intensity = spectrum[line_idx] * (1.0 - line_dist / 0.03);
-		line_intensity *= (1.0 - radius * 1.5);
-
-		if (line_intensity > 0.0) {
-			color += color_accent.rgb * line_intensity * 0.5;
-		}
-	}
-
-	// Center glow
-	float center_glow = exp(-radius * 8.0) * (0.5 + audio_level * 0.5);
-	vec3 center_color = mix(color_primary.rgb, vec3(1.0), center_glow);
-	color += center_color * center_glow * glow_intensity;
-
-	// Spinning dots at intersections
-	for (int ring = 0; ring < 4; ring++) {
-		float ring_r = 0.15 + float(ring) * 0.1;
-		int num_dots = 8 + ring * 4;
+	// Spinning dots at ring intersections
+	for (int ring = 0; ring < 5; ring++) {
+		float ring_r = 0.1 + float(ring) * 0.08;
+		int num_dots = 8 + ring * 6;
+		float dot_angular_speed = 0.4 - float(ring) * 0.08;
 
 		for (int dot = 0; dot < num_dots; dot++) {
-			if (dot >= 20) break; // Limit for performance
+			if (dot >= 38) break;
 
-			float dot_angle = (float(dot) / float(num_dots)) * 6.28318 + time * (0.5 - float(ring) * 0.1);
+			float dot_angle = (float(dot) / float(num_dots)) * TAU + time * dot_angular_speed;
 			vec2 dot_pos = vec2(cos(dot_angle), sin(dot_angle)) * ring_r;
 
 			float dot_dist = length(centered_uv - dot_pos);
 			int spec_idx = (ring * 8 + dot) % 32;
-			float dot_size = 0.015 + spectrum[spec_idx] * 0.02;
+			float dot_size = 0.012 + spectrum[spec_idx] * 0.018;
 
+			// Dot core
 			if (dot_dist < dot_size) {
 				float dot_intensity = 1.0 - dot_dist / dot_size;
-				dot_intensity = pow(dot_intensity, 2.0);
+				dot_intensity = pow(dot_intensity, 1.8);
 
 				vec3 dot_color = mix(color_secondary.rgb, color_accent.rgb, float(dot) / float(num_dots));
-				color += dot_color * dot_intensity * 0.8;
+				dot_color = mix(dot_color, vec3(1.0), dot_intensity * 0.4);
+				color += dot_color * dot_intensity * 0.9;
 			}
+
+			// Dot glow
+			float dot_glow = exp(-dot_dist * dot_dist / (dot_size * dot_size * 4.0));
+			color += color_secondary.rgb * dot_glow * 0.12;
 		}
 	}
+
+	return color;
+}
+
+// =============================================================================
+// POST-PROCESSING EFFECTS
+// =============================================================================
+
+vec3 apply_post_processing(vec3 color, vec2 uv, float time) {
+	// Chromatic aberration (subtle, increases with beat)
+	float aberration_amount = 0.002 + beat_intensity * 0.003;
+	vec2 aberration_dir = normalize(uv - vec2(0.5)) * aberration_amount;
+	// Note: We can't actually sample other pixels in fragment shader without textures
+	// So we'll simulate it with color shifting based on position
+	float edge_dist = length(uv - vec2(0.5)) * 2.0;
+	color.r *= 1.0 + aberration_dir.x * edge_dist * 10.0;
+	color.b *= 1.0 - aberration_dir.x * edge_dist * 10.0;
+
+	// Film grain (very subtle)
+	float grain = hash(uv * 1000.0 + vec2(time * 100.0, 0.0)) * 0.03;
+	color += vec3(grain) * (0.3 + audio_level * 0.2);
+
+	// Subtle scanlines
+	float scanline = sin(uv.y * 800.0) * 0.02 + 0.98;
+	color *= scanline;
+
+	// Vignette (enhanced)
+	vec2 vignette_uv = uv * (1.0 - uv);
+	float vignette = pow(vignette_uv.x * vignette_uv.y * 16.0, 0.3);
+	vignette = mix(0.3, 1.0, vignette);
+	color *= vignette;
+
+	// HDR bloom simulation
+	vec3 bloom = max(color - vec3(0.6), vec3(0.0));
+	color += bloom * 0.6 * glow_intensity;
+
+	// Subtle color grading (increase saturation slightly)
+	float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+	color = mix(vec3(luminance), color, 1.15);
 
 	return color;
 }
@@ -488,15 +776,9 @@ void fragment() {
 		final_color = render_plenoptic(uv, time);
 	}
 
-	// Add subtle vignette
-	vec2 vignette_uv = uv * (1.0 - uv);
-	float vignette = pow(vignette_uv.x * vignette_uv.y * 15.0, 0.25);
-	final_color *= vignette;
+	// Apply post-processing
+	final_color = apply_post_processing(final_color, uv, time);
 
-	// HDR bloom-like effect (brighten already bright areas)
-	vec3 bloom = max(final_color - vec3(0.5), vec3(0.0));
-	final_color += bloom * 0.5;
-
-	// Clamp final output and set color with full opacity
+	// Clamp final output
 	COLOR = vec4(clamp(final_color, vec3(0.0), vec3(1.0)), 1.0);
 }
