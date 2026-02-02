@@ -167,20 +167,30 @@ func detach_grinder(grinder: RigidBody3D) -> Vector3:
 
 func _calculate_velocity(grinder: RigidBody3D, state: Dictionary) -> Vector3:
 	var length: float = get_rail_length()
-	var current_pos: Vector3 = get_point_at_offset(state.offset)
+	var clamped_offset: float = clamp(state.offset, 0.0, length)
+	var current_pos: Vector3 = get_point_at_offset(clamped_offset)
 
 	# Calculate actual rail direction from positions (not tangent)
+	# Handle edge cases where we're at or past the rail ends
 	var rail_dir: Vector3
 	if state.direction > 0:
-		# Moving toward end
-		var ahead_offset: float = minf(state.offset + 1.0, length)
-		var ahead_pos: Vector3 = get_point_at_offset(ahead_offset)
-		rail_dir = (ahead_pos - current_pos).normalized()
+		# Moving toward end - look ahead, or look back and invert if at edge
+		if clamped_offset >= length - 0.5:
+			# At end - look backward and invert to get forward direction
+			var behind_pos: Vector3 = get_point_at_offset(maxf(clamped_offset - 2.0, 0.0))
+			rail_dir = (current_pos - behind_pos).normalized()
+		else:
+			var ahead_pos: Vector3 = get_point_at_offset(minf(clamped_offset + 2.0, length))
+			rail_dir = (ahead_pos - current_pos).normalized()
 	else:
-		# Moving toward start
-		var ahead_offset: float = maxf(state.offset - 1.0, 0.0)
-		var ahead_pos: Vector3 = get_point_at_offset(ahead_offset)
-		rail_dir = (ahead_pos - current_pos).normalized()
+		# Moving toward start - look ahead (backward on rail), or invert if at edge
+		if clamped_offset <= 0.5:
+			# At start - look forward and invert to get backward direction
+			var ahead_pos: Vector3 = get_point_at_offset(minf(clamped_offset + 2.0, length))
+			rail_dir = (current_pos - ahead_pos).normalized()
+		else:
+			var behind_pos: Vector3 = get_point_at_offset(maxf(clamped_offset - 2.0, 0.0))
+			rail_dir = (behind_pos - current_pos).normalized()
 
 	# Get perpendicular for swing calculation
 	var right: Vector3 = rail_dir.cross(Vector3.UP).normalized()
