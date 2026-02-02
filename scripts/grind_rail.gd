@@ -7,11 +7,14 @@ class_name GrindRail
 @export var rail_speed: float = 15.0
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
-@export var gravity: float = 30.0
-@export var swing_damping: float = 0.5
-@export var swing_force: float = 25.0  # How much player input affects swing
+@export var gravity: float = 15.0
+@export var swing_damping: float = 3.0
+@export var swing_force: float = 8.0  # How much player input affects swing
+@export var max_swing_angle: float = 1.2  # ~70 degrees max swing
+@export var rope_thickness: float = 0.08
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
+var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
 
 
 func _ready() -> void:
@@ -50,6 +53,41 @@ func can_attach(grinder: RigidBody3D) -> bool:
 	return grinder.global_position.distance_to(closest_point) <= max_attach_distance
 
 
+func _create_rope_visual() -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	var cylinder := CylinderMesh.new()
+	cylinder.top_radius = rope_thickness
+	cylinder.bottom_radius = rope_thickness
+	cylinder.height = 1.0  # Will be scaled
+	mesh_instance.mesh = cylinder
+
+	# Create rope material
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.4, 0.3, 0.2)  # Brown rope color
+	mat.roughness = 0.9
+	mesh_instance.material_override = mat
+
+	get_tree().root.add_child(mesh_instance)
+	return mesh_instance
+
+
+func _update_rope_visual(mesh: MeshInstance3D, start: Vector3, end: Vector3) -> void:
+	var mid: Vector3 = (start + end) / 2.0
+	var length: float = start.distance_to(end)
+	var dir: Vector3 = (end - start).normalized()
+
+	mesh.global_position = mid
+	mesh.scale = Vector3(1, length, 1)
+
+	# Rotate to point from start to end
+	if dir.length_squared() > 0.001:
+		var up: Vector3 = Vector3.UP
+		if absf(dir.dot(up)) > 0.99:
+			up = Vector3.FORWARD
+		mesh.look_at(mesh.global_position + dir, up)
+		mesh.rotate_object_local(Vector3.RIGHT, PI / 2)
+
+
 func try_attach_player(grinder: RigidBody3D) -> bool:
 	if not can_attach(grinder):
 		return false
@@ -63,31 +101,26 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 	var tangent: Vector3 = get_tangent_at_offset(offset)
 	var direction: int = 1 if grinder.linear_velocity.dot(tangent) >= 0 else -1
 
-	# Calculate initial swing angle from player's position relative to attachment point
-	var attach_point: Vector3 = get_point_at_offset(offset)
-	var to_player: Vector3 = grinder.global_position - attach_point
+	# Start with small initial swing angle (mostly hanging straight down)
+	var initial_angle: float = 0.0
 
-	# Get the perpendicular plane to the rail tangent
+	# Small initial angular velocity from player's horizontal velocity
+	var horizontal_vel: Vector3 = grinder.linear_velocity
+	horizontal_vel.y = 0
 	var right: Vector3 = tangent.cross(Vector3.UP).normalized()
 	if right.length_squared() < 0.1:
 		right = tangent.cross(Vector3.FORWARD).normalized()
-
-	# Project to_player onto the swing plane and calculate angle
-	var swing_component: float = to_player.dot(right)
-	var down_component: float = -to_player.y
-	var initial_angle: float = atan2(swing_component, down_component)
-
-	# Initial angular velocity from player's horizontal velocity
-	var horizontal_vel: Vector3 = grinder.linear_velocity
-	horizontal_vel.y = 0
-	var initial_angular_vel: float = horizontal_vel.dot(right) / rope_length
+	var initial_angular_vel: float = horizontal_vel.dot(right) / rope_length * 0.3  # Reduced
 
 	active_grinders[grinder] = {
 		"offset": offset,
 		"direction": direction,
 		"swing_angle": initial_angle,
-		"angular_velocity": initial_angular_vel
+		"angular_velocity": clamp(initial_angular_vel, -2.0, 2.0)  # Clamp initial velocity
 	}
+
+	# Create rope visual
+	rope_visuals[grinder] = _create_rope_visual()
 
 	if grinder.has_method("start_grinding"):
 		grinder.start_grinding(self)
@@ -103,6 +136,13 @@ func detach_grinder(grinder: RigidBody3D) -> Vector3:
 	var exit_velocity: Vector3 = _calculate_velocity(grinder, state)
 
 	active_grinders.erase(grinder)
+
+	# Clean up rope visual
+	if rope_visuals.has(grinder):
+		var rope: MeshInstance3D = rope_visuals[grinder]
+		if is_instance_valid(rope):
+			rope.queue_free()
+		rope_visuals.erase(grinder)
 
 	if is_instance_valid(grinder) and grinder.has_method("stop_grinding"):
 		grinder.stop_grinding()
@@ -140,6 +180,12 @@ func _physics_process(delta: float) -> void:
 		_update_grinder(grinder, delta)
 
 	for grinder in to_remove:
+		# Clean up rope visual
+		if rope_visuals.has(grinder):
+			var rope: MeshInstance3D = rope_visuals[grinder]
+			if is_instance_valid(rope):
+				rope.queue_free()
+			rope_visuals.erase(grinder)
 		active_grinders.erase(grinder)
 
 
@@ -190,6 +236,9 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Update swing angle
 	state.swing_angle += state.angular_velocity * delta
 
+	# Clamp swing angle to prevent going over the top
+	state.swing_angle = clamp(state.swing_angle, -max_swing_angle, max_swing_angle)
+
 	# Move along rail
 	state.offset += state.direction * rail_speed * delta
 
@@ -197,6 +246,12 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	if state.offset <= 0.0 or state.offset >= length:
 		var exit_vel: Vector3 = _calculate_velocity(grinder, state)
 		grinder.linear_velocity = exit_vel
+		# Clean up rope visual
+		if rope_visuals.has(grinder):
+			var rope: MeshInstance3D = rope_visuals[grinder]
+			if is_instance_valid(rope):
+				rope.queue_free()
+			rope_visuals.erase(grinder)
 		active_grinders.erase(grinder)
 		if grinder.has_method("stop_grinding"):
 			grinder.stop_grinding()
@@ -209,4 +264,10 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 
 	grinder.global_position = player_pos
 	grinder.linear_velocity = _calculate_velocity(grinder, state)
-	grinder.angular_velocity = Vector3(state.angular_velocity, 0, 0)
+	grinder.angular_velocity = Vector3.ZERO
+
+	# Update rope visual
+	if rope_visuals.has(grinder):
+		var rope: MeshInstance3D = rope_visuals[grinder]
+		if is_instance_valid(rope):
+			_update_rope_visual(rope, attach_point, player_pos)
