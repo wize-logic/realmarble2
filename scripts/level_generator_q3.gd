@@ -285,6 +285,7 @@ func generate_level() -> void:
 	generate_teleporters()
 	generate_jump_pads()
 	generate_grind_rails()
+	generate_perimeter_rails()
 
 	# Create spawn point markers
 	generate_spawn_markers()
@@ -1851,6 +1852,120 @@ func _create_rail_visual(rail: Path3D) -> void:
 	rail_visual.set_surface_override_material(0, material)
 
 	rail.add_child(rail_visual)
+
+# ============================================================================
+# PERIMETER RAILS (Safety rails around arena edges to prevent falling)
+# ============================================================================
+
+func generate_perimeter_rails() -> void:
+	## Generate multiple grind rails scattered around the outer edges of the arena
+	## These serve as safety rails to catch players before they fall off
+	var scale: float = arena_size / 140.0
+
+	# Bring rails closer to the play area
+	var base_distance: float = arena_size * 0.42
+
+	# Height range for perimeter rails
+	var min_height: float = 1.5 * scale
+	var max_height: float = 6.0 * scale
+
+	# Number of rails per side (randomized)
+	var rails_per_side: int = rng.randi_range(2, 4)
+
+	var rail_count: int = 0
+	var side_names: Array[String] = ["South", "East", "North", "West"]
+
+	# Direction vectors for each side (along the side, and outward from center)
+	var side_configs: Array[Dictionary] = [
+		{"along": Vector3(1, 0, 0), "out": Vector3(0, 0, -1), "center": Vector3(0, 0, -base_distance)},  # South
+		{"along": Vector3(0, 0, 1), "out": Vector3(1, 0, 0), "center": Vector3(base_distance, 0, 0)},   # East
+		{"along": Vector3(-1, 0, 0), "out": Vector3(0, 0, 1), "center": Vector3(0, 0, base_distance)},  # North
+		{"along": Vector3(0, 0, -1), "out": Vector3(-1, 0, 0), "center": Vector3(-base_distance, 0, 0)} # West
+	]
+
+	for side_idx in range(4):
+		var config: Dictionary = side_configs[side_idx]
+		var side_name: String = side_names[side_idx]
+
+		# Generate multiple rails for this side
+		var num_rails: int = rng.randi_range(2, 4)
+
+		for i in range(num_rails):
+			# Random position along the side
+			var side_length: float = arena_size * 0.8
+			var along_offset: float = rng.randf_range(-side_length / 2, side_length / 2)
+
+			# Random distance from center (some closer, some further)
+			var distance_variation: float = rng.randf_range(-4.0, 6.0) * scale
+
+			# Random height
+			var height: float = rng.randf_range(min_height, max_height)
+
+			# Random rail length (longer segments)
+			var rail_length: float = rng.randf_range(30.0, 60.0) * scale
+
+			# Calculate rail start and end positions
+			var center_pos: Vector3 = config["center"] + config["out"] * distance_variation
+			center_pos.y = height
+			center_pos += config["along"] * along_offset
+
+			var half_length: float = rail_length / 2.0
+			var start_pos: Vector3 = center_pos - config["along"] * half_length
+			var end_pos: Vector3 = center_pos + config["along"] * half_length
+
+			# Create the rail
+			_create_perimeter_rail(start_pos, end_pos, rail_count, side_name, scale)
+
+			# Track positions
+			rail_positions.append(start_pos)
+			rail_positions.append(end_pos)
+			rail_count += 1
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated %d perimeter safety rails around arena edges" % rail_count)
+
+func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String, scale: float) -> void:
+	## Create a perimeter rail with gentle random curves
+	var rail: Path3D = GrindRailScript.new()
+	rail.name = "PerimeterRail_%s_%d" % [side_name, index]
+	rail.curve = Curve3D.new()
+
+	var distance: float = start.distance_to(end)
+	var num_points: int = max(8, int(distance / 8.0))
+
+	# Random vertical arc - gentle curve up or down
+	var arc_height: float = distance * rng.randf_range(0.02, 0.06)
+	var arc_direction: float = 1.0 if rng.randf() > 0.3 else -1.0
+
+	# Random sideways bend - single gentle curve inward or outward
+	var bend_dir: Vector3
+	if side_name == "South" or side_name == "North":
+		bend_dir = Vector3(0, 0, 1)
+	else:
+		bend_dir = Vector3(1, 0, 0)
+	var bend_amount: float = rng.randf_range(-3.0, 3.0) * scale
+
+	for i in range(num_points):
+		var t: float = float(i) / (num_points - 1)
+		var pos: Vector3 = start.lerp(end, t)
+
+		# Smooth curve factor - peaks in middle, zero at ends
+		var curve_factor: float = sin(t * PI)
+
+		# Apply vertical arc
+		pos.y += curve_factor * arc_height * arc_direction
+
+		# Apply sideways bend (single gentle curve)
+		pos += bend_dir * curve_factor * bend_amount
+
+		rail.curve.add_point(pos)
+
+	# Set smooth tangents for better grinding physics
+	_set_rail_tangents(rail)
+
+	add_child(rail)
+
+	# Create visual mesh for the rail
+	_create_rail_visual(rail)
 
 # ============================================================================
 # PERIMETER & DEATH ZONE
