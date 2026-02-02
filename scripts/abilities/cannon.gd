@@ -171,46 +171,76 @@ func activate() -> void:
 	# Clean up invalid projectiles from tracking array
 	active_projectiles = active_projectiles.filter(func(p): return is_instance_valid(p) and p.is_inside_tree())
 
-	# Check if we've hit the projectile limit - free oldest if needed
-	if active_projectiles.size() >= max_active_projectiles:
-		var oldest_projectile: Node3D = active_projectiles[0]
-		if is_instance_valid(oldest_projectile):
-			oldest_projectile.queue_free()
-		active_projectiles.remove_at(0)
-		if OS.is_debug_build():
-			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles, false, get_entity_id())
+	# Get player level for multi-shot effects
+	var player_level: int = player.level if player and "level" in player else 0
 
-	# Spawn projectile
-	var projectile: Node3D = create_projectile()
-	if projectile:
-		# Add to world FIRST
-		player.get_parent().add_child(projectile)
+	# Determine number of projectiles based on level
+	# Level 0-1: 1 projectile, Level 2: 2 projectiles, Level 3: 3 projectiles
+	var num_projectiles: int = 1
+	if player_level >= 3:
+		num_projectiles = 3
+	elif player_level >= 2:
+		num_projectiles = 2
 
-		# Track this projectile
-		active_projectiles.append(projectile)
+	# Calculate spread angles for multiple projectiles
+	var spread_angle: float = 0.15  # Radians, about 8.5 degrees
 
-		# Position at cannon barrel (after adding to tree)
-		projectile.global_position = barrel_position
+	for proj_index in range(num_projectiles):
+		# Check if we've hit the projectile limit - free oldest if needed
+		if active_projectiles.size() >= max_active_projectiles:
+			var oldest_projectile: Node3D = active_projectiles[0]
+			if is_instance_valid(oldest_projectile):
+				oldest_projectile.queue_free()
+			active_projectiles.remove_at(0)
+			if OS.is_debug_build():
+				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannon: Projectile limit reached (%d), freed oldest" % max_active_projectiles, false, get_entity_id())
 
-		# Set velocity - inherit player velocity + projectile velocity in fire direction
-		var level_multiplier: float = 1.0
-		if player and "level" in player:
-			level_multiplier = 1.0 + (player.level * 0.25)
+		# Calculate spread direction for this projectile
+		var spread_fire_direction: Vector3 = fire_direction
+		if num_projectiles > 1:
+			# Calculate angle offset: center projectile at 0, others spread out evenly
+			var angle_offset: float = 0.0
+			if num_projectiles == 2:
+				angle_offset = spread_angle if proj_index == 0 else -spread_angle
+			elif num_projectiles == 3:
+				if proj_index == 0:
+					angle_offset = 0.0  # Center
+				elif proj_index == 1:
+					angle_offset = spread_angle  # Right
+				else:
+					angle_offset = -spread_angle  # Left
 
-		# Projectile velocity = player velocity + fire direction * speed
-		var projectile_velocity: Vector3 = player.linear_velocity + (fire_direction * speed * level_multiplier)
-		if projectile is RigidBody3D:
-			projectile.linear_velocity = projectile_velocity
+			# Rotate fire direction around the Y axis for horizontal spread
+			spread_fire_direction = fire_direction.rotated(Vector3.UP, angle_offset)
 
-		# Set damage, owner, and player level via metadata (damage is always 1)
-		var owner_id: int = player.name.to_int() if player else -1
-		var player_level: int = player.level if player and "level" in player else 0
-		projectile.set_meta("damage", damage)
-		projectile.set_meta("owner_id", owner_id)
-		projectile.set_meta("player_level", player_level)
+		# Spawn projectile
+		var projectile: Node3D = create_projectile(player_level)
+		if projectile:
+			# Add to world FIRST
+			player.get_parent().add_child(projectile)
 
-		# Auto-destroy after lifetime
-		get_tree().create_timer(projectile_lifetime).timeout.connect(projectile.queue_free)
+			# Track this projectile
+			active_projectiles.append(projectile)
+
+			# Position at cannon barrel (after adding to tree)
+			projectile.global_position = barrel_position
+
+			# Set velocity - inherit player velocity + projectile velocity in fire direction
+			var level_multiplier: float = 1.0 + (player_level * 0.25)
+
+			# Projectile velocity = player velocity + fire direction * speed
+			var projectile_velocity: Vector3 = player.linear_velocity + (spread_fire_direction * speed * level_multiplier)
+			if projectile is RigidBody3D:
+				projectile.linear_velocity = projectile_velocity
+
+			# Set damage, owner, and player level via metadata (damage is always 1)
+			var owner_id: int = player.name.to_int() if player else -1
+			projectile.set_meta("damage", damage)
+			projectile.set_meta("owner_id", owner_id)
+			projectile.set_meta("player_level", player_level)
+
+			# Auto-destroy after lifetime
+			get_tree().create_timer(projectile_lifetime).timeout.connect(projectile.queue_free)
 
 	# Spawn muzzle flash particles at barrel position
 	spawn_muzzle_flash(barrel_position, fire_direction)
@@ -289,14 +319,17 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	if projectile and is_instance_valid(projectile):
 		projectile.queue_free()
 
-func create_projectile() -> Node3D:
-	"""Create a cannonball projectile node"""
+func create_projectile(level: int = 0) -> Node3D:
+	"""Create a cannonball projectile node, scaled by player level"""
 	# Create a simple projectile
 	var projectile: RigidBody3D = RigidBody3D.new()
 	projectile.name = "Cannonball"
 
+	# Level-based size scaling: Level 1+ gets 10% bigger per level
+	var size_mult: float = 1.0 + (level * 0.1)
+
 	# Physics setup - heavier but no gravity for straight shots
-	projectile.mass = 0.5  # Much heavier than gun (was 0.1)
+	projectile.mass = 0.5 * size_mult  # Scale mass with size
 	projectile.gravity_scale = 0.0  # No gravity for laser-straight accuracy
 	projectile.continuous_cd = true
 	projectile.collision_layer = 4  # Projectile layer
@@ -304,25 +337,31 @@ func create_projectile() -> Node3D:
 	projectile.contact_monitor = true  # Enable contact monitoring for collision detection
 	projectile.max_contacts_reported = 10  # Allow reporting up to 10 contacts
 
-	# Create mesh - larger cannonball
+	# Create mesh - larger cannonball, scales with level
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
 	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 0.4  # Much larger than gun (was 0.15)
-	sphere.height = 0.8
+	sphere.radius = 0.4 * size_mult  # Scale with level
+	sphere.height = 0.8 * size_mult
 	mesh_instance.mesh = sphere
 
-	# Create material - lime green for visibility
+	# Create material - lime green for visibility, brighter at higher levels
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 1.0, 0.0)  # Lime green
+	var green_intensity: float = 1.0 + (level * 0.1)  # Slightly brighter at higher levels
+	mat.albedo_color = Color(0.5, minf(green_intensity, 1.0), 0.0)  # Lime green
 	mat.metallic = 0.3
 	mat.roughness = 0.3
+	# Add emission glow at higher levels
+	if level >= 1:
+		mat.emission_enabled = true
+		mat.emission = Color(0.3, 0.6, 0.0)  # Subtle green glow
+		mat.emission_energy_multiplier = 0.5 + (level * 0.3)
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
 
-	# Create collision shape - larger
+	# Create collision shape - larger, scales with level
 	var collision: CollisionShape3D = CollisionShape3D.new()
 	var shape: SphereShape3D = SphereShape3D.new()
-	shape.radius = 0.4  # Match mesh radius
+	shape.radius = 0.4 * size_mult  # Match mesh radius
 	collision.shape = shape
 	projectile.add_child(collision)
 
