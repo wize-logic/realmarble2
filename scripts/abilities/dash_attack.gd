@@ -238,14 +238,15 @@ func activate() -> void:
 	if player_level >= 2:
 		spawn_dash_explosion(player.global_position, player_level)
 
-	# Scale hitbox based on charge level to match visual indicator (+30% per level)
+	# Scale hitbox based on charge level AND player level to match visual indicator
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
+	var level_scale: float = 1.0 + (player_level * 0.1)  # +10% per level (matches indicator)
 	var base_hitbox_radius: float = 1.5
-	var scaled_radius: float = base_hitbox_radius * charge_scale
+	var scaled_radius: float = base_hitbox_radius * charge_scale * level_scale
 
 	# Enable hitbox
 	if hitbox:
-		# Update hitbox size to match charge level
+		# Update hitbox size to match charge level AND player level
 		if hitbox.get_child_count() > 0:
 			var collision_shape: CollisionShape3D = hitbox.get_child(0)
 			if collision_shape and collision_shape.shape is SphereShape3D:
@@ -311,11 +312,15 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player: %s" % body.name, false, get_entity_id())
 
 func end_dash() -> void:
-	# Level-based effect: Level 1+ creates explosion at dash END
+	# Visual effect at dash END - always spawn a burst, scaled by level
 	if player and is_instance_valid(player):
 		var player_level: int = player.level if "level" in player else 0
 		if player_level >= 1:
+			# Level 1+: Full explosion effect
 			spawn_dash_explosion(player.global_position, player_level)
+		else:
+			# Level 0: Small impact burst for visual feedback
+			spawn_dash_impact_burst(player.global_position)
 
 	is_dashing = false
 	hit_players.clear()
@@ -470,6 +475,70 @@ func spawn_afterimage(position: Vector3) -> void:
 	tween.tween_property(afterimage, "scale", Vector3(0.3, 0.3, 0.3), 0.3)
 	tween.set_parallel(false)
 	tween.tween_callback(afterimage.queue_free)
+
+func spawn_dash_impact_burst(position: Vector3) -> void:
+	"""Spawn a small impact burst at dash end (level 0 base effect)"""
+	if not player or not player.get_parent():
+		return
+
+	# Create small particle burst
+	var burst: CPUParticles3D = CPUParticles3D.new()
+	burst.name = "DashImpactBurst"
+	player.get_parent().add_child(burst)
+	burst.global_position = position
+
+	# Configure burst particles - smaller than full explosion
+	burst.emitting = true
+	burst.amount = 20
+	burst.lifetime = 0.3
+	burst.one_shot = true
+	burst.explosiveness = 1.0
+	burst.randomness = 0.3
+	burst.local_coords = false
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.3, 0.3)
+
+	# Create material
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	particle_mesh.material = particle_material
+	burst.mesh = particle_mesh
+
+	# Emission shape - small sphere burst
+	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	burst.emission_sphere_radius = 0.2
+
+	# Movement - quick outward burst
+	burst.direction = Vector3.ZERO
+	burst.spread = 180.0
+	burst.gravity = Vector3(0, -2.0, 0)
+	burst.initial_velocity_min = 3.0
+	burst.initial_velocity_max = 6.0
+
+	# Size over lifetime
+	burst.scale_amount_min = 1.5
+	burst.scale_amount_max = 2.5
+	burst.scale_amount_curve = Curve.new()
+	burst.scale_amount_curve.add_point(Vector2(0, 1.2))
+	burst.scale_amount_curve.add_point(Vector2(0.5, 0.8))
+	burst.scale_amount_curve.add_point(Vector2(1, 0.0))
+
+	# Color - magenta burst
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.5, 0.9, 0.9))  # Bright pink
+	gradient.add_point(0.4, Color(0.9, 0.3, 0.7, 0.7))  # Magenta
+	gradient.add_point(1.0, Color(0.4, 0.1, 0.3, 0.0))  # Fade
+	burst.color_ramp = gradient
+
+	# Auto-delete after lifetime
+	get_tree().create_timer(burst.lifetime + 0.3).timeout.connect(burst.queue_free)
 
 func create_direction_indicator() -> void:
 	"""Create a sphere indicator that shows the dash hitbox area while charging"""

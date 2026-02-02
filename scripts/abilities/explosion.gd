@@ -126,13 +126,13 @@ func _ready() -> void:
 	magma_particles.initial_velocity_min = 6.0  # Fast shooting chunks
 	magma_particles.initial_velocity_max = 12.0
 
-	# Size over lifetime - start small, stay consistent
+	# Size over lifetime - start small, shrink to nothing
 	magma_particles.scale_amount_min = 1.2
 	magma_particles.scale_amount_max = 2.0
 	magma_particles.scale_amount_curve = Curve.new()
 	magma_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
-	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.9))
-	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.3))
+	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.7))
+	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Shrink to 0 to prevent stuck particles
 
 	# Color - lava/magma gradient (bright orange -> dark red)
 	var magma_gradient: Gradient = Gradient.new()
@@ -306,8 +306,13 @@ func damage_nearby_players() -> void:
 	# Get charge multiplier from base ability class
 	var charge_mult: float = get_charge_multiplier()
 
-	# Scale explosion radius with charge level (charge level 3 = AoE expansion)
-	var current_radius: float = explosion_radius * (1.0 + (charge_level - 1) * 0.5)  # +50% per level
+	# Get player level for level-based scaling
+	var player_level: int = player.level if player and "level" in player else 0
+
+	# Scale explosion radius with charge level AND player level (matches indicator)
+	var charge_scale: float = 1.0 + (charge_level - 1) * 0.5  # +50% per charge level
+	var level_scale: float = 1.0 + (player_level * 0.15)  # +15% per player level
+	var current_radius: float = explosion_radius * charge_scale * level_scale
 	if explosion_area.get_child(0) and explosion_area.get_child(0).shape is SphereShape3D:
 		explosion_area.get_child(0).shape.radius = current_radius
 

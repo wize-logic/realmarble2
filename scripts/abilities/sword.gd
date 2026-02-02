@@ -57,18 +57,18 @@ func _ready() -> void:
 	slash_particles.name = "SlashParticles"
 	add_child(slash_particles)
 
-	# Configure slash particles - horizontal arc
+	# Configure slash particles - horizontal arc (enhanced for visual impact)
 	slash_particles.emitting = false
-	slash_particles.amount = 40
-	slash_particles.lifetime = 0.3
+	slash_particles.amount = 80  # More particles for fuller effect
+	slash_particles.lifetime = 0.4  # Slightly longer for visibility
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 1.0
-	slash_particles.randomness = 0.2
+	slash_particles.randomness = 0.3
 	slash_particles.local_coords = false
 
-	# Set up particle mesh
+	# Set up particle mesh - larger, more visible
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.1)  # Thin slashes
+	particle_mesh.size = Vector2(0.6, 0.3)  # Larger slash particles
 
 	# Create material for slash effect
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -76,7 +76,7 @@ func _ready() -> void:
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED  # Orient with slash
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES  # Always face camera for visibility
 	particle_material.disable_receive_shadows = true
 
 	# Set material on mesh BEFORE assigning to particles
@@ -85,29 +85,30 @@ func _ready() -> void:
 
 	# Emission shape - arc in front
 	slash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	slash_particles.emission_sphere_radius = 0.3
+	slash_particles.emission_sphere_radius = 0.5  # Wider emission
 
-	# Movement - slash arc
+	# Movement - slash arc with more energy
 	slash_particles.direction = Vector3(0, 0, -1)  # Forward
 	slash_particles.spread = slash_arc_angle / 2  # Spread in arc
 	slash_particles.gravity = Vector3.ZERO
-	slash_particles.initial_velocity_min = 8.0
-	slash_particles.initial_velocity_max = 15.0
+	slash_particles.initial_velocity_min = 12.0  # Faster particles
+	slash_particles.initial_velocity_max = 20.0
 
-	# Size over lifetime - quick slash
-	slash_particles.scale_amount_min = 2.0
-	slash_particles.scale_amount_max = 4.0
+	# Size over lifetime - bigger, more dramatic
+	slash_particles.scale_amount_min = 3.0
+	slash_particles.scale_amount_max = 6.0
 	slash_particles.scale_amount_curve = Curve.new()
-	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
-	slash_particles.scale_amount_curve.add_point(Vector2(0.5, 1.0))
+	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.5))
+	slash_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
 	slash_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - silver/blue sword slash
+	# Color - brighter, more vibrant sword slash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.6, 0.75, 1.0, 1.0))  # Bright cyan-blue (no white)
-	gradient.add_point(0.3, Color(0.7, 0.8, 1.0, 0.8))  # Light blue
-	gradient.add_point(0.7, Color(0.5, 0.6, 0.9, 0.4))  # Darker blue
-	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.8, 0.95, 1.0, 1.0))  # Bright cyan-white
+	gradient.add_point(0.2, Color(0.6, 0.85, 1.0, 1.0))  # Bright cyan-blue
+	gradient.add_point(0.5, Color(0.5, 0.7, 1.0, 0.8))  # Light blue
+	gradient.add_point(0.8, Color(0.4, 0.5, 0.9, 0.4))  # Darker blue
+	gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
 
 	# Create arc indicator for sword swing range
@@ -297,7 +298,7 @@ func activate() -> void:
 	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
 		# Level 1+: More particles
-		slash_particles.amount = 40 + (player_level * 15)
+		slash_particles.amount = 80 + (player_level * 25)
 
 		if is_spin_attack:
 			# Spin attack: particles emit in all directions
@@ -312,6 +313,9 @@ func activate() -> void:
 
 		slash_particles.emitting = true
 		slash_particles.restart()
+
+	# Add a brief light flash for visual impact
+	spawn_slash_flash(player.global_position + Vector3.UP * 0.5 + slash_direction * 1.0, player_level)
 
 	# Play slash sound
 	if ability_sound:
@@ -594,6 +598,28 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 		if is_instance_valid(ring_particles):
 			ring_particles.queue_free()
 	)
+
+func spawn_slash_flash(position: Vector3, level: int) -> void:
+	"""Spawn a brief light flash at the slash position for visual impact"""
+	if not player or not player.get_parent():
+		return
+
+	# Create light flash
+	var flash: OmniLight3D = OmniLight3D.new()
+	flash.name = "SlashFlash"
+	player.get_parent().add_child(flash)
+	flash.global_position = position
+
+	# Configure light - steel blue color matching sword
+	flash.light_color = Color(0.6, 0.8, 1.0)
+	flash.light_energy = 3.0 + (level * 1.0)  # Brighter at higher levels
+	flash.omni_range = 4.0 + (level * 1.0)  # Larger at higher levels
+	flash.omni_attenuation = 1.5
+
+	# Fade out quickly
+	var tween: Tween = get_tree().create_tween()
+	tween.tween_property(flash, "light_energy", 0.0, 0.2)
+	tween.tween_callback(flash.queue_free)
 
 func create_arc_indicator() -> void:
 	"""Create a box indicator that shows the sword hitbox area while charging"""
