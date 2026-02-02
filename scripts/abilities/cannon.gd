@@ -663,6 +663,9 @@ func _process(delta: float) -> void:
 		var is_local_player: bool = player.is_multiplayer_authority()
 
 		if is_local_player:
+			# Get player level for multi-shot indicator
+			var player_level: int = player.level if "level" in player else 0
+
 			# Find the nearest player in the auto-aim cone
 			var target = find_nearest_player()
 
@@ -680,8 +683,29 @@ func _process(delta: float) -> void:
 				var target_position = target.global_position + Vector3(0, 1.5, 0)
 				reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
 
-				# Rotate reticle for visual effect
-				reticle.rotation.y += delta * 2.0
+				# Scale reticle based on level (larger projectiles at higher levels)
+				var level_scale: float = 1.0 + (player_level * 0.1)
+				reticle.scale = Vector3(level_scale, level_scale, level_scale)
+
+				# Update reticle color based on level to indicate multi-shot
+				var mat: StandardMaterial3D = reticle.material_override
+				if mat:
+					if player_level >= 3:
+						# Level 3: Bright lime (3 projectiles) - triple ring effect
+						mat.albedo_color = Color(0.4, 1.0, 0.2, 0.55)
+					elif player_level >= 2:
+						# Level 2: Brighter lime (2 projectiles)
+						mat.albedo_color = Color(0.45, 1.0, 0.15, 0.5)
+					elif player_level >= 1:
+						# Level 1: Glowing lime (bigger projectile)
+						mat.albedo_color = Color(0.5, 1.0, 0.1, 0.45)
+					else:
+						# Level 0: Standard lime
+						mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)
+
+				# Rotate reticle for visual effect (faster at higher levels)
+				var rotation_speed: float = 2.0 + (player_level * 0.5)
+				reticle.rotation.y += delta * rotation_speed
 			else:
 				# No lock - hide reticle
 				reticle.visible = false

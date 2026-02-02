@@ -136,6 +136,10 @@ func _process(delta: float) -> void:
 
 			arc_indicator.visible = true
 
+			# Get player level for level-based indicator changes
+			var player_level: int = player.level if "level" in player else 0
+			var is_spin_attack: bool = player_level >= 3
+
 			# Get player's camera/movement direction
 			var camera_arm: Node3D = player.get_node_or_null("CameraArm")
 			var slash_direction: Vector3 = Vector3.FORWARD
@@ -170,15 +174,59 @@ func _process(delta: float) -> void:
 
 			arc_indicator.global_position = indicator_position
 
-			# Orient indicator to face slash direction
-			arc_indicator.look_at(arc_indicator.global_position + slash_direction * 5.0, Vector3.UP)
+			# Update indicator mesh based on level (spin attack vs forward arc)
+			var mesh_instance: MeshInstance3D = arc_indicator.get_child(0) if arc_indicator.get_child_count() > 0 else null
+			if mesh_instance:
+				if is_spin_attack:
+					# Level 3: Circular indicator for spin attack (if not already a cylinder)
+					if not mesh_instance.mesh is CylinderMesh:
+						var cylinder: CylinderMesh = CylinderMesh.new()
+						cylinder.top_radius = slash_range * 1.2
+						cylinder.bottom_radius = slash_range * 1.2
+						cylinder.height = 0.1
+						mesh_instance.mesh = cylinder
+						mesh_instance.position = Vector3.ZERO  # Centered on player
 
-			# Scale based on charge level to match hitbox scaling (+20% per level)
-			var scale_factor = 1.0 + (charge_level - 1) * 0.2
+					# Don't orient - spin attack is 360 degrees
+					arc_indicator.rotation = Vector3.ZERO
+					# Rotate for visual effect
+					arc_indicator.rotation.y += delta * 2.0
+				else:
+					# Level 0-2: Forward arc (if not already a box)
+					if not mesh_instance.mesh is BoxMesh:
+						var box: BoxMesh = BoxMesh.new()
+						box.size = Vector3(slash_range * 2, 0.1, slash_range)
+						mesh_instance.mesh = box
+						mesh_instance.position = Vector3(0, 0, -slash_range / 2)
+
+					# Orient indicator to face slash direction
+					arc_indicator.look_at(arc_indicator.global_position + slash_direction * 5.0, Vector3.UP)
+
+			# Update indicator color based on level
+			if mesh_instance and mesh_instance.material_override:
+				var mat: StandardMaterial3D = mesh_instance.material_override
+				if player_level >= 3:
+					# Level 3: Bright blue (spin attack)
+					mat.albedo_color = Color(0.6, 0.8, 1.0, 0.25)
+				elif player_level >= 2:
+					# Level 2: Brighter blue (shockwave)
+					mat.albedo_color = Color(0.7, 0.85, 0.95, 0.2)
+				elif player_level >= 1:
+					# Level 1: Light blue (wider arc)
+					mat.albedo_color = Color(0.75, 0.85, 0.92, 0.18)
+				else:
+					# Level 0: Subtle cool
+					mat.albedo_color = Color(0.8, 0.85, 0.9, 0.15)
+
+			# Scale based on charge level AND player level
+			var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
+			var level_scale: float = 1.0 + (player_level * 0.15)
+			var scale_factor: float = charge_scale * level_scale
 			arc_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-			# Pulse effect while charging
-			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.12
+			# Pulse effect while charging (faster at higher levels)
+			var pulse_speed: float = 0.008 + (player_level * 0.002)
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.12
 			arc_indicator.scale *= pulse
 		else:
 			# Hide indicator when not charging or not local player

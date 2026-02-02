@@ -768,6 +768,9 @@ func _process(delta: float) -> void:
 		var is_local_player: bool = player.is_multiplayer_authority()
 
 		if is_local_player:
+			# Get player level for level-based indicator
+			var player_level: int = player.level if "level" in player else 0
+
 			var target = find_nearest_player()
 
 			if target and is_instance_valid(target):
@@ -782,8 +785,29 @@ func _process(delta: float) -> void:
 				var target_position = target.global_position + Vector3(0, 3.0, 0)
 				reticle.global_position = reticle.global_position.lerp(target_position, delta * 8.0)
 
-				# Rotate and pulse for electric effect
-				reticle.rotation.y += delta * 4.0
+				# Scale reticle based on level (larger strike area at higher levels)
+				var level_scale: float = 1.0 + (player_level * 0.15)
+				reticle.scale = Vector3(level_scale, level_scale, level_scale)
+
+				# Update reticle color based on level
+				var mat: StandardMaterial3D = reticle.material_override
+				if mat:
+					if player_level >= 3:
+						# Level 3: Bright cyan (triple strike)
+						mat.albedo_color = Color(0.3, 0.9, 1.0, 0.6)
+					elif player_level >= 2:
+						# Level 2: Brighter cyan (chain lightning)
+						mat.albedo_color = Color(0.35, 0.85, 1.0, 0.55)
+					elif player_level >= 1:
+						# Level 1: Light cyan (larger area)
+						mat.albedo_color = Color(0.4, 0.8, 1.0, 0.5)
+					else:
+						# Level 0: Standard cyan
+						mat.albedo_color = Color(0.4, 0.8, 1.0, 0.5)
+
+				# Rotate and pulse for electric effect (faster at higher levels)
+				var rotation_speed: float = 4.0 + (player_level * 1.0)
+				reticle.rotation.y += delta * rotation_speed
 				reticle.rotation.x = sin(Time.get_ticks_msec() * 0.01) * 0.2
 			else:
 				reticle.visible = false

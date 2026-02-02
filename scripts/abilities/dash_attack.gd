@@ -149,12 +149,32 @@ func _process(delta: float) -> void:
 			# Position sphere at player's center (where the hitbox will be during dash)
 			direction_indicator.global_position = player.global_position
 
-			# Scale based on charge level to match hitbox scaling (+30% per level)
-			var scale_factor = 1.0 + (charge_level - 1) * 0.3
+			# Scale based on charge level AND player level
+			var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
+			var player_level: int = player.level if "level" in player else 0
+			var level_scale: float = 1.0 + (player_level * 0.1)  # +10% per level
+			var scale_factor: float = charge_scale * level_scale
 			direction_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-			# Pulse effect while charging
-			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.15
+			# Update indicator color based on level (more intense at higher levels)
+			var mat: StandardMaterial3D = direction_indicator.material_override
+			if mat:
+				if player_level >= 3:
+					# Level 3: Bright magenta (shows afterimage + double explosion)
+					mat.albedo_color = Color(1.0, 0.4, 0.8, 0.25)
+				elif player_level >= 2:
+					# Level 2: Hot pink (shows double explosion)
+					mat.albedo_color = Color(0.95, 0.5, 0.75, 0.22)
+				elif player_level >= 1:
+					# Level 1: Light magenta (shows end explosion)
+					mat.albedo_color = Color(0.9, 0.6, 0.85, 0.18)
+				else:
+					# Level 0: Subtle neutral
+					mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)
+
+			# Pulse effect while charging (faster at higher levels)
+			var pulse_speed: float = 0.008 + (player_level * 0.002)
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.15
 			direction_indicator.scale *= pulse
 		else:
 			# Hide indicator when not charging or not local player
