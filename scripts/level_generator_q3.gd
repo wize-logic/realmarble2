@@ -1888,7 +1888,7 @@ func generate_perimeter_rails() -> void:
 		var side_name: String = side_names[side_idx]
 
 		# Generate multiple rails for this side
-		var num_rails: int = rng.randi_range(4, 6)
+		var num_rails: int = rng.randi_range(2, 4)
 
 		for i in range(num_rails):
 			# Random position along the side
