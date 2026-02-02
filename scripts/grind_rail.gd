@@ -9,11 +9,11 @@ class_name GrindRail
 @export var boost_acceleration: float = 40.0  # How fast you accelerate when boosting
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
-@export var gravity: float = 15.0
-@export var swing_damping: float = 3.0
-@export var swing_force: float = 8.0  # How much player input affects swing
-@export var max_swing_angle: float = 1.2  # ~70 degrees max swing
-@export var rope_thickness: float = 0.03
+@export var gravity: float = 20.0  # Increased for more natural swing
+@export var swing_damping: float = 0.8  # Reduced for looser feel
+@export var swing_force: float = 12.0  # Increased for more responsive swinging
+@export var max_swing_angle: float = 1.5  # ~85 degrees max swing
+@export var rope_thickness: float = 0.015  # Very thin rope
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
 var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
