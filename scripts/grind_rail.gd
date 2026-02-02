@@ -295,9 +295,12 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Move along rail
 	state.offset += state.direction * state.current_speed * delta
 
-	# Check if reached end - detach with full velocity
+	# Check if reached end - launch player upward
 	if state.offset <= 0.0 or state.offset >= length:
 		var exit_vel: Vector3 = _calculate_velocity(grinder, state)
+		# Add upward launch to help player get back to the stage
+		var launch_strength: float = 18.0
+		exit_vel.y = maxf(exit_vel.y, 0.0) + launch_strength
 		grinder.linear_velocity = exit_vel
 		# Clean up rope visual
 		if rope_visuals.has(grinder):
