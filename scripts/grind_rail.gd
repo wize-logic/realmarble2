@@ -9,7 +9,7 @@ class_name GrindRail
 @export var boost_acceleration: float = 20.0  # How fast you accelerate when boosting (reduced)
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
-@export var gravity: float = 10.0  # Pendulum gravity (slower swing)
+@export var gravity: float = 35.0  # Strong gravity for heavy feel
 @export var swing_damping: float = 1.2  # Moderate damping
 @export var swing_force: float = 6.0  # Gentler swing control
 @export var rope_thickness: float = 0.015  # Very thin rope
