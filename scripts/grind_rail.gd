@@ -59,12 +59,15 @@ func _create_rope_visual() -> MeshInstance3D:
 	cylinder.top_radius = rope_thickness
 	cylinder.bottom_radius = rope_thickness
 	cylinder.height = 1.0  # Will be scaled
+	cylinder.radial_segments = 8  # Make it round, not rectangular
+	cylinder.rings = 1
 	mesh_instance.mesh = cylinder
 
 	# Create rope material
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.4, 0.3, 0.2)  # Brown rope color
-	mat.roughness = 0.9
+	mat.albedo_color = Color(0.55, 0.35, 0.2)  # Brown rope color
+	mat.roughness = 0.95
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_VERTEX
 	mesh_instance.material_override = mat
 
 	get_tree().root.add_child(mesh_instance)
@@ -72,20 +75,29 @@ func _create_rope_visual() -> MeshInstance3D:
 
 
 func _update_rope_visual(mesh: MeshInstance3D, start: Vector3, end: Vector3) -> void:
-	var mid: Vector3 = (start + end) / 2.0
-	var length: float = start.distance_to(end)
-	var dir: Vector3 = (end - start).normalized()
+	var rope_vec: Vector3 = end - start
+	var rope_len: float = rope_vec.length()
 
-	mesh.global_position = mid
-	mesh.scale = Vector3(1, length, 1)
+	if rope_len < 0.01:
+		return
 
-	# Rotate to point from start to end
-	if dir.length_squared() > 0.001:
-		var up: Vector3 = Vector3.UP
-		if absf(dir.dot(up)) > 0.99:
-			up = Vector3.FORWARD
-		mesh.look_at(mesh.global_position + dir, up)
-		mesh.rotate_object_local(Vector3.RIGHT, PI / 2)
+	var rope_dir: Vector3 = rope_vec / rope_len
+
+	# Position at midpoint
+	mesh.global_position = (start + end) / 2.0
+
+	# Build basis to orient cylinder along rope direction
+	# Cylinder's local Y axis should point along rope_dir
+	var y_axis: Vector3 = rope_dir
+	var x_axis: Vector3
+	if absf(y_axis.dot(Vector3.UP)) < 0.99:
+		x_axis = y_axis.cross(Vector3.UP).normalized()
+	else:
+		x_axis = y_axis.cross(Vector3.FORWARD).normalized()
+	var z_axis: Vector3 = x_axis.cross(y_axis).normalized()
+
+	mesh.global_transform.basis = Basis(x_axis, y_axis, z_axis)
+	mesh.scale = Vector3(1, rope_len, 1)
 
 
 func try_attach_player(grinder: RigidBody3D) -> bool:
@@ -151,13 +163,29 @@ func detach_grinder(grinder: RigidBody3D) -> Vector3:
 
 
 func _calculate_velocity(grinder: RigidBody3D, state: Dictionary) -> Vector3:
-	var tangent: Vector3 = get_tangent_at_offset(state.offset)
-	var right: Vector3 = tangent.cross(Vector3.UP).normalized()
-	if right.length_squared() < 0.1:
-		right = tangent.cross(Vector3.FORWARD).normalized()
+	var length: float = get_rail_length()
+	var current_pos: Vector3 = get_point_at_offset(state.offset)
 
-	# Velocity along rail
-	var rail_vel: Vector3 = tangent * state.direction * rail_speed
+	# Calculate actual rail direction from positions (not tangent)
+	var rail_dir: Vector3
+	if state.direction > 0:
+		# Moving toward end
+		var ahead_offset: float = minf(state.offset + 1.0, length)
+		var ahead_pos: Vector3 = get_point_at_offset(ahead_offset)
+		rail_dir = (ahead_pos - current_pos).normalized()
+	else:
+		# Moving toward start
+		var ahead_offset: float = maxf(state.offset - 1.0, 0.0)
+		var ahead_pos: Vector3 = get_point_at_offset(ahead_offset)
+		rail_dir = (ahead_pos - current_pos).normalized()
+
+	# Get perpendicular for swing calculation
+	var right: Vector3 = rail_dir.cross(Vector3.UP).normalized()
+	if right.length_squared() < 0.1:
+		right = rail_dir.cross(Vector3.FORWARD).normalized()
+
+	# Velocity along rail (in actual travel direction)
+	var rail_vel: Vector3 = rail_dir * rail_speed
 
 	# Velocity from swing (tangent to the swing arc)
 	var swing_tangent: Vector3 = right * cos(state.swing_angle) + Vector3.UP * sin(state.swing_angle)
