@@ -1901,52 +1901,38 @@ func generate_perimeter_rails() -> void:
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated 4 perimeter safety rails around arena edges")
 
 func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String, scale: float) -> void:
-	## Create a perimeter rail with random curves and height variations
+	## Create a perimeter rail with gentle random curves
 	var rail: Path3D = GrindRailScript.new()
 	rail.name = "PerimeterRail_%s_%d" % [side_name, index]
 	rail.curve = Curve3D.new()
 
 	var distance: float = start.distance_to(end)
-	var num_points: int = max(10, int(distance / 6.0))  # More points for smoother curves
+	var num_points: int = max(8, int(distance / 8.0))
 
-	# Random arc parameters - can curve up or down, with varying intensity
-	var arc_height: float = distance * rng.randf_range(0.02, 0.08)
-	var arc_direction: float = 1.0 if rng.randf() > 0.3 else -1.0  # Mostly curve up, sometimes down
+	# Random vertical arc - gentle curve up or down
+	var arc_height: float = distance * rng.randf_range(0.02, 0.06)
+	var arc_direction: float = 1.0 if rng.randf() > 0.3 else -1.0
 
-	# Calculate perpendicular direction for sideways wobble
-	var rail_dir: Vector3 = (end - start).normalized()
-	var wobble_dir: Vector3
+	# Random sideways bend - single gentle curve inward or outward
+	var bend_dir: Vector3
 	if side_name == "South" or side_name == "North":
-		wobble_dir = Vector3(0, 0, 1)  # Wobble in Z for E-W rails
+		bend_dir = Vector3(0, 0, 1)
 	else:
-		wobble_dir = Vector3(1, 0, 0)  # Wobble in X for N-S rails
-
-	# Random wobble parameters - how much the rail curves sideways
-	var wobble_amplitude: float = rng.randf_range(1.0, 4.0) * scale
-	var wobble_frequency: float = rng.randf_range(1.0, 2.5)  # Number of waves along rail
-	var wobble_phase: float = rng.randf_range(0, TAU)  # Random starting phase
-
-	# Additional random height undulation
-	var height_wobble_amp: float = rng.randf_range(0.5, 2.0) * scale
-	var height_wobble_freq: float = rng.randf_range(1.5, 3.0)
-	var height_wobble_phase: float = rng.randf_range(0, TAU)
+		bend_dir = Vector3(1, 0, 0)
+	var bend_amount: float = rng.randf_range(-3.0, 3.0) * scale
 
 	for i in range(num_points):
 		var t: float = float(i) / (num_points - 1)
 		var pos: Vector3 = start.lerp(end, t)
 
-		# Main arc (up or down curve)
-		pos.y += sin(t * PI) * arc_height * arc_direction
+		# Smooth curve factor - peaks in middle, zero at ends
+		var curve_factor: float = sin(t * PI)
 
-		# Add sideways wobble (perpendicular to rail direction)
-		var wobble_offset: float = sin(t * TAU * wobble_frequency + wobble_phase) * wobble_amplitude
-		# Taper wobble at ends so it connects smoothly
-		var taper: float = sin(t * PI)  # 0 at ends, 1 in middle
-		pos += wobble_dir * wobble_offset * taper
+		# Apply vertical arc
+		pos.y += curve_factor * arc_height * arc_direction
 
-		# Add height undulation for more variety
-		var height_undulation: float = sin(t * TAU * height_wobble_freq + height_wobble_phase) * height_wobble_amp
-		pos.y += height_undulation * taper
+		# Apply sideways bend (single gentle curve)
+		pos += bend_dir * curve_factor * bend_amount
 
 		rail.curve.add_point(pos)
 
