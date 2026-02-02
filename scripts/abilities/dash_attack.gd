@@ -71,7 +71,6 @@ func _ready() -> void:
 	# Set up particle mesh and material for visibility
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
-	fire_trail.mesh = particle_mesh
 
 	# Create material for additive blending (fire effect)
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -82,7 +81,10 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
-	fire_trail.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	fire_trail.mesh = particle_mesh
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 
@@ -390,7 +392,6 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
-	explosion.mesh = particle_mesh
 
 	# Create material for explosion
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -400,7 +401,10 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	explosion.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	explosion.mesh = particle_mesh
 
 	# Emission shape - sphere burst
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE

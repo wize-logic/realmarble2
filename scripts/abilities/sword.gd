@@ -69,7 +69,6 @@ func _ready() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.4, 0.1)  # Thin slashes
-	slash_particles.mesh = particle_mesh
 
 	# Create material for slash effect
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -79,7 +78,10 @@ func _ready() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED  # Orient with slash
 	particle_material.disable_receive_shadows = true
-	slash_particles.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	slash_particles.mesh = particle_mesh
 
 	# Emission shape - arc in front
 	slash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -447,7 +449,6 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.3, 0.3)
-	trail.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -455,7 +456,10 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	trail.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	trail.mesh = particle_mesh
 
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	trail.emission_sphere_radius = 0.5
@@ -549,7 +553,6 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.2)
-	ring_particles.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -557,7 +560,10 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-	ring_particles.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	ring_particles.mesh = particle_mesh
 
 	# Emit in a ring around player
 	ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
