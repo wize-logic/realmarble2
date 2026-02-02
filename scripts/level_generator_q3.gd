@@ -1858,47 +1858,70 @@ func _create_rail_visual(rail: Path3D) -> void:
 # ============================================================================
 
 func generate_perimeter_rails() -> void:
-	## Generate grind rails around the outer edges of the arena
+	## Generate multiple grind rails scattered around the outer edges of the arena
 	## These serve as safety rails to catch players before they fall off
 	var scale: float = arena_size / 140.0
 
-	# Position rails at the arena boundary (slightly inside video walls)
-	var rail_distance: float = arena_size * 0.52
+	# Bring rails closer to the play area
+	var base_distance: float = arena_size * 0.42
 
-	# Base height range for perimeter rails
-	var base_height: float = 3.0 * scale
+	# Height range for perimeter rails
+	var min_height: float = 1.5 * scale
+	var max_height: float = 6.0 * scale
 
-	# Track the starting index for naming
-	var perimeter_rail_start_index: int = rail_positions.size() / 2
+	# Number of rails per side (randomized)
+	var rails_per_side: int = rng.randi_range(2, 4)
 
-	# Create rails for all 4 sides with random height variations at corners
-	var corner_heights: Array[float] = []
-	for i in range(4):
-		# Random height variation for each corner
-		corner_heights.append(base_height + rng.randf_range(-1.5, 2.5) * scale)
+	var rail_count: int = 0
+	var side_names: Array[String] = ["South", "East", "North", "West"]
 
-	var corners: Array[Vector3] = [
-		Vector3(-rail_distance, corner_heights[0], -rail_distance),  # SW corner
-		Vector3(rail_distance, corner_heights[1], -rail_distance),   # SE corner
-		Vector3(rail_distance, corner_heights[2], rail_distance),    # NE corner
-		Vector3(-rail_distance, corner_heights[3], rail_distance),   # NW corner
+	# Direction vectors for each side (along the side, and outward from center)
+	var side_configs: Array[Dictionary] = [
+		{"along": Vector3(1, 0, 0), "out": Vector3(0, 0, -1), "center": Vector3(0, 0, -base_distance)},  # South
+		{"along": Vector3(0, 0, 1), "out": Vector3(1, 0, 0), "center": Vector3(base_distance, 0, 0)},   # East
+		{"along": Vector3(-1, 0, 0), "out": Vector3(0, 0, 1), "center": Vector3(0, 0, base_distance)},  # North
+		{"along": Vector3(0, 0, -1), "out": Vector3(-1, 0, 0), "center": Vector3(-base_distance, 0, 0)} # West
 	]
 
-	# Create 4 rails connecting the corners (forming a square perimeter)
-	var side_names: Array[String] = ["South", "East", "North", "West"]
-	for i in range(4):
-		var start_pos: Vector3 = corners[i]
-		var end_pos: Vector3 = corners[(i + 1) % 4]
+	for side_idx in range(4):
+		var config: Dictionary = side_configs[side_idx]
+		var side_name: String = side_names[side_idx]
 
-		# Create the perimeter rail with randomness
-		var rail_index: int = perimeter_rail_start_index + i
-		_create_perimeter_rail(start_pos, end_pos, rail_index, side_names[i], scale)
+		# Generate multiple rails for this side
+		var num_rails: int = rng.randi_range(2, 4)
 
-		# Track positions
-		rail_positions.append(start_pos)
-		rail_positions.append(end_pos)
+		for i in range(num_rails):
+			# Random position along the side
+			var side_length: float = arena_size * 0.8
+			var along_offset: float = rng.randf_range(-side_length / 2, side_length / 2)
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated 4 perimeter safety rails around arena edges")
+			# Random distance from center (some closer, some further)
+			var distance_variation: float = rng.randf_range(-4.0, 6.0) * scale
+
+			# Random height
+			var height: float = rng.randf_range(min_height, max_height)
+
+			# Random rail length (shorter segments)
+			var rail_length: float = rng.randf_range(15.0, 35.0) * scale
+
+			# Calculate rail start and end positions
+			var center_pos: Vector3 = config["center"] + config["out"] * distance_variation
+			center_pos.y = height
+			center_pos += config["along"] * along_offset
+
+			var half_length: float = rail_length / 2.0
+			var start_pos: Vector3 = center_pos - config["along"] * half_length
+			var end_pos: Vector3 = center_pos + config["along"] * half_length
+
+			# Create the rail
+			_create_perimeter_rail(start_pos, end_pos, rail_count, side_name, scale)
+
+			# Track positions
+			rail_positions.append(start_pos)
+			rail_positions.append(end_pos)
+			rail_count += 1
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated %d perimeter safety rails around arena edges" % rail_count)
 
 func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String, scale: float) -> void:
 	## Create a perimeter rail with gentle random curves
