@@ -313,7 +313,8 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 			player.get_parent().add_child(hit_sound)
 			hit_sound.global_position = projectile_position  # Set position after adding to tree
 			hit_sound.play()
-			# Sound will auto-cleanup when it finishes
+			# Cleanup after sound finishes
+			hit_sound.finished.connect(hit_sound.queue_free)
 
 	# Destroy projectile on hit
 	if projectile and is_instance_valid(projectile):
