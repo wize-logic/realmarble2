@@ -1862,23 +1862,26 @@ func generate_perimeter_rails() -> void:
 	## These serve as safety rails to catch players before they fall off
 	var scale: float = arena_size / 140.0
 
-	# Position rails at the arena boundary (same as video walls)
-	var rail_distance: float = arena_size * 0.52  # Slightly inside the boundary
+	# Position rails at the arena boundary (slightly inside video walls)
+	var rail_distance: float = arena_size * 0.52
 
-	# Height for the perimeter rails - low enough to catch falling players
-	# but high enough to be above most floor geometry
-	var rail_height: float = 3.0 * scale
+	# Base height range for perimeter rails
+	var base_height: float = 3.0 * scale
 
 	# Track the starting index for naming
 	var perimeter_rail_start_index: int = rail_positions.size() / 2
 
-	# Create rails for all 4 sides of the arena
-	# Each side is one continuous rail from corner to corner
+	# Create rails for all 4 sides with random height variations at corners
+	var corner_heights: Array[float] = []
+	for i in range(4):
+		# Random height variation for each corner
+		corner_heights.append(base_height + rng.randf_range(-1.5, 2.5) * scale)
+
 	var corners: Array[Vector3] = [
-		Vector3(-rail_distance, rail_height, -rail_distance),  # SW corner
-		Vector3(rail_distance, rail_height, -rail_distance),   # SE corner
-		Vector3(rail_distance, rail_height, rail_distance),    # NE corner
-		Vector3(-rail_distance, rail_height, rail_distance),   # NW corner
+		Vector3(-rail_distance, corner_heights[0], -rail_distance),  # SW corner
+		Vector3(rail_distance, corner_heights[1], -rail_distance),   # SE corner
+		Vector3(rail_distance, corner_heights[2], rail_distance),    # NE corner
+		Vector3(-rail_distance, corner_heights[3], rail_distance),   # NW corner
 	]
 
 	# Create 4 rails connecting the corners (forming a square perimeter)
@@ -1887,9 +1890,9 @@ func generate_perimeter_rails() -> void:
 		var start_pos: Vector3 = corners[i]
 		var end_pos: Vector3 = corners[(i + 1) % 4]
 
-		# Create the perimeter rail
+		# Create the perimeter rail with randomness
 		var rail_index: int = perimeter_rail_start_index + i
-		_create_perimeter_rail(start_pos, end_pos, rail_index, side_names[i])
+		_create_perimeter_rail(start_pos, end_pos, rail_index, side_names[i], scale)
 
 		# Track positions
 		rail_positions.append(start_pos)
@@ -1897,24 +1900,53 @@ func generate_perimeter_rails() -> void:
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated 4 perimeter safety rails around arena edges")
 
-func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String) -> void:
-	## Create a perimeter rail between two points (straighter than arena rails)
+func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String, scale: float) -> void:
+	## Create a perimeter rail with random curves and height variations
 	var rail: Path3D = GrindRailScript.new()
 	rail.name = "PerimeterRail_%s_%d" % [side_name, index]
 	rail.curve = Curve3D.new()
 
 	var distance: float = start.distance_to(end)
-	var num_points: int = max(8, int(distance / 8.0))  # Fewer points for straighter rails
+	var num_points: int = max(10, int(distance / 6.0))  # More points for smoother curves
 
-	# Very subtle arc - these are meant to be more like safety rails
-	var arc_height: float = distance * 0.03  # Much smaller arc than arena rails
+	# Random arc parameters - can curve up or down, with varying intensity
+	var arc_height: float = distance * rng.randf_range(0.02, 0.08)
+	var arc_direction: float = 1.0 if rng.randf() > 0.3 else -1.0  # Mostly curve up, sometimes down
+
+	# Calculate perpendicular direction for sideways wobble
+	var rail_dir: Vector3 = (end - start).normalized()
+	var wobble_dir: Vector3
+	if side_name == "South" or side_name == "North":
+		wobble_dir = Vector3(0, 0, 1)  # Wobble in Z for E-W rails
+	else:
+		wobble_dir = Vector3(1, 0, 0)  # Wobble in X for N-S rails
+
+	# Random wobble parameters - how much the rail curves sideways
+	var wobble_amplitude: float = rng.randf_range(1.0, 4.0) * scale
+	var wobble_frequency: float = rng.randf_range(1.0, 2.5)  # Number of waves along rail
+	var wobble_phase: float = rng.randf_range(0, TAU)  # Random starting phase
+
+	# Additional random height undulation
+	var height_wobble_amp: float = rng.randf_range(0.5, 2.0) * scale
+	var height_wobble_freq: float = rng.randf_range(1.5, 3.0)
+	var height_wobble_phase: float = rng.randf_range(0, TAU)
 
 	for i in range(num_points):
 		var t: float = float(i) / (num_points - 1)
 		var pos: Vector3 = start.lerp(end, t)
 
-		# Add subtle arc using sine curve (highest at middle)
-		pos.y += sin(t * PI) * arc_height
+		# Main arc (up or down curve)
+		pos.y += sin(t * PI) * arc_height * arc_direction
+
+		# Add sideways wobble (perpendicular to rail direction)
+		var wobble_offset: float = sin(t * TAU * wobble_frequency + wobble_phase) * wobble_amplitude
+		# Taper wobble at ends so it connects smoothly
+		var taper: float = sin(t * PI)  # 0 at ends, 1 in middle
+		pos += wobble_dir * wobble_offset * taper
+
+		# Add height undulation for more variety
+		var height_undulation: float = sin(t * TAU * height_wobble_freq + height_wobble_phase) * height_wobble_amp
+		pos.y += height_undulation * taper
 
 		rail.curve.add_point(pos)
 
@@ -1923,7 +1955,7 @@ func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name:
 
 	add_child(rail)
 
-	# Create visual mesh for the rail (using shared function)
+	# Create visual mesh for the rail
 	_create_rail_visual(rail)
 
 # ============================================================================
