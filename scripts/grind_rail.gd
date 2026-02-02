@@ -5,14 +5,13 @@ class_name GrindRail
 ## Player hangs from rail by a rope and can swing
 
 @export var rail_speed: float = 15.0
-@export var boost_speed: float = 35.0  # Max speed when boosting
-@export var boost_acceleration: float = 40.0  # How fast you accelerate when boosting
+@export var boost_speed: float = 25.0  # Max speed when boosting (reduced)
+@export var boost_acceleration: float = 20.0  # How fast you accelerate when boosting (reduced)
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
-@export var gravity: float = 20.0  # Increased for more natural swing
-@export var swing_damping: float = 0.8  # Reduced for looser feel
-@export var swing_force: float = 12.0  # Increased for more responsive swinging
-@export var max_swing_angle: float = 1.5  # ~85 degrees max swing
+@export var gravity: float = 20.0  # Pendulum gravity
+@export var swing_damping: float = 0.8  # Looser feel
+@export var swing_force: float = 12.0  # Responsive swinging
 @export var rope_thickness: float = 0.015  # Very thin rope
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
@@ -278,8 +277,11 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Update swing angle
 	state.swing_angle += state.angular_velocity * delta
 
-	# Clamp swing angle to prevent going over the top
-	state.swing_angle = clamp(state.swing_angle, -max_swing_angle, max_swing_angle)
+	# Wrap angle to keep it in -PI to PI range (allows full rotation)
+	while state.swing_angle > PI:
+		state.swing_angle -= TAU
+	while state.swing_angle < -PI:
+		state.swing_angle += TAU
 
 	# Boost when holding shift
 	var is_boosting: bool = Input.is_key_pressed(KEY_SHIFT)
