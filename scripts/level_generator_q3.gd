@@ -285,6 +285,7 @@ func generate_level() -> void:
 	generate_teleporters()
 	generate_jump_pads()
 	generate_grind_rails()
+	generate_perimeter_rails()
 
 	# Create spawn point markers
 	generate_spawn_markers()
@@ -1851,6 +1852,79 @@ func _create_rail_visual(rail: Path3D) -> void:
 	rail_visual.set_surface_override_material(0, material)
 
 	rail.add_child(rail_visual)
+
+# ============================================================================
+# PERIMETER RAILS (Safety rails around arena edges to prevent falling)
+# ============================================================================
+
+func generate_perimeter_rails() -> void:
+	## Generate grind rails around the outer edges of the arena
+	## These serve as safety rails to catch players before they fall off
+	var scale: float = arena_size / 140.0
+
+	# Position rails at the arena boundary (same as video walls)
+	var rail_distance: float = arena_size * 0.52  # Slightly inside the boundary
+
+	# Height for the perimeter rails - low enough to catch falling players
+	# but high enough to be above most floor geometry
+	var rail_height: float = 3.0 * scale
+
+	# Track the starting index for naming
+	var perimeter_rail_start_index: int = rail_positions.size() / 2
+
+	# Create rails for all 4 sides of the arena
+	# Each side is one continuous rail from corner to corner
+	var corners: Array[Vector3] = [
+		Vector3(-rail_distance, rail_height, -rail_distance),  # SW corner
+		Vector3(rail_distance, rail_height, -rail_distance),   # SE corner
+		Vector3(rail_distance, rail_height, rail_distance),    # NE corner
+		Vector3(-rail_distance, rail_height, rail_distance),   # NW corner
+	]
+
+	# Create 4 rails connecting the corners (forming a square perimeter)
+	var side_names: Array[String] = ["South", "East", "North", "West"]
+	for i in range(4):
+		var start_pos: Vector3 = corners[i]
+		var end_pos: Vector3 = corners[(i + 1) % 4]
+
+		# Create the perimeter rail
+		var rail_index: int = perimeter_rail_start_index + i
+		_create_perimeter_rail(start_pos, end_pos, rail_index, side_names[i])
+
+		# Track positions
+		rail_positions.append(start_pos)
+		rail_positions.append(end_pos)
+
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Generated 4 perimeter safety rails around arena edges")
+
+func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name: String) -> void:
+	## Create a perimeter rail between two points (straighter than arena rails)
+	var rail: Path3D = GrindRailScript.new()
+	rail.name = "PerimeterRail_%s_%d" % [side_name, index]
+	rail.curve = Curve3D.new()
+
+	var distance: float = start.distance_to(end)
+	var num_points: int = max(8, int(distance / 8.0))  # Fewer points for straighter rails
+
+	# Very subtle arc - these are meant to be more like safety rails
+	var arc_height: float = distance * 0.03  # Much smaller arc than arena rails
+
+	for i in range(num_points):
+		var t: float = float(i) / (num_points - 1)
+		var pos: Vector3 = start.lerp(end, t)
+
+		# Add subtle arc using sine curve (highest at middle)
+		pos.y += sin(t * PI) * arc_height
+
+		rail.curve.add_point(pos)
+
+	# Set smooth tangents for better grinding physics
+	_set_rail_tangents(rail)
+
+	add_child(rail)
+
+	# Create visual mesh for the rail (using shared function)
+	_create_rail_visual(rail)
 
 # ============================================================================
 # PERIMETER & DEATH ZONE
