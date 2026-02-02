@@ -368,7 +368,6 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
-	warning_particles.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -376,7 +375,8 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	warning_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	warning_particles.mesh = particle_mesh
 
 	warning_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	warning_particles.emission_ring_axis = Vector3.UP
@@ -479,7 +479,6 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
-	impact_particles.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -487,7 +486,8 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	impact_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	impact_particles.mesh = particle_mesh
 
 	impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	impact_particles.emission_sphere_radius = 1.0
@@ -525,8 +525,8 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 
 	var arc_mesh: QuadMesh = QuadMesh.new()
 	arc_mesh.size = Vector2(0.15, 0.15)
+	arc_mesh.material = particle_material  # Reuse material
 	arc_particles.mesh = arc_mesh
-	arc_particles.mesh.material = particle_material  # Reuse material
 
 	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	arc_particles.emission_box_extents = Vector3(2.0, bolt_height / 2.0, 2.0)
@@ -635,7 +635,6 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
-	chain_particles.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -643,7 +642,8 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	chain_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	chain_particles.mesh = particle_mesh
 
 	# Emit along the line between the two targets
 	var direction: Vector3 = (to_pos - from_pos).normalized()
@@ -725,7 +725,6 @@ func create_reticle() -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.1, 0.1)
-	particles.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -733,7 +732,8 @@ func create_reticle() -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	particles.mesh = particle_mesh
 
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	particles.emission_ring_axis = Vector3(0, 1, 0)

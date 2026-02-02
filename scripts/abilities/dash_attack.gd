@@ -511,8 +511,6 @@ func create_direction_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	sphere_particles.mesh = particle_mesh
-
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -521,7 +519,8 @@ func create_direction_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	sphere_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	sphere_particles.mesh = particle_mesh
 
 	# Emission shape - sphere surface matching hitbox
 	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE

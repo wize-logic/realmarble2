@@ -291,7 +291,7 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		# Apply stronger knockback from cannonball impact
 		# Get player level multiplier from projectile metadata
 		var player_level: int = projectile.get_meta("player_level", 0)
-		var level_mult: float = 1.0 + (player.level * 0.2)
+		var level_mult: float = 1.0 + (player_level * 0.2)
 
 		# Calculate knockback (base 150.0, slightly nerfed for better balance, scaled by level)
 		var base_knockback: float = 150.0
@@ -396,7 +396,6 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	# Set up particle mesh - larger
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.3, 0.3)  # Larger than gun (was 0.15)
-	trail.mesh = particle_mesh
 
 	# Create material for trail
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -406,7 +405,8 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	trail.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	trail.mesh = particle_mesh
 
 	# Emission shape - point source
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
@@ -458,7 +458,6 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	# Set up particle mesh - larger
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.8, 0.8)  # Much larger than gun (was 0.4)
-	muzzle_flash.mesh = particle_mesh
 
 	# Create material for flash
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -468,7 +467,8 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	muzzle_flash.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	muzzle_flash.mesh = particle_mesh
 
 	# Emission shape - larger sphere
 	muzzle_flash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -523,7 +523,6 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.6, 0.6)
-	explosion.mesh = particle_mesh
 
 	# Create material for explosion
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -533,7 +532,8 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	explosion.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	explosion.mesh = particle_mesh
 
 	# Emission shape - sphere burst
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -610,7 +610,6 @@ func create_reticle() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	particles.mesh = particle_mesh
 
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -620,7 +619,8 @@ func create_reticle() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	particles.mesh = particle_mesh
 
 	# Emission shape - ring around reticle
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING

@@ -47,8 +47,6 @@ func _ready() -> void:
 	# Set up particle mesh and material for visibility
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.8, 0.8)
-	explosion_particles.mesh = particle_mesh
-
 	# Create material for additive blending (explosion effect)
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -58,7 +56,8 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.6, 0.1, 1.0)
-	explosion_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	explosion_particles.mesh = particle_mesh
 
 	# Emission shape - sphere explosion
 	explosion_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -104,8 +103,6 @@ func _ready() -> void:
 	# Set up particle mesh - larger chunks
 	var magma_mesh: QuadMesh = QuadMesh.new()
 	magma_mesh.size = Vector2(0.4, 0.4)
-	magma_particles.mesh = magma_mesh
-
 	# Create material for magma chunks (glowing lava)
 	var magma_material: StandardMaterial3D = StandardMaterial3D.new()
 	magma_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -115,7 +112,8 @@ func _ready() -> void:
 	magma_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	magma_material.disable_receive_shadows = true
 	magma_material.albedo_color = Color(1.0, 0.3, 0.0, 1.0)
-	magma_particles.mesh.material = magma_material
+	magma_mesh.material = magma_material
+	magma_particles.mesh = magma_mesh
 
 	# Emission shape - sphere around player
 	magma_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -430,15 +428,14 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 
 		var particle_mesh: QuadMesh = QuadMesh.new()
 		particle_mesh.size = Vector2(0.4, 0.4)
-		fire.mesh = particle_mesh
-
 		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		particle_material.vertex_color_use_as_albedo = true
 		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		fire.mesh.material = particle_material
+		particle_mesh.material = particle_material
+		fire.mesh = particle_mesh
 
 		fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 		fire.emission_sphere_radius = 0.5
@@ -517,7 +514,6 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
-	explosion.mesh = particle_mesh
 
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -525,7 +521,8 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	explosion.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	explosion.mesh = particle_mesh
 
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	explosion.emission_sphere_radius = 0.3
@@ -593,8 +590,6 @@ func create_radius_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
-	sphere_particles.mesh = particle_mesh
-
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -603,7 +598,8 @@ func create_radius_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	sphere_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	sphere_particles.mesh = particle_mesh
 
 	# Emission shape - sphere surface matching the hitbox
 	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
