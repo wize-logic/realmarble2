@@ -5,13 +5,15 @@ class_name GrindRail
 ## Player hangs from rail by a rope and can swing
 
 @export var rail_speed: float = 15.0
+@export var boost_speed: float = 35.0  # Max speed when boosting
+@export var boost_acceleration: float = 40.0  # How fast you accelerate when boosting
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
 @export var gravity: float = 15.0
 @export var swing_damping: float = 3.0
 @export var swing_force: float = 8.0  # How much player input affects swing
 @export var max_swing_angle: float = 1.2  # ~70 degrees max swing
-@export var rope_thickness: float = 0.08
+@export var rope_thickness: float = 0.03
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
 var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
@@ -128,7 +130,8 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 		"offset": offset,
 		"direction": direction,
 		"swing_angle": initial_angle,
-		"angular_velocity": clamp(initial_angular_vel, -2.0, 2.0)  # Clamp initial velocity
+		"angular_velocity": clamp(initial_angular_vel, -2.0, 2.0),  # Clamp initial velocity
+		"current_speed": rail_speed  # Start at base speed
 	}
 
 	# Create rope visual
@@ -185,7 +188,8 @@ func _calculate_velocity(grinder: RigidBody3D, state: Dictionary) -> Vector3:
 		right = rail_dir.cross(Vector3.FORWARD).normalized()
 
 	# Velocity along rail (in actual travel direction)
-	var rail_vel: Vector3 = rail_dir * rail_speed
+	var current_speed: float = state.get("current_speed", rail_speed)
+	var rail_vel: Vector3 = rail_dir * current_speed
 
 	# Velocity from swing (tangent to the swing arc)
 	var swing_tangent: Vector3 = right * cos(state.swing_angle) + Vector3.UP * sin(state.swing_angle)
@@ -267,8 +271,17 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	# Clamp swing angle to prevent going over the top
 	state.swing_angle = clamp(state.swing_angle, -max_swing_angle, max_swing_angle)
 
+	# Boost when holding shift
+	var is_boosting: bool = Input.is_key_pressed(KEY_SHIFT)
+	if is_boosting:
+		state.current_speed = minf(state.current_speed + boost_acceleration * delta, boost_speed)
+	else:
+		# Gradually return to base speed
+		if state.current_speed > rail_speed:
+			state.current_speed = maxf(state.current_speed - boost_acceleration * 0.5 * delta, rail_speed)
+
 	# Move along rail
-	state.offset += state.direction * rail_speed * delta
+	state.offset += state.direction * state.current_speed * delta
 
 	# Check if reached end - detach with full velocity
 	if state.offset <= 0.0 or state.offset >= length:
