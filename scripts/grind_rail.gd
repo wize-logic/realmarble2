@@ -108,18 +108,42 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 		detach_grinder(grinder)
 		return
 
-	# W = forward (direction 1), S = backward (direction -1)
-	var input_forward: float = Input.get_axis("down", "up")
-	if absf(input_forward) > 0.1:
-		state.direction = 1 if input_forward > 0 else -1
+	# Get current position and calculate direction to end points
+	var current_pos: Vector3 = get_point_at_offset(state.offset)
+	var start_pos: Vector3 = get_point_at_offset(0.0)
+	var end_pos: Vector3 = get_point_at_offset(length)
+
+	# Direction control: use player's movement input
+	if "movement_input_direction" in grinder:
+		var input_dir: Vector3 = grinder.movement_input_direction
+		if input_dir.length_squared() > 0.01:
+			# Calculate direction to each end of rail
+			var dir_to_end: Vector3 = (end_pos - current_pos).normalized()
+			var dir_to_start: Vector3 = (start_pos - current_pos).normalized()
+
+			# Check which direction player wants to go
+			var dot_to_end: float = input_dir.dot(dir_to_end)
+			var dot_to_start: float = input_dir.dot(dir_to_start)
+
+			if dot_to_end > 0.2 and dot_to_end > dot_to_start:
+				state.direction = 1  # Move toward end
+			elif dot_to_start > 0.2 and dot_to_start > dot_to_end:
+				state.direction = -1  # Move toward start
 
 	# Move along rail
 	state.offset += state.direction * rail_speed * delta
 
 	# Check if reached end - detach
-	if state.offset <= 0.0 or state.offset >= length:
-		var tangent: Vector3 = get_tangent_at_offset(clamp(state.offset, 0.0, length))
-		grinder.linear_velocity = tangent * state.direction * rail_speed
+	if state.offset <= 0.0:
+		var exit_dir: Vector3 = (start_pos - get_point_at_offset(1.0)).normalized()
+		grinder.linear_velocity = exit_dir * rail_speed
+		active_grinders.erase(grinder)
+		if grinder.has_method("stop_grinding"):
+			grinder.stop_grinding()
+		return
+	elif state.offset >= length:
+		var exit_dir: Vector3 = (end_pos - get_point_at_offset(length - 1.0)).normalized()
+		grinder.linear_velocity = exit_dir * rail_speed
 		active_grinders.erase(grinder)
 		if grinder.has_method("stop_grinding"):
 			grinder.stop_grinding()
@@ -129,8 +153,4 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	var rail_pos: Vector3 = get_point_at_offset(state.offset)
 	rail_pos.y += rail_height_offset
 	grinder.global_position = rail_pos
-
-	# Set velocity along rail
-	var tangent: Vector3 = get_tangent_at_offset(state.offset)
-	grinder.linear_velocity = tangent * state.direction * rail_speed
 	grinder.angular_velocity = Vector3.ZERO
