@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://b57uspbprxc8"]
+[gd_scene load_steps=28 format=3 uid="uid://b57uspbprxc8"]
 
 [ext_resource type="Script" uid="uid://bd81ysdlqd6oy" path="res://scripts/world.gd" id="1_ho7yh"]
 [ext_resource type="Script" uid="uid://chl816vkrpda8" path="res://scripts/ui/fps_counter.gd" id="4_2328u"]
@@ -110,6 +110,18 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud_panel"]
+bg_color = Color(0, 0, 0, 0.85)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.3, 0.7, 1, 0.6)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
 [node name="World" type="Node"]
 script = ExtResource("1_ho7yh")
 
@@ -143,60 +155,54 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("15_gamehud")
 
-[node name="MarginContainer" type="MarginContainer" parent="GameHUD/HUD"]
+[node name="HUDPanel" type="PanelContainer" parent="GameHUD/HUD"]
 layout_mode = 1
 offset_left = 20.0
 offset_top = 20.0
-offset_right = 400.0
-offset_bottom = 200.0
-theme_override_constants/margin_left = 10
-theme_override_constants/margin_top = 10
-theme_override_constants/margin_right = 10
-theme_override_constants/margin_bottom = 10
+offset_right = 280.0
+offset_bottom = 220.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_hud_panel")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="GameHUD/HUD/MarginContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="GameHUD/HUD/HUDPanel"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 15
 
-[node name="TimerLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="GameHUD/HUD/HUDPanel/MarginContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.8, 0, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 28
-text = "Time: 05:00"
+theme_override_constants/separation = 12
 
-[node name="ScoreLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
+[node name="TimerLabel" type="Label" parent="GameHUD/HUD/HUDPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Kills: 0"
+theme_override_colors/font_color = Color(0.3, 0.7, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "TIME: 05:00"
 
-[node name="LevelLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
+[node name="ScoreLabel" type="Label" parent="GameHUD/HUD/HUDPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.4, 0.8, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 22
-text = "Level: 0/3"
-
-[node name="AbilityLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.4, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 20
-text = "Ability: None"
+text = "KILLS: 0"
 
-[node name="HealthLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
+[node name="LevelLabel" type="Label" parent="GameHUD/HUD/HUDPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.2, 1, 0.2, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 6
+theme_override_colors/font_color = Color(0.3, 0.7, 1, 1)
 theme_override_font_sizes/font_size = 20
-text = "Health: 3"
+text = "LEVEL: 0/3"
+
+[node name="AbilityLabel" type="Label" parent="GameHUD/HUD/HUDPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 16
+text = "ABILITY: None"
+
+[node name="HealthLabel" type="Label" parent="GameHUD/HUD/HUDPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.3, 1)
+theme_override_font_sizes/font_size = 16
+text = "HEALTH: 3"
 
 [node name="OrbSpawner" type="Node3D" parent="."]
 script = ExtResource("7_orbspawner")

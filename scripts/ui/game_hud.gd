@@ -2,11 +2,11 @@ extends Control
 
 ## Game HUD for displaying timer, score, level, and ability info
 
-@onready var timer_label: Label = $MarginContainer/VBoxContainer/TimerLabel
-@onready var score_label: Label = $MarginContainer/VBoxContainer/ScoreLabel
-@onready var level_label: Label = $MarginContainer/VBoxContainer/LevelLabel
-@onready var ability_label: Label = $MarginContainer/VBoxContainer/AbilityLabel
-@onready var health_label: Label = $MarginContainer/VBoxContainer/HealthLabel
+@onready var timer_label: Label = $HUDPanel/MarginContainer/VBoxContainer/TimerLabel
+@onready var score_label: Label = $HUDPanel/MarginContainer/VBoxContainer/ScoreLabel
+@onready var level_label: Label = $HUDPanel/MarginContainer/VBoxContainer/LevelLabel
+@onready var ability_label: Label = $HUDPanel/MarginContainer/VBoxContainer/AbilityLabel
+@onready var health_label: Label = $HUDPanel/MarginContainer/VBoxContainer/HealthLabel
 
 var world: Node = null
 var player: Node = null
@@ -85,11 +85,11 @@ func update_hud() -> void:
 	# Update timer
 	if world and world.has_method("get_time_remaining_formatted"):
 		if world.game_active:
-			timer_label.text = "Time: " + world.get_time_remaining_formatted()
+			timer_label.text = "TIME: " + world.get_time_remaining_formatted()
 		else:
-			timer_label.text = "Time: --:--"
+			timer_label.text = "TIME: --:--"
 	else:
-		timer_label.text = "Time: --:--"
+		timer_label.text = "TIME: --:--"
 
 	# Update score
 	if world and world.has_method("get_score"):
@@ -98,15 +98,15 @@ func update_hud() -> void:
 		if multiplayer.has_multiplayer_peer():
 			peer_id = multiplayer.get_unique_id()
 		var score: int = world.get_score(peer_id)
-		score_label.text = "Kills: %d" % score
+		score_label.text = "KILLS: %d" % score
 	else:
-		score_label.text = "Kills: 0"
+		score_label.text = "KILLS: 0"
 
 	# Update level
 	if player and "level" in player:
-		level_label.text = "Level: %d/%d" % [player.level, player.MAX_LEVEL]
+		level_label.text = "LEVEL: %d/%d" % [player.level, player.MAX_LEVEL]
 	else:
-		level_label.text = "Level: 0/3"
+		level_label.text = "LEVEL: 0/3"
 
 	# Update ability
 	if player and "current_ability" in player and player.current_ability:
@@ -118,17 +118,17 @@ func update_hud() -> void:
 				else:
 					var cooldown: float = player.current_ability.cooldown_timer if "cooldown_timer" in player.current_ability else 0.0
 					ability_ready_text = " [%.1fs]" % cooldown
-			ability_label.text = "Ability: %s%s" % [player.current_ability.ability_name, ability_ready_text]
+			ability_label.text = "ABILITY: %s%s" % [player.current_ability.ability_name.to_upper(), ability_ready_text]
 		else:
-			ability_label.text = "Ability: Unknown"
+			ability_label.text = "ABILITY: Unknown"
 	else:
-		ability_label.text = "Ability: None (Press E to use)"
+		ability_label.text = "ABILITY: None"
 
 	# Update health
 	if player and "health" in player:
-		health_label.text = "Health: %d" % player.health
+		health_label.text = "HEALTH: %d" % player.health
 	else:
-		health_label.text = "Health: 3"
+		health_label.text = "HEALTH: 3"
 
 func create_expansion_notification() -> void:
 	"""Create the expansion notification label"""

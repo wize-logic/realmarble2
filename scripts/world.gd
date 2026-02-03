@@ -2621,20 +2621,27 @@ func _create_marble_preview() -> void:
 	# Make this the current camera
 	preview_camera.make_current()
 
-	# Create directional light for good lighting
+	# Create directional light for good lighting - fixed medium brightness for consistent menu display
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 1.2
+	preview_light.light_energy = 1.0  # Fixed medium brightness
+	preview_light.light_color = Color(1.0, 0.98, 0.95)  # Slightly warm white
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
 
-	# Add an additional fill light for better showcase
+	# Add an additional fill light for better showcase - fixed medium brightness
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.5
+	fill_light.light_energy = 0.4  # Fixed medium fill
+	fill_light.light_color = Color(0.9, 0.95, 1.0)  # Slightly cool fill for contrast
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
+
+	# Set fixed ambient lighting for consistent menu appearance
+	var world_env = get_node_or_null("WorldEnvironment")
+	if world_env and world_env.environment:
+		world_env.environment.ambient_light_energy = 0.6  # Fixed medium ambient
 
 	# Add to World root (Menu is a CanvasLayer for UI, can't hold 3D nodes)
 	add_child(preview_container)
