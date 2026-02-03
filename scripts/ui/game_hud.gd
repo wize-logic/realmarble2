@@ -43,6 +43,13 @@ var killstreak_notification_timer: float = 0.0
 var killstreak_notification_duration: float = 3.0
 var killstreak_sound: AudioStreamPlayer = null
 
+# Ult bar
+var ult_container: Control = null
+var ult_label: Label = null
+var ult_bar: ProgressBar = null
+var ult_bar_fill_style: StyleBoxFlat = null
+var ult_pulse_time: float = 0.0
+
 func _ready() -> void:
 	# Load custom fonts
 	font_bold = load("res://fonts/Rajdhani-Bold.ttf")
@@ -56,6 +63,7 @@ func _ready() -> void:
 	create_kill_notification()
 	create_killstreak_notification()
 	create_killstreak_sound()
+	create_ult_bar()
 
 	# Try to find the local player
 	call_deferred("find_local_player")
@@ -73,6 +81,10 @@ func find_local_player() -> void:
 	if not player:
 		await get_tree().create_timer(0.5).timeout
 		find_local_player()
+	else:
+		# Hide the player's built-in ult meter since the HUD handles it now
+		if "ult_meter_ui" in player and player.ult_meter_ui:
+			player.ult_meter_ui.visible = false
 
 func reset_hud() -> void:
 	player = null
@@ -81,6 +93,7 @@ func reset_hud() -> void:
 
 func _process(delta: float) -> void:
 	update_hud()
+	update_ult_bar(delta)
 	update_expansion_notification(delta)
 	update_kill_notification(delta)
 	update_killstreak_notification(delta)
@@ -324,6 +337,130 @@ func show_killstreak_notification(streak: int) -> void:
 	killstreak_notification_timer = killstreak_notification_duration
 
 	play_killstreak_sound(streak)
+
+# --- Ult bar ---
+
+func create_ult_bar() -> void:
+	# Container anchored to bottom-center
+	ult_container = Control.new()
+	ult_container.name = "UltBar"
+	ult_container.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	ult_container.anchor_left = 0.5
+	ult_container.anchor_right = 0.5
+	ult_container.anchor_top = 1.0
+	ult_container.anchor_bottom = 1.0
+	ult_container.offset_left = -140
+	ult_container.offset_right = 140
+	ult_container.offset_top = -58
+	ult_container.offset_bottom = -28
+	ult_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(ult_container)
+
+	# Label above bar
+	ult_label = Label.new()
+	ult_label.name = "UltLabel"
+	ult_label.text = "ULT  0%"
+	ult_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ult_label.position = Vector2(0, 0)
+	ult_label.size = Vector2(280, 20)
+	ult_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if font_semibold:
+		ult_label.add_theme_font_override("font", font_semibold)
+	ult_label.add_theme_font_size_override("font_size", 16)
+	ult_label.add_theme_color_override("font_color", COLOR_WHITE)
+	ult_label.add_theme_color_override("font_outline_color", COLOR_OUTLINE)
+	ult_label.add_theme_color_override("font_shadow_color", COLOR_SHADOW)
+	ult_label.add_theme_constant_override("outline_size", 2)
+	ult_label.add_theme_constant_override("shadow_offset_x", 1)
+	ult_label.add_theme_constant_override("shadow_offset_y", 1)
+	ult_container.add_child(ult_label)
+
+	# Progress bar
+	ult_bar = ProgressBar.new()
+	ult_bar.name = "UltProgress"
+	ult_bar.min_value = 0.0
+	ult_bar.max_value = 100.0
+	ult_bar.value = 0.0
+	ult_bar.show_percentage = false
+	ult_bar.position = Vector2(0, 22)
+	ult_bar.size = Vector2(280, 6)
+	ult_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Background style - minimal, no borders
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.1, 0.12, 0.18, 0.5)
+	bg_style.corner_radius_top_left = 3
+	bg_style.corner_radius_top_right = 3
+	bg_style.corner_radius_bottom_left = 3
+	bg_style.corner_radius_bottom_right = 3
+	ult_bar.add_theme_stylebox_override("background", bg_style)
+
+	# Fill style - accent blue progression
+	ult_bar_fill_style = StyleBoxFlat.new()
+	ult_bar_fill_style.bg_color = Color(0.2, 0.35, 0.5, 0.8)
+	ult_bar_fill_style.corner_radius_top_left = 3
+	ult_bar_fill_style.corner_radius_top_right = 3
+	ult_bar_fill_style.corner_radius_bottom_left = 3
+	ult_bar_fill_style.corner_radius_bottom_right = 3
+	ult_bar.add_theme_stylebox_override("fill", ult_bar_fill_style)
+
+	ult_container.add_child(ult_bar)
+
+func update_ult_bar(delta: float) -> void:
+	if not ult_container or not ult_bar or not ult_label:
+		return
+
+	# Get ult charge from player's ult system
+	var ult_system: Node = null
+	if player and "ult_system" in player:
+		ult_system = player.ult_system
+
+	if not ult_system or not "ult_charge" in ult_system:
+		ult_bar.value = 0.0
+		ult_label.text = "ULT  0%"
+		ult_label.add_theme_color_override("font_color", COLOR_SECONDARY)
+		if ult_bar_fill_style:
+			ult_bar_fill_style.bg_color = Color(0.2, 0.35, 0.5, 0.8)
+		return
+
+	var charge: float = ult_system.ult_charge
+	var max_charge: float = ult_system.MAX_ULT_CHARGE
+	var percent: float = (charge / max_charge) * 100.0
+	ult_bar.value = percent
+
+	var is_ready: bool = charge >= max_charge
+
+	if is_ready:
+		# Pulsing accent blue when ready
+		ult_pulse_time += delta * 3.0
+		var pulse: float = 0.8 + 0.2 * sin(ult_pulse_time * TAU)
+		var ready_color := Color(0.3 * pulse, 0.7 * pulse, 1.0 * pulse, 1.0)
+
+		ult_label.text = "ULTIMATE  READY"
+		ult_label.add_theme_color_override("font_color", COLOR_ACCENT_BLUE)
+		if font_bold:
+			ult_label.add_theme_font_override("font", font_bold)
+
+		if ult_bar_fill_style:
+			ult_bar_fill_style.bg_color = ready_color
+	else:
+		ult_pulse_time = 0.0
+		ult_label.text = "ULT  %d%%" % int(percent)
+		ult_label.add_theme_color_override("font_color", COLOR_WHITE)
+		if font_semibold:
+			ult_label.add_theme_font_override("font", font_semibold)
+
+		# Fill color ramps from muted to brighter blue as charge increases
+		if ult_bar_fill_style:
+			var t: float = percent / 100.0
+			var fill_color := Color(
+				lerp(0.15, 0.3, t),
+				lerp(0.25, 0.6, t),
+				lerp(0.4, 0.95, t),
+				lerp(0.7, 1.0, t)
+			)
+			ult_bar_fill_style.bg_color = fill_color
+
 
 func play_killstreak_sound(streak: int) -> void:
 	if not killstreak_sound:
