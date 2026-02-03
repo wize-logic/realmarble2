@@ -78,16 +78,24 @@ var camera_yaw: float = 0.0  # Horizontal camera angle
 var camera_min_pitch: float = -60.0  # Max look down (degrees)
 var camera_max_pitch: float = 45.0  # Max look up (degrees)
 
-# Marble movement properties - Shooter style (responsive)
+# Marble movement properties - Momentum-based (physics-driven)
 var marble_mass: float = 8.0  # Marbles are dense (glass/steel)
-var base_roll_force: float = 300.0  # Significantly increased for climbing slopes
+var base_roll_force: float = 300.0  # Base force for acceleration
 var base_jump_impulse: float = 70.0
 var current_roll_force: float = 300.0
 var current_jump_impulse: float = 70.0
-var max_speed: float = 12.0  # Slightly higher max speed
-var air_control: float = 0.4  # Better air control for shooter feel
+var max_speed: float = 12.0  # Target max speed (soft cap)
+var air_control: float = 0.4  # Movement control while airborne
 var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
 var current_spin_dash_force: float = 250.0
+
+# Momentum-based movement properties
+var base_acceleration: float = 8.0  # Base acceleration rate (units/sec^2)
+var current_acceleration: float = 8.0  # Level-scaled acceleration
+var deceleration: float = 6.0  # Deceleration rate when no input (units/sec^2)
+var turn_speed_retention: float = 0.85  # How much speed is kept when turning 90 degrees (0-1)
+var momentum_buildup_time: float = 1.2  # Seconds to reach max speed from standstill
+var previous_move_direction: Vector3 = Vector3.ZERO  # Track direction for turn penalty
 
 # Jump system
 var jump_count: int = 0
@@ -143,6 +151,7 @@ const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
+const ACCELERATION_BOOST_PER_LEVEL: float = 2.0  # Acceleration boost per level
 
 # Killstreak system
 var killstreak: int = 0  # Current killstreak count
@@ -1159,20 +1168,60 @@ func _physics_process(delta: float) -> void:
 		DebugLogger.dlog(DebugLogger.Category.RAILS, "SAFETY: Clearing stale rail reference", false, get_entity_id())
 		current_rail = null
 
-	# Apply movement force if there's input
+	# Momentum-based movement system
+	var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
+	var current_speed: float = horizontal_velocity.length()
+	var control_multiplier: float = 1.0 if is_grounded else air_control
+
 	if input_dir != Vector2.ZERO:
-		# Get current horizontal speed
-		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		var current_speed: float = horizontal_velocity.length()
+		# Calculate turn penalty - reduce speed when changing direction sharply
+		if previous_move_direction != Vector3.ZERO and current_speed > 0.5:
+			var direction_dot: float = movement_input_direction.dot(previous_move_direction)
+			# direction_dot: 1 = same direction, 0 = perpendicular, -1 = opposite
+			if direction_dot < 0.7:  # Turning more than ~45 degrees
+				# Calculate turn penalty: more speed lost for sharper turns
+				var turn_factor: float = (1.0 - direction_dot) * 0.5  # 0 to 1 based on turn sharpness
+				var speed_retention: float = lerp(1.0, turn_speed_retention, turn_factor)
+				# Apply speed reduction through velocity dampening
+				var new_speed: float = current_speed * speed_retention
+				if current_speed > 0.1:
+					linear_velocity.x = horizontal_velocity.normalized().x * new_speed + (linear_velocity.x - horizontal_velocity.x)
+					linear_velocity.z = horizontal_velocity.normalized().z * new_speed + (linear_velocity.z - horizontal_velocity.z)
+					horizontal_velocity = Vector3(linear_velocity.x, 0, linear_velocity.z)
+					current_speed = horizontal_velocity.length()
 
-		# Apply movement force with reduced control in air
-		var control_multiplier: float = 1.0 if is_grounded else air_control
-		var force_to_apply: float = current_roll_force * control_multiplier
+		# Store direction for next frame's turn calculation
+		previous_move_direction = movement_input_direction
 
-		# Only apply force if below max speed (or allow air control regardless)
-		if current_speed < max_speed or not is_grounded:
-			# Apply central force for movement (no torque to prevent spinning)
-			apply_central_force(movement_input_direction * force_to_apply)
+		# Momentum-based acceleration: force diminishes as we approach max speed
+		# This creates a smooth acceleration curve instead of instant max speed
+		var speed_ratio: float = clamp(current_speed / max_speed, 0.0, 1.0)
+		var acceleration_factor: float = 1.0 - (speed_ratio * speed_ratio)  # Quadratic falloff
+
+		# Calculate force based on acceleration and mass (F = ma, scaled by marble mass)
+		var target_force: float = current_acceleration * marble_mass * acceleration_factor * control_multiplier
+		# Ensure minimum force for responsiveness, but scale with control_multiplier
+		var min_force: float = current_roll_force * 0.15 * control_multiplier
+		var force_to_apply: float = max(target_force, min_force)
+
+		# Apply movement force
+		apply_central_force(movement_input_direction * force_to_apply)
+
+	else:
+		# No input - apply deceleration (friction-like slowdown)
+		# Only apply on ground, air has natural drag from RigidBody
+		if is_grounded and current_speed > 0.5:
+			# Deceleration force opposite to velocity
+			var decel_force: float = deceleration * marble_mass
+			var velocity_dir: Vector3 = horizontal_velocity.normalized()
+			# Don't over-decelerate (would reverse direction)
+			var max_decel: float = current_speed * marble_mass / delta if delta > 0 else decel_force
+			decel_force = min(decel_force, max_decel)
+			apply_central_force(-velocity_dir * decel_force)
+
+		# Clear previous direction when not moving
+		if current_speed < 0.5:
+			previous_move_direction = Vector3.ZERO
 
 func check_ground() -> void:
 	# Use RayCast3D node for ground detection
@@ -1611,6 +1660,7 @@ func update_stats() -> void:
 	current_jump_impulse = base_jump_impulse + (level * JUMP_BOOST_PER_LEVEL)
 	current_spin_dash_force = base_spin_dash_force + (level * SPIN_BOOST_PER_LEVEL)
 	current_bounce_back_impulse = base_bounce_back_impulse + (level * BOUNCE_BOOST_PER_LEVEL)
+	current_acceleration = base_acceleration + (level * ACCELERATION_BOOST_PER_LEVEL)
 
 func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	"""Pickup a new ability"""
