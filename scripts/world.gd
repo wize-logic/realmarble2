@@ -2444,25 +2444,25 @@ func _create_customize_panel() -> void:
 	var preview_cam = Camera3D.new()
 	preview_cam.name = "PreviewCamera"
 	preview_cam.position = Vector3(0, 0.3, 1.8)
-	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	scene_root.add_child(preview_cam)
+	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_cam.current = true
 
 	# Create lighting for the preview
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 	light.light_energy = 1.2
 	scene_root.add_child(light)
+	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
 	# Add ambient light
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 	ambient_light.light_energy = 0.4
 	scene_root.add_child(ambient_light)
+	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
 	# Store references in the panel script
 	customize_panel.preview_viewport = sub_viewport
