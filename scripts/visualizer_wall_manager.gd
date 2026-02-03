@@ -61,6 +61,13 @@ var beat_cooldown: float = 0.0
 @export var peak_hold_time: float = 0.3  # How long peaks stay visible
 @export var peak_fall_speed: float = 1.5  # How fast peaks fall after hold
 
+# Auto-cycle settings
+@export var auto_cycle: bool = true  # Automatically cycle through modes
+@export var cycle_interval: float = 30.0  # Seconds between mode switches
+@export var cycle_colors: bool = true  # Also cycle color presets with modes
+var _cycle_timer: float = 0.0
+var _color_preset_index: int = 0
+
 # Shader reference
 var _visualizer_shader: Shader = null
 var _shader_material: ShaderMaterial = null
@@ -233,6 +240,13 @@ func _setup_spectrum_analyzer(bus_name: String) -> bool:
 func _process(delta: float) -> void:
 	if not is_initialized:
 		return
+
+	# Auto-cycle through visualization modes
+	if auto_cycle:
+		_cycle_timer += delta
+		if _cycle_timer >= cycle_interval:
+			_cycle_timer = 0.0
+			_advance_cycle()
 
 	# Update audio analysis
 	_update_spectrum_data(delta)
@@ -487,6 +501,17 @@ func previous_mode() -> void:
 	set_mode(prev as VisualizerMode)
 
 
+func _advance_cycle() -> void:
+	## Advance to the next mode and optionally cycle the color preset
+	var next = (current_mode + 1) % VisualizerMode.size()
+	set_mode(next as VisualizerMode)
+
+	if cycle_colors:
+		var preset_names = COLOR_PRESETS.keys()
+		_color_preset_index = (_color_preset_index + 1) % preset_names.size()
+		set_color_preset(preset_names[_color_preset_index])
+
+
 func set_color_preset(preset_name: String) -> void:
 	## Apply a color preset
 	if not COLOR_PRESETS.has(preset_name):
@@ -498,6 +523,12 @@ func set_color_preset(preset_name: String) -> void:
 	color_secondary = preset["secondary"]
 	color_accent = preset["accent"]
 	background_color = preset["background"]
+
+	# Keep cycle index in sync
+	var preset_names = COLOR_PRESETS.keys()
+	var idx = preset_names.find(preset_name)
+	if idx >= 0:
+		_color_preset_index = idx
 
 	_update_shader_colors()
 	print("[VisualizerWallManager] Applied color preset: %s" % preset_name)
