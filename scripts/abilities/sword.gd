@@ -57,19 +57,18 @@ func _ready() -> void:
 	slash_particles.name = "SlashParticles"
 	add_child(slash_particles)
 
-	# Configure slash particles - horizontal arc
+	# Configure slash particles - horizontal arc (enhanced for visual impact)
 	slash_particles.emitting = false
-	slash_particles.amount = 40
-	slash_particles.lifetime = 0.3
+	slash_particles.amount = 80  # More particles for fuller effect
+	slash_particles.lifetime = 0.4  # Slightly longer for visibility
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 1.0
-	slash_particles.randomness = 0.2
+	slash_particles.randomness = 0.3
 	slash_particles.local_coords = false
 
-	# Set up particle mesh
+	# Set up particle mesh - larger, more visible
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.1)  # Thin slashes
-	slash_particles.mesh = particle_mesh
+	particle_mesh.size = Vector2(0.6, 0.3)  # Larger slash particles
 
 	# Create material for slash effect
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -77,35 +76,39 @@ func _ready() -> void:
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED  # Orient with slash
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES  # Always face camera for visibility
 	particle_material.disable_receive_shadows = true
-	slash_particles.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	slash_particles.mesh = particle_mesh
 
 	# Emission shape - arc in front
 	slash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	slash_particles.emission_sphere_radius = 0.3
+	slash_particles.emission_sphere_radius = 0.5  # Wider emission
 
-	# Movement - slash arc
+	# Movement - slash arc with more energy
 	slash_particles.direction = Vector3(0, 0, -1)  # Forward
 	slash_particles.spread = slash_arc_angle / 2  # Spread in arc
 	slash_particles.gravity = Vector3.ZERO
-	slash_particles.initial_velocity_min = 8.0
-	slash_particles.initial_velocity_max = 15.0
+	slash_particles.initial_velocity_min = 12.0  # Faster particles
+	slash_particles.initial_velocity_max = 20.0
 
-	# Size over lifetime - quick slash
-	slash_particles.scale_amount_min = 2.0
-	slash_particles.scale_amount_max = 4.0
+	# Size over lifetime - bigger, more dramatic
+	slash_particles.scale_amount_min = 3.0
+	slash_particles.scale_amount_max = 6.0
 	slash_particles.scale_amount_curve = Curve.new()
-	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
-	slash_particles.scale_amount_curve.add_point(Vector2(0.5, 1.0))
+	slash_particles.scale_amount_curve.add_point(Vector2(0, 2.5))
+	slash_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
 	slash_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
 
-	# Color - silver/blue sword slash
+	# Color - brighter, more vibrant sword slash
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.6, 0.75, 1.0, 1.0))  # Bright cyan-blue (no white)
-	gradient.add_point(0.3, Color(0.7, 0.8, 1.0, 0.8))  # Light blue
-	gradient.add_point(0.7, Color(0.5, 0.6, 0.9, 0.4))  # Darker blue
-	gradient.add_point(1.0, Color(0.3, 0.4, 0.6, 0.0))  # Transparent
+	gradient.add_point(0.0, Color(0.8, 0.95, 1.0, 1.0))  # Bright cyan-white
+	gradient.add_point(0.2, Color(0.6, 0.85, 1.0, 1.0))  # Bright cyan-blue
+	gradient.add_point(0.5, Color(0.5, 0.7, 1.0, 0.8))  # Light blue
+	gradient.add_point(0.8, Color(0.4, 0.5, 0.9, 0.4))  # Darker blue
+	gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
 
 	# Create arc indicator for sword swing range
@@ -135,6 +138,10 @@ func _process(delta: float) -> void:
 					player.get_parent().add_child(arc_indicator)
 
 			arc_indicator.visible = true
+
+			# Get player level for level-based indicator changes
+			var player_level: int = player.level if "level" in player else 0
+			var is_spin_attack: bool = player_level >= 3
 
 			# Get player's camera/movement direction
 			var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -170,15 +177,59 @@ func _process(delta: float) -> void:
 
 			arc_indicator.global_position = indicator_position
 
-			# Orient indicator to face slash direction
-			arc_indicator.look_at(arc_indicator.global_position + slash_direction * 5.0, Vector3.UP)
+			# Update indicator mesh based on level (spin attack vs forward arc)
+			var mesh_instance: MeshInstance3D = arc_indicator.get_child(0) if arc_indicator.get_child_count() > 0 else null
+			if mesh_instance:
+				if is_spin_attack:
+					# Level 3: Circular indicator for spin attack (if not already a cylinder)
+					if not mesh_instance.mesh is CylinderMesh:
+						var cylinder: CylinderMesh = CylinderMesh.new()
+						cylinder.top_radius = slash_range * 1.2
+						cylinder.bottom_radius = slash_range * 1.2
+						cylinder.height = 0.1
+						mesh_instance.mesh = cylinder
+						mesh_instance.position = Vector3.ZERO  # Centered on player
 
-			# Scale based on charge level to match hitbox scaling (+20% per level)
-			var scale_factor = 1.0 + (charge_level - 1) * 0.2
+					# Don't orient - spin attack is 360 degrees
+					arc_indicator.rotation = Vector3.ZERO
+					# Rotate for visual effect
+					arc_indicator.rotation.y += delta * 2.0
+				else:
+					# Level 0-2: Forward arc (if not already a box)
+					if not mesh_instance.mesh is BoxMesh:
+						var box: BoxMesh = BoxMesh.new()
+						box.size = Vector3(slash_range * 2, 0.1, slash_range)
+						mesh_instance.mesh = box
+						mesh_instance.position = Vector3(0, 0, -slash_range / 2)
+
+					# Orient indicator to face slash direction
+					arc_indicator.look_at(arc_indicator.global_position + slash_direction * 5.0, Vector3.UP)
+
+			# Update indicator color based on level
+			if mesh_instance and mesh_instance.material_override:
+				var mat: StandardMaterial3D = mesh_instance.material_override
+				if player_level >= 3:
+					# Level 3: Bright blue (spin attack)
+					mat.albedo_color = Color(0.6, 0.8, 1.0, 0.25)
+				elif player_level >= 2:
+					# Level 2: Brighter blue (shockwave)
+					mat.albedo_color = Color(0.7, 0.85, 0.95, 0.2)
+				elif player_level >= 1:
+					# Level 1: Light blue (wider arc)
+					mat.albedo_color = Color(0.75, 0.85, 0.92, 0.18)
+				else:
+					# Level 0: Subtle cool
+					mat.albedo_color = Color(0.8, 0.85, 0.9, 0.15)
+
+			# Scale based on charge level AND player level
+			var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.15)
+			var scale_factor: float = charge_scale * level_scale
 			arc_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-			# Pulse effect while charging
-			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.12
+			# Pulse effect while charging (faster at higher levels)
+			var pulse_speed: float = 0.008 + ((player_level - 1) * 0.002)
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.12
 			arc_indicator.scale *= pulse
 		else:
 			# Hide indicator when not charging or not local player
@@ -197,7 +248,10 @@ func activate() -> void:
 	var charged_damage: int = int(slash_damage * charge_multiplier)
 	var charged_knockback: float = 70.0 * charge_multiplier  # Increased from 30.0 for stronger impact
 
-	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "SWORD SLASH! (Charge level %d, %.1fx damage)" % [charge_level, charge_multiplier], false, get_entity_id())
+	# Get player level for level-based effects
+	var player_level: int = player.level if "level" in player else 0
+
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "SWORD SLASH! (Charge level %d, %.1fx damage, player level %d)" % [charge_level, charge_multiplier, player_level], false, get_entity_id())
 
 	# Get player's camera/movement direction
 	var camera_arm: Node3D = player.get_node_or_null("CameraArm")
@@ -214,34 +268,65 @@ func activate() -> void:
 	slash_timer = slash_duration
 	hit_players.clear()
 
-	# Scale hitbox based on charge level to match visual indicator (+20% per level)
+	# Scale hitbox based on charge level and player level
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
-	var scaled_range: float = slash_range * charge_scale
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% range per level
+	var scaled_range: float = slash_range * charge_scale * level_scale
+
+	# Level 3: SPIN ATTACK - 360 degree attack instead of forward arc
+	var is_spin_attack: bool = player_level >= 3
 
 	# Position and orient hitbox in front of player
 	if slash_hitbox and player:
-		# Update hitbox size to match charge level
+		# Update hitbox size to match charge level and level scaling
 		if slash_hitbox.get_child_count() > 0:
 			var collision_shape: CollisionShape3D = slash_hitbox.get_child(0)
 			if collision_shape and collision_shape.shape is BoxShape3D:
-				collision_shape.shape.size = Vector3(scaled_range * 2, 0.3, scaled_range)
-				collision_shape.position = Vector3(0, 0, -scaled_range / 2)
+				if is_spin_attack:
+					# For spin attack, use a larger box that covers all around the player
+					collision_shape.shape.size = Vector3(scaled_range * 2.5, 0.5, scaled_range * 2.5)
+					collision_shape.position = Vector3.ZERO  # Centered on player
+				else:
+					collision_shape.shape.size = Vector3(scaled_range * 2, 0.3, scaled_range)
+					collision_shape.position = Vector3(0, 0, -scaled_range / 2)
 
 		slash_hitbox.global_position = player.global_position
-		slash_hitbox.look_at(player.global_position + slash_direction, Vector3.UP)
+		if not is_spin_attack:
+			slash_hitbox.look_at(player.global_position + slash_direction, Vector3.UP)
 		slash_hitbox.monitoring = true
 
-	# Trigger slash particles
+	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
-		slash_particles.global_position = player.global_position + Vector3.UP * 0.5 + slash_direction * 1.5
-		slash_particles.global_rotation = slash_hitbox.global_rotation
+		# Level 1+: More particles
+		slash_particles.amount = 80 + ((player_level - 1) * 25)
+
+		if is_spin_attack:
+			# Spin attack: particles emit in all directions
+			slash_particles.spread = 180.0
+			slash_particles.global_position = player.global_position + Vector3.UP * 0.5
+			slash_particles.global_rotation = Vector3.ZERO
+			spawn_spin_attack_effect(player.global_position, scaled_range)
+		else:
+			slash_particles.spread = slash_arc_angle / 2
+			slash_particles.global_position = player.global_position + Vector3.UP * 0.5 + slash_direction * 1.5
+			slash_particles.global_rotation = slash_hitbox.global_rotation
+
 		slash_particles.emitting = true
 		slash_particles.restart()
+
+	# Add a brief light flash for visual impact
+	spawn_slash_flash(player.global_position + Vector3.UP * 0.5 + slash_direction * 1.0, player_level)
 
 	# Play slash sound
 	if ability_sound:
 		ability_sound.global_position = player.global_position
+		# Higher pitch for spin attack
+		ability_sound.pitch_scale = 1.3 if is_spin_attack else 1.0
 		ability_sound.play()
+
+	# Level 2+: Spawn shockwave projectile that travels forward
+	if player_level >= 2 and not is_spin_attack:
+		spawn_sword_shockwave(player.global_position + Vector3.UP * 0.5, slash_direction, player_level)
 
 func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 	if not is_slashing or not player:
@@ -260,7 +345,7 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		# Get charge multiplier and player level multiplier for this hit
 		var charge_multiplier: float = get_charge_multiplier()
 		var player_level: int = player.level if player and "level" in player else 0
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 		var charged_damage: int = int(slash_damage * charge_multiplier)
 		var charged_knockback: float = 70.0 * charge_multiplier * level_mult  # Increased from 30.0 for stronger impact
 
@@ -320,6 +405,222 @@ func play_attack_hit_sound() -> void:
 		await hit_sound.finished
 		hit_sound.queue_free()
 
+func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: int) -> void:
+	"""Spawn a shockwave projectile that travels forward (Level 2+ effect)"""
+	if not player or not player.get_parent():
+		return
+
+	# Create shockwave container
+	var shockwave: Node3D = Node3D.new()
+	shockwave.name = "SwordShockwave"
+	player.get_parent().add_child(shockwave)
+	shockwave.global_position = start_position
+
+	# Create the visual wave effect (a stretched cylinder/disc)
+	var wave_mesh: MeshInstance3D = MeshInstance3D.new()
+	var cylinder: CylinderMesh = CylinderMesh.new()
+	cylinder.top_radius = 0.8
+	cylinder.bottom_radius = 0.8
+	cylinder.height = 0.1
+	wave_mesh.mesh = cylinder
+	shockwave.add_child(wave_mesh)
+
+	# Rotate to face forward direction
+	wave_mesh.rotation.x = PI / 2
+
+	# Create material - steel blue energy wave
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.5, 0.7, 1.0, 0.7)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = Color(0.4, 0.6, 1.0)
+	mat.emission_energy_multiplier = 2.0
+	wave_mesh.material_override = mat
+
+	# Add trailing particles
+	var trail: CPUParticles3D = CPUParticles3D.new()
+	trail.name = "ShockwaveTrail"
+	shockwave.add_child(trail)
+
+	trail.emitting = true
+	trail.amount = 30
+	trail.lifetime = 0.4
+	trail.explosiveness = 0.0
+	trail.randomness = 0.2
+	trail.local_coords = false
+
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.3, 0.3)
+
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	trail.mesh = particle_mesh
+
+	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	trail.emission_sphere_radius = 0.5
+
+	trail.direction = Vector3.ZERO
+	trail.spread = 180.0
+	trail.gravity = Vector3.ZERO
+	trail.initial_velocity_min = 0.5
+	trail.initial_velocity_max = 2.0
+
+	trail.scale_amount_min = 1.5
+	trail.scale_amount_max = 2.5
+
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.7, 0.85, 1.0, 0.9))  # Bright blue
+	gradient.add_point(0.4, Color(0.5, 0.7, 1.0, 0.7))  # Steel blue
+	gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
+	trail.color_ramp = gradient
+
+	# Move the shockwave forward over time
+	var shockwave_speed: float = 25.0 + ((level - 1) * 5.0)  # Faster at higher levels
+	var shockwave_duration: float = 0.6
+	var shockwave_damage: int = 1
+	var owner_id: int = player.name.to_int() if player else -1
+	var hit_targets: Array = []
+
+	# Use a tween to move the shockwave
+	var tween: Tween = get_tree().create_tween()
+	var end_position: Vector3 = start_position + direction * (shockwave_speed * shockwave_duration)
+	tween.tween_property(shockwave, "global_position", end_position, shockwave_duration)
+	tween.tween_callback(func():
+		if is_instance_valid(shockwave):
+			shockwave.queue_free()
+	)
+
+	# Check for hits during shockwave travel
+	var check_timer: float = 0.0
+	while check_timer < shockwave_duration:
+		await get_tree().create_timer(0.05).timeout
+		check_timer += 0.05
+
+		if not is_instance_valid(shockwave) or not is_instance_valid(player):
+			break
+
+		# Check for nearby targets
+		var players_container = player.get_parent()
+		for potential_target in players_container.get_children():
+			if potential_target == player:
+				continue
+			if potential_target in hit_targets:
+				continue
+			if not potential_target.has_method('receive_damage_from'):
+				continue
+			if "health" in potential_target and potential_target.health <= 0:
+				continue
+
+			var distance: float = potential_target.global_position.distance_to(shockwave.global_position)
+			if distance < 2.0:  # Hit radius
+				hit_targets.append(potential_target)
+
+				# Deal damage
+				var target_id: int = potential_target.get_multiplayer_authority()
+				if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+					potential_target.receive_damage_from(shockwave_damage, owner_id)
+				else:
+					potential_target.receive_damage_from.rpc_id(target_id, shockwave_damage, owner_id)
+
+				# Apply knockback
+				var knockback_dir: Vector3 = direction
+				knockback_dir.y = 0.3
+				potential_target.apply_central_impulse(knockback_dir * 80.0)
+
+func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
+	"""Spawn a circular slash effect for spin attack (Level 3 effect)"""
+	if not player or not player.get_parent():
+		return
+
+	# Create a ring of slash particles around the player
+	var ring_particles: CPUParticles3D = CPUParticles3D.new()
+	ring_particles.name = "SpinAttackRing"
+	player.get_parent().add_child(ring_particles)
+	ring_particles.global_position = position
+
+	ring_particles.emitting = true
+	ring_particles.amount = 80
+	ring_particles.lifetime = 0.4
+	ring_particles.one_shot = true
+	ring_particles.explosiveness = 1.0
+	ring_particles.randomness = 0.2
+	ring_particles.local_coords = false
+
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.5, 0.2)
+
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	ring_particles.mesh = particle_mesh
+
+	# Emit in a ring around player
+	ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	ring_particles.emission_ring_axis = Vector3.UP
+	ring_particles.emission_ring_height = 0.2
+	ring_particles.emission_ring_radius = radius * 0.8
+	ring_particles.emission_ring_inner_radius = 0.5
+
+	ring_particles.direction = Vector3(1, 0, 0)  # Outward
+	ring_particles.spread = 30.0
+	ring_particles.gravity = Vector3.ZERO
+	ring_particles.initial_velocity_min = 8.0
+	ring_particles.initial_velocity_max = 15.0
+
+	ring_particles.scale_amount_min = 3.0
+	ring_particles.scale_amount_max = 5.0
+
+	# Steel blue gradient
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(0.7, 0.85, 1.0, 1.0))  # Bright cyan-blue
+	gradient.add_point(0.3, Color(0.6, 0.75, 1.0, 0.8))  # Light blue
+	gradient.add_point(0.7, Color(0.4, 0.5, 0.9, 0.4))  # Darker blue
+	gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
+	ring_particles.color_ramp = gradient
+
+	# Auto-cleanup
+	get_tree().create_timer(ring_particles.lifetime + 0.5).timeout.connect(func():
+		if is_instance_valid(ring_particles):
+			ring_particles.queue_free()
+	)
+
+func spawn_slash_flash(position: Vector3, level: int) -> void:
+	"""Spawn a brief light flash at the slash position for visual impact"""
+	if not player or not player.get_parent():
+		return
+
+	# Create light flash
+	var flash: OmniLight3D = OmniLight3D.new()
+	flash.name = "SlashFlash"
+	player.get_parent().add_child(flash)
+	flash.global_position = position
+
+	# Configure light - steel blue color matching sword
+	flash.light_color = Color(0.6, 0.8, 1.0)
+	flash.light_energy = 3.0 + ((level - 1) * 1.0)  # Brighter at higher levels
+	flash.omni_range = 4.0 + ((level - 1) * 1.0)  # Larger at higher levels
+	flash.omni_attenuation = 1.5
+
+	# Fade out quickly
+	var tween: Tween = get_tree().create_tween()
+	tween.tween_property(flash, "light_energy", 0.0, 0.2)
+	tween.tween_callback(flash.queue_free)
+
 func create_arc_indicator() -> void:
 	"""Create a box indicator that shows the sword hitbox area while charging"""
 	arc_indicator = Node3D.new()
@@ -365,8 +666,6 @@ func create_arc_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	edge_particles.mesh = particle_mesh
-
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -375,7 +674,8 @@ func create_arc_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	edge_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	edge_particles.mesh = particle_mesh
 
 	# Emission shape - box matching the hitbox area
 	edge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX

@@ -13,6 +13,7 @@ var is_dashing: bool = false
 var dash_timer: float = 0.0
 var dash_direction: Vector3 = Vector3.ZERO
 var hit_players: Array = []  # Track who we've hit this dash
+var dash_start_position: Vector3 = Vector3.ZERO  # For level-based effects
 
 # Hitbox for detecting other players
 var hitbox: Area3D = null
@@ -22,6 +23,10 @@ var fire_trail: CPUParticles3D = null
 
 # Direction indicator for dash targeting
 var direction_indicator: MeshInstance3D = null
+
+# Afterimage tracking for level 3
+var afterimage_timer: float = 0.0
+const AFTERIMAGE_INTERVAL: float = 0.05
 
 func _ready() -> void:
 	super._ready()
@@ -66,7 +71,6 @@ func _ready() -> void:
 	# Set up particle mesh and material for visibility
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
-	fire_trail.mesh = particle_mesh
 
 	# Create material for additive blending (fire effect)
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
@@ -77,7 +81,10 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
-	fire_trail.mesh.material = particle_material
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	fire_trail.mesh = particle_mesh
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 
@@ -144,12 +151,32 @@ func _process(delta: float) -> void:
 			# Position sphere at player's center (where the hitbox will be during dash)
 			direction_indicator.global_position = player.global_position
 
-			# Scale based on charge level to match hitbox scaling (+30% per level)
-			var scale_factor = 1.0 + (charge_level - 1) * 0.3
+			# Scale based on charge level AND player level
+			var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
+			var player_level: int = player.level if "level" in player else 0
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.1)  # +10% per level above 1
+			var scale_factor: float = charge_scale * level_scale
 			direction_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-			# Pulse effect while charging
-			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.008) * 0.15
+			# Update indicator color based on level (more intense at higher levels)
+			var mat: StandardMaterial3D = direction_indicator.material_override
+			if mat:
+				if player_level >= 3:
+					# Level 3: Bright magenta (shows afterimage + double explosion)
+					mat.albedo_color = Color(1.0, 0.4, 0.8, 0.25)
+				elif player_level >= 2:
+					# Level 2: Hot pink (shows double explosion)
+					mat.albedo_color = Color(0.95, 0.5, 0.75, 0.22)
+				elif player_level >= 1:
+					# Level 1: Light magenta (shows end explosion)
+					mat.albedo_color = Color(0.9, 0.6, 0.85, 0.18)
+				else:
+					# Level 0: Subtle neutral
+					mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)
+
+			# Pulse effect while charging (faster at higher levels)
+			var pulse_speed: float = 0.008 + ((player_level - 1) * 0.002)
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.15
 			direction_indicator.scale *= pulse
 		else:
 			# Hide indicator when not charging or not local player
@@ -191,7 +218,7 @@ func activate() -> void:
 		# Scale dash force with player level (1.0 + 0.3 per level)
 		var level_multiplier: float = 1.0
 		if player and "level" in player:
-			level_multiplier = 1.0 + (player.level * 0.3)
+			level_multiplier = 1.0 + ((player.level - 1) * 0.3)
 
 		# Apply charged dash force
 		player.apply_central_impulse(dash_direction * charged_dash_force * level_multiplier)
@@ -203,15 +230,23 @@ func activate() -> void:
 	is_dashing = true
 	dash_timer = dash_duration
 	hit_players.clear()
+	dash_start_position = player.global_position
+	afterimage_timer = 0.0
 
-	# Scale hitbox based on charge level to match visual indicator (+30% per level)
+	# Level-based effect: Level 2+ creates explosion at dash START
+	var player_level: int = player.level if player and "level" in player else 0
+	if player_level >= 2:
+		spawn_dash_explosion(player.global_position, player_level)
+
+	# Scale hitbox based on charge level AND player level to match visual indicator
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.1)  # +10% per level above 1 (matches indicator)
 	var base_hitbox_radius: float = 1.5
-	var scaled_radius: float = base_hitbox_radius * charge_scale
+	var scaled_radius: float = base_hitbox_radius * charge_scale * level_scale
 
 	# Enable hitbox
 	if hitbox:
-		# Update hitbox size to match charge level
+		# Update hitbox size to match charge level AND player level
 		if hitbox.get_child_count() > 0:
 			var collision_shape: CollisionShape3D = hitbox.get_child(0)
 			if collision_shape and collision_shape.shape is SphereShape3D:
@@ -246,7 +281,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		# Get charge multiplier and player level multiplier for knockback scaling (damage always 1)
 		var charge_multiplier: float = get_charge_multiplier()
 		var player_level: int = player.level if player and "level" in player else 0
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 		var charged_damage: int = damage  # Always 1, no charge scaling
 		var charged_knockback: float = 180.0 * charge_multiplier * level_mult  # Increased from 100.0 for stronger impact
 
@@ -277,6 +312,11 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player: %s" % body.name, false, get_entity_id())
 
 func end_dash() -> void:
+	# Visual effect at dash END - always spawn explosion scaled by level
+	if player and is_instance_valid(player):
+		var player_level: int = player.level if "level" in player else 1
+		spawn_dash_explosion(player.global_position, player_level)
+
 	is_dashing = false
 	hit_players.clear()
 
@@ -295,6 +335,14 @@ func _physics_process(delta: float) -> void:
 			hitbox.global_position = player.global_position
 		if fire_trail:
 			fire_trail.global_position = player.global_position
+
+		# Level 3: Spawn afterimages during dash
+		var player_level: int = player.level if "level" in player else 0
+		if player_level >= 3:
+			afterimage_timer += delta
+			if afterimage_timer >= AFTERIMAGE_INTERVAL:
+				afterimage_timer = 0.0
+				spawn_afterimage(player.global_position)
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
@@ -317,6 +365,111 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func spawn_dash_explosion(position: Vector3, level: int) -> void:
+	"""Spawn a magenta explosion effect at the given position (level-based effect)"""
+	if not player or not player.get_parent():
+		return
+
+	# Create explosion particles
+	var explosion: CPUParticles3D = CPUParticles3D.new()
+	explosion.name = "DashExplosion"
+	player.get_parent().add_child(explosion)
+	explosion.global_position = position
+
+	# Scale effect with level
+	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
+
+	# Configure explosion particles
+	explosion.emitting = true
+	explosion.amount = int(40 * scale_mult)
+	explosion.lifetime = 0.4
+	explosion.one_shot = true
+	explosion.explosiveness = 1.0
+	explosion.randomness = 0.4
+	explosion.local_coords = false
+
+	# Set up particle mesh
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.5, 0.5)
+
+	# Create material for explosion
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+
+	# Set material on mesh BEFORE assigning to particles
+	particle_mesh.material = particle_material
+	explosion.mesh = particle_mesh
+
+	# Emission shape - sphere burst
+	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	explosion.emission_sphere_radius = 0.3 * scale_mult
+
+	# Movement - explosive outward burst
+	explosion.direction = Vector3.ZERO
+	explosion.spread = 180.0
+	explosion.gravity = Vector3(0, -3.0, 0)
+	explosion.initial_velocity_min = 5.0 * scale_mult
+	explosion.initial_velocity_max = 12.0 * scale_mult
+
+	# Size over lifetime
+	explosion.scale_amount_min = 2.0 * scale_mult
+	explosion.scale_amount_max = 4.0 * scale_mult
+	explosion.scale_amount_curve = Curve.new()
+	explosion.scale_amount_curve.add_point(Vector2(0, 1.5))
+	explosion.scale_amount_curve.add_point(Vector2(0.3, 1.2))
+	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
+
+	# Color - magenta explosion matching dash color
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.6, 1.0, 1.0))  # Bright pink-magenta
+	gradient.add_point(0.2, Color(1.0, 0.3, 0.8, 1.0))  # Hot pink
+	gradient.add_point(0.5, Color(0.8, 0.1, 0.6, 0.7))  # Deep magenta
+	gradient.add_point(1.0, Color(0.3, 0.0, 0.2, 0.0))  # Dark/transparent
+	explosion.color_ramp = gradient
+
+	# Auto-delete after lifetime
+	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(explosion.queue_free)
+
+func spawn_afterimage(position: Vector3) -> void:
+	"""Spawn a ghostly afterimage at the given position (level 3 effect)"""
+	if not player or not player.get_parent():
+		return
+
+	# Create afterimage mesh
+	var afterimage: MeshInstance3D = MeshInstance3D.new()
+	afterimage.name = "DashAfterimage"
+
+	# Create sphere mesh matching player size
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	afterimage.mesh = sphere
+
+	# Create ghostly magenta material
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.8, 0.6)  # Magenta, semi-transparent
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	afterimage.material_override = mat
+
+	player.get_parent().add_child(afterimage)
+	afterimage.global_position = position
+
+	# Fade out and shrink the afterimage
+	var tween: Tween = get_tree().create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(mat, "albedo_color:a", 0.0, 0.3)
+	tween.tween_property(afterimage, "scale", Vector3(0.3, 0.3, 0.3), 0.3)
+	tween.set_parallel(false)
+	tween.tween_callback(afterimage.queue_free)
 
 func create_direction_indicator() -> void:
 	"""Create a sphere indicator that shows the dash hitbox area while charging"""
@@ -358,8 +511,6 @@ func create_direction_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	sphere_particles.mesh = particle_mesh
-
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -368,7 +519,8 @@ func create_direction_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	sphere_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	sphere_particles.mesh = particle_mesh
 
 	# Emission shape - sphere surface matching hitbox
 	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE

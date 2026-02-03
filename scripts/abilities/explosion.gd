@@ -47,8 +47,6 @@ func _ready() -> void:
 	# Set up particle mesh and material for visibility
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.8, 0.8)
-	explosion_particles.mesh = particle_mesh
-
 	# Create material for additive blending (explosion effect)
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -58,7 +56,8 @@ func _ready() -> void:
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
 	particle_material.albedo_color = Color(1.0, 0.6, 0.1, 1.0)
-	explosion_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	explosion_particles.mesh = particle_mesh
 
 	# Emission shape - sphere explosion
 	explosion_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -104,8 +103,6 @@ func _ready() -> void:
 	# Set up particle mesh - larger chunks
 	var magma_mesh: QuadMesh = QuadMesh.new()
 	magma_mesh.size = Vector2(0.4, 0.4)
-	magma_particles.mesh = magma_mesh
-
 	# Create material for magma chunks (glowing lava)
 	var magma_material: StandardMaterial3D = StandardMaterial3D.new()
 	magma_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -115,7 +112,8 @@ func _ready() -> void:
 	magma_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	magma_material.disable_receive_shadows = true
 	magma_material.albedo_color = Color(1.0, 0.3, 0.0, 1.0)
-	magma_particles.mesh.material = magma_material
+	magma_mesh.material = magma_material
+	magma_particles.mesh = magma_mesh
 
 	# Emission shape - sphere around player
 	magma_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -128,13 +126,13 @@ func _ready() -> void:
 	magma_particles.initial_velocity_min = 6.0  # Fast shooting chunks
 	magma_particles.initial_velocity_max = 12.0
 
-	# Size over lifetime - start small, stay consistent
+	# Size over lifetime - start small, shrink to nothing
 	magma_particles.scale_amount_min = 1.2
 	magma_particles.scale_amount_max = 2.0
 	magma_particles.scale_amount_curve = Curve.new()
 	magma_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
-	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.9))
-	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.3))
+	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.7))
+	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Shrink to 0 to prevent stuck particles
 
 	# Color - lava/magma gradient (bright orange -> dark red)
 	var magma_gradient: Gradient = Gradient.new()
@@ -189,17 +187,38 @@ func _process(delta: float) -> void:
 			# Position sphere at player's center (where explosion hitbox will be)
 			radius_indicator.global_position = player.global_position
 
-			# Scale indicator uniformly based on charge level to match hitbox (+50% per level)
-			var current_radius = explosion_radius * (1.0 + (charge_level - 1) * 0.5)
-			var scale_factor = current_radius / explosion_radius
+			# Get player level for level-based scaling
+			var player_level: int = player.level if "level" in player else 0
+
+			# Scale indicator based on charge level AND player level
+			var charge_scale: float = 1.0 + (charge_level - 1) * 0.5
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% radius per level
+			var scale_factor: float = charge_scale * level_scale
 			radius_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
-			# Pulse effect while charging
-			var pulse = 1.0 + sin(Time.get_ticks_msec() * 0.005) * 0.1
+			# Update indicator color based on level (more intense at higher levels)
+			var mat: StandardMaterial3D = radius_indicator.material_override
+			if mat:
+				if player_level >= 3:
+					# Level 3: Bright orange (secondary explosions)
+					mat.albedo_color = Color(1.0, 0.5, 0.1, 0.2)
+				elif player_level >= 2:
+					# Level 2: Hot orange (lingering fire)
+					mat.albedo_color = Color(1.0, 0.6, 0.2, 0.17)
+				elif player_level >= 1:
+					# Level 1: Warm orange (more particles)
+					mat.albedo_color = Color(0.95, 0.7, 0.4, 0.15)
+				else:
+					# Level 0: Subtle warm
+					mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)
+
+			# Pulse effect while charging (faster at higher levels)
+			var pulse_speed: float = 0.005 + ((player_level - 1) * 0.002)
+			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.1
 			radius_indicator.scale *= pulse
 
-			# Rotate indicator slowly for visual effect
-			radius_indicator.rotation.y += delta * 0.5
+			# Rotate indicator slowly for visual effect (faster at higher levels)
+			radius_indicator.rotation.y += delta * (0.5 + (player_level - 1) * 0.2)
 		else:
 			# Hide indicator when not charging or not local player
 			radius_indicator.visible = false
@@ -268,6 +287,17 @@ func activate() -> void:
 		player.apply_central_impulse(Vector3.UP * charged_launch_force)
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player launched upward with %.1fx force!" % charge_multiplier, false, get_entity_id())
 
+	# Level-based effects
+	var player_level: int = player.level if player and "level" in player else 0
+
+	# Level 2+: Spawn lingering fire patches on the ground
+	if player_level >= 2:
+		spawn_lingering_fire(player_pos, player_level)
+
+	# Level 3: Spawn secondary explosions in a ring around main explosion
+	if player_level >= 3:
+		spawn_secondary_explosions(player_pos)
+
 func damage_nearby_players() -> void:
 	"""Damage all players in explosion radius"""
 	if not explosion_area or not player:
@@ -276,8 +306,13 @@ func damage_nearby_players() -> void:
 	# Get charge multiplier from base ability class
 	var charge_mult: float = get_charge_multiplier()
 
-	# Scale explosion radius with charge level (charge level 3 = AoE expansion)
-	var current_radius: float = explosion_radius * (1.0 + (charge_level - 1) * 0.5)  # +50% per level
+	# Get player level for level-based scaling
+	var player_level: int = player.level if player and "level" in player else 0
+
+	# Scale explosion radius with charge level AND player level (matches indicator)
+	var charge_scale: float = 1.0 + (charge_level - 1) * 0.5  # +50% per charge level
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% per player level
+	var current_radius: float = explosion_radius * charge_scale * level_scale
 	if explosion_area.get_child(0) and explosion_area.get_child(0).shape is SphereShape3D:
 		explosion_area.get_child(0).shape.radius = current_radius
 
@@ -315,8 +350,7 @@ func damage_nearby_players() -> void:
 				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Explosion hit player (RPC): %s | Damage: %d (charge x%.1f)" % [body.name, scaled_damage, charge_mult], false, get_entity_id())
 
 			# Apply knockback scaled by charge and player level
-			var player_level: int = player.level if player and "level" in player else 0
-			var level_mult: float = 1.0 + (player_level * 0.2)
+			var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 			var scaled_knockback: float = knockback_force * charge_mult * level_mult
 			body.apply_central_impulse(knockback_dir * scaled_knockback)
 
@@ -354,6 +388,171 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func spawn_lingering_fire(position: Vector3, level: int) -> void:
+	"""Spawn lingering fire patches on the ground (Level 2+ effect)"""
+	if not player or not player.get_parent():
+		return
+
+	var num_patches: int = 3 + (level - 2) * 2  # Level 2: 3 patches, Level 3: 5 patches
+
+	for i in range(num_patches):
+		# Random position around explosion center
+		var offset: Vector3 = Vector3(
+			randf_range(-3.0, 3.0),
+			0.0,
+			randf_range(-3.0, 3.0)
+		)
+		var fire_pos: Vector3 = position + offset
+
+		# Raycast to find ground
+		var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
+			fire_pos + Vector3.UP * 10.0,
+			fire_pos + Vector3.DOWN * 20.0
+		)
+		query.collision_mask = 1  # World only
+		var result: Dictionary = space_state.intersect_ray(query)
+		if result:
+			fire_pos = result.position + Vector3.UP * 0.1
+
+		# Create fire particle
+		var fire: CPUParticles3D = CPUParticles3D.new()
+		fire.name = "LingeringFire"
+		player.get_parent().add_child(fire)
+		fire.global_position = fire_pos
+
+		# Configure lingering fire
+		fire.emitting = true
+		fire.amount = 20
+		fire.lifetime = 1.5
+		fire.explosiveness = 0.0
+		fire.randomness = 0.3
+		fire.local_coords = false
+
+		var particle_mesh: QuadMesh = QuadMesh.new()
+		particle_mesh.size = Vector2(0.4, 0.4)
+		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		particle_material.vertex_color_use_as_albedo = true
+		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		particle_mesh.material = particle_material
+		fire.mesh = particle_mesh
+
+		fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		fire.emission_sphere_radius = 0.5
+
+		fire.direction = Vector3.UP
+		fire.spread = 30.0
+		fire.gravity = Vector3(0, 1.0, 0)  # Fire rises
+		fire.initial_velocity_min = 1.0
+		fire.initial_velocity_max = 3.0
+
+		fire.scale_amount_min = 1.5
+		fire.scale_amount_max = 2.5
+
+		# Orange-red fire gradient
+		var gradient: Gradient = Gradient.new()
+		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 0.9))  # Bright yellow
+		gradient.add_point(0.3, Color(1.0, 0.5, 0.0, 0.8))  # Orange
+		gradient.add_point(0.6, Color(0.8, 0.2, 0.0, 0.5))  # Red
+		gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
+		fire.color_ramp = gradient
+
+		# Stop emitting after duration, then cleanup
+		var fire_duration: float = 1.5 + randf_range(0.0, 0.5)
+		get_tree().create_timer(fire_duration).timeout.connect(func():
+			if is_instance_valid(fire):
+				fire.emitting = false
+		)
+		get_tree().create_timer(fire_duration + fire.lifetime + 0.5).timeout.connect(func():
+			if is_instance_valid(fire):
+				fire.queue_free()
+		)
+
+func spawn_secondary_explosions(center_position: Vector3) -> void:
+	"""Spawn secondary explosions in a ring around the main explosion (Level 3 effect)"""
+	if not player or not player.get_parent():
+		return
+
+	var num_explosions: int = 4  # 4 secondary explosions in a ring
+	var ring_radius: float = 4.0
+
+	for i in range(num_explosions):
+		var angle: float = (i / float(num_explosions)) * TAU  # Evenly spaced around circle
+		var offset: Vector3 = Vector3(
+			cos(angle) * ring_radius,
+			0.0,
+			sin(angle) * ring_radius
+		)
+
+		# Delay each secondary explosion slightly for cascade effect
+		var delay: float = 0.1 + (i * 0.08)
+
+		get_tree().create_timer(delay).timeout.connect(func():
+			if not is_instance_valid(player) or not player.get_parent():
+				return
+			spawn_single_secondary_explosion(center_position + offset)
+		)
+
+func spawn_single_secondary_explosion(position: Vector3) -> void:
+	"""Spawn a single secondary explosion effect"""
+	if not player or not player.get_parent():
+		return
+
+	# Create secondary explosion particles (smaller than main)
+	var explosion: CPUParticles3D = CPUParticles3D.new()
+	explosion.name = "SecondaryExplosion"
+	player.get_parent().add_child(explosion)
+	explosion.global_position = position
+
+	explosion.emitting = true
+	explosion.amount = 50
+	explosion.lifetime = 0.4
+	explosion.one_shot = true
+	explosion.explosiveness = 1.0
+	explosion.randomness = 0.4
+	explosion.local_coords = false
+
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.5, 0.5)
+
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_mesh.material = particle_material
+	explosion.mesh = particle_mesh
+
+	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	explosion.emission_sphere_radius = 0.3
+
+	explosion.direction = Vector3.UP
+	explosion.spread = 180.0
+	explosion.gravity = Vector3(0, -10.0, 0)
+	explosion.initial_velocity_min = 5.0
+	explosion.initial_velocity_max = 10.0
+
+	explosion.scale_amount_min = 1.5
+	explosion.scale_amount_max = 3.0
+
+	# Orange explosion gradient
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright yellow
+	gradient.add_point(0.2, Color(1.0, 0.6, 0.0, 1.0))  # Orange
+	gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))  # Red-orange
+	gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
+	explosion.color_ramp = gradient
+
+	# Auto-delete
+	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(func():
+		if is_instance_valid(explosion):
+			explosion.queue_free()
+	)
 
 func create_radius_indicator() -> void:
 	"""Create a sphere indicator that shows the explosion hitbox while charging"""
@@ -395,8 +594,6 @@ func create_radius_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
-	sphere_particles.mesh = particle_mesh
-
 	# Create material for particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -405,7 +602,8 @@ func create_radius_indicator() -> void:
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	particle_material.disable_receive_shadows = true
-	sphere_particles.mesh.material = particle_material
+	particle_mesh.material = particle_material
+	sphere_particles.mesh = particle_mesh
 
 	# Emission shape - sphere surface matching the hitbox
 	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE

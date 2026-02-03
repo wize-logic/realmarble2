@@ -196,6 +196,6 @@ func load_preferences() -> void:
 		return  # No saved preferences, use defaults
 
 	debug_enabled = config.get_value("debug", "enabled", false)
-	watched_entity_id = config.get_value("debug", "watched_entity_id", null)
+	watched_entity_id = config.get_value("debug", "watched_entity_id", -1) if config.has_section_key("debug", "watched_entity_id") else null
 	for category in Category.values():
 		enabled_categories[category] = config.get_value("debug", "category_%d" % category, false)
