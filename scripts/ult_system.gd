@@ -34,10 +34,6 @@ var ult_light: OmniLight3D = null
 var trail_particles: CPUParticles3D = null
 var hitbox: Area3D = null
 
-# UI components
-var ult_meter_ui: Control = null
-var ult_meter_bar: ProgressBar = null
-var ult_meter_label: Label = null
 var ult_ready_flash: float = 0.0
 
 signal ult_activated
@@ -45,7 +41,6 @@ signal ult_charge_changed(new_charge: float)
 signal ult_ready
 
 func _ready() -> void:
-	create_ult_meter_ui()
 	create_hitbox()
 	create_visual_effects()
 
@@ -56,9 +51,6 @@ func setup(p_player: Node) -> void:
 func _process(delta: float) -> void:
 	if not player:
 		return
-
-	# Update ult meter UI
-	update_ult_meter_ui()
 
 	# Handle ult state
 	if is_ulting:
@@ -612,50 +604,3 @@ func spawn_end_shockwave() -> void:
 	tween.set_parallel(false)
 	tween.tween_callback(ring.queue_free)
 
-# ============================================================================
-# UI
-# ============================================================================
-
-func create_ult_meter_ui() -> void:
-	"""Create the ult charge meter UI"""
-	# Check if we have a player with a valid canvas layer
-	# We'll add this to the player's UI later
-	pass  # UI will be created when added to player
-
-func update_ult_meter_ui() -> void:
-	"""Update the ult meter display"""
-	if not ult_meter_ui or not ult_meter_bar:
-		return
-
-	# Update bar value
-	var charge_percent: float = (ult_charge / MAX_ULT_CHARGE) * 100.0
-	ult_meter_bar.value = charge_percent
-
-	# Update style based on charge level
-	var style_box_fill: StyleBoxFlat = ult_meter_bar.get_theme_stylebox("fill")
-	if style_box_fill:
-		if ult_charge >= MAX_ULT_CHARGE:
-			# Ready - pulsing gold
-			var pulse: float = (sin(ult_ready_flash) + 1.0) / 2.0
-			style_box_fill.bg_color = Color(1.0, 0.8 + pulse * 0.2, 0.2, 1.0)
-		elif charge_percent >= 75.0:
-			style_box_fill.bg_color = Color(1.0, 0.6, 0.1, 0.9)  # Orange
-		elif charge_percent >= 50.0:
-			style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow
-		elif charge_percent >= 25.0:
-			style_box_fill.bg_color = Color(0.8, 0.8, 0.3, 0.9)  # Yellow-green
-		else:
-			style_box_fill.bg_color = Color(0.5, 0.5, 0.5, 0.9)  # Gray
-
-	# Update label
-	if ult_meter_label:
-		if ult_charge >= MAX_ULT_CHARGE:
-			ult_meter_label.text = "Q - ULTIMATE READY!"
-		else:
-			ult_meter_label.text = "ULT: %d%%" % int(charge_percent)
-
-func set_ui_references(ui: Control, bar: ProgressBar, label: Label) -> void:
-	"""Set UI references for the ult meter"""
-	ult_meter_ui = ui
-	ult_meter_bar = bar
-	ult_meter_label = label

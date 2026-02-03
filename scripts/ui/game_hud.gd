@@ -81,10 +81,6 @@ func find_local_player() -> void:
 	if not player:
 		await get_tree().create_timer(0.5).timeout
 		find_local_player()
-	else:
-		# Hide the player's built-in ult meter since the HUD handles it now
-		if "ult_meter_ui" in player and player.ult_meter_ui:
-			player.ult_meter_ui.visible = false
 
 func reset_hud() -> void:
 	player = null

@@ -38,9 +38,6 @@ var custom_color_index: int = -1
 @onready var teleport_sound: AudioStreamPlayer3D = get_node_or_null("TeleportSound")
 
 # UI Elements
-var charge_meter_ui: Control = null
-var charge_meter_bar: ProgressBar = null
-var charge_meter_label: Label = null
 var rail_reticle_ui: Control = null  # Reticle for rail targeting
 
 ## Number of hits before respawn
@@ -158,9 +155,6 @@ var current_ability: Node = null  # The currently equipped ability
 
 # Ultimate system
 var ult_system: Node = null
-var ult_meter_ui: Control = null
-var ult_meter_bar: ProgressBar = null
-var ult_meter_label: Label = null
 
 # Death effects
 var death_particles: CPUParticles3D = null  # Particle effect for death
@@ -634,11 +628,7 @@ func _ready() -> void:
 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-	# Create charge meter UI
-	create_charge_meter_ui()
-
-	# Create ult meter UI and system
-	create_ult_meter_ui()
+	# Create ult system
 	create_ult_system()
 
 	# Create rail reticle UI
@@ -833,9 +823,6 @@ func _process(delta: float) -> void:
 
 	# Make camera look at player
 	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
-
-	# Update charge meter UI (for abilities and spin dash)
-	update_charge_meter_ui()
 
 	# Update rail targeting
 	update_rail_targeting()
@@ -1949,124 +1936,6 @@ func spawn_death_orb() -> void:
 # UI SYSTEM
 # ============================================================================
 
-func create_charge_meter_ui() -> void:
-	"""Create the charge meter UI that shows spin dash charge"""
-	# Create container
-	charge_meter_ui = Control.new()
-	charge_meter_ui.name = "ChargeMeterUI"
-	charge_meter_ui.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	charge_meter_ui.anchor_left = 0.5
-	charge_meter_ui.anchor_right = 0.5
-	charge_meter_ui.anchor_top = 1.0
-	charge_meter_ui.anchor_bottom = 1.0
-	charge_meter_ui.offset_left = -150
-	charge_meter_ui.offset_right = 150
-	charge_meter_ui.offset_top = -120
-	charge_meter_ui.offset_bottom = -80
-	charge_meter_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	charge_meter_ui.visible = false
-	add_child(charge_meter_ui)
-
-	# Create label
-	charge_meter_label = Label.new()
-	charge_meter_label.name = "ChargeLabel"
-	charge_meter_label.text = "CHARGE"
-	charge_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	charge_meter_label.add_theme_font_size_override("font_size", 18)
-	charge_meter_label.add_theme_color_override("font_color", Color.WHITE)
-	charge_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	charge_meter_label.add_theme_constant_override("outline_size", 4)
-	charge_meter_label.position = Vector2(0, 0)
-	charge_meter_label.size = Vector2(300, 20)
-	charge_meter_ui.add_child(charge_meter_label)
-
-	# Create progress bar
-	charge_meter_bar = ProgressBar.new()
-	charge_meter_bar.name = "ChargeBar"
-	charge_meter_bar.min_value = 0.0
-	charge_meter_bar.max_value = 100.0
-	charge_meter_bar.value = 0.0
-	charge_meter_bar.show_percentage = false
-	charge_meter_bar.position = Vector2(0, 22)
-	charge_meter_bar.size = Vector2(300, 18)
-
-	# Style the progress bar
-	var style_box_bg: StyleBoxFlat = StyleBoxFlat.new()
-	style_box_bg.bg_color = Color(0.2, 0.2, 0.2, 0.8)
-	style_box_bg.border_width_left = 2
-	style_box_bg.border_width_right = 2
-	style_box_bg.border_width_top = 2
-	style_box_bg.border_width_bottom = 2
-	style_box_bg.border_color = Color.WHITE
-	charge_meter_bar.add_theme_stylebox_override("background", style_box_bg)
-
-	var style_box_fill: StyleBoxFlat = StyleBoxFlat.new()
-	style_box_fill.bg_color = Color(0.2, 0.8, 1.0, 0.9)  # Cyan
-	charge_meter_bar.add_theme_stylebox_override("fill", style_box_fill)
-
-	charge_meter_ui.add_child(charge_meter_bar)
-
-	DebugLogger.dlog(DebugLogger.Category.UI, "Charge meter UI created", false, get_entity_id())
-
-func create_ult_meter_ui() -> void:
-	"""Create the ult charge meter UI"""
-	# Create container - positioned above the charge meter
-	ult_meter_ui = Control.new()
-	ult_meter_ui.name = "UltMeterUI"
-	ult_meter_ui.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	ult_meter_ui.anchor_left = 0.5
-	ult_meter_ui.anchor_right = 0.5
-	ult_meter_ui.anchor_top = 1.0
-	ult_meter_ui.anchor_bottom = 1.0
-	ult_meter_ui.offset_left = -150
-	ult_meter_ui.offset_right = 150
-	ult_meter_ui.offset_top = -170  # Above the charge meter
-	ult_meter_ui.offset_bottom = -130
-	ult_meter_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ult_meter_ui.visible = true  # Always visible
-	add_child(ult_meter_ui)
-
-	# Create label
-	ult_meter_label = Label.new()
-	ult_meter_label.name = "UltLabel"
-	ult_meter_label.text = "ULT: 0%"
-	ult_meter_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ult_meter_label.add_theme_font_size_override("font_size", 16)
-	ult_meter_label.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2))  # Gold
-	ult_meter_label.add_theme_color_override("font_outline_color", Color.BLACK)
-	ult_meter_label.add_theme_constant_override("outline_size", 4)
-	ult_meter_label.position = Vector2(0, 0)
-	ult_meter_label.size = Vector2(300, 20)
-	ult_meter_ui.add_child(ult_meter_label)
-
-	# Create progress bar
-	ult_meter_bar = ProgressBar.new()
-	ult_meter_bar.name = "UltBar"
-	ult_meter_bar.min_value = 0.0
-	ult_meter_bar.max_value = 100.0
-	ult_meter_bar.value = 0.0
-	ult_meter_bar.show_percentage = false
-	ult_meter_bar.position = Vector2(0, 22)
-	ult_meter_bar.size = Vector2(300, 14)
-
-	# Style the progress bar - dark background with gold accents
-	var style_box_bg: StyleBoxFlat = StyleBoxFlat.new()
-	style_box_bg.bg_color = Color(0.15, 0.12, 0.1, 0.9)
-	style_box_bg.border_width_left = 2
-	style_box_bg.border_width_right = 2
-	style_box_bg.border_width_top = 2
-	style_box_bg.border_width_bottom = 2
-	style_box_bg.border_color = Color(0.6, 0.5, 0.2)  # Gold border
-	ult_meter_bar.add_theme_stylebox_override("background", style_box_bg)
-
-	var style_box_fill: StyleBoxFlat = StyleBoxFlat.new()
-	style_box_fill.bg_color = Color(0.5, 0.5, 0.5, 0.9)  # Gray initially
-	ult_meter_bar.add_theme_stylebox_override("fill", style_box_fill)
-
-	ult_meter_ui.add_child(ult_meter_bar)
-
-	DebugLogger.dlog(DebugLogger.Category.UI, "Ult meter UI created", false, get_entity_id())
-
 func create_ult_system() -> void:
 	"""Create and initialize the ult system"""
 	ult_system = UltSystemScript.new()
@@ -2076,10 +1945,6 @@ func create_ult_system() -> void:
 	# Set up the ult system
 	if ult_system.has_method("setup"):
 		ult_system.setup(self)
-
-	# Give the ult system references to the UI
-	if ult_system.has_method("set_ui_references"):
-		ult_system.set_ui_references(ult_meter_ui, ult_meter_bar, ult_meter_label)
 
 	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ult system created for player %s" % name, false, get_entity_id())
 
@@ -2230,53 +2095,6 @@ func update_rail_targeting() -> void:
 			(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
 	else:
 		rail_reticle_ui.visible = false
-
-func update_charge_meter_ui() -> void:
-	"""Update the charge meter display"""
-	if not charge_meter_ui or not charge_meter_bar or not charge_meter_label:
-		return
-
-	# Check if charging ability
-	var is_charging_ability: bool = current_ability and current_ability.get("is_charging") == true
-
-	if is_charging_ability:
-		# Show meter for ability charging
-		charge_meter_ui.visible = true
-		charge_meter_label.text = current_ability.ability_name.to_upper()
-
-		var max_charge: float = current_ability.get("max_charge_time") if "max_charge_time" in current_ability else 2.0
-		var current_charge: float = current_ability.get("charge_time") if "charge_time" in current_ability else 0.0
-		var charge_percent: float = (current_charge / max_charge) * 100.0
-		charge_meter_bar.value = charge_percent
-
-		# Change color based on charge level
-		var style_box_fill: StyleBoxFlat = charge_meter_bar.get_theme_stylebox("fill")
-		if style_box_fill:
-			if charge_percent < 50.0:
-				style_box_fill.bg_color = Color(1.0, 0.3, 0.3, 0.9)  # Red - level 1
-			elif charge_percent < 100.0:
-				style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow - level 2
-			else:
-				style_box_fill.bg_color = Color(0.2, 1.0, 0.3, 0.9)  # Green - level 3 (max)
-	elif is_charging_spin:
-		# Show meter for spin dash charging
-		charge_meter_ui.visible = true
-		charge_meter_label.text = "SPIN DASH"
-		var charge_percent: float = (spin_charge / max_spin_charge) * 100.0
-		charge_meter_bar.value = charge_percent
-
-		# Change color based on charge level
-		var style_box_fill: StyleBoxFlat = charge_meter_bar.get_theme_stylebox("fill")
-		if style_box_fill:
-			if charge_percent < 33.0:
-				style_box_fill.bg_color = Color(1.0, 0.3, 0.3, 0.9)  # Red - low charge
-			elif charge_percent < 66.0:
-				style_box_fill.bg_color = Color(1.0, 0.8, 0.2, 0.9)  # Yellow - medium charge
-			else:
-				style_box_fill.bg_color = Color(0.2, 1.0, 0.3, 0.9)  # Green - high charge
-	else:
-		# Hide meter when not charging anything
-		charge_meter_ui.visible = false
 
 # ============================================================================
 # RAIL GRINDING SYSTEM (Simplified - rail handles physics)
