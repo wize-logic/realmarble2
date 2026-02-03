@@ -240,7 +240,7 @@ func activate() -> void:
 
 	# Scale hitbox based on charge level AND player level to match visual indicator
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
-	var level_scale: float = 1.0 + (player_level * 0.1)  # +10% per level (matches indicator)
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.1)  # +10% per level above 1 (matches indicator)
 	var base_hitbox_radius: float = 1.5
 	var scaled_radius: float = base_hitbox_radius * charge_scale * level_scale
 

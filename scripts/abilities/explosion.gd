@@ -350,7 +350,6 @@ func damage_nearby_players() -> void:
 				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Explosion hit player (RPC): %s | Damage: %d (charge x%.1f)" % [body.name, scaled_damage, charge_mult], false, get_entity_id())
 
 			# Apply knockback scaled by charge and player level
-			var player_level: int = player.level if player and "level" in player else 0
 			var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 			var scaled_knockback: float = knockback_force * charge_mult * level_mult
 			body.apply_central_impulse(knockback_dir * scaled_knockback)
