@@ -20,17 +20,17 @@ var viz_control: ColorRect = null
 
 # Audio analysis
 var spectrum_analyzer: AudioEffectSpectrumAnalyzerInstance = null
-var spectrum_data: Array[float] = []
+var spectrum_data: PackedFloat32Array = PackedFloat32Array()
 var audio_level: float = 0.0
 var bass_level: float = 0.0
 var mid_level: float = 0.0
 var high_level: float = 0.0
 
 # Smoothing for visual appeal - enhanced with velocity tracking
-var smoothed_spectrum: Array[float] = []
-var spectrum_velocity: Array[float] = []  # Velocity for spring-based smoothing
-var peak_spectrum: Array[float] = []  # Peak hold values
-var peak_decay: Array[float] = []  # Peak decay timers
+var smoothed_spectrum: PackedFloat32Array = PackedFloat32Array()
+var spectrum_velocity: PackedFloat32Array = PackedFloat32Array()  # Velocity for spring-based smoothing
+var peak_spectrum: PackedFloat32Array = PackedFloat32Array()  # Peak hold values
+var peak_decay: PackedFloat32Array = PackedFloat32Array()  # Peak decay timers
 var smoothed_audio: float = 0.0
 var smoothed_bass: float = 0.0
 var smoothed_mid: float = 0.0
@@ -125,12 +125,16 @@ const COLOR_PRESETS = {
 
 func _ready() -> void:
 	# Initialize spectrum data arrays with velocity tracking
-	for i in range(32):
-		spectrum_data.append(0.0)
-		smoothed_spectrum.append(0.0)
-		spectrum_velocity.append(0.0)
-		peak_spectrum.append(0.0)
-		peak_decay.append(0.0)
+	spectrum_data.resize(32)
+	spectrum_data.fill(0.0)
+	smoothed_spectrum.resize(32)
+	smoothed_spectrum.fill(0.0)
+	spectrum_velocity.resize(32)
+	spectrum_velocity.fill(0.0)
+	peak_spectrum.resize(32)
+	peak_spectrum.fill(0.0)
+	peak_decay.resize(32)
+	peak_decay.fill(0.0)
 
 
 func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
@@ -163,6 +167,7 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	# Create a ColorRect that fills the viewport with our shader
 	viz_control = ColorRect.new()
 	viz_control.name = "VisualizerRect"
+	viz_control.color = Color.BLACK  # Black fallback if shader fails (prevents white flash)
 	viz_control.set_anchors_preset(Control.PRESET_FULL_RECT)
 	viz_control.size = Vector2(viewport_size)
 
@@ -175,6 +180,15 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	_shader_material.set_shader_parameter("viz_mode", current_mode)
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
+
+	# Initialize audio uniforms before first render to prevent garbage data
+	_shader_material.set_shader_parameter("spectrum", smoothed_spectrum)
+	_shader_material.set_shader_parameter("peak_spectrum", peak_spectrum)
+	_shader_material.set_shader_parameter("audio_level", 0.0)
+	_shader_material.set_shader_parameter("bass_level", 0.0)
+	_shader_material.set_shader_parameter("mid_level", 0.0)
+	_shader_material.set_shader_parameter("high_level", 0.0)
+	_shader_material.set_shader_parameter("beat_intensity", 0.0)
 
 	viz_control.material = _shader_material
 	sub_viewport.add_child(viz_control)

@@ -84,7 +84,8 @@ float fbm(vec2 p, int octaves) {
 	float amplitude = 0.5;
 	float frequency = 1.0;
 
-	for (int i = 0; i < octaves; i++) {
+	for (int i = 0; i < 4; i++) {
+		if (i >= octaves) break;
 		value += amplitude * noise(p * frequency);
 		amplitude *= 0.5;
 		frequency *= 2.0;
@@ -681,8 +682,8 @@ vec3 render_plenoptic(vec2 uv, float time) {
 		int num_dots = 8 + ring * 6;
 		float dot_angular_speed = 0.4 - float(ring) * 0.08;
 
-		for (int dot = 0; dot < num_dots; dot++) {
-			if (dot >= 38) break;
+		for (int dot = 0; dot < 38; dot++) {
+			if (dot >= num_dots) break;
 
 			float dot_angle = (float(dot) / float(num_dots)) * TAU + time * dot_angular_speed;
 			vec2 dot_pos = vec2(cos(dot_angle), sin(dot_angle)) * ring_r;
