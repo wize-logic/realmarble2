@@ -90,9 +90,9 @@ var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
 var current_spin_dash_force: float = 250.0
 
 # Momentum-based movement properties
-var base_acceleration: float = 8.0  # Base acceleration rate (units/sec^2)
-var current_acceleration: float = 8.0  # Level-scaled acceleration
-var deceleration: float = 6.0  # Deceleration rate when no input (units/sec^2)
+var base_acceleration: float = 45.0  # Base acceleration rate (units/sec^2) - tuned for marble mass
+var current_acceleration: float = 45.0  # Level-scaled acceleration
+var deceleration: float = 25.0  # Deceleration rate when no input (units/sec^2)
 var turn_speed_retention: float = 0.85  # How much speed is kept when turning 90 degrees (0-1)
 var momentum_buildup_time: float = 1.2  # Seconds to reach max speed from standstill
 var previous_move_direction: Vector3 = Vector3.ZERO  # Track direction for turn penalty
@@ -1201,7 +1201,7 @@ func _physics_process(delta: float) -> void:
 		# Calculate force based on acceleration and mass (F = ma, scaled by marble mass)
 		var target_force: float = current_acceleration * marble_mass * acceleration_factor * control_multiplier
 		# Ensure minimum force for responsiveness, but scale with control_multiplier
-		var min_force: float = current_roll_force * 0.15 * control_multiplier
+		var min_force: float = current_roll_force * 0.25 * control_multiplier
 		var force_to_apply: float = max(target_force, min_force)
 
 		# Apply movement force
