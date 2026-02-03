@@ -43,10 +43,6 @@ func _exit_tree() -> void:
 func cleanup_reticle() -> void:
 	"""Clean up the reticle when ability is dropped or destroyed"""
 	if reticle and is_instance_valid(reticle):
-		if reticle.is_inside_tree():
-			var parent = reticle.get_parent()
-			if parent:
-				parent.remove_child(reticle)
 		reticle.queue_free()
 	reticle = null
 	reticle_target = null
