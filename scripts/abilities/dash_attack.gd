@@ -154,7 +154,7 @@ func _process(delta: float) -> void:
 			# Scale based on charge level AND player level
 			var charge_scale: float = 1.0 + (charge_level - 1) * 0.3
 			var player_level: int = player.level if "level" in player else 0
-			var level_scale: float = 1.0 + (player_level * 0.1)  # +10% per level
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.1)  # +10% per level above 1
 			var scale_factor: float = charge_scale * level_scale
 			direction_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -175,7 +175,7 @@ func _process(delta: float) -> void:
 					mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)
 
 			# Pulse effect while charging (faster at higher levels)
-			var pulse_speed: float = 0.008 + (player_level * 0.002)
+			var pulse_speed: float = 0.008 + ((player_level - 1) * 0.002)
 			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.15
 			direction_indicator.scale *= pulse
 		else:
@@ -218,7 +218,7 @@ func activate() -> void:
 		# Scale dash force with player level (1.0 + 0.3 per level)
 		var level_multiplier: float = 1.0
 		if player and "level" in player:
-			level_multiplier = 1.0 + (player.level * 0.3)
+			level_multiplier = 1.0 + ((player.level - 1) * 0.3)
 
 		# Apply charged dash force
 		player.apply_central_impulse(dash_direction * charged_dash_force * level_multiplier)
@@ -281,7 +281,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		# Get charge multiplier and player level multiplier for knockback scaling (damage always 1)
 		var charge_multiplier: float = get_charge_multiplier()
 		var player_level: int = player.level if player and "level" in player else 0
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 		var charged_damage: int = damage  # Always 1, no charge scaling
 		var charged_knockback: float = 180.0 * charge_multiplier * level_mult  # Increased from 100.0 for stronger impact
 
@@ -312,15 +312,10 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Dash attack hit player: %s" % body.name, false, get_entity_id())
 
 func end_dash() -> void:
-	# Visual effect at dash END - always spawn a burst, scaled by level
+	# Visual effect at dash END - always spawn explosion scaled by level
 	if player and is_instance_valid(player):
-		var player_level: int = player.level if "level" in player else 0
-		if player_level >= 1:
-			# Level 1+: Full explosion effect
-			spawn_dash_explosion(player.global_position, player_level)
-		else:
-			# Level 0: Small impact burst for visual feedback
-			spawn_dash_impact_burst(player.global_position)
+		var player_level: int = player.level if "level" in player else 1
+		spawn_dash_explosion(player.global_position, player_level)
 
 	is_dashing = false
 	hit_players.clear()
@@ -383,7 +378,7 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	explosion.global_position = position
 
 	# Scale effect with level
-	var scale_mult: float = 0.7 + (level * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
+	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
 
 	# Configure explosion particles
 	explosion.emitting = true
@@ -475,70 +470,6 @@ func spawn_afterimage(position: Vector3) -> void:
 	tween.tween_property(afterimage, "scale", Vector3(0.3, 0.3, 0.3), 0.3)
 	tween.set_parallel(false)
 	tween.tween_callback(afterimage.queue_free)
-
-func spawn_dash_impact_burst(position: Vector3) -> void:
-	"""Spawn a small impact burst at dash end (level 0 base effect)"""
-	if not player or not player.get_parent():
-		return
-
-	# Create small particle burst
-	var burst: CPUParticles3D = CPUParticles3D.new()
-	burst.name = "DashImpactBurst"
-	player.get_parent().add_child(burst)
-	burst.global_position = position
-
-	# Configure burst particles - smaller than full explosion
-	burst.emitting = true
-	burst.amount = 20
-	burst.lifetime = 0.3
-	burst.one_shot = true
-	burst.explosiveness = 1.0
-	burst.randomness = 0.3
-	burst.local_coords = false
-
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)
-
-	# Create material
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	burst.mesh = particle_mesh
-
-	# Emission shape - small sphere burst
-	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	burst.emission_sphere_radius = 0.2
-
-	# Movement - quick outward burst
-	burst.direction = Vector3.ZERO
-	burst.spread = 180.0
-	burst.gravity = Vector3(0, -2.0, 0)
-	burst.initial_velocity_min = 3.0
-	burst.initial_velocity_max = 6.0
-
-	# Size over lifetime
-	burst.scale_amount_min = 1.5
-	burst.scale_amount_max = 2.5
-	burst.scale_amount_curve = Curve.new()
-	burst.scale_amount_curve.add_point(Vector2(0, 1.2))
-	burst.scale_amount_curve.add_point(Vector2(0.5, 0.8))
-	burst.scale_amount_curve.add_point(Vector2(1, 0.0))
-
-	# Color - magenta burst
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.5, 0.9, 0.9))  # Bright pink
-	gradient.add_point(0.4, Color(0.9, 0.3, 0.7, 0.7))  # Magenta
-	gradient.add_point(1.0, Color(0.4, 0.1, 0.3, 0.0))  # Fade
-	burst.color_ramp = gradient
-
-	# Auto-delete after lifetime
-	get_tree().create_timer(burst.lifetime + 0.3).timeout.connect(burst.queue_free)
 
 func create_direction_indicator() -> void:
 	"""Create a sphere indicator that shows the dash hitbox area while charging"""

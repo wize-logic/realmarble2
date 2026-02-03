@@ -223,12 +223,12 @@ func _process(delta: float) -> void:
 
 			# Scale based on charge level AND player level
 			var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
-			var level_scale: float = 1.0 + (player_level * 0.15)
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.15)
 			var scale_factor: float = charge_scale * level_scale
 			arc_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
 			# Pulse effect while charging (faster at higher levels)
-			var pulse_speed: float = 0.008 + (player_level * 0.002)
+			var pulse_speed: float = 0.008 + ((player_level - 1) * 0.002)
 			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.12
 			arc_indicator.scale *= pulse
 		else:
@@ -270,7 +270,7 @@ func activate() -> void:
 
 	# Scale hitbox based on charge level and player level
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
-	var level_scale: float = 1.0 + (player_level * 0.15)  # +15% range per level
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% range per level
 	var scaled_range: float = slash_range * charge_scale * level_scale
 
 	# Level 3: SPIN ATTACK - 360 degree attack instead of forward arc
@@ -298,7 +298,7 @@ func activate() -> void:
 	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
 		# Level 1+: More particles
-		slash_particles.amount = 80 + (player_level * 25)
+		slash_particles.amount = 80 + ((player_level - 1) * 25)
 
 		if is_spin_attack:
 			# Spin attack: particles emit in all directions
@@ -345,7 +345,7 @@ func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 		# Get charge multiplier and player level multiplier for this hit
 		var charge_multiplier: float = get_charge_multiplier()
 		var player_level: int = player.level if player and "level" in player else 0
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 		var charged_damage: int = int(slash_damage * charge_multiplier)
 		var charged_knockback: float = 70.0 * charge_multiplier * level_mult  # Increased from 30.0 for stronger impact
 
@@ -484,7 +484,7 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	trail.color_ramp = gradient
 
 	# Move the shockwave forward over time
-	var shockwave_speed: float = 25.0 + (level * 5.0)  # Faster at higher levels
+	var shockwave_speed: float = 25.0 + ((level - 1) * 5.0)  # Faster at higher levels
 	var shockwave_duration: float = 0.6
 	var shockwave_damage: int = 1
 	var owner_id: int = player.name.to_int() if player else -1
@@ -612,8 +612,8 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 
 	# Configure light - steel blue color matching sword
 	flash.light_color = Color(0.6, 0.8, 1.0)
-	flash.light_energy = 3.0 + (level * 1.0)  # Brighter at higher levels
-	flash.omni_range = 4.0 + (level * 1.0)  # Larger at higher levels
+	flash.light_energy = 3.0 + ((level - 1) * 1.0)  # Brighter at higher levels
+	flash.omni_range = 4.0 + ((level - 1) * 1.0)  # Larger at higher levels
 	flash.omni_attenuation = 1.5
 
 	# Fade out quickly

@@ -192,7 +192,7 @@ func _process(delta: float) -> void:
 
 			# Scale indicator based on charge level AND player level
 			var charge_scale: float = 1.0 + (charge_level - 1) * 0.5
-			var level_scale: float = 1.0 + (player_level * 0.15)  # +15% radius per level
+			var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% radius per level
 			var scale_factor: float = charge_scale * level_scale
 			radius_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
 
@@ -213,12 +213,12 @@ func _process(delta: float) -> void:
 					mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)
 
 			# Pulse effect while charging (faster at higher levels)
-			var pulse_speed: float = 0.005 + (player_level * 0.002)
+			var pulse_speed: float = 0.005 + ((player_level - 1) * 0.002)
 			var pulse = 1.0 + sin(Time.get_ticks_msec() * pulse_speed) * 0.1
 			radius_indicator.scale *= pulse
 
 			# Rotate indicator slowly for visual effect (faster at higher levels)
-			radius_indicator.rotation.y += delta * (0.5 + player_level * 0.2)
+			radius_indicator.rotation.y += delta * (0.5 + (player_level - 1) * 0.2)
 		else:
 			# Hide indicator when not charging or not local player
 			radius_indicator.visible = false
@@ -311,7 +311,7 @@ func damage_nearby_players() -> void:
 
 	# Scale explosion radius with charge level AND player level (matches indicator)
 	var charge_scale: float = 1.0 + (charge_level - 1) * 0.5  # +50% per charge level
-	var level_scale: float = 1.0 + (player_level * 0.15)  # +15% per player level
+	var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% per player level
 	var current_radius: float = explosion_radius * charge_scale * level_scale
 	if explosion_area.get_child(0) and explosion_area.get_child(0).shape is SphereShape3D:
 		explosion_area.get_child(0).shape.radius = current_radius
@@ -351,7 +351,7 @@ func damage_nearby_players() -> void:
 
 			# Apply knockback scaled by charge and player level
 			var player_level: int = player.level if player and "level" in player else 0
-			var level_mult: float = 1.0 + (player_level * 0.2)
+			var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 			var scaled_knockback: float = knockback_force * charge_mult * level_mult
 			body.apply_central_impulse(knockback_dir * scaled_knockback)
 

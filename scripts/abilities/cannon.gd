@@ -226,7 +226,7 @@ func activate() -> void:
 			projectile.global_position = barrel_position
 
 			# Set velocity - inherit player velocity + projectile velocity in fire direction
-			var level_multiplier: float = 1.0 + (player_level * 0.25)
+			var level_multiplier: float = 1.0 + ((player_level - 1) * 0.25)
 
 			# Projectile velocity = player velocity + fire direction * speed
 			var projectile_velocity: Vector3 = player.linear_velocity + (spread_fire_direction * speed * level_multiplier)
@@ -291,7 +291,7 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		# Apply stronger knockback from cannonball impact
 		# Get player level multiplier from projectile metadata
 		var player_level: int = projectile.get_meta("player_level", 0)
-		var level_mult: float = 1.0 + (player_level * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
 
 		# Calculate knockback (base 150.0, slightly nerfed for better balance, scaled by level)
 		var base_knockback: float = 150.0
@@ -327,7 +327,7 @@ func create_projectile(level: int = 0) -> Node3D:
 	projectile.name = "Cannonball"
 
 	# Level-based size scaling: Level 1+ gets 10% bigger per level
-	var size_mult: float = 1.0 + (level * 0.1)
+	var size_mult: float = 1.0 + ((level - 1) * 0.1)
 
 	# Physics setup - heavier but no gravity for straight shots
 	projectile.mass = 0.5 * size_mult  # Scale mass with size
@@ -347,7 +347,7 @@ func create_projectile(level: int = 0) -> Node3D:
 
 	# Create material - lime green for visibility, brighter at higher levels
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var green_intensity: float = 1.0 + (level * 0.1)  # Slightly brighter at higher levels
+	var green_intensity: float = 1.0 + ((level - 1) * 0.1)  # Slightly brighter at higher levels
 	mat.albedo_color = Color(0.5, minf(green_intensity, 1.0), 0.0)  # Lime green
 	mat.metallic = 0.3
 	mat.roughness = 0.3
@@ -355,7 +355,7 @@ func create_projectile(level: int = 0) -> Node3D:
 	if level >= 1:
 		mat.emission_enabled = true
 		mat.emission = Color(0.3, 0.6, 0.0)  # Subtle green glow
-		mat.emission_energy_multiplier = 0.5 + (level * 0.3)
+		mat.emission_energy_multiplier = 0.5 + ((level - 1) * 0.3)
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
 
@@ -685,7 +685,7 @@ func _process(delta: float) -> void:
 				reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
 
 				# Scale reticle based on level (larger projectiles at higher levels)
-				var level_scale: float = 1.0 + (player_level * 0.1)
+				var level_scale: float = 1.0 + ((player_level - 1) * 0.1)
 				reticle.scale = Vector3(level_scale, level_scale, level_scale)
 
 				# Update reticle color based on level to indicate multi-shot
@@ -705,7 +705,7 @@ func _process(delta: float) -> void:
 						mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)
 
 				# Rotate reticle for visual effect (faster at higher levels)
-				var rotation_speed: float = 2.0 + (player_level * 0.5)
+				var rotation_speed: float = 2.0 + ((player_level - 1) * 0.5)
 				reticle.rotation.y += delta * rotation_speed
 			else:
 				# No lock - hide reticle

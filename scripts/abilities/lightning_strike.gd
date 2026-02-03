@@ -245,8 +245,8 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 
 	# Level-based strike radius scaling
 	var base_strike_radius: float = 3.0
-	var strike_radius: float = base_strike_radius + (level * 0.5)  # +0.5 radius per level
-	var aoe_radius: float = 2.5 + (level * 0.3)  # +0.3 AoE per level
+	var strike_radius: float = base_strike_radius + ((level - 1) * 0.5)  # +0.5 radius per level
+	var aoe_radius: float = 2.5 + ((level - 1) * 0.3)  # +0.3 AoE per level
 
 	# Spawn warning circle at strike location (scaled by level)
 	spawn_warning_indicator(position, level)
@@ -284,7 +284,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 			hit_targets.append(target)
 
 			# Strong upward knockback from lightning (scaled by level)
-			var level_mult: float = 1.0 + (level * 0.2)
+			var level_mult: float = 1.0 + ((level - 1) * 0.2)
 			var knockback: float = 120.0 * level_mult
 			target.apply_central_impulse(Vector3.UP * knockback * 0.7 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * knockback * 0.3)
 
@@ -330,7 +330,7 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 		return
 
 	# Scale indicator with level
-	var radius_scale: float = 1.0 + (level * 0.15)
+	var radius_scale: float = 1.0 + ((level - 1) * 0.15)
 
 	var indicator: MeshInstance3D = MeshInstance3D.new()
 	indicator.name = "LightningWarning"
@@ -405,7 +405,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 		return
 
 	# Scale bolt intensity with level
-	var intensity_scale: float = 1.0 + (level * 0.2)
+	var intensity_scale: float = 1.0 + ((level - 1) * 0.2)
 	var bolt_height: float = 80.0  # Height of the lightning bolt
 
 	# Create main bolt line using multiple segments
@@ -561,7 +561,7 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 	if not player or not player.get_parent():
 		return
 
-	var chain_range: float = 8.0 + (level * 2.0)  # Chain range increases with level
+	var chain_range: float = 8.0 + ((level - 1) * 2.0)  # Chain range increases with level
 	var num_chains: int = 1 + (level - 2)  # Level 2: 1 chain, Level 3: 2 chains
 	var owner_id: int = player.name.to_int() if player else -1
 	var players_container = player.get_parent()
@@ -786,7 +786,7 @@ func _process(delta: float) -> void:
 				reticle.global_position = reticle.global_position.lerp(target_position, delta * 8.0)
 
 				# Scale reticle based on level (larger strike area at higher levels)
-				var level_scale: float = 1.0 + (player_level * 0.15)
+				var level_scale: float = 1.0 + ((player_level - 1) * 0.15)
 				reticle.scale = Vector3(level_scale, level_scale, level_scale)
 
 				# Update reticle color based on level
@@ -806,7 +806,7 @@ func _process(delta: float) -> void:
 						mat.albedo_color = Color(0.4, 0.8, 1.0, 0.5)
 
 				# Rotate and pulse for electric effect (faster at higher levels)
-				var rotation_speed: float = 4.0 + (player_level * 1.0)
+				var rotation_speed: float = 4.0 + ((player_level - 1) * 1.0)
 				reticle.rotation.y += delta * rotation_speed
 				reticle.rotation.x = sin(Time.get_ticks_msec() * 0.01) * 0.2
 			else:
