@@ -28,6 +28,9 @@ uniform float animation_speed : hint_range(0.1, 3.0) = 1.0;
 uniform float bar_width : hint_range(0.5, 1.0) = 0.85;
 uniform float reflection_amount : hint_range(0.0, 1.0) = 0.3;
 
+// Performance quality: 0=Low (best FPS), 1=Medium, 2=High (original)
+uniform int quality_level : hint_range(0, 2) = 1;
+
 // Time passed in
 uniform float time_offset = 0.0;
 
@@ -80,9 +83,11 @@ float fbm(vec2 p, int octaves) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
+	// Performance: limit octaves based on quality
+	int max_oct = quality_level == 0 ? 1 : (quality_level == 1 ? 2 : octaves);
 
-	for (int i = 0; i < 4; i++) {
-		if (i >= octaves) break;
+	for (int i = 0; i < 2; i++) {
+		if (i >= max_oct) break;
 		value += amplitude * noise(p * frequency);
 		amplitude *= 0.5;
 		frequency *= 2.0;
@@ -117,12 +122,20 @@ float get_peak(float x) {
 	return texture(peak_tex, vec2(clamp(x, 0.0, 1.0), 0.5)).r;
 }
 
-// Smooth spectrum sampling with wider kernel
+// Smooth spectrum sampling with quality-adaptive kernel
 float get_spectrum_smooth(float x, float smoothness) {
+	// Low quality: no smoothing, just direct sample
+	if (quality_level == 0) {
+		return get_spectrum(x);
+	}
+
 	float total = 0.0;
 	float weight_sum = 0.0;
+	// Medium: 3 samples, High: 5 samples
+	int range_val = quality_level == 1 ? 1 : 2;
 
-	for (int i = -5; i <= 5; i++) {
+	for (int i = -2; i <= 2; i++) {
+		if (abs(i) > range_val) continue;
 		float offset = float(i) * smoothness / 32.0;
 		float weight = exp(-float(i * i) / (2.0 * smoothness * smoothness));
 		total += get_spectrum(x + offset) * weight;
@@ -380,8 +393,12 @@ vec3 render_ambience(vec2 uv, float time) {
 	vec3 nebula_color = mix(color_primary.rgb, color_accent.rgb, nebula);
 	color += nebula_color * nebula * 0.3;
 
-	// Floating particles with trails
-	for (int i = 0; i < 30; i++) {
+	// Floating particles with trails - quality-adaptive
+	int num_particles = quality_level == 0 ? 6 : (quality_level == 1 ? 12 : 20);
+	int num_trails = quality_level == 0 ? 1 : (quality_level == 1 ? 2 : 3);
+
+	for (int i = 0; i < 20; i++) {
+		if (i >= num_particles) break;
 		float fi = float(i);
 		float seed = hash(vec2(fi, fi * 0.7));
 		float seed2 = hash(vec2(fi * 1.3, fi * 0.5));
@@ -419,10 +436,10 @@ vec3 render_ambience(vec2 uv, float time) {
 			color += glow_color * glow * 0.15;
 		}
 
-		// Particle trail
-		float trail_length = 0.05 + sample_spectrum(spec_idx) * 0.03;
+		// Particle trail - reduced iterations
 		vec2 trail_dir = vec2(-0.03 * speed_mod, -0.05 * speed_mod);
-		for (int t = 1; t <= 5; t++) {
+		for (int t = 1; t <= 3; t++) {
+			if (t > num_trails) break;
 			vec2 trail_pos = particle_pos + trail_dir * float(t) * 0.2;
 			float trail_dist = length(uv - trail_pos);
 			float trail_size = particle_size * (1.0 - float(t) * 0.15);
@@ -599,8 +616,10 @@ vec3 render_plenoptic(vec2 uv, float time) {
 	swirl *= audio_level * 0.15;
 	color += mix(color_primary.rgb, color_secondary.rgb, swirl) * swirl;
 
-	// Concentric pulsing rings
+	// Concentric pulsing rings - quality-adaptive
+	int num_rings = quality_level == 0 ? 4 : (quality_level == 1 ? 6 : 10);
 	for (int i = 0; i < 10; i++) {
+		if (i >= num_rings) break;
 		float fi = float(i);
 		float base_radius = 0.05 + fi * 0.045;
 
@@ -630,26 +649,30 @@ vec3 render_plenoptic(vec2 uv, float time) {
 			color += ring_color * ring_intensity * glow_intensity * 0.8;
 		}
 
-		// Soft outer glow
-		float glow = exp(-circle_dist * circle_dist / (ring_width * ring_width * 6.0));
-		color += color_secondary.rgb * glow * 0.06;
+		// Soft outer glow (skip on low quality)
+		if (quality_level > 0) {
+			float glow = exp(-circle_dist * circle_dist / (ring_width * ring_width * 6.0));
+			color += color_secondary.rgb * glow * 0.06;
+		}
 	}
 
-	// Radial lines with spectrum
-	float num_lines = 32.0;
-	float line_angle = TAU / num_lines;
+	// Radial lines with spectrum - quality-adaptive
+	int num_line_samples = quality_level == 0 ? 8 : (quality_level == 1 ? 16 : 32);
+	float line_angle = TAU / float(num_line_samples);
 	for (int i = 0; i < 32; i++) {
+		if (i >= num_line_samples) break;
 		float fi = float(i);
 		float target_angle = fi * line_angle - PI;
 		float angle_diff = abs(mod(angle - target_angle + PI, TAU) - PI);
 
-		float line_width = 0.025 + sample_spectrum(i) * 0.015;
+		int spec_idx = (i * 32) / num_line_samples;  // Map to spectrum
+		float line_width = 0.025 + sample_spectrum(spec_idx) * 0.015;
 		float line_intensity = smoothstep(line_width, line_width * 0.2, angle_diff);
-		line_intensity *= sample_spectrum(i);
+		line_intensity *= sample_spectrum(spec_idx);
 		line_intensity *= smoothstep(0.5, 0.1, radius); // Fade at edges
 
 		if (line_intensity > 0.01) {
-			vec3 line_color = mix(color_accent.rgb, color_primary.rgb, fi / 32.0);
+			vec3 line_color = mix(color_accent.rgb, color_primary.rgb, fi / float(num_line_samples));
 			color += line_color * line_intensity * 0.4;
 		}
 	}
@@ -659,13 +682,18 @@ vec3 render_plenoptic(vec2 uv, float time) {
 	vec3 center_color = mix(color_primary.rgb, vec3(1.0), center_glow * 0.7);
 	color += center_color * center_glow * glow_intensity * 0.8;
 
-	// Spinning dots at ring intersections
-	for (int ring = 0; ring < 5; ring++) {
+	// Spinning dots at ring intersections - quality-adaptive
+	// Low: 2 rings x 6 dots = 12 iterations, Medium: 3 rings x 10 dots = 30, High: 4 rings x 16 dots = 64
+	int max_dot_rings = quality_level == 0 ? 2 : (quality_level == 1 ? 3 : 4);
+	int max_dots_per_ring = quality_level == 0 ? 6 : (quality_level == 1 ? 10 : 16);
+
+	for (int ring = 0; ring < 4; ring++) {
+		if (ring >= max_dot_rings) break;
 		float ring_r = 0.1 + float(ring) * 0.08;
-		int num_dots = 8 + ring * 6;
+		int num_dots = min(8 + ring * 4, max_dots_per_ring);
 		float dot_angular_speed = 0.4 - float(ring) * 0.08;
 
-		for (int dot = 0; dot < 38; dot++) {
+		for (int dot = 0; dot < 16; dot++) {
 			if (dot >= num_dots) break;
 
 			float dot_angle = (float(dot) / float(num_dots)) * TAU + time * dot_angular_speed;
@@ -685,9 +713,11 @@ vec3 render_plenoptic(vec2 uv, float time) {
 				color += dot_color * dot_intensity * 0.9;
 			}
 
-			// Dot glow
-			float dot_glow = exp(-dot_dist * dot_dist / (dot_size * dot_size * 4.0));
-			color += color_secondary.rgb * dot_glow * 0.12;
+			// Dot glow (skip on low quality)
+			if (quality_level > 0) {
+				float dot_glow = exp(-dot_dist * dot_dist / (dot_size * dot_size * 4.0));
+				color += color_secondary.rgb * dot_glow * 0.12;
+			}
 		}
 	}
 

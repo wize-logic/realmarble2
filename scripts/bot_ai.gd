@@ -73,17 +73,17 @@ var ult_check_timer: float = 0.0  # Timer for checking ult availability
 # ============================================================================
 
 const DEBUG_LOG_INTERVAL: float = 2.0
-const CACHE_REFRESH_INTERVAL: float = 0.5  # IMPROVED: Reduced from 0.1s for performance
+const CACHE_REFRESH_INTERVAL: float = 0.75  # IMPROVED: Increased from 0.5s for better performance
 const TARGET_STUCK_TIMEOUT: float = 4.0
 const ABILITY_COLLECTION_TIMEOUT: float = 15.0  # Timeout for ability collection
 const STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT: float = 3.0
 const MAX_STUCK_ATTEMPTS: int = 10
 const BOUNCE_COOLDOWN: float = 0.5
-const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.2
-const EDGE_CHECK_INTERVAL: float = 0.3
-const PLATFORM_CHECK_INTERVAL: float = 1.5
-const VISION_UPDATE_INTERVAL: float = 0.1
-const SPACE_STATE_CACHE_REFRESH: float = 1.0
+const PLAYER_AVOIDANCE_CHECK_INTERVAL: float = 0.3  # IMPROVED: Increased from 0.2s
+const EDGE_CHECK_INTERVAL: float = 0.4  # IMPROVED: Increased from 0.3s
+const PLATFORM_CHECK_INTERVAL: float = 2.0  # IMPROVED: Increased from 1.5s
+const VISION_UPDATE_INTERVAL: float = 0.15  # IMPROVED: Increased from 0.1s
+const SPACE_STATE_CACHE_REFRESH: float = 1.5  # IMPROVED: Increased from 1.0s
 const VISION_HYSTERESIS_TIME: float = 0.5
 const BOT_EYE_HEIGHT: float = 1.0
 const MAX_CACHED_PLATFORMS: int = 20

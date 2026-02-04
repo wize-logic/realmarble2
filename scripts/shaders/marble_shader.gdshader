@@ -31,39 +31,45 @@ uniform float glow_pulse_amount : hint_range(0.0, 0.5) = 0.08;
 uniform float outer_rim_power : hint_range(1.0, 5.0) = 2.2;
 uniform float outer_rim_intensity : hint_range(0.0, 1.0) = 0.2;
 
+// Performance quality: 0=Low (best FPS), 1=Medium, 2=High
+uniform int quality_level : hint_range(0, 2) = 1;
+
 // Simple hash function
 float hash(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
 
-// 3D noise function
+// 3D noise function - optimized version
 float noise3d(vec3 p) {
 	vec3 i = floor(p);
 	vec3 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
 
-	float n = 0.0;
-	for(int z = 0; z <= 1; z++) {
-		for(int y = 0; y <= 1; y++) {
-			for(int x = 0; x <= 1; x++) {
-				vec3 g = vec3(float(x), float(y), float(z));
-				n += hash(i + g) *
-					(f.x * g.x + (1.0 - f.x) * (1.0 - g.x)) *
-					(f.y * g.y + (1.0 - f.y) * (1.0 - g.y)) *
-					(f.z * g.z + (1.0 - f.z) * (1.0 - g.z));
-			}
-		}
-	}
-	return n;
+	// Optimized: unrolled interpolation instead of nested loops
+	float a = hash(i);
+	float b = hash(i + vec3(1.0, 0.0, 0.0));
+	float c = hash(i + vec3(0.0, 1.0, 0.0));
+	float d = hash(i + vec3(1.0, 1.0, 0.0));
+	float e = hash(i + vec3(0.0, 0.0, 1.0));
+	float f1 = hash(i + vec3(1.0, 0.0, 1.0));
+	float g = hash(i + vec3(0.0, 1.0, 1.0));
+	float h = hash(i + vec3(1.0, 1.0, 1.0));
+
+	float z1 = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+	float z2 = mix(mix(e, f1, f.x), mix(g, h, f.x), f.y);
+	return mix(z1, z2, f.z);
 }
 
-// Fractal Brownian Motion for marble veins
+// Fractal Brownian Motion for marble veins - quality-adaptive
 float fbm3d(vec3 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
+	// Low: 1 octave, Medium: 2 octaves, High: 3 octaves
+	int max_octaves = quality_level == 0 ? 1 : (quality_level == 1 ? 2 : 3);
 
-	for(int i = 0; i < 4; i++) {
+	for(int i = 0; i < 3; i++) {
+		if (i >= max_octaves) break;
 		value += amplitude * noise3d(p * frequency);
 		frequency *= 2.0;
 		amplitude *= 0.5;
@@ -87,11 +93,14 @@ float marble_pattern(vec3 pos, float time) {
 	return pattern * 0.5 + 0.5;
 }
 
-// Bubble/inclusion pattern with multiple layers
+// Bubble/inclusion pattern with multiple layers - quality-adaptive
 float bubbles(vec3 pos) {
 	float bubble = 0.0;
+	// Low: 1 layer, Medium: 2 layers, High: 3 layers
+	int max_layers = quality_level == 0 ? 1 : (quality_level == 1 ? 2 : 3);
 
-	for(int i = 0; i < 4; i++) {
+	for(int i = 0; i < 3; i++) {
+		if (i >= max_layers) break;
 		vec3 bubble_pos = pos * (1.5 + float(i) * 0.5);
 		float n = noise3d(bubble_pos);
 		bubble += step(0.72, n) * (1.0 - float(i) * 0.25);
@@ -183,11 +192,13 @@ void fragment() {
 	// Set to fully opaque for proper shadow casting and receiving
 	ALPHA = 1.0;
 
-	// Enhanced normal map detail from swirl pattern
-	float normal_detail_x = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.1, 0.0, 0.0)) - 0.5) * 0.4;
-	float normal_detail_y = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.0, 0.1, 0.0)) - 0.5) * 0.4;
-	NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
-	NORMAL_MAP_DEPTH = 0.8;
+	// Enhanced normal map detail from swirl pattern (skip on low quality)
+	if (quality_level > 0) {
+		float normal_detail_x = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.1, 0.0, 0.0)) - 0.5) * 0.4;
+		float normal_detail_y = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.0, 0.1, 0.0)) - 0.5) * 0.4;
+		NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
+		NORMAL_MAP_DEPTH = 0.8;
+	}
 
 	// === SPECIAL MARBLE LIGHTING - Subtle glow to help differentiate marbles ===
 	// Pulsing glow animation (subtle)

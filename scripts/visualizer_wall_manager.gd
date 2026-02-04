@@ -63,6 +63,13 @@ var beat_cooldown: float = 0.0
 var _cycle_timer: float = 0.0
 var _color_preset_index: int = 0
 
+# Performance settings
+## Update interval in seconds (0 = every frame, higher = less updates)
+@export var update_interval: float = 0.0
+## Shader quality level: 0=Low (best FPS), 1=Medium, 2=High
+@export var quality_level: int = 1
+var _update_timer: float = 0.0
+
 # Shader reference (spatial shader applied directly to 3D panels)
 var _visualizer_shader: Shader = null
 var _shader_material: ShaderMaterial = null
@@ -167,6 +174,7 @@ func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vec
 	_shader_material.set_shader_parameter("viz_mode", int(current_mode))
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
+	_shader_material.set_shader_parameter("quality_level", quality_level)
 
 	# Create spectrum textures (32x1 RGBA8 images)
 	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
@@ -227,7 +235,14 @@ func _process(delta: float) -> void:
 			_cycle_timer = 0.0
 			_advance_cycle()
 
-	_update_spectrum_data(delta)
+	# Performance: skip updates based on interval
+	if update_interval > 0.0:
+		_update_timer += delta
+		if _update_timer < update_interval:
+			return
+		_update_timer = 0.0
+
+	_update_spectrum_data(delta if update_interval == 0.0 else update_interval)
 	_update_shader_audio()
 
 

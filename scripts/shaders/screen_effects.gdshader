@@ -23,6 +23,9 @@ uniform vec3 color_tint : source_color = vec3(1.0, 1.0, 1.0);
 uniform float grain_amount : hint_range(0.0, 0.1) = 0.02;
 uniform float grain_speed : hint_range(0.0, 10.0) = 5.0;
 
+// Performance quality: 0=Low (best FPS), 1=Medium, 2=High
+uniform int quality_level : hint_range(0, 2) = 1;
+
 // Hash for noise
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -62,14 +65,19 @@ void fragment() {
 	vec2 center_offset = uv - 0.5;
 	float dist_from_center = length(center_offset);
 
-	// Chromatic aberration
-	float aberration = chromatic_aberration * (1.0 + dist_from_center * chromatic_radial * 5.0);
-	vec2 aberration_offset = normalize(center_offset + vec2(0.001)) * aberration;
-
 	vec3 color;
-	color.r = texture(TEXTURE, uv + aberration_offset).r;
-	color.g = texture(TEXTURE, uv).g;
-	color.b = texture(TEXTURE, uv - aberration_offset).b;
+
+	// Chromatic aberration (skip on low quality - uses 3 texture samples)
+	if (quality_level > 0 && chromatic_aberration > 0.0) {
+		float aberration = chromatic_aberration * (1.0 + dist_from_center * chromatic_radial * 5.0);
+		vec2 aberration_offset = normalize(center_offset + vec2(0.001)) * aberration;
+		color.r = texture(TEXTURE, uv + aberration_offset).r;
+		color.g = texture(TEXTURE, uv).g;
+		color.b = texture(TEXTURE, uv - aberration_offset).b;
+	} else {
+		// Single texture sample for low quality
+		color = texture(TEXTURE, uv).rgb;
+	}
 
 	// Apply saturation
 	float luminance = dot(color, vec3(0.299, 0.587, 0.114));
@@ -81,17 +89,21 @@ void fragment() {
 	// Apply color tint
 	color *= color_tint;
 
-	// Apply speed lines
-	float lines = speed_lines(uv, TIME);
-	color = mix(color, speed_line_color, lines * 0.4);
+	// Apply speed lines (skip on low quality when not active)
+	if (quality_level > 0 || speed_line_intensity > 0.1) {
+		float lines = speed_lines(uv, TIME);
+		color = mix(color, speed_line_color, lines * 0.4);
+	}
 
-	// Apply vignette
+	// Apply vignette (always apply - cheap and important for visuals)
 	float vignette = calculate_vignette(uv);
 	color = mix(color, vignette_color, vignette);
 
-	// Apply film grain
-	float grain = film_grain(uv, TIME);
-	color += grain;
+	// Apply film grain (skip on low quality)
+	if (quality_level >= 2) {
+		float grain = film_grain(uv, TIME);
+		color += grain;
+	}
 
 	// Clamp final color
 	color = clamp(color, 0.0, 1.0);
