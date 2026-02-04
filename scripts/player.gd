@@ -81,10 +81,14 @@ var base_roll_force: float = 300.0  # Significantly increased for climbing slope
 var base_jump_impulse: float = 70.0
 var current_roll_force: float = 300.0
 var current_jump_impulse: float = 70.0
-var max_speed: float = 12.0  # Slightly higher max speed
+var base_max_speed: float = 12.0  # Base max speed (scales with arena size)
+var max_speed: float = 12.0  # Current max speed (scaled)
 var air_control: float = 0.4  # Better air control for shooter feel
 var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
 var current_spin_dash_force: float = 250.0
+
+# Arena size scaling - larger arenas need faster movement
+var arena_size_multiplier: float = 1.0  # Set by world based on level size
 
 # Jump system
 var jump_count: int = 0
@@ -136,7 +140,8 @@ var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash
 # Level up system (3 levels max)
 var level: int = 0
 const MAX_LEVEL: int = 3
-const SPEED_BOOST_PER_LEVEL: float = 20.0  # Speed boost per level
+const SPEED_BOOST_PER_LEVEL: float = 40.0  # Roll force boost per level (increased for impactful level ups)
+const MAX_SPEED_BOOST_PER_LEVEL: float = 2.0  # Max speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
@@ -1593,11 +1598,20 @@ func collect_orb() -> void:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already at MAX_LEVEL (%d)" % MAX_LEVEL, false, get_entity_id())
 
 func update_stats() -> void:
-	"""Update movement stats based on current level"""
-	current_roll_force = base_roll_force + (level * SPEED_BOOST_PER_LEVEL)
+	"""Update movement stats based on current level and arena size"""
+	# Base stats + level bonuses, then scaled by arena size
+	current_roll_force = (base_roll_force + (level * SPEED_BOOST_PER_LEVEL)) * arena_size_multiplier
 	current_jump_impulse = base_jump_impulse + (level * JUMP_BOOST_PER_LEVEL)
-	current_spin_dash_force = base_spin_dash_force + (level * SPIN_BOOST_PER_LEVEL)
+	current_spin_dash_force = (base_spin_dash_force + (level * SPIN_BOOST_PER_LEVEL)) * arena_size_multiplier
 	current_bounce_back_impulse = base_bounce_back_impulse + (level * BOUNCE_BOOST_PER_LEVEL)
+	# Max speed scales with arena size and level
+	max_speed = (base_max_speed + (level * MAX_SPEED_BOOST_PER_LEVEL)) * arena_size_multiplier
+
+func set_arena_size_multiplier(multiplier: float) -> void:
+	"""Set the arena size multiplier and update stats accordingly"""
+	arena_size_multiplier = multiplier
+	update_stats()
+	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Arena size multiplier set to %.2f | Max Speed: %.1f | Roll Force: %.1f" % [multiplier, max_speed, current_roll_force], false, get_entity_id())
 
 func pickup_ability(ability_scene: PackedScene, ability_name: String) -> void:
 	"""Pickup a new ability"""
