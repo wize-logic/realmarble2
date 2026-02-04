@@ -378,7 +378,7 @@ func _update_shader_colors() -> void:
 
 
 func create_visualizer_panels(wall_configs: Array) -> Array[MeshInstance3D]:
-	## Create visualizer panel meshes at the given wall positions
+	## Create visualizer panel meshes at the given wall positions (legacy flat walls)
 
 	if not is_initialized:
 		push_warning("VisualizerWallManager: Not initialized")
@@ -410,12 +410,10 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 	mesh_instance.position = pos
 	mesh_instance.rotation = rot
 
-	# Apply the spatial shader directly to the panel (no SubViewport needed)
 	mesh_instance.material_override = _shader_material
 
 	print("[VisualizerWallManager] Created panel: %s with direct shader" % panel_name)
 
-	# Add collision for gameplay
 	var static_body = StaticBody3D.new()
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
@@ -427,6 +425,94 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 	collision.shape = shape
 	static_body.add_child(collision)
 	mesh_instance.add_child(static_body)
+
+	return mesh_instance
+
+
+func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, bottom_gap_deg: float = 8.0, h_segments: int = 64, v_segments: int = 32) -> MeshInstance3D:
+	## Create an inward-facing dome with the visualizer shader.
+	## bottom_gap_deg: elevation angle in degrees where the dome starts (gap below this).
+	## The dome goes from bottom_gap_deg up to 90 degrees (zenith).
+
+	if not is_initialized:
+		push_warning("VisualizerWallManager: Not initialized")
+		return null
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	var min_elevation := deg_to_rad(bottom_gap_deg)
+	var max_elevation := deg_to_rad(90.0)
+
+	# Generate vertices ring-by-ring from bottom to top
+	for v in range(v_segments + 1):
+		var elevation := lerpf(min_elevation, max_elevation, float(v) / float(v_segments))
+		var y := sin(elevation) * dome_radius
+		var ring_r := cos(elevation) * dome_radius
+
+		for h in range(h_segments + 1):
+			var azimuth := float(h) / float(h_segments) * TAU
+			var x := cos(azimuth) * ring_r
+			var z := sin(azimuth) * ring_r
+
+			vertices.append(Vector3(x, y, z) + center)
+			# Normal points inward (toward center)
+			normals.append(-Vector3(x, y, z).normalized())
+			# UV: u wraps around, v goes bottom-to-top
+			uvs.append(Vector2(float(h) / float(h_segments), float(v) / float(v_segments)))
+
+	# Generate triangle indices with reversed winding for inward-facing
+	for v in range(v_segments):
+		for h in range(h_segments):
+			var tl := v * (h_segments + 1) + h
+			var tr := tl + 1
+			var bl := (v + 1) * (h_segments + 1) + h
+			var br := bl + 1
+			# Reversed winding so front face points inward (matches cull_back)
+			indices.append(tl)
+			indices.append(bl)
+			indices.append(tr)
+			indices.append(tr)
+			indices.append(bl)
+			indices.append(br)
+
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var dome_mesh := ArrayMesh.new()
+	dome_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = dome_mesh
+	mesh_instance.name = "VisualizerDome"
+	mesh_instance.material_override = _shader_material
+
+	# Collision using ConcavePolygonShape3D (trimesh)
+	var static_body := StaticBody3D.new()
+	var collision := CollisionShape3D.new()
+	var shape := ConcavePolygonShape3D.new()
+	var faces := PackedVector3Array()
+	for i in range(0, indices.size(), 3):
+		faces.append(vertices[indices[i]])
+		faces.append(vertices[indices[i + 1]])
+		faces.append(vertices[indices[i + 2]])
+	shape.set_faces(faces)
+	collision.shape = shape
+	static_body.add_child(collision)
+	mesh_instance.add_child(static_body)
+
+	visualizer_panels.append(mesh_instance)
+	add_child(mesh_instance)
+
+	var bottom_edge_y := sin(min_elevation) * dome_radius + center.y
+	print("[VisualizerWallManager] Created dome: radius=%.1f, bottom_edge_y=%.1f, gap_angle=%.1f°" % [dome_radius, bottom_edge_y, bottom_gap_deg])
 
 	return mesh_instance
 

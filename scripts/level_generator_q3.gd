@@ -2036,17 +2036,10 @@ func apply_visualizer_walls() -> void:
 		print("[LevelGen] Video walls enabled, skipping visualizer walls")
 		return
 
-	var scale: float = arena_size / 140.0
-	var wall_distance: float = arena_size * 0.55
-	var perim_wall_height: float = 25.0 * scale
-
-	# Wall configs with rotation for visualizer panels facing inward
-	var wall_configs = [
-		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, PI, 0)},  # North
-		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, 0, 0)},  # South
-		{"pos": Vector3(wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, -PI/2, 0)},  # East
-		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, PI/2, 0)}  # West
-	]
+	# Dome sizing: radius encompasses the arena with some breathing room
+	# Bottom gap angle keeps the dome open at the bottom so the ball can fall off and die
+	var dome_radius: float = arena_size * 0.65
+	var dome_bottom_gap_deg: float = 8.0  # degrees above equator where dome starts
 
 	# Load and initialize visualizer wall manager
 	print("[LevelGen] Loading VisualizerWallManager...")
@@ -2064,15 +2057,15 @@ func apply_visualizer_walls() -> void:
 	visualizer_wall_manager.sensitivity = visualizer_sensitivity
 	add_child(visualizer_wall_manager)
 
-	# Initialize visualizer and create panels
+	# Initialize visualizer and create dome
 	if visualizer_wall_manager.initialize(VISUALIZER_AUDIO_BUS, VISUALIZER_RESOLUTION):
-		print("[LevelGen] Creating visualizer panels...")
-		visualizer_wall_manager.create_visualizer_panels(wall_configs)
+		print("[LevelGen] Creating visualizer dome...")
+		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, dome_bottom_gap_deg)
 
 		# Apply color preset
 		visualizer_wall_manager.set_color_preset(visualizer_color_preset)
 
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Visualizer walls created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Visualizer dome created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
 	else:
 		push_warning("Failed to initialize visualizer walls")
 		visualizer_wall_manager.queue_free()
