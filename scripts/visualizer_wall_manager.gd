@@ -180,7 +180,7 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	# Create a ColorRect that fills the viewport with our shader
 	viz_control = ColorRect.new()
 	viz_control.name = "VisualizerRect"
-	viz_control.color = Color.BLACK  # Black fallback if shader fails (prevents white flash)
+	viz_control.color = Color(0.1, 0.0, 0.15, 1.0)  # Dark purple fallback if shader fails
 	viz_control.set_anchors_preset(Control.PRESET_FULL_RECT)
 	viz_control.size = Vector2(viewport_size)
 
@@ -190,14 +190,14 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 
 	# Set initial shader parameters
 	_update_shader_colors()
-	_shader_material.set_shader_parameter("viz_mode", current_mode)
+	_shader_material.set_shader_parameter("viz_mode", int(current_mode))
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
 
-	# Create spectrum textures (32x1 images) for passing audio data to shader
-	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_R8)
+	# Create spectrum textures (32x1 RGBA8 images) for passing audio data to shader
+	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
 	_spectrum_texture = ImageTexture.create_from_image(_spectrum_image)
-	_peak_image = Image.create(32, 1, false, Image.FORMAT_R8)
+	_peak_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
 	_peak_texture = ImageTexture.create_from_image(_peak_image)
 
 	# Initialize audio uniforms before first render

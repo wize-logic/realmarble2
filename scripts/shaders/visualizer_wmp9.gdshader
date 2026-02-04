@@ -4,7 +4,7 @@ shader_type canvas_item;
 // Beautiful, smooth audio-reactive visuals with modern effects
 
 // Visualization mode: 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
-uniform int viz_mode : hint_range(0, 4) = 0;
+uniform int viz_mode = 0;
 
 // Audio spectrum data (32 frequency bands packed into 32x1 textures)
 uniform sampler2D spectrum_tex : filter_nearest, repeat_disable;
@@ -16,10 +16,10 @@ uniform float high_level : hint_range(0.0, 1.0) = 0.0;
 uniform float beat_intensity : hint_range(0.0, 1.0) = 0.0;
 
 // Colors (WMP9 style palettes)
-uniform vec4 color_primary : source_color = vec4(0.0, 0.7, 1.0, 1.0);
-uniform vec4 color_secondary : source_color = vec4(1.0, 0.3, 0.7, 1.0);
-uniform vec4 color_accent : source_color = vec4(0.3, 1.0, 0.5, 1.0);
-uniform vec4 background_color : source_color = vec4(0.02, 0.02, 0.05, 1.0);
+uniform vec4 color_primary = vec4(0.0, 0.7, 1.0, 1.0);
+uniform vec4 color_secondary = vec4(1.0, 0.3, 0.7, 1.0);
+uniform vec4 color_accent = vec4(0.3, 1.0, 0.5, 1.0);
+uniform vec4 background_color = vec4(0.02, 0.02, 0.05, 1.0);
 
 // Settings
 uniform float glow_intensity : hint_range(0.0, 3.0) = 1.5;
