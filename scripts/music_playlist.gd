@@ -84,15 +84,17 @@ func start_playlist() -> void:
 
 	is_playing = true
 	is_paused = false
-	current_track_index = 0
 	_skip_attempts = 0
 
 	# Ensure indices are initialized
 	if shuffled_indices.size() != playlist.size():
 		_initialize_indices()
 
-	if shuffle:
-		_shuffle_playlist()
+	# Start with a random track if shuffle is enabled
+	if shuffle and playlist.size() > 0:
+		current_track_index = randi() % playlist.size()
+	else:
+		current_track_index = 0
 
 	_play_current_track()
 
@@ -250,20 +252,27 @@ func _play_current_track() -> void:
 
 func _advance_track() -> void:
 	"""Move to next track in playlist"""
-	current_track_index += 1
+	if shuffle and playlist.size() > 1:
+		# Pick a random track (avoid playing the same track twice in a row)
+		var previous_index: int = current_track_index
+		var attempts: int = 0
+		while attempts < 10:
+			current_track_index = randi() % playlist.size()
+			if current_track_index != previous_index:
+				break
+			attempts += 1
+	else:
+		# Sequential playback
+		current_track_index += 1
 
-	# Loop back to start if at end
-	if current_track_index >= playlist.size():
-		current_track_index = 0
+		# Loop back to start if at end
+		if current_track_index >= playlist.size():
+			current_track_index = 0
 
-		if not loop_playlist:
-			is_playing = false
-			playlist_finished.emit()
-			return
-
-		# Re-shuffle if enabled
-		if shuffle:
-			_shuffle_playlist()
+			if not loop_playlist:
+				is_playing = false
+				playlist_finished.emit()
+				return
 
 func _shuffle_playlist() -> void:
 	"""Shuffle the playlist order"""
