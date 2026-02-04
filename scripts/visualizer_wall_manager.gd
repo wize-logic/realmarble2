@@ -72,6 +72,12 @@ var _color_preset_index: int = 0
 var _visualizer_shader: Shader = null
 var _shader_material: ShaderMaterial = null
 
+# Spectrum textures (32x1 images passed to shader instead of uniform arrays)
+var _spectrum_image: Image = null
+var _spectrum_texture: ImageTexture = null
+var _peak_image: Image = null
+var _peak_texture: ImageTexture = null
+
 # Created visualizer panels
 var visualizer_panels: Array[MeshInstance3D] = []
 
@@ -188,9 +194,15 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
 
-	# Initialize audio uniforms before first render to prevent garbage data
-	_shader_material.set_shader_parameter("spectrum", smoothed_spectrum)
-	_shader_material.set_shader_parameter("peak_spectrum", peak_spectrum)
+	# Create spectrum textures (32x1 images) for passing audio data to shader
+	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_R8)
+	_spectrum_texture = ImageTexture.create_from_image(_spectrum_image)
+	_peak_image = Image.create(32, 1, false, Image.FORMAT_R8)
+	_peak_texture = ImageTexture.create_from_image(_peak_image)
+
+	# Initialize audio uniforms before first render
+	_shader_material.set_shader_parameter("spectrum_tex", _spectrum_texture)
+	_shader_material.set_shader_parameter("peak_tex", _peak_texture)
 	_shader_material.set_shader_parameter("audio_level", 0.0)
 	_shader_material.set_shader_parameter("bass_level", 0.0)
 	_shader_material.set_shader_parameter("mid_level", 0.0)
@@ -369,6 +381,17 @@ func _smooth_spectrum_data(delta: float) -> void:
 	smoothed_mid = _get_smoothed_value(mid_level, smoothed_mid, mid_velocity, delta, attack_factor, release_factor)
 	smoothed_high = _get_smoothed_value(high_level, smoothed_high, high_velocity, delta, attack_factor, release_factor)
 
+	# Idle animation: ensure minimum visual activity so walls are never dead black
+	var t = Time.get_ticks_msec() / 1000.0
+	for i in range(32):
+		var idle_wave = (sin(t * 1.5 + float(i) * 0.5) * 0.5 + 0.5) * 0.08
+		idle_wave += (sin(t * 0.7 + float(i) * 0.3) * 0.5 + 0.5) * 0.04
+		smoothed_spectrum[i] = max(smoothed_spectrum[i], idle_wave)
+	smoothed_audio = max(smoothed_audio, 0.05)
+	smoothed_bass = max(smoothed_bass, 0.03)
+	smoothed_mid = max(smoothed_mid, 0.03)
+	smoothed_high = max(smoothed_high, 0.02)
+
 
 func _smooth_level_with_velocity(target: float, current: float, velocity: float, delta: float, attack: float, release: float) -> void:
 	## Helper to update velocity (modifies the passed velocity reference via class vars)
@@ -387,9 +410,15 @@ func _update_shader_audio() -> void:
 	if _shader_material == null:
 		return
 
-	# Pass spectrum array to shader
-	_shader_material.set_shader_parameter("spectrum", smoothed_spectrum)
-	_shader_material.set_shader_parameter("peak_spectrum", peak_spectrum)
+	# Write spectrum data into 32x1 textures (R8 format, red channel = value)
+	for i in range(32):
+		var spec_val = clamp(smoothed_spectrum[i], 0.0, 1.0)
+		var peak_val = clamp(peak_spectrum[i], 0.0, 1.0)
+		_spectrum_image.set_pixel(i, 0, Color(spec_val, 0.0, 0.0, 1.0))
+		_peak_image.set_pixel(i, 0, Color(peak_val, 0.0, 0.0, 1.0))
+	_spectrum_texture.update(_spectrum_image)
+	_peak_texture.update(_peak_image)
+
 	_shader_material.set_shader_parameter("audio_level", smoothed_audio)
 	_shader_material.set_shader_parameter("bass_level", smoothed_bass)
 	_shader_material.set_shader_parameter("mid_level", smoothed_mid)

@@ -6,9 +6,9 @@ shader_type canvas_item;
 // Visualization mode: 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
 uniform int viz_mode : hint_range(0, 4) = 0;
 
-// Audio spectrum data (32 frequency bands)
-uniform float spectrum[32];
-uniform float peak_spectrum[32];  // Peak hold values
+// Audio spectrum data (32 frequency bands packed into 32x1 textures)
+uniform sampler2D spectrum_tex : filter_nearest, repeat_disable;
+uniform sampler2D peak_tex : filter_nearest, repeat_disable;
 uniform float audio_level : hint_range(0.0, 1.0) = 0.0;
 uniform float bass_level : hint_range(0.0, 1.0) = 0.0;
 uniform float mid_level : hint_range(0.0, 1.0) = 0.0;
@@ -100,49 +100,35 @@ float smin(float a, float b, float k) {
 	return min(a, b) - h * h * k * 0.25;
 }
 
-// Get spectrum value with smooth cubic interpolation
-float get_spectrum(float x) {
-	float idx = x * 31.0;
-	int i0 = int(floor(idx));
-	int i1 = min(i0 + 1, 31);
-	int i2 = min(i0 + 2, 31);
-	int im1 = max(i0 - 1, 0);
-	float t = fract(idx);
-
-	// Catmull-Rom spline interpolation for super smooth curves
-	float p0 = spectrum[im1];
-	float p1 = spectrum[i0];
-	float p2 = spectrum[i1];
-	float p3 = spectrum[i2];
-
-	float t2 = t * t;
-	float t3 = t2 * t;
-
-	return 0.5 * ((2.0 * p1) +
-		(-p0 + p2) * t +
-		(2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
-		(-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
+// Sample a single spectrum band by index (0-31)
+float sample_spectrum(int idx) {
+	return texture(spectrum_tex, vec2((float(idx) + 0.5) / 32.0, 0.5)).r;
 }
 
-// Get peak spectrum with interpolation
+// Sample a single peak band by index (0-31)
+float sample_peak(int idx) {
+	return texture(peak_tex, vec2((float(idx) + 0.5) / 32.0, 0.5)).r;
+}
+
+// Get spectrum value with smooth interpolation (x = 0.0 to 1.0)
+float get_spectrum(float x) {
+	return texture(spectrum_tex, vec2(clamp(x, 0.0, 1.0), 0.5)).r;
+}
+
+// Get peak spectrum with interpolation (x = 0.0 to 1.0)
 float get_peak(float x) {
-	float idx = x * 31.0;
-	int i0 = int(floor(idx));
-	int i1 = min(i0 + 1, 31);
-	float t = fract(idx);
-	return mix(peak_spectrum[i0], peak_spectrum[i1], t);
+	return texture(peak_tex, vec2(clamp(x, 0.0, 1.0), 0.5)).r;
 }
 
 // Smooth spectrum sampling with wider kernel
 float get_spectrum_smooth(float x, float smoothness) {
 	float total = 0.0;
 	float weight_sum = 0.0;
-	int samples = 5;
 
-	for (int i = -samples; i <= samples; i++) {
+	for (int i = -5; i <= 5; i++) {
 		float offset = float(i) * smoothness / 32.0;
 		float weight = exp(-float(i * i) / (2.0 * smoothness * smoothness));
-		total += get_spectrum(clamp(x + offset, 0.0, 1.0)) * weight;
+		total += get_spectrum(x + offset) * weight;
 		weight_sum += weight;
 	}
 
@@ -191,8 +177,8 @@ vec3 render_bars(vec2 uv, float time) {
 
 		// Only process if within bar influence area (optimization + glow)
 		if (dist_to_bar < half_width * 3.0) {
-			float spec = spectrum[i];
-			float peak = peak_spectrum[i];
+			float spec = sample_spectrum(i);
+			float peak = sample_peak(i);
 			float bar_height = spec * 0.82 + 0.03;
 
 			// Normalized position within bar
@@ -412,7 +398,7 @@ vec3 render_ambience(vec2 uv, float time) {
 		// Particle size based on spectrum and distance
 		int spec_idx = int(fi) % 32;
 		float base_size = 0.008 + seed * 0.015;
-		float audio_size = spectrum[spec_idx] * 0.025;
+		float audio_size = sample_spectrum(spec_idx) * 0.025;
 		float particle_size = base_size + audio_size;
 
 		// Distance to particle
@@ -437,7 +423,7 @@ vec3 render_ambience(vec2 uv, float time) {
 		}
 
 		// Particle trail
-		float trail_length = 0.05 + spectrum[spec_idx] * 0.03;
+		float trail_length = 0.05 + sample_spectrum(spec_idx) * 0.03;
 		vec2 trail_dir = vec2(-0.03 * speed_mod, -0.05 * speed_mod);
 		for (int t = 1; t <= 5; t++) {
 			vec2 trail_pos = particle_pos + trail_dir * float(t) * 0.2;
@@ -494,7 +480,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		// Spectrum affects beam properties
 		int spec_idx = i % 32;
-		float beam_length = 0.15 + spectrum[spec_idx] * 0.55;
+		float beam_length = 0.15 + sample_spectrum(spec_idx) * 0.55;
 		float beam_width = 0.08 + mid_level * 0.06;
 
 		// Angle difference with smooth wrapping
@@ -556,7 +542,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		// Add spectrum modulation
 		int ring_spec_idx = int(((angle + PI) / TAU) * 32.0) % 32;
-		ring_intensity *= 0.5 + spectrum[ring_spec_idx] * 0.5;
+		ring_intensity *= 0.5 + sample_spectrum(ring_spec_idx) * 0.5;
 
 		color += ring_color * ring_intensity * 0.8;
 
@@ -573,7 +559,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		float bar_angular_width = 0.05;
 		if (angle_diff < bar_angular_width) {
-			float bar_length = spectrum[i] * 0.15;
+			float bar_length = sample_spectrum(i) * 0.15;
 			if (radius > bar_start && radius < bar_start + bar_length) {
 				float intensity = smoothstep(bar_angular_width, bar_angular_width * 0.3, angle_diff);
 				intensity *= smoothstep(bar_start, bar_start + 0.02, radius);
@@ -623,7 +609,7 @@ vec3 render_plenoptic(vec2 uv, float time) {
 
 		// Spectrum modulation
 		int spec_idx = (i * 3) % 32;
-		float spec_mod = spectrum[spec_idx];
+		float spec_mod = sample_spectrum(spec_idx);
 		float circle_radius = base_radius + spec_mod * 0.02;
 
 		// Time-based animation
@@ -660,9 +646,9 @@ vec3 render_plenoptic(vec2 uv, float time) {
 		float target_angle = fi * line_angle - PI;
 		float angle_diff = abs(mod(angle - target_angle + PI, TAU) - PI);
 
-		float line_width = 0.025 + spectrum[i] * 0.015;
+		float line_width = 0.025 + sample_spectrum(i) * 0.015;
 		float line_intensity = smoothstep(line_width, line_width * 0.2, angle_diff);
-		line_intensity *= spectrum[i];
+		line_intensity *= sample_spectrum(i);
 		line_intensity *= smoothstep(0.5, 0.1, radius); // Fade at edges
 
 		if (line_intensity > 0.01) {
@@ -690,7 +676,7 @@ vec3 render_plenoptic(vec2 uv, float time) {
 
 			float dot_dist = length(centered_uv - dot_pos);
 			int spec_idx = (ring * 8 + dot) % 32;
-			float dot_size = 0.012 + spectrum[spec_idx] * 0.018;
+			float dot_size = 0.012 + sample_spectrum(spec_idx) * 0.018;
 
 			// Dot core
 			if (dot_dist < dot_size) {
