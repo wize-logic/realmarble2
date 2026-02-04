@@ -140,8 +140,8 @@ var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash
 # Level up system (3 levels max)
 var level: int = 0
 const MAX_LEVEL: int = 3
-const SPEED_BOOST_PER_LEVEL: float = 40.0  # Roll force boost per level (increased for impactful level ups)
-const MAX_SPEED_BOOST_PER_LEVEL: float = 2.0  # Max speed boost per level
+const SPEED_BOOST_PER_LEVEL: float = 50.0  # Roll force boost per level (increased for impactful level ups)
+const MAX_SPEED_BOOST_PER_LEVEL: float = 5.0  # Max speed boost per level (significant increase per level)
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
@@ -1593,7 +1593,7 @@ func collect_orb() -> void:
 	if level < MAX_LEVEL:
 		level += 1
 		update_stats()
-		DebugLogger.dlog(DebugLogger.Category.PLAYER, "⭐ LEVEL UP! New level: %d | Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, current_jump_impulse, current_spin_dash_force], false, get_entity_id())
+		DebugLogger.dlog(DebugLogger.Category.PLAYER, "⭐ LEVEL UP! New level: %d | Roll Force: %.1f | Max Speed: %.1f | Jump: %.1f | Spin: %.1f" % [level, current_roll_force, max_speed, current_jump_impulse, current_spin_dash_force], false, get_entity_id())
 	else:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Already at MAX_LEVEL (%d)" % MAX_LEVEL, false, get_entity_id())
 
