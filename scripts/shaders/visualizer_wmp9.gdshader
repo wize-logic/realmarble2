@@ -1,14 +1,15 @@
-shader_type canvas_item;
+shader_type spatial;
+render_mode unshaded, cull_back;
 
 // Enhanced Windows Media Player 9 Style Audio Visualizer
 // Beautiful, smooth audio-reactive visuals with modern effects
 
 // Visualization mode: 0=Bars, 1=Scope, 2=Ambience, 3=Battery, 4=Plenoptic
-uniform int viz_mode : hint_range(0, 4) = 0;
+uniform int viz_mode = 0;
 
-// Audio spectrum data (32 frequency bands)
-uniform float spectrum[32];
-uniform float peak_spectrum[32];  // Peak hold values
+// Audio spectrum data (32 frequency bands packed into 32x1 textures)
+uniform sampler2D spectrum_tex : filter_nearest, repeat_disable;
+uniform sampler2D peak_tex : filter_nearest, repeat_disable;
 uniform float audio_level : hint_range(0.0, 1.0) = 0.0;
 uniform float bass_level : hint_range(0.0, 1.0) = 0.0;
 uniform float mid_level : hint_range(0.0, 1.0) = 0.0;
@@ -16,10 +17,10 @@ uniform float high_level : hint_range(0.0, 1.0) = 0.0;
 uniform float beat_intensity : hint_range(0.0, 1.0) = 0.0;
 
 // Colors (WMP9 style palettes)
-uniform vec4 color_primary : source_color = vec4(0.0, 0.7, 1.0, 1.0);
-uniform vec4 color_secondary : source_color = vec4(1.0, 0.3, 0.7, 1.0);
-uniform vec4 color_accent : source_color = vec4(0.3, 1.0, 0.5, 1.0);
-uniform vec4 background_color : source_color = vec4(0.02, 0.02, 0.05, 1.0);
+uniform vec4 color_primary = vec4(0.0, 0.7, 1.0, 1.0);
+uniform vec4 color_secondary = vec4(1.0, 0.3, 0.7, 1.0);
+uniform vec4 color_accent = vec4(0.3, 1.0, 0.5, 1.0);
+uniform vec4 background_color = vec4(0.02, 0.02, 0.05, 1.0);
 
 // Settings
 uniform float glow_intensity : hint_range(0.0, 3.0) = 1.5;
@@ -29,10 +30,6 @@ uniform float reflection_amount : hint_range(0.0, 1.0) = 0.3;
 
 // Time passed in
 uniform float time_offset = 0.0;
-
-// Constants
-const float PI = 3.14159265359;
-const float TAU = 6.28318530718;
 
 // =============================================================================
 // NOISE AND UTILITY FUNCTIONS
@@ -84,7 +81,8 @@ float fbm(vec2 p, int octaves) {
 	float amplitude = 0.5;
 	float frequency = 1.0;
 
-	for (int i = 0; i < octaves; i++) {
+	for (int i = 0; i < 4; i++) {
+		if (i >= octaves) break;
 		value += amplitude * noise(p * frequency);
 		amplitude *= 0.5;
 		frequency *= 2.0;
@@ -99,49 +97,35 @@ float smin(float a, float b, float k) {
 	return min(a, b) - h * h * k * 0.25;
 }
 
-// Get spectrum value with smooth cubic interpolation
-float get_spectrum(float x) {
-	float idx = x * 31.0;
-	int i0 = int(floor(idx));
-	int i1 = min(i0 + 1, 31);
-	int i2 = min(i0 + 2, 31);
-	int im1 = max(i0 - 1, 0);
-	float t = fract(idx);
-
-	// Catmull-Rom spline interpolation for super smooth curves
-	float p0 = spectrum[im1];
-	float p1 = spectrum[i0];
-	float p2 = spectrum[i1];
-	float p3 = spectrum[i2];
-
-	float t2 = t * t;
-	float t3 = t2 * t;
-
-	return 0.5 * ((2.0 * p1) +
-		(-p0 + p2) * t +
-		(2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
-		(-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
+// Sample a single spectrum band by index (0-31)
+float sample_spectrum(int idx) {
+	return texture(spectrum_tex, vec2((float(idx) + 0.5) / 32.0, 0.5)).r;
 }
 
-// Get peak spectrum with interpolation
+// Sample a single peak band by index (0-31)
+float sample_peak(int idx) {
+	return texture(peak_tex, vec2((float(idx) + 0.5) / 32.0, 0.5)).r;
+}
+
+// Get spectrum value with smooth interpolation (x = 0.0 to 1.0)
+float get_spectrum(float x) {
+	return texture(spectrum_tex, vec2(clamp(x, 0.0, 1.0), 0.5)).r;
+}
+
+// Get peak spectrum with interpolation (x = 0.0 to 1.0)
 float get_peak(float x) {
-	float idx = x * 31.0;
-	int i0 = int(floor(idx));
-	int i1 = min(i0 + 1, 31);
-	float t = fract(idx);
-	return mix(peak_spectrum[i0], peak_spectrum[i1], t);
+	return texture(peak_tex, vec2(clamp(x, 0.0, 1.0), 0.5)).r;
 }
 
 // Smooth spectrum sampling with wider kernel
 float get_spectrum_smooth(float x, float smoothness) {
 	float total = 0.0;
 	float weight_sum = 0.0;
-	int samples = 5;
 
-	for (int i = -samples; i <= samples; i++) {
+	for (int i = -5; i <= 5; i++) {
 		float offset = float(i) * smoothness / 32.0;
 		float weight = exp(-float(i * i) / (2.0 * smoothness * smoothness));
-		total += get_spectrum(clamp(x + offset, 0.0, 1.0)) * weight;
+		total += get_spectrum(x + offset) * weight;
 		weight_sum += weight;
 	}
 
@@ -190,8 +174,8 @@ vec3 render_bars(vec2 uv, float time) {
 
 		// Only process if within bar influence area (optimization + glow)
 		if (dist_to_bar < half_width * 3.0) {
-			float spec = spectrum[i];
-			float peak = peak_spectrum[i];
+			float spec = sample_spectrum(i);
+			float peak = sample_peak(i);
 			float bar_height = spec * 0.82 + 0.03;
 
 			// Normalized position within bar
@@ -411,7 +395,7 @@ vec3 render_ambience(vec2 uv, float time) {
 		// Particle size based on spectrum and distance
 		int spec_idx = int(fi) % 32;
 		float base_size = 0.008 + seed * 0.015;
-		float audio_size = spectrum[spec_idx] * 0.025;
+		float audio_size = sample_spectrum(spec_idx) * 0.025;
 		float particle_size = base_size + audio_size;
 
 		// Distance to particle
@@ -436,7 +420,7 @@ vec3 render_ambience(vec2 uv, float time) {
 		}
 
 		// Particle trail
-		float trail_length = 0.05 + spectrum[spec_idx] * 0.03;
+		float trail_length = 0.05 + sample_spectrum(spec_idx) * 0.03;
 		vec2 trail_dir = vec2(-0.03 * speed_mod, -0.05 * speed_mod);
 		for (int t = 1; t <= 5; t++) {
 			vec2 trail_pos = particle_pos + trail_dir * float(t) * 0.2;
@@ -493,7 +477,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		// Spectrum affects beam properties
 		int spec_idx = i % 32;
-		float beam_length = 0.15 + spectrum[spec_idx] * 0.55;
+		float beam_length = 0.15 + sample_spectrum(spec_idx) * 0.55;
 		float beam_width = 0.08 + mid_level * 0.06;
 
 		// Angle difference with smooth wrapping
@@ -555,7 +539,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		// Add spectrum modulation
 		int ring_spec_idx = int(((angle + PI) / TAU) * 32.0) % 32;
-		ring_intensity *= 0.5 + spectrum[ring_spec_idx] * 0.5;
+		ring_intensity *= 0.5 + sample_spectrum(ring_spec_idx) * 0.5;
 
 		color += ring_color * ring_intensity * 0.8;
 
@@ -572,7 +556,7 @@ vec3 render_battery(vec2 uv, float time) {
 
 		float bar_angular_width = 0.05;
 		if (angle_diff < bar_angular_width) {
-			float bar_length = spectrum[i] * 0.15;
+			float bar_length = sample_spectrum(i) * 0.15;
 			if (radius > bar_start && radius < bar_start + bar_length) {
 				float intensity = smoothstep(bar_angular_width, bar_angular_width * 0.3, angle_diff);
 				intensity *= smoothstep(bar_start, bar_start + 0.02, radius);
@@ -622,7 +606,7 @@ vec3 render_plenoptic(vec2 uv, float time) {
 
 		// Spectrum modulation
 		int spec_idx = (i * 3) % 32;
-		float spec_mod = spectrum[spec_idx];
+		float spec_mod = sample_spectrum(spec_idx);
 		float circle_radius = base_radius + spec_mod * 0.02;
 
 		// Time-based animation
@@ -659,9 +643,9 @@ vec3 render_plenoptic(vec2 uv, float time) {
 		float target_angle = fi * line_angle - PI;
 		float angle_diff = abs(mod(angle - target_angle + PI, TAU) - PI);
 
-		float line_width = 0.025 + spectrum[i] * 0.015;
+		float line_width = 0.025 + sample_spectrum(i) * 0.015;
 		float line_intensity = smoothstep(line_width, line_width * 0.2, angle_diff);
-		line_intensity *= spectrum[i];
+		line_intensity *= sample_spectrum(i);
 		line_intensity *= smoothstep(0.5, 0.1, radius); // Fade at edges
 
 		if (line_intensity > 0.01) {
@@ -681,15 +665,15 @@ vec3 render_plenoptic(vec2 uv, float time) {
 		int num_dots = 8 + ring * 6;
 		float dot_angular_speed = 0.4 - float(ring) * 0.08;
 
-		for (int dot = 0; dot < num_dots; dot++) {
-			if (dot >= 38) break;
+		for (int dot = 0; dot < 38; dot++) {
+			if (dot >= num_dots) break;
 
 			float dot_angle = (float(dot) / float(num_dots)) * TAU + time * dot_angular_speed;
 			vec2 dot_pos = vec2(cos(dot_angle), sin(dot_angle)) * ring_r;
 
 			float dot_dist = length(centered_uv - dot_pos);
 			int spec_idx = (ring * 8 + dot) % 32;
-			float dot_size = 0.012 + spectrum[spec_idx] * 0.018;
+			float dot_size = 0.012 + sample_spectrum(spec_idx) * 0.018;
 
 			// Dot core
 			if (dot_dist < dot_size) {
@@ -780,5 +764,5 @@ void fragment() {
 	final_color = apply_post_processing(final_color, uv, time);
 
 	// Clamp final output
-	COLOR = vec4(clamp(final_color, vec3(0.0), vec3(1.0)), 1.0);
+	ALBEDO = clamp(final_color, vec3(0.0), vec3(1.0));
 }
