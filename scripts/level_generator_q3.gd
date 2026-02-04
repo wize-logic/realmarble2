@@ -64,6 +64,8 @@ extends Node3D
 @export var q3_ceiling_lights: bool = true  ## Add ceiling-mounted lights
 @export var q3_floor_fill: bool = true  ## Add floor-level fill lights
 @export var q3_structure_boost: float = 1.5  ## Extra lighting on structures
+## Lighting quality for performance: 0=Low (few lights), 1=Medium, 2=High (full)
+@export var lighting_quality: int = 1
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -2462,8 +2464,8 @@ func generate_room_lights() -> void:
 	# Third pass: Corridor lighting
 	_generate_corridor_q3_lights()
 
-	# Fourth pass: Wall bounce lights for radiosity simulation
-	if q3_bounce_enabled:
+	# Fourth pass: Wall bounce lights for radiosity simulation (skip on low quality)
+	if q3_bounce_enabled and lighting_quality >= 1:
 		_generate_bounce_lights()
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d Q3-style lights (grid + room + corridor + bounce)" % lights.size())
@@ -2472,9 +2474,12 @@ func generate_room_lights() -> void:
 func _generate_arena_light_grid() -> void:
 	## Generate a uniform grid of lights across the entire arena
 	## This ensures base illumination everywhere - the Q3 "lightmap" approach
+	## Performance: lighting_quality controls light density
 
 	var half_arena: float = arena_size * 0.5
-	var grid_step: float = q3_grid_spacing
+	# Increase grid spacing on lower quality for fewer lights
+	var quality_multiplier: float = 1.0 if lighting_quality >= 2 else (1.5 if lighting_quality == 1 else 2.5)
+	var grid_step: float = q3_grid_spacing * quality_multiplier
 	var grid_count_x: int = int(arena_size / grid_step) + 1
 	var grid_count_z: int = int(arena_size / grid_step) + 1
 
@@ -2482,53 +2487,62 @@ func _generate_arena_light_grid() -> void:
 	var start_x: float = -half_arena + (arena_size - (grid_count_x - 1) * grid_step) * 0.5
 	var start_z: float = -half_arena + (arena_size - (grid_count_z - 1) * grid_step) * 0.5
 
+	# On lower quality, increase light range to compensate for fewer lights
+	var range_boost: float = 1.0 if lighting_quality >= 2 else (1.3 if lighting_quality == 1 else 1.6)
+	var energy_boost: float = 1.0 if lighting_quality >= 2 else (1.2 if lighting_quality == 1 else 1.4)
+
 	var grid_idx: int = 0
+	var lights_created: int = 0
 	for gx in range(grid_count_x):
 		for gz in range(grid_count_z):
 			var pos_x: float = start_x + gx * grid_step
 			var pos_z: float = start_z + gz * grid_step
 
-			# Ceiling light - primary illumination
+			# Ceiling light - primary illumination (always enabled)
 			if q3_ceiling_lights:
 				var ceiling_light: OmniLight3D = OmniLight3D.new()
 				ceiling_light.name = "GridCeilingLight_%d" % grid_idx
 				ceiling_light.position = Vector3(pos_x, room_height * 0.85, pos_z)
 				ceiling_light.light_color = q3_light_color
-				ceiling_light.light_energy = q3_light_energy
-				ceiling_light.omni_range = q3_light_range * 1.2  # Overlap for seamless coverage
-				ceiling_light.omni_attenuation = 0.7  # Softer falloff
+				ceiling_light.light_energy = q3_light_energy * energy_boost
+				ceiling_light.omni_range = q3_light_range * 1.2 * range_boost
+				ceiling_light.omni_attenuation = 0.7
 				ceiling_light.shadow_enabled = false
 				add_child(ceiling_light)
 				lights.append(ceiling_light)
+				lights_created += 1
 
-			# Floor fill light - eliminates ground-level dark spots
-			if q3_floor_fill:
+			# Floor fill light - only on medium/high quality
+			if q3_floor_fill and lighting_quality >= 1:
 				var floor_light: OmniLight3D = OmniLight3D.new()
 				floor_light.name = "GridFloorLight_%d" % grid_idx
 				floor_light.position = Vector3(pos_x, 1.5, pos_z)
 				floor_light.light_color = q3_light_color
-				floor_light.light_energy = q3_ambient_energy
-				floor_light.omni_range = q3_light_range
-				floor_light.omni_attenuation = 0.6  # Very soft falloff
+				floor_light.light_energy = q3_ambient_energy * energy_boost
+				floor_light.omni_range = q3_light_range * range_boost
+				floor_light.omni_attenuation = 0.6
 				floor_light.shadow_enabled = false
 				add_child(floor_light)
 				lights.append(floor_light)
+				lights_created += 1
 
-			# Mid-height ambient light - fills vertical space
-			var mid_light: OmniLight3D = OmniLight3D.new()
-			mid_light.name = "GridMidLight_%d" % grid_idx
-			mid_light.position = Vector3(pos_x, room_height * 0.4, pos_z)
-			mid_light.light_color = q3_light_color
-			mid_light.light_energy = q3_ambient_energy * 0.7
-			mid_light.omni_range = q3_light_range * 0.9
-			mid_light.omni_attenuation = 0.6
-			mid_light.shadow_enabled = false
-			add_child(mid_light)
-			lights.append(mid_light)
+			# Mid-height ambient light - only on high quality
+			if lighting_quality >= 2:
+				var mid_light: OmniLight3D = OmniLight3D.new()
+				mid_light.name = "GridMidLight_%d" % grid_idx
+				mid_light.position = Vector3(pos_x, room_height * 0.4, pos_z)
+				mid_light.light_color = q3_light_color
+				mid_light.light_energy = q3_ambient_energy * 0.7 * energy_boost
+				mid_light.omni_range = q3_light_range * 0.9 * range_boost
+				mid_light.omni_attenuation = 0.6
+				mid_light.shadow_enabled = false
+				add_child(mid_light)
+				lights.append(mid_light)
+				lights_created += 1
 
 			grid_idx += 1
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "  Grid lights: %d (%dx%d grid)" % [grid_idx * 3, grid_count_x, grid_count_z])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "  Grid lights: %d (%dx%d grid, quality=%d)" % [lights_created, grid_count_x, grid_count_z, lighting_quality])
 
 
 func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -> void:

@@ -21,6 +21,9 @@ uniform float color_variation : hint_range(0.0, 0.3) = 0.08;
 uniform float emission_strength : hint_range(0.0, 0.5) = 0.015;  // Subtle emission
 uniform vec3 emission_tint : source_color = vec3(0.7, 0.75, 0.8);  // Subtle tint
 
+// Performance quality: 0=Low (best FPS), 1=Medium, 2=High
+uniform int quality_level : hint_range(0, 2) = 1;
+
 // Q3-style lighting controls - prevents pitch black spots without washing out
 uniform float min_brightness : hint_range(0.0, 0.5) = 0.03;  // Very subtle minimum
 uniform float ambient_boost : hint_range(0.0, 0.5) = 0.01;  // Minimal ambient boost
@@ -48,34 +51,37 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// 3D noise for volumetric effects
+// 3D noise for volumetric effects - optimized version
 float noise3d(vec3 p) {
 	vec3 i = floor(p);
 	vec3 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);
 
-	float n = 0.0;
-	for(int z = 0; z <= 1; z++) {
-		for(int y = 0; y <= 1; y++) {
-			for(int x = 0; x <= 1; x++) {
-				vec3 g = vec3(float(x), float(y), float(z));
-				n += hash3(i + g) *
-					(f.x * g.x + (1.0 - f.x) * (1.0 - g.x)) *
-					(f.y * g.y + (1.0 - f.y) * (1.0 - g.y)) *
-					(f.z * g.z + (1.0 - f.z) * (1.0 - g.z));
-			}
-		}
-	}
-	return n;
+	// Optimized: unrolled interpolation instead of nested loops
+	float a = hash3(i);
+	float b = hash3(i + vec3(1.0, 0.0, 0.0));
+	float c = hash3(i + vec3(0.0, 1.0, 0.0));
+	float d = hash3(i + vec3(1.0, 1.0, 0.0));
+	float e = hash3(i + vec3(0.0, 0.0, 1.0));
+	float f1 = hash3(i + vec3(1.0, 0.0, 1.0));
+	float g = hash3(i + vec3(0.0, 1.0, 1.0));
+	float h = hash3(i + vec3(1.0, 1.0, 1.0));
+
+	float z1 = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+	float z2 = mix(mix(e, f1, f.x), mix(g, h, f.x), f.y);
+	return mix(z1, z2, f.z);
 }
 
-// Fractal Brownian Motion for complex patterns
+// Fractal Brownian Motion for complex patterns - quality-adaptive
 float fbm(vec2 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
+	// Low: 2 octaves, Medium: 3 octaves, High: 4 octaves
+	int max_octaves = quality_level == 0 ? 2 : (quality_level == 1 ? 3 : 4);
 
-	for(int i = 0; i < 5; i++) {
+	for(int i = 0; i < 4; i++) {
+		if (i >= max_octaves) break;
 		value += amplitude * noise(p * frequency);
 		frequency *= 2.0;
 		amplitude *= 0.5;
@@ -160,35 +166,55 @@ void fragment() {
 	                pattern_y * blend_weights.y +
 	                pattern_z * blend_weights.z;
 
-	// Add cellular/tile pattern
-	float cells_x = voronoi(uv_x * 0.5);
-	float cells_y = voronoi(uv_y * 0.5);
-	float cells_z = voronoi(uv_z * 0.5);
-	float cells = cells_x * blend_weights.x +
-	              cells_y * blend_weights.y +
-	              cells_z * blend_weights.z;
+	// Add cellular/tile pattern (skip on low quality for performance)
+	float combined = pattern;
+	if (quality_level > 0) {
+		float cells_x = voronoi(uv_x * 0.5);
+		float cells_y = voronoi(uv_y * 0.5);
+		float cells_z = voronoi(uv_z * 0.5);
+		float cells = cells_x * blend_weights.x +
+		              cells_y * blend_weights.y +
+		              cells_z * blend_weights.z;
+		// Combine patterns
+		combined = mix(pattern, cells, pattern_mix);
+	}
 
-	// Combine patterns
-	float combined = mix(pattern, cells, pattern_mix);
-
-	// Create detail variation
-	float detail = noise(world_pos.xz * scale * 4.0) * detail_strength;
+	// Create detail variation (simplified on low quality)
+	float detail = 0.0;
+	if (quality_level > 0) {
+		detail = noise(world_pos.xz * scale * 4.0) * detail_strength;
+	}
 	combined += detail;
 
-	// Add wear/weathering effect
-	float wear = smoothstep(0.4, 0.6, fbm(world_pos.xz * 0.5)) * wear_amount;
+	// Add wear/weathering effect (skip fbm call on low quality)
+	float wear = 0.0;
+	if (quality_level > 0) {
+		wear = smoothstep(0.4, 0.6, fbm(world_pos.xz * 0.5)) * wear_amount;
+	}
 
-	// Calculate edge wear
-	float edge = edge_factor(NORMAL, world_pos) * edge_wear_strength;
+	// Calculate edge wear (skip on low quality - expensive dFdx/dFdy)
+	float edge = 0.0;
+	if (quality_level > 0) {
+		edge = edge_factor(NORMAL, world_pos) * edge_wear_strength;
+	}
 
-	// Calculate ambient occlusion
-	float ao = calculate_ao(world_pos, NORMAL);
+	// Calculate ambient occlusion (simplified on low quality)
+	float ao = 1.0;
+	if (quality_level > 0) {
+		ao = calculate_ao(world_pos, NORMAL);
+	}
 
-	// Calculate wet puddle areas
-	float wet = wet_puddles(world_pos) * wet_area_amount;
+	// Calculate wet puddle areas (skip on low quality)
+	float wet = 0.0;
+	if (quality_level >= 2) {
+		wet = wet_puddles(world_pos) * wet_area_amount;
+	}
 
 	// Add per-surface color variation using world position
-	float hue_shift = noise3d(world_pos * 0.1) * color_variation;
+	float hue_shift = 0.0;
+	if (quality_level > 0) {
+		hue_shift = noise3d(world_pos * 0.1) * color_variation;
+	}
 	vec3 varied_base = base_color + vec3(hue_shift, hue_shift * 0.5, -hue_shift * 0.3);
 	vec3 varied_accent = accent_color + vec3(-hue_shift * 0.5, hue_shift, hue_shift * 0.2);
 
@@ -234,11 +260,13 @@ void fragment() {
 	// Specular increases on wet areas
 	SPECULAR = 0.5 + wet * 0.4;
 
-	// Normal map detail from noise (enhanced)
-	float normal_detail_x = (noise(world_pos.xz * scale * 8.0) - 0.5) * detail_strength * 0.6;
-	float normal_detail_y = (noise(world_pos.xz * scale * 8.0 + vec2(100.0, 0.0)) - 0.5) * detail_strength * 0.6;
-	NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
-	NORMAL_MAP_DEPTH = 0.6;
+	// Normal map detail from noise (skip on low quality for performance)
+	if (quality_level > 0) {
+		float normal_detail_x = (noise(world_pos.xz * scale * 8.0) - 0.5) * detail_strength * 0.6;
+		float normal_detail_y = (noise(world_pos.xz * scale * 8.0 + vec2(100.0, 0.0)) - 0.5) * detail_strength * 0.6;
+		NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
+		NORMAL_MAP_DEPTH = 0.6;
+	}
 
 	// Subtle emission on edges and wet areas (helps visibility without washing out)
 	vec3 emit_color = emission_tint * final_color;
