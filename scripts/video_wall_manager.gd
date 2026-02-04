@@ -255,9 +255,8 @@ func _create_curved_wall_segment(radius: float, height: float, start_angle: floa
 			vertices.append(Vector3(x, y, z))
 			# Normal points inward (toward center)
 			normals.append(-Vector3(x, 0, z).normalized())
-			# UV: u based on angle position, v flipped for correct orientation
-			var u_uv := lerpf(start_angle / TAU, end_angle / TAU, t)
-			uvs.append(Vector2(u_uv, v_uv))
+			# UV: each wall segment gets full 0-1 range so video displays completely on each
+			uvs.append(Vector2(t, v_uv))
 
 	# Generate triangle indices with reversed winding for inward-facing
 	for v in range(v_segments):
