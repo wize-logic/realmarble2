@@ -2039,7 +2039,7 @@ func apply_visualizer_walls() -> void:
 	# Dome sizing: radius encompasses the arena with some breathing room
 	# Bottom gap angle keeps the dome open at the bottom so the ball can fall off and die
 	var dome_radius: float = arena_size * 0.65
-	var dome_bottom_gap_deg: float = 8.0  # degrees above equator where dome starts
+	var dome_bottom_gap_deg: float = 30.0  # degrees above equator where dome starts (larger = bigger opening)
 
 	# Load and initialize visualizer wall manager
 	print("[LevelGen] Loading VisualizerWallManager...")
