@@ -175,6 +175,7 @@ func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vec
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
 	_shader_material.set_shader_parameter("quality_level", quality_level)
+	_shader_material.set_shader_parameter("dome_mode", true)  # Enable dome-optimized rendering
 
 	# Create spectrum textures (32x1 RGBA8 images)
 	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
