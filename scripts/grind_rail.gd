@@ -9,14 +9,14 @@ class_name GrindRail
 @export var boost_acceleration: float = 25.0  # How fast you accelerate when boosting
 @export var rope_length: float = 5.0
 @export var max_attach_distance: float = 25.0
-@export var gravity: float = 28.0  # Gravity for pendulum feel
-@export var swing_damping: float = 0.8  # Light damping for fluid swings
-@export var swing_force: float = 12.0  # Responsive swing control
+@export var gravity: float = 32.0  # Stronger gravity for dynamic pendulum feel
+@export var swing_damping: float = 0.0  # No damping - fully dynamic rope
+@export var swing_force: float = 18.0  # Strong swing control for dynamic movement
 @export var rope_thickness: float = 0.008  # Ultra-thin rope (wire-like)
 
 # Transition smoothing
 @export var transition_duration: float = 0.25  # Smooth attach transition time
-@export var momentum_transfer: float = 0.85  # How much velocity converts to swing
+@export var momentum_transfer: float = 1.0  # Full velocity converts to swing for dynamic entry
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
 var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
@@ -131,11 +131,11 @@ func try_attach_player(grinder: RigidBody3D) -> bool:
 	var perpendicular_speed: float = horizontal_vel.dot(right)
 
 	# Initial swing angle based on perpendicular momentum (swing INTO the rail motion)
-	var initial_angle: float = clamp(perpendicular_speed * 0.04 * momentum_transfer, -0.5, 0.5)
+	var initial_angle: float = clamp(perpendicular_speed * 0.06 * momentum_transfer, -0.8, 0.8)
 
-	# Initial angular velocity from the player's momentum
+	# Initial angular velocity from the player's momentum - higher limit for dynamic entry
 	var initial_angular_vel: float = perpendicular_speed / rope_length * momentum_transfer
-	initial_angular_vel = clamp(initial_angular_vel, -4.0, 4.0)
+	initial_angular_vel = clamp(initial_angular_vel, -6.0, 6.0)
 
 	# Inherit some speed from player's velocity along the rail
 	var speed_along_rail: float = absf(vel_dot)
@@ -238,9 +238,9 @@ func _calculate_velocity(grinder: RigidBody3D, state: Dictionary) -> Vector3:
 	var swing_tangent: Vector3 = right * cos(state.swing_angle) + Vector3.UP * sin(state.swing_angle)
 	var swing_vel: Vector3 = swing_tangent * state.angular_velocity * rope_length
 
-	# Add a small vertical component based on swing position for more dynamic feel
-	# When swinging up, you get a small lift
-	var swing_lift: float = sin(state.swing_angle) * absf(state.angular_velocity) * 0.15
+	# Add vertical component based on swing position for dynamic feel
+	# When swinging up, you get noticeable lift
+	var swing_lift: float = sin(state.swing_angle) * absf(state.angular_velocity) * 0.25
 	swing_vel.y += swing_lift
 
 	return rail_vel + swing_vel
@@ -322,21 +322,14 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	var gravity_torque: float = -gravity / rope_length * sin(state.swing_angle)
 	state.angular_velocity += gravity_torque * delta
 
-	# Variable damping - less damping at low speeds for fluid feel, more at high speeds for control
-	var speed_factor: float = minf(absf(state.angular_velocity) / 3.0, 1.0)
-	var effective_damping: float = lerpf(swing_damping * 0.5, swing_damping * 1.5, speed_factor)
-	state.angular_velocity *= (1.0 - effective_damping * delta)
+	# No damping - rope swings freely for dynamic physics
 
 	# Update swing angle
 	state.swing_angle += state.angular_velocity * delta
 
-	# Soft clamp swing angle (allow big swings but resist extremes)
-	var max_swing: float = PI * 0.7  # Allow up to ~126 degree swings
-	if absf(state.swing_angle) > max_swing:
-		var excess: float = absf(state.swing_angle) - max_swing
-		var resistance: float = 1.0 + excess * 2.0  # Increasing resistance
-		state.angular_velocity /= resistance
-		state.swing_angle = clamp(state.swing_angle, -PI * 0.85, PI * 0.85)
+	# Allow very large swings for dynamic rope physics - only hard limit at full rotation
+	var max_swing: float = PI * 0.95  # Allow up to ~171 degree swings (near full rotation)
+	state.swing_angle = clamp(state.swing_angle, -max_swing, max_swing)
 
 	# Boost when holding shift (smooth acceleration)
 	var is_boosting: bool = Input.is_key_pressed(KEY_SHIFT)
