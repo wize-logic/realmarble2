@@ -97,6 +97,7 @@ var skybox_generator: Node3D = null
 
 # GAME STATE
 var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
+var current_arena_multiplier: float = 1.0  # Arena size multiplier for player speed scaling
 
 func _ready() -> void:
 	# Load saved marble color preference from Global settings
@@ -969,6 +970,10 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 	add_child(local_player)
 	local_player.add_to_group("players")
 
+	# Set arena size multiplier for movement speed scaling
+	if local_player.has_method("set_arena_size_multiplier"):
+		local_player.set_arena_size_multiplier(current_arena_multiplier)
+
 	# Update player spawns from level generator (same as bots)
 	if level_generator and level_generator.has_method("get_spawn_points"):
 		var spawn_points: PackedVector3Array = level_generator.get_spawn_points()
@@ -1107,6 +1112,10 @@ func add_player(peer_id: int) -> void:
 
 	# Add to players group for AI targeting
 	player.add_to_group("players")
+
+	# Set arena size multiplier for movement speed scaling
+	if player.has_method("set_arena_size_multiplier"):
+		player.set_arena_size_multiplier(current_arena_multiplier)
 
 	# Check if this is a bot (IDs >= 9000 are bots)
 	var is_bot: bool = peer_id >= 9000
@@ -1907,6 +1916,10 @@ func spawn_bot() -> void:
 	bot.custom_color_index = randi() % 28  # 28 color schemes available
 
 	add_child(bot)
+
+	# Set arena size multiplier for movement speed scaling
+	if bot.has_method("set_arena_size_multiplier"):
+		bot.set_arena_size_multiplier(current_arena_multiplier)
 
 	# Update bot spawns from level generator
 	if level_generator and level_generator.has_method("get_spawn_points"):
@@ -2805,6 +2818,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 		4: 2.0    # Huge - massive arena
 	}
 	var arena_mult: float = arena_multipliers.get(level_size, 1.0)
+	current_arena_multiplier = arena_mult  # Store for player speed scaling
 
 	# Remove old level generator if it exists
 	if level_generator:
@@ -2887,7 +2901,10 @@ func update_player_spawns() -> void:
 	for player in players:
 		if "spawns" in player:
 			player.spawns = new_spawns
-			DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Updated spawns for player: %s" % player.name)
+		# Update arena size multiplier for movement speed scaling
+		if player.has_method("set_arena_size_multiplier"):
+			player.set_arena_size_multiplier(current_arena_multiplier)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Updated spawns and arena size for player: %s" % player.name)
 
 func _on_track_started(metadata: Dictionary) -> void:
 	"""Called when a new music track starts playing"""
