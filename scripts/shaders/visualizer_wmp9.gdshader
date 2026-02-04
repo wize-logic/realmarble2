@@ -31,10 +31,6 @@ uniform float reflection_amount : hint_range(0.0, 1.0) = 0.3;
 // Time passed in
 uniform float time_offset = 0.0;
 
-// Constants
-const float PI = 3.14159265359;
-const float TAU = 6.28318530718;
-
 // =============================================================================
 // NOISE AND UTILITY FUNCTIONS
 // =============================================================================
