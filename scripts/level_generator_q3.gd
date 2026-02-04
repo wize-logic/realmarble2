@@ -1988,18 +1988,11 @@ func apply_video_walls() -> void:
 		print("[LevelGen] Video walls disabled and not on main menu - skipping")
 		return
 
+	# Rotating cylinder sizing based on arena
 	var scale: float = arena_size / 140.0
-	var wall_distance: float = arena_size * 0.55
-	var perim_wall_height: float = 25.0 * scale
-
-	# Wall configs with rotation for video panels facing inward
-	# North: faces -Z (toward center), South: faces +Z, East: faces -X, West: faces +X
-	var wall_configs = [
-		{"pos": Vector3(0, perim_wall_height / 2.0, wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, PI, 0)},  # North - rotated to face inward
-		{"pos": Vector3(0, perim_wall_height / 2.0, -wall_distance), "size": Vector3(arena_size * 1.2, perim_wall_height, 0.1), "rotation": Vector3(0, 0, 0)},  # South - faces +Z (inward)
-		{"pos": Vector3(wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, -PI/2, 0)},  # East - rotated to face inward
-		{"pos": Vector3(-wall_distance, perim_wall_height / 2.0, 0), "size": Vector3(0.1, perim_wall_height, arena_size * 1.2), "rotation": Vector3(0, PI/2, 0)}  # West - rotated to face inward
-	]
+	var cylinder_radius: float = arena_size * 0.6
+	var cylinder_height: float = 30.0 * scale
+	var cylinder_center: Vector3 = Vector3(0, cylinder_height / 2.0, 0)
 
 	# Load and initialize video wall manager
 	print("[LevelGen] Loading VideoWallManager...")
@@ -2014,11 +2007,11 @@ func apply_video_walls() -> void:
 	video_wall_manager.loop_video = VIDEO_WALL_LOOP
 	add_child(video_wall_manager)
 
-	# Initialize video and create panels
+	# Initialize video and create rotating cylinder
 	if video_wall_manager.initialize(VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION):
-		print("[LevelGen] Creating video panels...")
-		video_wall_manager.create_video_panels(wall_configs)
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Video walls created with: " + VIDEO_WALL_PATH)
+		print("[LevelGen] Creating rotating video cylinder...")
+		video_wall_manager.create_video_cylinder(cylinder_radius, cylinder_height, cylinder_center, 64, 1)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Rotating video cylinder created with: " + VIDEO_WALL_PATH)
 	else:
 		push_warning("Failed to initialize video walls")
 		video_wall_manager.queue_free()
@@ -2039,9 +2032,8 @@ func apply_visualizer_walls() -> void:
 		return
 
 	# Dome sizing: radius encompasses the arena with some breathing room
-	# Full sphere dome with a small gap at the very bottom for the ball to fall through
+	# Complete sphere dome with no gaps
 	var dome_radius: float = arena_size * 0.65
-	var dome_bottom_gap_deg: float = 8.0  # degrees from nadir where dome starts (small gap at bottom)
 
 	# Load and initialize visualizer wall manager
 	print("[LevelGen] Loading VisualizerWallManager...")
@@ -2062,13 +2054,13 @@ func apply_visualizer_walls() -> void:
 	# Initialize visualizer and create dome
 	if visualizer_wall_manager.initialize(VISUALIZER_AUDIO_BUS, VISUALIZER_RESOLUTION):
 		print("[LevelGen] Creating visualizer dome...")
-		# Full sphere needs more vertical segments for smooth coverage (64h x 48v)
-		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, dome_bottom_gap_deg, 64, 48)
+		# Complete sphere with 64h x 48v segments for smooth coverage
+		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, 64, 48)
 
 		# Apply color preset
 		visualizer_wall_manager.set_color_preset(visualizer_color_preset)
 
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Full sphere visualizer dome created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Complete sphere visualizer dome created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
 	else:
 		push_warning("Failed to initialize visualizer walls")
 		visualizer_wall_manager.queue_free()

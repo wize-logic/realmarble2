@@ -1,7 +1,7 @@
 extends Node3D
 
 ## Video Wall Manager
-## Creates video panel meshes that replace perimeter walls
+## Creates a rotating curved video wall around the arena
 ## All panels share the same video source via a custom shader with linear filtering
 
 # Video components
@@ -16,8 +16,15 @@ var _video_shader: Shader = null
 var loop_video: bool = true
 var volume_db: float = -80.0  # Muted by default
 
+# Rotation settings
+var rotation_speed: float = 0.05  # Radians per second (slow rotation)
+var enable_rotation: bool = true
+
 # Created video panels
 var video_panels: Array[MeshInstance3D] = []
+
+# Rotating cylinder mesh
+var video_cylinder: MeshInstance3D = null
 
 # State
 var is_initialized: bool = false
@@ -173,6 +180,98 @@ func _on_video_finished() -> void:
 		video_player.play()
 
 
+func _process(delta: float) -> void:
+	# Rotate the video cylinder slowly around the Y axis
+	if enable_rotation and video_cylinder and is_instance_valid(video_cylinder):
+		video_cylinder.rotate_y(rotation_speed * delta)
+
+
+func create_video_cylinder(radius: float, height: float, center: Vector3 = Vector3.ZERO, h_segments: int = 64, v_segments: int = 1) -> MeshInstance3D:
+	## Create an inward-facing curved cylindrical wall with video texture.
+	## The cylinder rotates slowly around the arena.
+	## radius: distance from center to the wall
+	## height: vertical height of the wall
+	## center: center position of the cylinder
+	## h_segments: number of horizontal segments (smoothness)
+	## v_segments: number of vertical segments
+
+	if not is_initialized:
+		push_warning("VideoWallManager: Not initialized")
+		return null
+
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var indices := PackedInt32Array()
+
+	var half_height := height / 2.0
+
+	# Generate vertices for a cylinder (open top and bottom)
+	for v in range(v_segments + 1):
+		var y := lerpf(-half_height, half_height, float(v) / float(v_segments))
+
+		for h in range(h_segments + 1):
+			var azimuth := float(h) / float(h_segments) * TAU
+			var x := cos(azimuth) * radius
+			var z := sin(azimuth) * radius
+
+			vertices.append(Vector3(x, y, z) + center)
+			# Normal points inward (toward center)
+			normals.append(-Vector3(x, 0, z).normalized())
+			# UV: u wraps around horizontally, v goes bottom-to-top
+			uvs.append(Vector2(float(h) / float(h_segments), float(v) / float(v_segments)))
+
+	# Generate triangle indices with reversed winding for inward-facing
+	for v in range(v_segments):
+		for h in range(h_segments):
+			var tl := v * (h_segments + 1) + h
+			var tr := tl + 1
+			var bl := (v + 1) * (h_segments + 1) + h
+			var br := bl + 1
+			# Reversed winding so front face points inward
+			indices.append(tl)
+			indices.append(bl)
+			indices.append(tr)
+			indices.append(tr)
+			indices.append(bl)
+			indices.append(br)
+
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var cylinder_mesh := ArrayMesh.new()
+	cylinder_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = cylinder_mesh
+	mesh_instance.name = "VideoCylinder"
+
+	# Create material with video texture
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_texture = viewport_texture
+	material.albedo_color = Color(1.0, 1.0, 1.0)
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_BACK
+	material.metallic = 0.0
+	material.roughness = 1.0
+	mesh_instance.material_override = material
+
+	video_cylinder = mesh_instance
+	video_panels.append(mesh_instance)
+	add_child(mesh_instance)
+
+	print("[VideoWallManager] Created rotating video cylinder: radius=%.1f, height=%.1f" % [radius, height])
+
+	return mesh_instance
+
+
 func cleanup() -> void:
 	# Prevent double-cleanup
 	if not is_initialized:
@@ -191,6 +290,7 @@ func cleanup() -> void:
 		if is_instance_valid(panel) and panel.is_inside_tree():
 			panel.queue_free()
 	video_panels.clear()
+	video_cylinder = null
 
 	if sub_viewport and is_instance_valid(sub_viewport):
 		if sub_viewport.is_inside_tree():
