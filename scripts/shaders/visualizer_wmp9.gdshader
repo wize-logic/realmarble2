@@ -34,6 +34,11 @@ uniform int quality_level : hint_range(0, 2) = 1;
 // Dome mode: render for spherical dome geometry
 uniform bool dome_mode = true;
 
+// Number of times to tile the visualization around the dome (horizontal)
+uniform int dome_tiles_h : hint_range(1, 8) = 4;
+// Number of times to tile vertically on dome
+uniform int dome_tiles_v : hint_range(1, 4) = 2;
+
 // Time passed in
 uniform float time_offset = 0.0;
 
@@ -934,24 +939,33 @@ void fragment() {
 	// Flip Y for proper orientation
 	uv.y = 1.0 - uv.y;
 
+	// In dome mode, tile the visualization so it covers the entire dome surface
+	// UV.x wraps around horizontally (longitude), UV.y goes bottom to top (latitude)
+	vec2 tiled_uv = uv;
+	if (dome_mode) {
+		// Tile horizontally and vertically so visualization is visible from all angles
+		tiled_uv.x = fract(uv.x * float(dome_tiles_h));
+		tiled_uv.y = fract(uv.y * float(dome_tiles_v));
+	}
+
 	float time = TIME * animation_speed + time_offset;
 
 	vec3 final_color = vec3(0.0);
 
-	// Select visualization mode
+	// Select visualization mode (use tiled UVs for dome coverage)
 	if (viz_mode == 0) {
-		final_color = render_bars(uv, time);
+		final_color = render_bars(tiled_uv, time);
 	} else if (viz_mode == 1) {
-		final_color = render_scope(uv, time);
+		final_color = render_scope(tiled_uv, time);
 	} else if (viz_mode == 2) {
-		final_color = render_ambience(uv, time);
+		final_color = render_ambience(tiled_uv, time);
 	} else if (viz_mode == 3) {
-		final_color = render_battery(uv, time);
+		final_color = render_battery(tiled_uv, time);
 	} else if (viz_mode == 4) {
-		final_color = render_plenoptic(uv, time);
+		final_color = render_plenoptic(tiled_uv, time);
 	}
 
-	// Apply post-processing
+	// Apply post-processing (use original UVs for consistent vignette etc.)
 	final_color = apply_post_processing(final_color, uv, time);
 
 	// Clamp final output
