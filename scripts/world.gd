@@ -1757,10 +1757,10 @@ func _load_music_from_directory(dir: String) -> int:
 				# Extract the original filename (remove .import extension)
 				var original_name: String = file_name.trim_suffix(".import")
 				var ext: String = original_name.get_extension().to_lower()
-				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found imported file: %s -> original: %s (ext: %s)" % [file_name, original_name, ext])
 
-				# Check if it's a supported audio format
+				# Check if it's a supported audio format (only log audio files)
 				if ext in ["mp3", "ogg", "wav"]:
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found imported audio: %s" % original_name)
 					# Use the ORIGINAL filename (without .import) for loading
 					var file_path: String = dir.path_join(original_name)
 					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
@@ -1775,10 +1775,10 @@ func _load_music_from_directory(dir: String) -> int:
 			else:
 				# Non-imported file (external music directory)
 				var ext: String = file_name.get_extension().to_lower()
-				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found file: %s (extension: %s)" % [file_name, ext])
 
-				# Check if it's a supported audio format
+				# Check if it's a supported audio format (only process audio files)
 				if ext in ["mp3", "ogg", "wav"]:
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found audio file: %s" % file_name)
 					var file_path: String = dir.path_join(file_name)
 					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
 					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
@@ -2439,6 +2439,9 @@ func _create_customize_panel() -> void:
 	marble_mesh.mesh.rings = 16
 	marble_mesh.position = Vector3(0, 0, 0)
 	scene_root.add_child(marble_mesh)
+
+	# Apply initial material to the marble preview immediately (prevents grey sphere)
+	marble_mesh.material_override = marble_material_manager.create_marble_material(selected_marble_color_index)
 
 	# Create camera for the preview
 	var preview_cam = Camera3D.new()
