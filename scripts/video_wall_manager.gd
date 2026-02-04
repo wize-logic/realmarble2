@@ -23,8 +23,8 @@ var enable_rotation: bool = true
 # Created video panels
 var video_panels: Array[MeshInstance3D] = []
 
-# Rotating cylinder mesh
-var video_cylinder: MeshInstance3D = null
+# Rotating cylinder container (holds all wall segments)
+var video_cylinder: Node3D = null
 
 # State
 var is_initialized: bool = false
@@ -181,23 +181,54 @@ func _on_video_finished() -> void:
 
 
 func _process(delta: float) -> void:
-	# Rotate the video cylinder slowly around the Y axis
+	# Rotate the video cylinder container slowly around the Y axis
 	if enable_rotation and video_cylinder and is_instance_valid(video_cylinder):
 		video_cylinder.rotate_y(rotation_speed * delta)
 
 
-func create_video_cylinder(radius: float, height: float, center: Vector3 = Vector3.ZERO, h_segments: int = 64, v_segments: int = 1) -> MeshInstance3D:
-	## Create an inward-facing curved cylindrical wall with video texture.
-	## The cylinder rotates slowly around the arena.
-	## radius: distance from center to the wall
-	## height: vertical height of the wall
+func create_video_cylinder(radius: float, height: float, center: Vector3 = Vector3.ZERO, h_segments: int = 64, v_segments: int = 1, num_walls: int = 8) -> Node3D:
+	## Create multiple inward-facing curved wall segments with video texture.
+	## The walls are separate meshes but positioned close together to look like one.
+	## The container rotates slowly around the arena.
+	## radius: distance from center to the walls
+	## height: vertical height of the walls
 	## center: center position of the cylinder
-	## h_segments: number of horizontal segments (smoothness)
+	## h_segments: number of horizontal segments per wall (smoothness)
 	## v_segments: number of vertical segments
+	## num_walls: number of separate wall segments
 
 	if not is_initialized:
 		push_warning("VideoWallManager: Not initialized")
 		return null
+
+	# Create a container node that holds all wall segments and rotates
+	var container := Node3D.new()
+	container.name = "VideoCylinderContainer"
+	container.position = center
+	add_child(container)
+
+	# Calculate the angle each wall segment covers
+	var angle_per_wall := TAU / float(num_walls)
+	var segments_per_wall := h_segments / num_walls
+
+	# Create each wall segment
+	for wall_idx in range(num_walls):
+		var start_angle := wall_idx * angle_per_wall
+		var end_angle := (wall_idx + 1) * angle_per_wall
+
+		var wall_mesh := _create_curved_wall_segment(radius, height, start_angle, end_angle, segments_per_wall, v_segments)
+		wall_mesh.name = "VideoWall%d" % wall_idx
+		container.add_child(wall_mesh)
+		video_panels.append(wall_mesh)
+
+	video_cylinder = container
+	print("[VideoWallManager] Created %d rotating video wall segments: radius=%.1f, height=%.1f" % [num_walls, radius, height])
+
+	return container
+
+
+func _create_curved_wall_segment(radius: float, height: float, start_angle: float, end_angle: float, h_segments: int, v_segments: int) -> MeshInstance3D:
+	## Create a single curved wall segment mesh
 
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -209,20 +240,24 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 
 	var half_height := height / 2.0
 
-	# Generate vertices for a cylinder (open top and bottom)
+	# Generate vertices for this wall segment
 	for v in range(v_segments + 1):
 		var y := lerpf(-half_height, half_height, float(v) / float(v_segments))
+		# Flip V coordinate to fix upside-down video (1.0 - v_ratio)
+		var v_uv := 1.0 - float(v) / float(v_segments)
 
 		for h in range(h_segments + 1):
-			var azimuth := float(h) / float(h_segments) * TAU
+			var t := float(h) / float(h_segments)
+			var azimuth := lerpf(start_angle, end_angle, t)
 			var x := cos(azimuth) * radius
 			var z := sin(azimuth) * radius
 
-			vertices.append(Vector3(x, y, z) + center)
+			vertices.append(Vector3(x, y, z))
 			# Normal points inward (toward center)
 			normals.append(-Vector3(x, 0, z).normalized())
-			# UV: u wraps around horizontally, v goes bottom-to-top
-			uvs.append(Vector2(float(h) / float(h_segments), float(v) / float(v_segments)))
+			# UV: u based on angle position, v flipped for correct orientation
+			var u_uv := lerpf(start_angle / TAU, end_angle / TAU, t)
+			uvs.append(Vector2(u_uv, v_uv))
 
 	# Generate triangle indices with reversed winding for inward-facing
 	for v in range(v_segments):
@@ -244,12 +279,11 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 
-	var cylinder_mesh := ArrayMesh.new()
-	cylinder_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var segment_mesh := ArrayMesh.new()
+	segment_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = cylinder_mesh
-	mesh_instance.name = "VideoCylinder"
+	mesh_instance.mesh = segment_mesh
 
 	# Create material with video texture
 	var material := StandardMaterial3D.new()
@@ -262,12 +296,6 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 	material.metallic = 0.0
 	material.roughness = 1.0
 	mesh_instance.material_override = material
-
-	video_cylinder = mesh_instance
-	video_panels.append(mesh_instance)
-	add_child(mesh_instance)
-
-	print("[VideoWallManager] Created rotating video cylinder: radius=%.1f, height=%.1f" % [radius, height])
 
 	return mesh_instance
 
