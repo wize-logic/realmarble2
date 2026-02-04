@@ -1758,46 +1758,36 @@ func _load_music_from_directory(dir: String) -> int:
 	dir_access.list_dir_begin()
 	var file_name: String = dir_access.get_next()
 	var songs_loaded: int = 0
+	var loaded_files: Dictionary = {}  # Track loaded files to prevent duplicates
 
 	while file_name != "":
 		if not dir_access.current_is_dir():
-			# Skip .import files - we want the original audio files
+			# Determine the actual audio filename (strip .import if present)
+			var audio_filename: String = file_name
 			if file_name.ends_with(".import"):
-				# Extract the original filename (remove .import extension)
-				var original_name: String = file_name.trim_suffix(".import")
-				var ext: String = original_name.get_extension().to_lower()
+				audio_filename = file_name.trim_suffix(".import")
 
-				# Check if it's a supported audio format (only log audio files)
-				if ext in ["mp3", "ogg", "wav"]:
-					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found imported audio: %s" % original_name)
-					# Use the ORIGINAL filename (without .import) for loading
-					var file_path: String = dir.path_join(original_name)
-					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
-					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+			var ext: String = audio_filename.get_extension().to_lower()
 
-					if audio_stream and gameplay_music.has_method("add_song"):
-						gameplay_music.add_song(audio_stream, file_path)
-						songs_loaded += 1
-						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ Successfully loaded: %s" % original_name)
-					else:
-						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ Failed to load: %s (stream=%s)" % [original_name, "null" if not audio_stream else "exists"])
-			else:
-				# Non-imported file (external music directory)
-				var ext: String = file_name.get_extension().to_lower()
+			# Check if it's a supported audio format
+			if ext in ["mp3", "ogg", "wav"]:
+				# Skip if we've already loaded this audio file
+				if loaded_files.has(audio_filename):
+					file_name = dir_access.get_next()
+					continue
 
-				# Check if it's a supported audio format (only process audio files)
-				if ext in ["mp3", "ogg", "wav"]:
-					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found audio file: %s" % file_name)
-					var file_path: String = dir.path_join(file_name)
-					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
-					var audio_stream: AudioStream = _load_audio_file(file_path, ext)
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Found audio file: %s" % audio_filename)
+				var file_path: String = dir.path_join(audio_filename)
+				DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] Attempting to load: %s" % file_path)
+				var audio_stream: AudioStream = _load_audio_file(file_path, ext)
 
-					if audio_stream and gameplay_music.has_method("add_song"):
-						gameplay_music.add_song(audio_stream, file_path)
-						songs_loaded += 1
-						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ Successfully loaded: %s" % file_name)
-					else:
-						DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ Failed to load: %s (stream=%s)" % [file_name, "null" if not audio_stream else "exists"])
+				if audio_stream and gameplay_music.has_method("add_song"):
+					gameplay_music.add_song(audio_stream, file_path)
+					songs_loaded += 1
+					loaded_files[audio_filename] = true  # Mark as loaded
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ✅ Successfully loaded: %s" % audio_filename)
+				else:
+					DebugLogger.dlog(DebugLogger.Category.AUDIO, "[MUSIC] ❌ Failed to load: %s (stream=%s)" % [audio_filename, "null" if not audio_stream else "exists"])
 
 		file_name = dir_access.get_next()
 
