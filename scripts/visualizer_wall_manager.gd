@@ -2,7 +2,7 @@ extends Node3D
 
 ## Visualizer Wall Manager
 ## Creates Windows Media Player 9 style audio visualizer projected onto walls
-## Similar to video walls but renders procedural audio-reactive visuals
+## Shader runs directly on 3D panels (no SubViewport needed)
 
 # Visualization modes matching the shader
 enum VisualizerMode {
@@ -12,11 +12,6 @@ enum VisualizerMode {
 	BATTERY = 3,   # Geometric energy beams
 	PLENOPTIC = 4  # Kaleidoscope circles
 }
-
-# Visualization components
-var sub_viewport: SubViewport = null
-var viewport_texture: ViewportTexture = null
-var viz_control: ColorRect = null
 
 # Audio analysis
 var spectrum_analyzer: AudioEffectSpectrumAnalyzerInstance = null
@@ -28,9 +23,9 @@ var high_level: float = 0.0
 
 # Smoothing for visual appeal - enhanced with velocity tracking
 var smoothed_spectrum: PackedFloat32Array = PackedFloat32Array()
-var spectrum_velocity: PackedFloat32Array = PackedFloat32Array()  # Velocity for spring-based smoothing
-var peak_spectrum: PackedFloat32Array = PackedFloat32Array()  # Peak hold values
-var peak_decay: PackedFloat32Array = PackedFloat32Array()  # Peak decay timers
+var spectrum_velocity: PackedFloat32Array = PackedFloat32Array()
+var peak_spectrum: PackedFloat32Array = PackedFloat32Array()
+var peak_decay: PackedFloat32Array = PackedFloat32Array()
 var smoothed_audio: float = 0.0
 var smoothed_bass: float = 0.0
 var smoothed_mid: float = 0.0
@@ -54,25 +49,25 @@ var beat_cooldown: float = 0.0
 @export var background_color: Color = Color(0.02, 0.02, 0.05, 1.0)
 @export var glow_intensity: float = 1.5
 @export var animation_speed: float = 1.0
-@export var spectrum_smoothing: float = 0.12  # Lower = smoother
-@export var sensitivity: float = 2.0  # Audio sensitivity multiplier
-@export var attack_speed: float = 12.0  # How fast bars rise (higher = faster)
-@export var release_speed: float = 4.0  # How fast bars fall (lower = slower)
-@export var peak_hold_time: float = 0.3  # How long peaks stay visible
-@export var peak_fall_speed: float = 1.5  # How fast peaks fall after hold
+@export var spectrum_smoothing: float = 0.12
+@export var sensitivity: float = 2.0
+@export var attack_speed: float = 12.0
+@export var release_speed: float = 4.0
+@export var peak_hold_time: float = 0.3
+@export var peak_fall_speed: float = 1.5
 
 # Auto-cycle settings
-@export var auto_cycle: bool = true  # Automatically cycle through modes
-@export var cycle_interval: float = 30.0  # Seconds between mode switches
-@export var cycle_colors: bool = true  # Also cycle color presets with modes
+@export var auto_cycle: bool = true
+@export var cycle_interval: float = 30.0
+@export var cycle_colors: bool = true
 var _cycle_timer: float = 0.0
 var _color_preset_index: int = 0
 
-# Shader reference
+# Shader reference (spatial shader applied directly to 3D panels)
 var _visualizer_shader: Shader = null
 var _shader_material: ShaderMaterial = null
 
-# Spectrum textures (32x1 images passed to shader instead of uniform arrays)
+# Spectrum textures (32x1 images passed to shader)
 var _spectrum_image: Image = null
 var _spectrum_texture: ImageTexture = null
 var _peak_image: Image = null
@@ -137,7 +132,6 @@ const COLOR_PRESETS = {
 }
 
 func _ready() -> void:
-	# Initialize spectrum data arrays with velocity tracking
 	spectrum_data.resize(32)
 	spectrum_data.fill(0.0)
 	smoothed_spectrum.resize(32)
@@ -150,11 +144,11 @@ func _ready() -> void:
 	peak_decay.fill(0.0)
 
 
-func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
-	## Initialize the visualizer system
+func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
+	## Initialize the visualizer system (viewport_size kept for API compat but unused)
 	print("[VisualizerWallManager] Initializing with audio bus: %s" % audio_bus_name)
 
-	# Load the visualizer shader
+	# Load the visualizer shader (spatial shader applied directly to 3D panels)
 	_visualizer_shader = load("res://scripts/shaders/visualizer_wmp9.gdshader")
 	if _visualizer_shader == null:
 		push_error("VisualizerWallManager: Could not load visualizer_wmp9.gdshader")
@@ -164,27 +158,7 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	if not _setup_spectrum_analyzer(audio_bus_name):
 		push_warning("VisualizerWallManager: Could not set up spectrum analyzer, visualizer will run without audio reactivity")
 
-	# Create SubViewport for rendering the visualizer
-	sub_viewport = SubViewport.new()
-	sub_viewport.name = "VisualizerViewport"
-	sub_viewport.size = viewport_size
-	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	sub_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
-	sub_viewport.transparent_bg = false
-	sub_viewport.handle_input_locally = false
-	sub_viewport.gui_disable_input = true
-	sub_viewport.disable_3d = true
-	sub_viewport.snap_2d_transforms_to_pixel = true
-	add_child(sub_viewport)
-
-	# Create a ColorRect that fills the viewport with our shader
-	viz_control = ColorRect.new()
-	viz_control.name = "VisualizerRect"
-	viz_control.color = Color(0.1, 0.0, 0.15, 1.0)  # Dark purple fallback if shader fails
-	viz_control.set_anchors_preset(Control.PRESET_FULL_RECT)
-	viz_control.size = Vector2(viewport_size)
-
-	# Create shader material
+	# Create shader material (shared across all panels)
 	_shader_material = ShaderMaterial.new()
 	_shader_material.shader = _visualizer_shader
 
@@ -194,13 +168,13 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
 
-	# Create spectrum textures (32x1 RGBA8 images) for passing audio data to shader
+	# Create spectrum textures (32x1 RGBA8 images)
 	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
 	_spectrum_texture = ImageTexture.create_from_image(_spectrum_image)
 	_peak_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
 	_peak_texture = ImageTexture.create_from_image(_peak_image)
 
-	# Initialize audio uniforms before first render
+	# Initialize audio uniforms
 	_shader_material.set_shader_parameter("spectrum_tex", _spectrum_texture)
 	_shader_material.set_shader_parameter("peak_tex", _peak_texture)
 	_shader_material.set_shader_parameter("audio_level", 0.0)
@@ -208,12 +182,6 @@ func initialize(audio_bus_name: String = "Music", viewport_size: Vector2i = Vect
 	_shader_material.set_shader_parameter("mid_level", 0.0)
 	_shader_material.set_shader_parameter("high_level", 0.0)
 	_shader_material.set_shader_parameter("beat_intensity", 0.0)
-
-	viz_control.material = _shader_material
-	sub_viewport.add_child(viz_control)
-
-	# Get viewport texture for materials
-	viewport_texture = sub_viewport.get_texture()
 
 	is_initialized = true
 	print("[VisualizerWallManager] Initialized successfully")
@@ -237,11 +205,10 @@ func _setup_spectrum_analyzer(bus_name: String) -> bool:
 
 	# Add a new spectrum analyzer effect
 	var analyzer_effect = AudioEffectSpectrumAnalyzer.new()
-	analyzer_effect.buffer_length = 0.1  # 100ms buffer
+	analyzer_effect.buffer_length = 0.1
 	analyzer_effect.fft_size = AudioEffectSpectrumAnalyzer.FFT_SIZE_1024
 	AudioServer.add_bus_effect(bus_idx, analyzer_effect)
 
-	# Get the instance
 	var effect_idx = AudioServer.get_bus_effect_count(bus_idx) - 1
 	spectrum_analyzer = AudioServer.get_bus_effect_instance(bus_idx, effect_idx)
 
@@ -260,10 +227,7 @@ func _process(delta: float) -> void:
 			_cycle_timer = 0.0
 			_advance_cycle()
 
-	# Update audio analysis
 	_update_spectrum_data(delta)
-
-	# Update shader with audio data
 	_update_shader_audio()
 
 
@@ -278,11 +242,9 @@ func _update_spectrum_data(delta: float) -> void:
 		_smooth_spectrum_data(delta)
 		return
 
-	# Sample 32 frequency bands
 	var min_freq = 20.0
 	var max_freq = 16000.0
 
-	# Logarithmic frequency distribution
 	for i in range(32):
 		var freq_low = min_freq * pow(max_freq / min_freq, float(i) / 32.0)
 		var freq_high = min_freq * pow(max_freq / min_freq, float(i + 1) / 32.0)
@@ -290,19 +252,12 @@ func _update_spectrum_data(delta: float) -> void:
 		var magnitude = spectrum_analyzer.get_magnitude_for_frequency_range(freq_low, freq_high)
 		var energy = (magnitude.x + magnitude.y) / 2.0
 
-		# Convert to dB and normalize
 		var db = linear_to_db(energy)
-		var normalized = clamp((db + 60.0) / 60.0, 0.0, 1.0)  # -60dB to 0dB range
-
-		# Apply sensitivity
+		var normalized = clamp((db + 60.0) / 60.0, 0.0, 1.0)
 		normalized = clamp(normalized * sensitivity, 0.0, 1.0)
 
 		spectrum_data[i] = normalized
 
-	# Calculate frequency band levels
-	# Bass: 20-250 Hz (indices 0-7)
-	# Mid: 250-4000 Hz (indices 8-20)
-	# High: 4000-16000 Hz (indices 21-31)
 	bass_level = 0.0
 	mid_level = 0.0
 	high_level = 0.0
@@ -326,8 +281,6 @@ func _update_spectrum_data(delta: float) -> void:
 
 func _smooth_spectrum_data(delta: float) -> void:
 	## Apply enhanced smoothing with velocity tracking and asymmetric attack/release
-
-	# Calculate adaptive smoothing based on delta time
 	var attack_factor = 1.0 - exp(-attack_speed * delta)
 	var release_factor = 1.0 - exp(-release_speed * delta)
 
@@ -337,35 +290,29 @@ func _smooth_spectrum_data(delta: float) -> void:
 	if bass_delta > 0.15 and beat_cooldown <= 0.0:
 		beat_detected = true
 		beat_intensity = min(bass_delta * 3.0, 1.0)
-		beat_cooldown = 0.1  # Minimum time between beats
+		beat_cooldown = 0.1
 	else:
 		beat_detected = false
 		beat_intensity = max(0.0, beat_intensity - delta * 3.0)
 	last_bass_level = bass_level
 
-	# Smooth each spectrum band with asymmetric attack/release
 	for i in range(32):
 		var target = spectrum_data[i]
 		var current = smoothed_spectrum[i]
 		var diff = target - current
 
-		# Use attack speed when rising, release speed when falling
 		var factor = attack_factor if diff > 0 else release_factor
 
-		# Spring-based smoothing with velocity for more natural movement
 		var spring_force = diff * 30.0
 		var damping = spectrum_velocity[i] * 8.0
 		spectrum_velocity[i] += (spring_force - damping) * delta
 
-		# Blend spring physics with direct interpolation for stability
 		var spring_contribution = current + spectrum_velocity[i] * delta
 		var direct_contribution = lerp(current, target, factor)
 		smoothed_spectrum[i] = lerp(direct_contribution, spring_contribution, 0.3)
 
-		# Clamp to valid range
 		smoothed_spectrum[i] = clamp(smoothed_spectrum[i], 0.0, 1.0)
 
-		# Peak hold and decay
 		if smoothed_spectrum[i] > peak_spectrum[i]:
 			peak_spectrum[i] = smoothed_spectrum[i]
 			peak_decay[i] = peak_hold_time
@@ -374,8 +321,6 @@ func _smooth_spectrum_data(delta: float) -> void:
 			if peak_decay[i] <= 0:
 				peak_spectrum[i] = max(peak_spectrum[i] - peak_fall_speed * delta, smoothed_spectrum[i])
 
-	# Smooth overall levels with velocity tracking
-	_smooth_level_with_velocity(audio_level, smoothed_audio, audio_velocity, delta, attack_factor, release_factor)
 	smoothed_audio = _get_smoothed_value(audio_level, smoothed_audio, audio_velocity, delta, attack_factor, release_factor)
 	smoothed_bass = _get_smoothed_value(bass_level, smoothed_bass, bass_velocity, delta, attack_factor, release_factor)
 	smoothed_mid = _get_smoothed_value(mid_level, smoothed_mid, mid_velocity, delta, attack_factor, release_factor)
@@ -393,12 +338,7 @@ func _smooth_spectrum_data(delta: float) -> void:
 	smoothed_high = max(smoothed_high, 0.02)
 
 
-func _smooth_level_with_velocity(target: float, current: float, velocity: float, delta: float, attack: float, release: float) -> void:
-	## Helper to update velocity (modifies the passed velocity reference via class vars)
-	pass  # Handled inline in _get_smoothed_value
-
-
-func _get_smoothed_value(target: float, current: float, velocity: float, delta: float, attack: float, release: float) -> float:
+func _get_smoothed_value(target: float, current: float, _velocity: float, _delta: float, attack: float, release: float) -> float:
 	## Smooth a single value with asymmetric attack/release
 	var diff = target - current
 	var factor = attack if diff > 0 else release
@@ -410,7 +350,7 @@ func _update_shader_audio() -> void:
 	if _shader_material == null:
 		return
 
-	# Write spectrum data into 32x1 textures (R8 format, red channel = value)
+	# Write spectrum data into 32x1 textures (red channel = value)
 	for i in range(32):
 		var spec_val = clamp(smoothed_spectrum[i], 0.0, 1.0)
 		var peak_val = clamp(peak_spectrum[i], 0.0, 1.0)
@@ -439,7 +379,6 @@ func _update_shader_colors() -> void:
 
 func create_visualizer_panels(wall_configs: Array) -> Array[MeshInstance3D]:
 	## Create visualizer panel meshes at the given wall positions
-	## wall_configs: Array of {pos: Vector3, size: Vector3, rotation: Vector3}
 
 	if not is_initialized:
 		push_warning("VisualizerWallManager: Not initialized")
@@ -457,9 +396,8 @@ func create_visualizer_panels(wall_configs: Array) -> Array[MeshInstance3D]:
 
 
 func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_name: String) -> MeshInstance3D:
-	## Create a single visualizer panel mesh with collision
+	## Create a single visualizer panel with the shader applied directly
 
-	# Create plane mesh facing inward
 	var mesh = QuadMesh.new()
 	if abs(size.x) > abs(size.z):
 		mesh.size = Vector2(size.x, size.y)
@@ -472,32 +410,19 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 	mesh_instance.position = pos
 	mesh_instance.rotation = rot
 
-	# Use StandardMaterial3D with viewport texture for compatibility
-	var material = StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_texture = viewport_texture
-	material.albedo_color = Color(1.0, 1.0, 1.0)
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-	material.cull_mode = BaseMaterial3D.CULL_BACK
-	material.metallic = 0.0
-	material.roughness = 1.0
-	mesh_instance.material_override = material
+	# Apply the spatial shader directly to the panel (no SubViewport needed)
+	mesh_instance.material_override = _shader_material
 
-	print("[VisualizerWallManager] Created panel: %s with viewport texture" % panel_name)
+	print("[VisualizerWallManager] Created panel: %s with direct shader" % panel_name)
 
 	# Add collision for gameplay
 	var static_body = StaticBody3D.new()
 	var collision = CollisionShape3D.new()
 	var shape = BoxShape3D.new()
-	# Determine if this is a North/South wall (wider in X) or East/West wall (wider in Z)
 	var is_ns_wall = abs(size.x) > abs(size.z)
 	if is_ns_wall:
-		# N/S walls: no 90-degree rotation, collision stays wide in X, thin in Z
 		shape.size = Vector3(size.x, size.y, 0.1)
 	else:
-		# E/W walls: rotated 90 degrees, so we need collision wide in X locally
-		# so that after rotation it becomes wide in Z (parallel to wall) in world space
 		shape.size = Vector3(size.z, size.y, 0.1)
 	collision.shape = shape
 	static_body.add_child(collision)
@@ -553,7 +478,6 @@ func set_color_preset(preset_name: String) -> void:
 	color_accent = preset["accent"]
 	background_color = preset["background"]
 
-	# Keep cycle index in sync
 	var preset_names = COLOR_PRESETS.keys()
 	var idx = preset_names.find(preset_name)
 	if idx >= 0:
@@ -573,26 +497,22 @@ func set_colors(primary: Color, secondary: Color, accent: Color, background: Col
 
 
 func set_glow_intensity(intensity: float) -> void:
-	## Set the glow intensity
 	glow_intensity = clamp(intensity, 0.0, 3.0)
 	if _shader_material:
 		_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 
 
 func set_animation_speed(speed: float) -> void:
-	## Set the animation speed
 	animation_speed = clamp(speed, 0.1, 3.0)
 	if _shader_material:
 		_shader_material.set_shader_parameter("animation_speed", animation_speed)
 
 
 func set_sensitivity(value: float) -> void:
-	## Set the audio sensitivity
 	sensitivity = clamp(value, 0.5, 5.0)
 
 
 func get_available_presets() -> Array[String]:
-	## Get list of available color presets
 	var presets: Array[String] = []
 	for key in COLOR_PRESETS.keys():
 		presets.append(key)
@@ -600,12 +520,10 @@ func get_available_presets() -> Array[String]:
 
 
 func get_current_mode_name() -> String:
-	## Get the name of the current visualization mode
 	return VisualizerMode.keys()[current_mode]
 
 
 func cleanup() -> void:
-	# Prevent double-cleanup
 	if not is_initialized:
 		return
 
@@ -617,17 +535,6 @@ func cleanup() -> void:
 			panel.queue_free()
 	visualizer_panels.clear()
 
-	if viz_control and is_instance_valid(viz_control):
-		if viz_control.is_inside_tree():
-			viz_control.queue_free()
-		viz_control = null
-
-	if sub_viewport and is_instance_valid(sub_viewport):
-		if sub_viewport.is_inside_tree():
-			sub_viewport.queue_free()
-		sub_viewport = null
-
-	viewport_texture = null
 	_shader_material = null
 
 

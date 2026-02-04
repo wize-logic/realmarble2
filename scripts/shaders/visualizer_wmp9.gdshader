@@ -1,4 +1,5 @@
-shader_type canvas_item;
+shader_type spatial;
+render_mode unshaded, cull_back;
 
 // Enhanced Windows Media Player 9 Style Audio Visualizer
 // Beautiful, smooth audio-reactive visuals with modern effects
@@ -767,5 +768,5 @@ void fragment() {
 	final_color = apply_post_processing(final_color, uv, time);
 
 	// Clamp final output
-	COLOR = vec4(clamp(final_color, vec3(0.0), vec3(1.0)), 1.0);
+	ALBEDO = clamp(final_color, vec3(0.0), vec3(1.0));
 }
