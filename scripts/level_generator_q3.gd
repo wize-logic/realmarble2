@@ -2039,9 +2039,9 @@ func apply_visualizer_walls() -> void:
 		return
 
 	# Dome sizing: radius encompasses the arena with some breathing room
-	# Bottom gap angle keeps the dome open at the bottom so the ball can fall off and die
+	# Full sphere dome with a small gap at the very bottom for the ball to fall through
 	var dome_radius: float = arena_size * 0.65
-	var dome_bottom_gap_deg: float = 30.0  # degrees above equator where dome starts (larger = bigger opening)
+	var dome_bottom_gap_deg: float = 8.0  # degrees from nadir where dome starts (small gap at bottom)
 
 	# Load and initialize visualizer wall manager
 	print("[LevelGen] Loading VisualizerWallManager...")
@@ -2062,12 +2062,13 @@ func apply_visualizer_walls() -> void:
 	# Initialize visualizer and create dome
 	if visualizer_wall_manager.initialize(VISUALIZER_AUDIO_BUS, VISUALIZER_RESOLUTION):
 		print("[LevelGen] Creating visualizer dome...")
-		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, dome_bottom_gap_deg)
+		# Full sphere needs more vertical segments for smooth coverage (64h x 48v)
+		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, dome_bottom_gap_deg, 64, 48)
 
 		# Apply color preset
 		visualizer_wall_manager.set_color_preset(visualizer_color_preset)
 
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Visualizer dome created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Full sphere visualizer dome created with mode: %d, preset: %s" % [visualizer_mode, visualizer_color_preset])
 	else:
 		push_warning("Failed to initialize visualizer walls")
 		visualizer_wall_manager.queue_free()

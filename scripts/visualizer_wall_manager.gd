@@ -445,9 +445,10 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 
 
 func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, bottom_gap_deg: float = 8.0, h_segments: int = 64, v_segments: int = 32) -> MeshInstance3D:
-	## Create an inward-facing dome with the visualizer shader.
-	## bottom_gap_deg: elevation angle in degrees where the dome starts (gap below this).
-	## The dome goes from bottom_gap_deg up to 90 degrees (zenith).
+	## Create an inward-facing full sphere dome with the visualizer shader.
+	## bottom_gap_deg: gap angle from the very bottom (nadir) in degrees.
+	## The dome goes from (-90 + bottom_gap_deg) up to 90 degrees (zenith),
+	## creating a full sphere with a small hole at the bottom for the ball to fall through.
 
 	if not is_initialized:
 		push_warning("VisualizerWallManager: Not initialized")
@@ -461,7 +462,8 @@ func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, 
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 
-	var min_elevation := deg_to_rad(bottom_gap_deg)
+	# Full sphere: from just above nadir (-90°) to zenith (+90°)
+	var min_elevation := deg_to_rad(-90.0 + bottom_gap_deg)
 	var max_elevation := deg_to_rad(90.0)
 
 	# Generate vertices ring-by-ring from bottom to top
@@ -527,7 +529,8 @@ func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, 
 	add_child(mesh_instance)
 
 	var bottom_edge_y := sin(min_elevation) * dome_radius + center.y
-	print("[VisualizerWallManager] Created dome: radius=%.1f, bottom_edge_y=%.1f, gap_angle=%.1f°" % [dome_radius, bottom_edge_y, bottom_gap_deg])
+	var top_edge_y := sin(max_elevation) * dome_radius + center.y
+	print("[VisualizerWallManager] Created full sphere dome: radius=%.1f, bottom_edge_y=%.1f, top_edge_y=%.1f, bottom_gap=%.1f°" % [dome_radius, bottom_edge_y, top_edge_y, bottom_gap_deg])
 
 	return mesh_instance
 
