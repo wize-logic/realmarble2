@@ -244,11 +244,17 @@ func activate() -> void:
 	# Position effects at player
 	var player_pos: Vector3 = player.global_position
 
+	# Get player level for level-based effects
+	var player_level: int = player.level if player and "level" in player else 0
+
 	# Trigger explosion particles
 	if explosion_particles:
 		explosion_particles.global_position = player_pos
 		explosion_particles.emitting = true
 		explosion_particles.restart()
+
+	# Spawn bright flash effect at center (GL Compatibility friendly)
+	spawn_explosion_flash(player_pos, player_level)
 
 	# Trigger magma particles (scaled with player level)
 	var magma_particles: CPUParticles3D = get_node_or_null("MagmaParticles")
@@ -288,8 +294,6 @@ func activate() -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player launched upward with %.1fx force!" % charge_multiplier, false, get_entity_id())
 
 	# Level-based effects
-	var player_level: int = player.level if player and "level" in player else 0
-
 	# Level 2+: Spawn lingering fire patches on the ground
 	if player_level >= 2:
 		spawn_lingering_fire(player_pos, player_level)
@@ -388,6 +392,104 @@ func play_attack_hit_sound() -> void:
 		# Auto-cleanup after sound finishes
 		await hit_sound.finished
 		hit_sound.queue_free()
+
+func spawn_explosion_flash(position: Vector3, level: int) -> void:
+	"""Spawn a bright flash effect at the explosion center (GL Compatibility friendly)"""
+	if not player or not player.get_parent():
+		return
+
+	var flash_container: Node3D = Node3D.new()
+	flash_container.name = "ExplosionFlash"
+	player.get_parent().add_child(flash_container)
+	flash_container.global_position = position
+
+	var flash_size: float = 3.0 + (level * 0.5)
+
+	# Layer 1: Outer orange glow
+	var outer_flash: MeshInstance3D = MeshInstance3D.new()
+	var outer_sphere: SphereMesh = SphereMesh.new()
+	outer_sphere.radius = flash_size * 2.0
+	outer_sphere.height = flash_size * 4.0
+	outer_sphere.radial_segments = 16
+	outer_sphere.rings = 8
+	outer_flash.mesh = outer_sphere
+
+	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
+	outer_mat.albedo_color = Color(1.0, 0.4, 0.0, 0.35)
+	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = outer_mat
+	flash_container.add_child(outer_flash)
+
+	# Layer 2: Middle yellow layer
+	var middle_flash: MeshInstance3D = MeshInstance3D.new()
+	var middle_sphere: SphereMesh = SphereMesh.new()
+	middle_sphere.radius = flash_size * 1.2
+	middle_sphere.height = flash_size * 2.4
+	middle_sphere.radial_segments = 16
+	middle_sphere.rings = 8
+	middle_flash.mesh = middle_sphere
+
+	var middle_mat: StandardMaterial3D = StandardMaterial3D.new()
+	middle_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.6)
+	middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	middle_flash.material_override = middle_mat
+	flash_container.add_child(middle_flash)
+
+	# Layer 3: Bright white-yellow core
+	var core_flash: MeshInstance3D = MeshInstance3D.new()
+	var core_sphere: SphereMesh = SphereMesh.new()
+	core_sphere.radius = flash_size * 0.5
+	core_sphere.height = flash_size * 1.0
+	core_sphere.radial_segments = 12
+	core_sphere.rings = 6
+	core_flash.mesh = core_sphere
+
+	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
+	core_mat.albedo_color = Color(1.0, 1.0, 0.9, 0.9)
+	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = core_mat
+	flash_container.add_child(core_flash)
+
+	# Add shockwave ring effect
+	var shockwave: MeshInstance3D = MeshInstance3D.new()
+	var torus: TorusMesh = TorusMesh.new()
+	torus.inner_radius = flash_size * 0.8
+	torus.outer_radius = flash_size * 1.2
+	torus.rings = 16
+	torus.ring_segments = 24
+	shockwave.mesh = torus
+	shockwave.rotation.x = PI / 2  # Lay flat
+
+	var wave_mat: StandardMaterial3D = StandardMaterial3D.new()
+	wave_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.7)
+	wave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wave_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	wave_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shockwave.material_override = wave_mat
+	flash_container.add_child(shockwave)
+
+	# Animate flash fading and shockwave expanding
+	var tween: Tween = get_tree().create_tween()
+	tween.set_parallel(true)
+
+	# Flash fades out
+	tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.3)
+	tween.tween_property(middle_mat, "albedo_color:a", 0.0, 0.2)
+	tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.15)
+
+	# Shockwave expands outward
+	tween.tween_property(shockwave, "scale", Vector3(4.0, 4.0, 4.0), 0.4)
+	tween.tween_property(wave_mat, "albedo_color:a", 0.0, 0.4)
+
+	tween.set_parallel(false)
+	tween.tween_interval(0.4)
+	tween.tween_callback(flash_container.queue_free)
 
 func spawn_lingering_fire(position: Vector3, level: int) -> void:
 	"""Spawn lingering fire patches on the ground (Level 2+ effect)"""

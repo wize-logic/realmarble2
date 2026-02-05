@@ -371,14 +371,65 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	if not player or not player.get_parent():
 		return
 
+	# Scale effect with level
+	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
+
+	# Create flash container (GL Compatibility friendly)
+	var flash_container: Node3D = Node3D.new()
+	flash_container.name = "DashFlash"
+	player.get_parent().add_child(flash_container)
+	flash_container.global_position = position
+
+	var flash_size: float = 1.5 * scale_mult
+
+	# Layer 1: Outer magenta glow
+	var outer_flash: MeshInstance3D = MeshInstance3D.new()
+	var outer_sphere: SphereMesh = SphereMesh.new()
+	outer_sphere.radius = flash_size * 2.0
+	outer_sphere.height = flash_size * 4.0
+	outer_sphere.radial_segments = 12
+	outer_sphere.rings = 6
+	outer_flash.mesh = outer_sphere
+
+	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
+	outer_mat.albedo_color = Color(0.8, 0.2, 0.6, 0.3)
+	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = outer_mat
+	flash_container.add_child(outer_flash)
+
+	# Layer 2: Bright pink core
+	var core_flash: MeshInstance3D = MeshInstance3D.new()
+	var core_sphere: SphereMesh = SphereMesh.new()
+	core_sphere.radius = flash_size * 0.8
+	core_sphere.height = flash_size * 1.6
+	core_sphere.radial_segments = 12
+	core_sphere.rings = 6
+	core_flash.mesh = core_sphere
+
+	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
+	core_mat.albedo_color = Color(1.0, 0.7, 0.95, 0.8)
+	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = core_mat
+	flash_container.add_child(core_flash)
+
+	# Animate flash fading
+	var flash_tween: Tween = get_tree().create_tween()
+	flash_tween.set_parallel(true)
+	flash_tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.25)
+	flash_tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.15)
+	flash_tween.set_parallel(false)
+	flash_tween.tween_interval(0.25)
+	flash_tween.tween_callback(flash_container.queue_free)
+
 	# Create explosion particles
 	var explosion: CPUParticles3D = CPUParticles3D.new()
 	explosion.name = "DashExplosion"
 	player.get_parent().add_child(explosion)
 	explosion.global_position = position
-
-	# Scale effect with level
-	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
 
 	# Configure explosion particles
 	explosion.emitting = true

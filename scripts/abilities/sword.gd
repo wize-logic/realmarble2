@@ -428,16 +428,30 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	# Rotate to face forward direction
 	wave_mesh.rotation.x = PI / 2
 
-	# Create material - steel blue energy wave
+	# Create material - steel blue energy wave (GL Compatibility - no emission)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 0.7, 1.0, 0.7)
+	mat.albedo_color = Color(0.8, 0.9, 1.0, 0.85)  # Brighter color to compensate for no emission
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.emission_enabled = true
-	mat.emission = Color(0.4, 0.6, 1.0)
-	mat.emission_energy_multiplier = 2.0
 	wave_mesh.material_override = mat
+
+	# Add inner brighter core ring for layered glow effect
+	var inner_wave: MeshInstance3D = MeshInstance3D.new()
+	var inner_cylinder: CylinderMesh = CylinderMesh.new()
+	inner_cylinder.top_radius = 0.5
+	inner_cylinder.bottom_radius = 0.5
+	inner_cylinder.height = 0.15
+	inner_wave.mesh = inner_cylinder
+	inner_wave.rotation.x = PI / 2
+	shockwave.add_child(inner_wave)
+
+	var inner_mat: StandardMaterial3D = StandardMaterial3D.new()
+	inner_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)  # White core
+	inner_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	inner_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	inner_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	inner_wave.material_override = inner_mat
 
 	# Add trailing particles
 	var trail: CPUParticles3D = CPUParticles3D.new()
@@ -600,26 +614,119 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	)
 
 func spawn_slash_flash(position: Vector3, level: int) -> void:
-	"""Spawn a brief light flash at the slash position for visual impact"""
+	"""Spawn a bright flash effect at the slash position (GL Compatibility friendly)"""
 	if not player or not player.get_parent():
 		return
 
-	# Create light flash
-	var flash: OmniLight3D = OmniLight3D.new()
-	flash.name = "SlashFlash"
-	player.get_parent().add_child(flash)
-	flash.global_position = position
+	# Create flash container
+	var flash_container: Node3D = Node3D.new()
+	flash_container.name = "SlashFlash"
+	player.get_parent().add_child(flash_container)
+	flash_container.global_position = position
 
-	# Configure light - steel blue color matching sword
-	flash.light_color = Color(0.6, 0.8, 1.0)
-	flash.light_energy = 3.0 + ((level - 1) * 1.0)  # Brighter at higher levels
-	flash.omni_range = 4.0 + ((level - 1) * 1.0)  # Larger at higher levels
-	flash.omni_attenuation = 1.5
+	# Create multi-layer flash effect using geometry (no lights)
+	var flash_size: float = 2.0 + ((level - 1) * 0.5)
 
-	# Fade out quickly
+	# Layer 1: Outer glow sphere
+	var outer_flash: MeshInstance3D = MeshInstance3D.new()
+	var outer_sphere: SphereMesh = SphereMesh.new()
+	outer_sphere.radius = flash_size * 1.5
+	outer_sphere.height = flash_size * 3.0
+	outer_sphere.radial_segments = 16
+	outer_sphere.rings = 8
+	outer_flash.mesh = outer_sphere
+
+	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
+	outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
+	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = outer_mat
+	flash_container.add_child(outer_flash)
+
+	# Layer 2: Middle bright layer
+	var middle_flash: MeshInstance3D = MeshInstance3D.new()
+	var middle_sphere: SphereMesh = SphereMesh.new()
+	middle_sphere.radius = flash_size * 0.8
+	middle_sphere.height = flash_size * 1.6
+	middle_sphere.radial_segments = 16
+	middle_sphere.rings = 8
+	middle_flash.mesh = middle_sphere
+
+	var middle_mat: StandardMaterial3D = StandardMaterial3D.new()
+	middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+	middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	middle_flash.material_override = middle_mat
+	flash_container.add_child(middle_flash)
+
+	# Layer 3: Bright white core
+	var core_flash: MeshInstance3D = MeshInstance3D.new()
+	var core_sphere: SphereMesh = SphereMesh.new()
+	core_sphere.radius = flash_size * 0.3
+	core_sphere.height = flash_size * 0.6
+	core_sphere.radial_segments = 12
+	core_sphere.rings = 6
+	core_flash.mesh = core_sphere
+
+	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
+	core_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)
+	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = core_mat
+	flash_container.add_child(core_flash)
+
+	# Add burst particles for extra impact
+	var burst_particles: CPUParticles3D = CPUParticles3D.new()
+	burst_particles.name = "FlashBurst"
+	flash_container.add_child(burst_particles)
+
+	burst_particles.emitting = true
+	burst_particles.amount = 30 + (level * 10)
+	burst_particles.lifetime = 0.25
+	burst_particles.one_shot = true
+	burst_particles.explosiveness = 1.0
+	burst_particles.local_coords = false
+
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.4, 0.4)
+
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_mesh.material = particle_material
+	burst_particles.mesh = particle_mesh
+
+	burst_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	burst_particles.emission_sphere_radius = 0.3
+	burst_particles.direction = Vector3.UP
+	burst_particles.spread = 180.0
+	burst_particles.gravity = Vector3.ZERO
+	burst_particles.initial_velocity_min = 10.0
+	burst_particles.initial_velocity_max = 20.0
+	burst_particles.scale_amount_min = 2.0
+	burst_particles.scale_amount_max = 4.0
+
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
+	gradient.add_point(0.3, Color(0.8, 0.9, 1.0, 0.8))  # Bright cyan
+	gradient.add_point(1.0, Color(0.4, 0.6, 1.0, 0.0))  # Fade to blue
+	burst_particles.color_ramp = gradient
+
+	# Animate and cleanup
 	var tween: Tween = get_tree().create_tween()
-	tween.tween_property(flash, "light_energy", 0.0, 0.2)
-	tween.tween_callback(flash.queue_free)
+	tween.set_parallel(true)
+	tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.2)
+	tween.tween_property(middle_mat, "albedo_color:a", 0.0, 0.15)
+	tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.1)
+	tween.set_parallel(false)
+	tween.tween_interval(0.25)
+	tween.tween_callback(flash_container.queue_free)
 
 func create_arc_indicator() -> void:
 	"""Create a box indicator that shows the sword hitbox area while charging"""
