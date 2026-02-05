@@ -493,35 +493,36 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 		current_pos = next_pos
 
 	# Create THREE layers for the bolt: outer glow, middle glow, bright core
-	create_bolt_layer(bolt_container, bolt_path, 1.2, Color(0.3, 0.5, 1.0, 0.4), 2.0, true)  # Outer blue glow
-	create_bolt_layer(bolt_container, bolt_path, 0.6, Color(0.6, 0.8, 1.0, 0.7), 8.0, true)  # Middle cyan glow
-	create_bolt_layer(bolt_container, bolt_path, 0.25, Color(1.0, 1.0, 1.0), 20.0, false)  # WHITE HOT CORE
+	# MUCH THICKER for visibility
+	create_bolt_layer(bolt_container, bolt_path, 2.5, Color(0.3, 0.5, 1.0, 0.5), 2.0, true)  # Outer blue glow - THICK
+	create_bolt_layer(bolt_container, bolt_path, 1.4, Color(0.6, 0.85, 1.0, 0.8), 8.0, true)  # Middle cyan glow
+	create_bolt_layer(bolt_container, bolt_path, 0.7, Color(1.0, 1.0, 1.0), 20.0, false)  # WHITE HOT CORE - THICK
 
-	# Add branching bolts for realism (2-4 branches)
-	var num_branches: int = 2 + int(level)
+	# Add branching bolts for realism (3-5 branches)
+	var num_branches: int = 3 + int(level)
 	for b in range(num_branches):
 		# Pick a random point along the main bolt to branch from
-		var branch_start_idx: int = randi_range(3, num_segments - 4)
+		var branch_start_idx: int = randi_range(2, num_segments - 3)
 		var branch_start: Vector3 = bolt_path[branch_start_idx]
 
 		# Generate branch path (shorter, goes outward and down slightly)
 		var branch_path: Array[Vector3] = []
 		var branch_pos: Vector3 = branch_start
-		var branch_segments: int = randi_range(4, 8)
-		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.3, randf_range(-1, 1)).normalized()
+		var branch_segments: int = randi_range(5, 10)  # More segments
+		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.4, randf_range(-1, 1)).normalized()
 
 		branch_path.append(branch_pos)
 		for s in range(branch_segments):
-			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(3.0, 6.0)
-			branch_next.x += randf_range(-1.5, 1.5)
-			branch_next.z += randf_range(-1.5, 1.5)
+			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(4.0, 8.0)  # Longer branches
+			branch_next.x += randf_range(-2.0, 2.0)
+			branch_next.z += randf_range(-2.0, 2.0)
 			branch_path.append(branch_next)
 			branch_pos = branch_next
-			branch_dir.y -= 0.1  # Gradually angle more downward
+			branch_dir.y -= 0.08  # Gradually angle more downward
 
-		# Create branch layers (thinner than main bolt)
-		create_bolt_layer(bolt_container, branch_path, 0.4, Color(0.5, 0.7, 1.0, 0.5), 4.0, true)  # Outer glow
-		create_bolt_layer(bolt_container, branch_path, 0.15, Color(0.95, 0.98, 1.0), 12.0, false)  # Bright core
+		# Create branch layers - THICKER for visibility
+		create_bolt_layer(bolt_container, branch_path, 1.0, Color(0.5, 0.75, 1.0, 0.6), 4.0, true)  # Outer glow
+		create_bolt_layer(bolt_container, branch_path, 0.4, Color(1.0, 1.0, 1.0), 15.0, false)  # Bright white core
 
 	# Spawn BRIGHT impact explosion particles - white-hot core sparks
 	var impact_particles: CPUParticles3D = CPUParticles3D.new()
