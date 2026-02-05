@@ -31,6 +31,9 @@ var spawn_animation_time: float = 0.5  # Duration of spawn animation
 var spawn_timer: float = 0.0
 var is_spawning: bool = true
 
+# MULTIPLAYER SYNC FIX: Seeded RNG for deterministic animation across clients
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+
 func _ready() -> void:
 	# Add to ability pickups group for bot AI
 	add_to_group("ability_pickups")
@@ -81,8 +84,15 @@ func _ready() -> void:
 	if mesh_instance:
 		mesh_instance.scale = Vector3.ZERO
 
-	# Randomize starting animation phase
-	time = randf() * TAU
+	# MULTIPLAYER SYNC FIX: Seed RNG based on position for deterministic animation
+	var pos_hash: int = int(global_position.x * 1000) ^ int(global_position.y * 1000) ^ int(global_position.z * 1000)
+	var level_seed: int = 0
+	if MultiplayerManager and MultiplayerManager.room_settings.has("level_seed"):
+		level_seed = MultiplayerManager.room_settings["level_seed"]
+	rng.seed = pos_hash ^ level_seed
+
+	# Use seeded RNG for starting animation phase (deterministic across clients)
+	time = rng.randf() * TAU
 
 func _process(delta: float) -> void:
 	if is_collected:
@@ -215,7 +225,7 @@ func _set_collected(collected: bool) -> void:
 			collision_shape.set_deferred("disabled", false)
 		is_spawning = true
 		spawn_timer = 0.0
-		time += randf() * 2.0
+		time += rng.randf() * 2.0
 
 @rpc("authority", "call_local", "reliable")
 func _sync_collected(collected: bool) -> void:
@@ -248,8 +258,8 @@ func _do_respawn() -> void:
 	if mesh_instance:
 		mesh_instance.scale = Vector3.ZERO
 
-	# Reset animation phase slightly for variety
-	time += randf() * 2.0
+	# MULTIPLAYER SYNC FIX: Use seeded RNG for deterministic animation phase
+	time += rng.randf() * 2.0
 
 	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability pickup '%s' respawned!" % ability_name)
 
@@ -257,5 +267,6 @@ func _do_respawn() -> void:
 func play_pickup_sound() -> void:
 	"""Play pickup sound effect"""
 	if pickup_sound and pickup_sound.stream:
-		pickup_sound.pitch_scale = randf_range(1.0, 1.2)
+		# MULTIPLAYER SYNC FIX: Use seeded RNG for consistent pitch across clients
+		pickup_sound.pitch_scale = rng.randf_range(1.0, 1.2)
 		pickup_sound.play()

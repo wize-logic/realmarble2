@@ -21,8 +21,15 @@ var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 func _ready() -> void:
-	# Initialize RNG with unique seed
-	rng.randomize()
+	# MULTIPLAYER SYNC FIX: Use level_seed for deterministic spawning across all clients
+	# Falls back to randomize() for offline/practice mode
+	var level_seed: int = 0
+	if MultiplayerManager and MultiplayerManager.room_settings.has("level_seed"):
+		level_seed = MultiplayerManager.room_settings["level_seed"]
+	if level_seed != 0:
+		rng.seed = level_seed ^ 0x4F524253  # XOR with "ORBS" for unique but deterministic seed
+	else:
+		rng.randomize()
 	# Don't spawn automatically - wait for world to call spawn_orbs() when match starts
 
 func _process(delta: float) -> void:
@@ -40,17 +47,30 @@ func _process(delta: float) -> void:
 		respawn_timer = 0.0
 		check_and_respawn_orbs()
 
+func seed_rng_from_level() -> void:
+	"""MULTIPLAYER SYNC FIX: Re-seed RNG from current level_seed for deterministic spawning"""
+	var level_seed: int = 0
+	if MultiplayerManager and MultiplayerManager.room_settings.has("level_seed"):
+		level_seed = MultiplayerManager.room_settings["level_seed"]
+	if level_seed != 0:
+		rng.seed = level_seed ^ 0x4F524253  # XOR with "ORBS" for unique but deterministic seed
+	else:
+		rng.randomize()
+
 func spawn_orbs() -> void:
 	"""Spawn orbs at random 3D positions in the map volume"""
-	# Only spawn on server (authoritative)
-	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
-		return
+	# MULTIPLAYER SYNC FIX: All clients must spawn orbs (not just server)
+	# Orbs need to exist on all clients for collection detection to work
+	# Seeded RNG ensures all clients generate identical positions
 
 	# Check if game is active before spawning
 	var world: Node = get_parent()
 	if not (world and world.has_method("is_game_active") and world.is_game_active()):
 		DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "ORB SPAWNER: Game is not active, skipping spawn")
 		return
+
+	# Re-seed RNG before spawning to ensure deterministic positions across all clients
+	seed_rng_from_level()
 
 	# Scale orb count based on number of players (5 orbs per player)
 	# Type B arenas get more orbs due to larger vertical space and rooms

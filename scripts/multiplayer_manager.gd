@@ -310,6 +310,7 @@ func reset_room_settings() -> void:
 		"level_size": 2,
 		"match_time": 300.0,
 		"video_walls": false,
+		"music_walls": false,
 		"level_seed": 0
 	}
 	room_settings_changed.emit(room_settings)
