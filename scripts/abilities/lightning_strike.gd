@@ -256,10 +256,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 	# Delay then strike
 	await get_tree().create_timer(strike_delay).timeout
 
-	# Re-target: snap strike position to where the target actually is now
-	if target and is_instance_valid(target) and target.is_inside_tree():
-		position = target.global_position
-
+	# Strike lands where the warning appeared - no re-targeting so players can dodge
 	# Spawn the actual lightning bolt (scaled by level)
 	spawn_lightning_bolt(position, level)
 
