@@ -77,12 +77,12 @@ var camera_max_pitch: float = 45.0  # Max look up (degrees)
 
 # Marble movement properties - Shooter style (responsive)
 var marble_mass: float = 8.0  # Marbles are dense (glass/steel)
-var base_roll_force: float = 300.0  # Significantly increased for climbing slopes
+var base_roll_force: float = 150.0  # Reduced by half for slower movement
 var base_jump_impulse: float = 70.0
-var current_roll_force: float = 300.0
+var current_roll_force: float = 150.0
 var current_jump_impulse: float = 70.0
-var base_max_speed: float = 12.0  # Base max speed (scales with arena size)
-var max_speed: float = 12.0  # Current max speed (scaled)
+var base_max_speed: float = 6.0  # Base max speed (scales with arena size) - reduced by half
+var max_speed: float = 6.0  # Current max speed (scaled)
 var air_control: float = 0.4  # Better air control for shooter feel
 var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
 var current_spin_dash_force: float = 250.0
@@ -140,8 +140,8 @@ var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash
 # Level up system (3 levels max)
 var level: int = 0
 const MAX_LEVEL: int = 3
-const SPEED_BOOST_PER_LEVEL: float = 50.0  # Roll force boost per level (increased for impactful level ups)
-const MAX_SPEED_BOOST_PER_LEVEL: float = 5.0  # Max speed boost per level (significant increase per level)
+const SPEED_BOOST_PER_LEVEL: float = 25.0  # Roll force boost per level (halved)
+const MAX_SPEED_BOOST_PER_LEVEL: float = 2.5  # Max speed boost per level (halved)
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
 const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
