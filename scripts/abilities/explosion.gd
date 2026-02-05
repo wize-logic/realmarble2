@@ -244,6 +244,9 @@ func activate() -> void:
 	# Position effects at player
 	var player_pos: Vector3 = player.global_position
 
+	# Get player level for level-based effects
+	var player_level: int = player.level if player and "level" in player else 0
+
 	# Trigger explosion particles
 	if explosion_particles:
 		explosion_particles.global_position = player_pos
@@ -291,8 +294,6 @@ func activate() -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player launched upward with %.1fx force!" % charge_multiplier, false, get_entity_id())
 
 	# Level-based effects
-	var player_level: int = player.level if player and "level" in player else 0
-
 	# Level 2+: Spawn lingering fire patches on the ground
 	if player_level >= 2:
 		spawn_lingering_fire(player_pos, player_level)
