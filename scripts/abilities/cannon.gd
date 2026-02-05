@@ -59,7 +59,7 @@ func find_nearest_player() -> Node3D:
 	var nearest: Node3D = null
 	var nearest_distance: float = INF
 	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
-	var max_angle_degrees: float = 70.0  # Only target within 70 degrees of forward (140 degree cone total) - improved accuracy
+	var max_angle_degrees: float = 50.0  # Only target within 50 degrees of forward (100 degree cone total) - tighter accuracy
 
 	# Get player's forward direction (based on camera or rotation) - full 3D
 	var forward_direction: Vector3
@@ -132,12 +132,12 @@ func activate() -> void:
 	if nearest_player:
 		# AUTO-AIM: Aim at the nearest player's position in FULL 3D (including up/down)
 		var target_pos = nearest_player.global_position
-		# Predict where the player will be based on their velocity (95% prediction for near-perfect accuracy)
+		# Predict where the player will be based on their velocity (98% prediction for near-perfect accuracy)
 		if nearest_player is RigidBody3D and nearest_player.linear_velocity.length() > 0:
 			var distance = player.global_position.distance_to(target_pos)
 			var time_to_hit = distance / speed
-			# Increased prediction for near-perfect accuracy
-			target_pos += nearest_player.linear_velocity * time_to_hit * 0.95
+			# High prediction for near-perfect accuracy
+			target_pos += nearest_player.linear_velocity * time_to_hit * 0.98
 
 		# Calculate direction to target (full 3D - can aim up or down at targets)
 		fire_direction = (target_pos - player.global_position).normalized()
@@ -226,7 +226,7 @@ func activate() -> void:
 			projectile.global_position = barrel_position
 
 			# Set velocity - inherit player velocity + projectile velocity in fire direction
-			var level_multiplier: float = 1.0 + ((player_level - 1) * 0.25)
+			var level_multiplier: float = 1.0 + ((player_level - 1) * 0.125)
 
 			# Projectile velocity = player velocity + fire direction * speed
 			var projectile_velocity: Vector3 = player.linear_velocity + (spread_fire_direction * speed * level_multiplier)
@@ -291,7 +291,7 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		# Apply stronger knockback from cannonball impact
 		# Get player level multiplier from projectile metadata
 		var player_level: int = projectile.get_meta("player_level", 0)
-		var level_mult: float = 1.0 + ((player_level - 1) * 0.2)
+		var level_mult: float = 1.0 + ((player_level - 1) * 0.1)
 
 		# Calculate knockback (base 150.0, slightly nerfed for better balance, scaled by level)
 		var base_knockback: float = 150.0
@@ -327,7 +327,7 @@ func create_projectile(level: int = 0) -> Node3D:
 	projectile.name = "Cannonball"
 
 	# Level-based size scaling: Level 1+ gets 10% bigger per level
-	var size_mult: float = 1.0 + ((level - 1) * 0.1)
+	var size_mult: float = 1.0 + ((level - 1) * 0.05)
 
 	# Physics setup - heavier but no gravity for straight shots
 	projectile.mass = 0.5 * size_mult  # Scale mass with size
@@ -347,7 +347,7 @@ func create_projectile(level: int = 0) -> Node3D:
 
 	# Create material - lime green for visibility, brighter at higher levels (GL Compatibility - no emission)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var green_intensity: float = 1.0 + ((level - 1) * 0.15)  # Brighter at higher levels
+	var green_intensity: float = 1.0 + ((level - 1) * 0.075)  # Brighter at higher levels
 	mat.albedo_color = Color(0.6, minf(green_intensity, 1.0), 0.1)  # Bright lime green
 	mat.metallic = 0.2
 	mat.roughness = 0.4
@@ -364,7 +364,7 @@ func create_projectile(level: int = 0) -> Node3D:
 		glow_mesh.mesh = glow_sphere
 
 		var glow_mat: StandardMaterial3D = StandardMaterial3D.new()
-		var glow_alpha: float = 0.25 + ((level - 1) * 0.1)
+		var glow_alpha: float = 0.25 + ((level - 1) * 0.05)
 		glow_mat.albedo_color = Color(0.5, 1.0, 0.2, glow_alpha)  # Green glow
 		glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -698,7 +698,7 @@ func _process(delta: float) -> void:
 				reticle.global_position = reticle.global_position.lerp(target_position, delta * 10.0)
 
 				# Scale reticle based on level (larger projectiles at higher levels)
-				var level_scale: float = 1.0 + ((player_level - 1) * 0.1)
+				var level_scale: float = 1.0 + ((player_level - 1) * 0.05)
 				reticle.scale = Vector3(level_scale, level_scale, level_scale)
 
 				# Update reticle color based on level to indicate multi-shot
@@ -718,7 +718,7 @@ func _process(delta: float) -> void:
 						mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)
 
 				# Rotate reticle for visual effect (faster at higher levels)
-				var rotation_speed: float = 2.0 + ((player_level - 1) * 0.5)
+				var rotation_speed: float = 2.0 + ((player_level - 1) * 0.25)
 				reticle.rotation.y += delta * rotation_speed
 			else:
 				# No lock - hide reticle
