@@ -56,6 +56,10 @@ var player_deaths: Dictionary = {}  # player_id: death_count
 var countdown_active: bool = false
 var countdown_time: float = 0.0
 
+# MULTIPLAYER SYNC: Periodic game timer sync from host to clients
+var timer_sync_interval: float = 5.0  # Sync timer every 5 seconds
+var timer_sync_accumulator: float = 0.0
+
 # Mid-round expansion system
 var expansion_triggered: bool = false
 var expansion_trigger_time: float = 150.0  # Trigger at 2.5 minutes (150 seconds remaining)
@@ -233,16 +237,24 @@ func _process(delta: float) -> void:
 			DebugLogger.dlog(DebugLogger.Category.WORLD, "Match time remaining: %.1f seconds (%.1f minutes)" % [game_time_remaining, game_time_remaining / 60.0])
 			last_time_print = current_interval
 
-		# Mid-round expansion disabled - use debug menu (F3 -> Page 2) to trigger manually
-		# # Check for mid-round expansion trigger
-		# if not expansion_triggered and game_time_remaining <= expansion_trigger_time:
-		# 	print("Mid-round expansion trigger reached!")
-		# 	trigger_mid_round_expansion()
+		# MULTIPLAYER SYNC: Host periodically syncs game timer to prevent client drift
+		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+			timer_sync_accumulator += delta
+			if timer_sync_accumulator >= timer_sync_interval:
+				timer_sync_accumulator = 0.0
+				_sync_game_timer.rpc(game_time_remaining)
 
 		if game_time_remaining <= 0:
 			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
-			DebugLogger.dlog(DebugLogger.Category.WORLD, "Time's up! Ending deathmatch...")
-			end_deathmatch()
+			# MULTIPLAYER SYNC FIX: Only host triggers match end in multiplayer
+			# Clients receive match end via RPC to prevent desync
+			if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+				pass  # Wait for host to send end_deathmatch RPC
+			else:
+				DebugLogger.dlog(DebugLogger.Category.WORLD, "Time's up! Ending deathmatch...")
+				if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+					_sync_end_deathmatch.rpc()
+				end_deathmatch()
 
 # ============================================================================
 # GAME STATE FUNCTIONS
@@ -1291,6 +1303,7 @@ func start_multiplayer_match(settings: Dictionary) -> void:
 
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = match_time  # Use the time setting from room
+	timer_sync_accumulator = 0.0  # Reset timer sync for clean start
 	player_scores.clear()
 	player_deaths.clear()
 
@@ -1362,6 +1375,7 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 
 	game_active = false  # Don't start until countdown finishes
 	game_time_remaining = 300.0
+	timer_sync_accumulator = 0.0  # Reset timer sync for clean start
 	player_scores.clear()
 	player_deaths.clear()
 
@@ -1534,6 +1548,21 @@ func return_to_multiplayer_lobby() -> void:
 	# Reset player ready status for next match
 	if MultiplayerManager:
 		MultiplayerManager.set_player_ready(false)
+		# MULTIPLAYER SYNC FIX: Host resets ALL players' ready states (including bots)
+		# so the lobby correctly shows everyone as not ready for the next match
+		if MultiplayerManager.is_host():
+			for peer_id in MultiplayerManager.players.keys():
+				if peer_id != multiplayer.get_unique_id():
+					MultiplayerManager.players[peer_id].ready = false
+			# Re-ready bots since they should always be ready
+			for peer_id in MultiplayerManager.players.keys():
+				if peer_id >= 9000:
+					MultiplayerManager.players[peer_id].ready = true
+			MultiplayerManager.player_list_changed.emit()
+			# Sync updated player list to all clients
+			MultiplayerManager.rpc("receive_player_list", MultiplayerManager.players)
+			# Re-sync room settings to clients so lobby displays correctly
+			MultiplayerManager.rpc("sync_room_settings", MultiplayerManager.room_settings)
 
 	# Start menu music
 	if menu_music:
@@ -1698,6 +1727,26 @@ func _sync_death(player_id: int, total_deaths: int) -> void:
 	"""RPC: Server syncs death count to all clients"""
 	player_deaths[player_id] = total_deaths
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Death synced - Player %d: %d" % [player_id, total_deaths])
+
+@rpc("authority", "reliable")
+func _sync_game_timer(time_remaining: float) -> void:
+	"""RPC: Host syncs game timer to all clients to prevent drift/desync"""
+	# Only accept timer sync if we're not the server (server is authoritative)
+	if multiplayer.is_server():
+		return
+	var drift: float = abs(game_time_remaining - time_remaining)
+	if drift > 0.5:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game timer synced from host: %.1f (drift was %.1fs)" % [time_remaining, drift])
+	game_time_remaining = time_remaining
+
+@rpc("authority", "reliable")
+func _sync_end_deathmatch() -> void:
+	"""RPC: Host notifies all clients that the match has ended"""
+	if multiplayer.is_server():
+		return  # Server already called end_deathmatch locally
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Received match end from host")
+	game_time_remaining = 0.0
+	end_deathmatch()
 
 func get_score(player_id: int) -> int:
 	"""Get a player's current score"""
