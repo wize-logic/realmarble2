@@ -5,9 +5,9 @@ extends Ability
 ## Works like cannon's auto-aim but the attack comes from the heavens!
 
 @export var strike_damage: int = 1  # Base damage
-@export var strike_delay: float = 0.15  # Short delay before strike lands (brief warning flash)
+@export var strike_delay: float = 0.55  # Delay before strike lands (warning flash gives time to react)
 @export var lock_range: float = 100.0  # Auto-aim range
-@export var fire_rate: float = 1.0  # Cooldown between strikes
+@export var fire_rate: float = 1.75  # Cooldown between strikes
 @onready var ability_sound: AudioStreamPlayer3D = $LightningSound
 
 # Track strike targets
@@ -164,7 +164,7 @@ func activate() -> void:
 
 		# Delay additional strikes slightly for cascade effect
 		if i > 0:
-			var delay: float = i * 0.15
+			var delay: float = i * 0.3
 			get_tree().create_timer(delay).timeout.connect(func():
 				if is_instance_valid(player) and is_instance_valid(target):
 					spawn_lightning_strike(strike_position, target, player_level)
@@ -320,7 +320,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 
 	# Level 2+: Chain lightning to nearby enemies
 	if level >= 2 and hit_targets.size() > 0:
-		var chain_delay: float = 0.2
+		var chain_delay: float = 0.4
 		await get_tree().create_timer(chain_delay).timeout
 		spawn_chain_lightning(hit_targets, level)
 
