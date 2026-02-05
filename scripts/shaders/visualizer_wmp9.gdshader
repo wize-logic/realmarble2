@@ -169,49 +169,49 @@ vec3 render_bars(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
 	if (dome_mode) {
-		// DOME MODE: Circular bar arrangement radiating from center
-		vec2 center = vec2(0.5, 0.5);
-		vec2 centered_uv = uv - center;
-		float angle = atan(centered_uv.y, centered_uv.x);
-		float radius = length(centered_uv) * 2.0; // Scale to 0-1 range
+		// DOME MODE: Bars extend from TOP of dome downward, visible from all directions
+		// UV.x = longitude (0-1 wraps around), UV.y = latitude (0=bottom, 1=top)
+		float angle = uv.x * TAU;  // Horizontal angle around dome
+		float dist_from_top = 1.0 - uv.y;  // 0 at top, 1 at bottom
 
 		int num_bars = 32;
-
-		// Background glow based on audio - radial gradient
-		float bg_glow = audio_level * 0.2;
-		color += mix(color_primary.rgb, color_secondary.rgb, radius) * bg_glow * (1.0 - radius);
-
-		// Beat pulse effect - centered
-		if (beat_intensity > 0.0) {
-			float pulse = beat_intensity * 0.25;
-			color += color_accent.rgb * pulse * (1.0 - radius * 1.2);
-		}
-
-		// Each bar occupies a slice of the circle
 		float bar_angle_width = TAU / float(num_bars);
 
+		// Background glow based on audio - brighter near top
+		float bg_glow = audio_level * 0.2;
+		color += mix(color_primary.rgb, color_secondary.rgb, dist_from_top) * bg_glow * (1.0 - dist_from_top);
+
+		// Beat pulse effect - centered at top
+		if (beat_intensity > 0.0) {
+			float pulse = beat_intensity * 0.25;
+			color += color_accent.rgb * pulse * (1.0 - dist_from_top * 1.2);
+		}
+
+		// Each bar is a vertical slice around the dome
 		for (int i = 0; i < num_bars; i++) {
 			float fi = float(i);
-			float bar_center_angle = fi * bar_angle_width - PI;
+			float bar_center_angle = fi * bar_angle_width;
 			float half_width = bar_angle_width * bar_width * 0.5;
 
-			// Angular distance to bar center
+			// Angular distance to this bar's center
 			float angle_diff = abs(mod(angle - bar_center_angle + PI, TAU) - PI);
 
 			if (angle_diff < half_width * 2.5) {
 				float spec = sample_spectrum(i);
 				float peak = sample_peak(i);
-				float bar_length = spec * 0.45 + 0.05; // Max length is ~0.5 (to edge)
+				float bar_length = spec * 0.85 + 0.05;  // How far down from top (0-0.9)
 
 				// Normalized position within bar (angular)
 				float angular_pos = 1.0 - angle_diff / half_width;
 
-				// Main bar body - extends outward from center
-				float inner_radius = 0.08; // Small gap at center
-				if (angle_diff < half_width && radius > inner_radius && radius < inner_radius + bar_length) {
-					float length_ratio = (radius - inner_radius) / bar_length;
+				// Small gap at top (zenith)
+				float top_gap = 0.02;
 
-					// Smooth color transition based on length
+				// Main bar body - extends downward from top
+				if (angle_diff < half_width && dist_from_top > top_gap && dist_from_top < top_gap + bar_length) {
+					float length_ratio = (dist_from_top - top_gap) / bar_length;
+
+					// Smooth color transition based on length (top to bottom)
 					vec3 bar_color = mix(color_primary.rgb, color_secondary.rgb, length_ratio);
 					bar_color = mix(bar_color, color_accent.rgb, pow(length_ratio, 2.0) * 0.5);
 
@@ -223,10 +223,10 @@ vec3 render_bars(vec2 uv, float time) {
 					float edge = 1.0 - pow(1.0 - angular_pos, 3.0) * 0.3;
 					bar_color *= edge;
 
-					// Tip glow
-					float tip_dist = (inner_radius + bar_length) - radius;
-					if (tip_dist < 0.04) {
-						float tip_glow = 1.0 - tip_dist / 0.04;
+					// Tip glow (at bottom of bar)
+					float tip_dist = (top_gap + bar_length) - dist_from_top;
+					if (tip_dist < 0.06) {
+						float tip_glow = 1.0 - tip_dist / 0.06;
 						bar_color += color_accent.rgb * tip_glow * glow_intensity * 0.5;
 					}
 
@@ -235,34 +235,34 @@ vec3 render_bars(vec2 uv, float time) {
 
 				// Bar glow (soft light around bars)
 				float glow_angle_dist = max(angle_diff - half_width, 0.0);
-				if (radius > inner_radius && radius < inner_radius + bar_length + 0.03) {
+				if (dist_from_top > top_gap && dist_from_top < top_gap + bar_length + 0.05) {
 					float glow = soft_glow(glow_angle_dist, half_width * 1.2, 2.5);
-					glow *= (1.0 - (radius - inner_radius) / (bar_length + 0.05));
-					vec3 glow_color = mix(color_primary.rgb, color_accent.rgb, (radius - inner_radius) / bar_length);
+					glow *= (1.0 - (dist_from_top - top_gap) / (bar_length + 0.08));
+					vec3 glow_color = mix(color_primary.rgb, color_accent.rgb, (dist_from_top - top_gap) / bar_length);
 					color += glow_color * glow * glow_intensity * 0.2;
 				}
 
-				// Peak indicator (arc at the peak position)
+				// Peak indicator (horizontal line at peak position)
 				if (peak > spec + 0.02) {
-					float peak_r = inner_radius + peak * 0.45 + 0.05;
-					float peak_dist = abs(radius - peak_r);
-					if (peak_dist < 0.012 && angle_diff < half_width) {
-						float peak_intensity = 1.0 - peak_dist / 0.012;
-						peak_intensity = pow(peak_intensity, 1.5);
-						color = mix(color, color_accent.rgb * 1.5, peak_intensity);
+					float peak_pos = top_gap + peak * 0.85 + 0.05;
+					float peak_dist = abs(dist_from_top - peak_pos);
+					if (peak_dist < 0.015 && angle_diff < half_width) {
+						float peak_intensity_val = 1.0 - peak_dist / 0.015;
+						peak_intensity_val = pow(peak_intensity_val, 1.5);
+						color = mix(color, color_accent.rgb * 1.5, peak_intensity_val);
 					}
 					// Peak glow
-					if (peak_dist < 0.03 && angle_diff < half_width * 1.2) {
-						float peak_glow = soft_glow(peak_dist, 0.03, 2.0);
+					if (peak_dist < 0.04 && angle_diff < half_width * 1.2) {
+						float peak_glow = soft_glow(peak_dist, 0.04, 2.0);
 						color += color_accent.rgb * peak_glow * 0.25;
 					}
 				}
 			}
 		}
 
-		// Center orb glow
-		float center_glow = exp(-radius * radius / 0.008) * (0.4 + audio_level * 0.3);
-		color += mix(color_primary.rgb, color_accent.rgb, audio_level) * center_glow * glow_intensity * 0.6;
+		// Top (zenith) orb glow
+		float zenith_glow = exp(-dist_from_top * dist_from_top / 0.008) * (0.4 + audio_level * 0.3);
+		color += mix(color_primary.rgb, color_accent.rgb, audio_level) * zenith_glow * glow_intensity * 0.6;
 
 	} else {
 		// ORIGINAL WALL MODE
@@ -366,17 +366,16 @@ vec3 render_scope(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
 	if (dome_mode) {
-		// DOME MODE: Circular oscilloscope
-		vec2 center = vec2(0.5, 0.5);
-		vec2 centered_uv = uv - center;
-		float angle = atan(centered_uv.y, centered_uv.x);
-		float radius = length(centered_uv) * 2.0;
+		// DOME MODE: Waveform rings encircling the dome from top down
+		// UV.x = longitude (0-1 wraps around), UV.y = latitude (0=bottom, 1=top)
+		float angle = uv.x * TAU;  // Horizontal angle around dome
+		float dist_from_top = 1.0 - uv.y;  // 0 at top, 1 at bottom
 
-		// Subtle animated background - radial
-		float bg_noise = fbm(centered_uv * 4.0 + vec2(time * 0.1, 0.0), 2) * 0.05;
-		color += mix(color_primary.rgb, color_secondary.rgb, radius) * bg_noise * audio_level;
+		// Subtle animated background
+		float bg_noise = fbm(vec2(angle, dist_from_top) * 2.0 + vec2(time * 0.1, 0.0), 2) * 0.05;
+		color += mix(color_primary.rgb, color_secondary.rgb, dist_from_top) * bg_noise * audio_level;
 
-		float base_radius = 0.35; // Base circle radius
+		float base_latitude = 0.35;  // Base ring position from top
 
 		// Multiple wave layers for depth
 		for (int layer = 2; layer >= 0; layer--) {
@@ -384,8 +383,8 @@ vec3 render_scope(vec2 uv, float time) {
 			float layer_alpha = 1.0 - float(layer) * 0.3;
 			float layer_width = 1.0 + float(layer) * 0.5;
 
-			// Sample waveform based on angle (wraps around)
-			float angle_norm = (angle + PI) / TAU; // 0 to 1
+			// Sample waveform based on horizontal angle (wraps around dome)
+			float angle_norm = uv.x;  // 0 to 1 around the dome
 			float wave_val = get_spectrum_smooth(angle_norm + layer_offset * 0.1, 1.5);
 
 			// Add flowing sine modulation
@@ -393,15 +392,15 @@ vec3 render_scope(vec2 uv, float time) {
 			wave_val += sin(angle * 4.0 - time * 2.5 + float(layer) * 0.5) * bass_level * 0.18;
 			wave_val += sin(angle * 12.0 + time * 6.0) * high_level * 0.06;
 
-			// Wave modulates the radius
-			float wave_radius = base_radius + (wave_val - 0.5) * 0.25;
+			// Wave modulates the latitude (how far down from top)
+			float wave_lat = base_latitude + (wave_val - 0.5) * 0.25;
 
-			// Distance to waveform circle
-			float dist = abs(radius - wave_radius);
+			// Distance to waveform ring
+			float dist = abs(dist_from_top - wave_lat);
 
 			// Line width varies with audio
-			float line_width = 0.008 * layer_width + audio_level * 0.005;
-			float glow_width = 0.08 * layer_width + audio_level * 0.04;
+			float line_width = 0.012 * layer_width + audio_level * 0.006;
+			float glow_width = 0.1 * layer_width + audio_level * 0.05;
 
 			// Color based on layer and angle
 			vec3 wave_color = mix(color_primary.rgb, color_secondary.rgb, angle_norm);
@@ -416,30 +415,30 @@ vec3 render_scope(vec2 uv, float time) {
 			color += wave_color * glow * glow_intensity * 0.3 * layer_alpha;
 		}
 
-		// Trailing echoes as inner circles
+		// Trailing echoes as rings closer to top
 		for (int i = 1; i <= 4; i++) {
 			float echo_offset = float(i) * 0.08;
 			float echo_alpha = 1.0 - float(i) * 0.22;
-			float echo_base = base_radius - float(i) * 0.06;
+			float echo_base = base_latitude - float(i) * 0.06;
 
-			float angle_norm = (angle + PI) / TAU;
+			float angle_norm = uv.x;
 			float echo_val = get_spectrum_smooth(angle_norm + echo_offset * 0.15, 2.0);
 			echo_val += sin(angle * 6.0 + time * 3.0 - float(i) * 0.5) * mid_level * 0.1;
-			float echo_radius = echo_base + (echo_val - 0.5) * 0.15;
+			float echo_lat = echo_base + (echo_val - 0.5) * 0.15;
 
-			float echo_dist = abs(radius - echo_radius);
-			float echo_glow = exp(-echo_dist * echo_dist / 0.003);
+			float echo_dist = abs(dist_from_top - echo_lat);
+			float echo_glow = exp(-echo_dist * echo_dist / 0.004);
 			color += color_secondary.rgb * echo_glow * echo_alpha * 0.15;
 		}
 
-		// Center glow
-		float center_glow = exp(-radius * radius / 0.01) * (0.3 + audio_level * 0.2);
-		color += color_accent.rgb * center_glow * glow_intensity * 0.4;
+		// Top (zenith) glow
+		float zenith_glow = exp(-dist_from_top * dist_from_top / 0.015) * (0.3 + audio_level * 0.2);
+		color += color_accent.rgb * zenith_glow * glow_intensity * 0.4;
 
-		// Reference circle (subtle)
-		float ref_dist = abs(radius - base_radius);
-		float ref_circle = smoothstep(0.003, 0.001, ref_dist);
-		color += vec3(0.06) * ref_circle;
+		// Reference ring (subtle)
+		float ref_dist = abs(dist_from_top - base_latitude);
+		float ref_ring = smoothstep(0.004, 0.001, ref_dist);
+		color += vec3(0.06) * ref_ring;
 
 	} else {
 		// ORIGINAL WALL MODE
@@ -506,13 +505,23 @@ vec3 render_scope(vec2 uv, float time) {
 vec3 render_ambience(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
+	// For dome mode, use spherical coordinates
+	float angle = uv.x * TAU;  // Horizontal angle around dome
+	float dist_from_top = dome_mode ? (1.0 - uv.y) : 0.0;  // 0 at top, 1 at bottom
+
 	// Multi-layer plasma background
 	for (int layer = 0; layer < 3; layer++) {
 		float fl = float(layer);
 		float layer_speed = 1.0 - fl * 0.3;
 		float layer_scale = 2.0 + fl * 1.5;
 
-		vec2 plasma_uv = uv * layer_scale + vec2(time * 0.1 * layer_speed, fl);
+		vec2 plasma_uv;
+		if (dome_mode) {
+			// Wrap plasma around dome using angle and latitude
+			plasma_uv = vec2(angle, dist_from_top) * layer_scale + vec2(time * 0.1 * layer_speed, fl);
+		} else {
+			plasma_uv = uv * layer_scale + vec2(time * 0.1 * layer_speed, fl);
+		}
 
 		float plasma = 0.0;
 		plasma += sin(plasma_uv.x * 2.5 + time * layer_speed) * 0.5;
@@ -533,7 +542,8 @@ vec3 render_ambience(vec2 uv, float time) {
 	}
 
 	// Nebula-like clouds
-	float nebula = fbm(uv * 4.0 + vec2(time * 0.05, time * 0.03), 4);
+	vec2 nebula_uv = dome_mode ? vec2(angle * 0.5, dist_from_top * 4.0) : uv * 4.0;
+	float nebula = fbm(nebula_uv + vec2(time * 0.05, time * 0.03), 4);
 	nebula = pow(nebula, 1.5) * audio_level;
 	vec3 nebula_color = mix(color_primary.rgb, color_accent.rgb, nebula);
 	color += nebula_color * nebula * 0.3;
@@ -620,14 +630,24 @@ vec3 render_ambience(vec2 uv, float time) {
 vec3 render_battery(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
-	vec2 center = vec2(0.5, 0.5);
-	vec2 centered_uv = uv - center;
+	// For dome mode, use spherical coordinates (top-down)
+	// For wall mode, use centered coordinates
+	float angle;
+	float radius;
 
-	float angle = atan(centered_uv.y, centered_uv.x);
-	float radius = length(centered_uv);
+	if (dome_mode) {
+		angle = uv.x * TAU;  // Horizontal angle around dome
+		radius = 1.0 - uv.y;  // Distance from top (0 at zenith, 1 at bottom)
+	} else {
+		vec2 center = vec2(0.5, 0.5);
+		vec2 centered_uv = uv - center;
+		angle = atan(centered_uv.y, centered_uv.x);
+		radius = length(centered_uv);
+	}
 
 	// Background energy field
-	float field = fbm(centered_uv * 5.0 + vec2(time * 0.2), 3);
+	vec2 field_uv = dome_mode ? vec2(angle, radius) : (uv - vec2(0.5));
+	float field = fbm(field_uv * 5.0 + vec2(time * 0.2), 3);
 	field *= audio_level * 0.2;
 	color += mix(color_primary.rgb, color_secondary.rgb, field) * field;
 
@@ -740,11 +760,22 @@ vec3 render_battery(vec2 uv, float time) {
 vec3 render_plenoptic(vec2 uv, float time) {
 	vec3 color = background_color.rgb;
 
-	vec2 center = vec2(0.5, 0.5);
-	vec2 centered_uv = uv - center;
+	// For dome mode, use spherical coordinates (top-down)
+	// For wall mode, use centered coordinates
+	float angle;
+	float radius;
+	vec2 centered_uv;
 
-	float angle = atan(centered_uv.y, centered_uv.x);
-	float radius = length(centered_uv);
+	if (dome_mode) {
+		angle = uv.x * TAU;  // Horizontal angle around dome
+		radius = 1.0 - uv.y;  // Distance from top (0 at zenith, 1 at bottom)
+		centered_uv = vec2(cos(angle), sin(angle)) * radius;  // For dot calculations
+	} else {
+		vec2 center = vec2(0.5, 0.5);
+		centered_uv = uv - center;
+		angle = atan(centered_uv.y, centered_uv.x);
+		radius = length(centered_uv);
+	}
 
 	// Kaleidoscope effect with smooth transitions
 	float num_segments = 8.0;
@@ -874,33 +905,38 @@ vec3 render_plenoptic(vec2 uv, float time) {
 // =============================================================================
 
 vec3 apply_post_processing(vec3 color, vec2 uv, float time) {
-	// Distance from center (for radial effects)
-	float edge_dist = length(uv - vec2(0.5)) * 2.0;
-
-	// Chromatic aberration (subtle, increases with beat)
-	float aberration_amount = 0.002 + beat_intensity * 0.003;
-	vec2 aberration_dir = normalize(uv - vec2(0.5)) * aberration_amount;
-	color.r *= 1.0 + aberration_dir.x * edge_dist * 10.0;
-	color.b *= 1.0 - aberration_dir.x * edge_dist * 10.0;
-
 	// Film grain (very subtle)
 	float grain = hash(uv * 1000.0 + vec2(time * 100.0, 0.0)) * 0.03;
 	color += vec3(grain) * (0.3 + audio_level * 0.2);
 
 	if (dome_mode) {
-		// DOME MODE: Radial effects that work better on spherical geometry
+		// DOME MODE: Effects based on spherical coordinates
+		// UV.y = 1 is top (zenith), UV.y = 0 is bottom
+		float dist_from_top = 1.0 - uv.y;
 
-		// Radial scanlines (concentric circles instead of horizontal lines)
-		float radial_scanline = sin(edge_dist * 400.0) * 0.015 + 0.985;
-		color *= radial_scanline;
+		// Chromatic aberration based on latitude
+		float aberration_amount = 0.002 + beat_intensity * 0.003;
+		color.r *= 1.0 + aberration_amount * dist_from_top * 8.0;
+		color.b *= 1.0 - aberration_amount * dist_from_top * 8.0;
 
-		// Radial vignette (circular, works naturally on dome)
-		float vignette = 1.0 - pow(edge_dist, 2.5) * 0.4;
-		vignette = max(vignette, 0.5);
+		// Latitude-based scanlines (rings around dome)
+		float lat_scanline = sin(dist_from_top * 300.0) * 0.015 + 0.985;
+		color *= lat_scanline;
+
+		// Vignette: brightest at top, fades toward bottom
+		float vignette = 1.0 - pow(dist_from_top, 2.0) * 0.5;
+		vignette = max(vignette, 0.4);
 		color *= vignette;
 
 	} else {
 		// ORIGINAL WALL MODE: Rectangular effects
+		float edge_dist = length(uv - vec2(0.5)) * 2.0;
+
+		// Chromatic aberration
+		float aberration_amount = 0.002 + beat_intensity * 0.003;
+		vec2 aberration_dir = normalize(uv - vec2(0.5)) * aberration_amount;
+		color.r *= 1.0 + aberration_dir.x * edge_dist * 10.0;
+		color.b *= 1.0 - aberration_dir.x * edge_dist * 10.0;
 
 		// Subtle scanlines
 		float scanline = sin(uv.y * 800.0) * 0.02 + 0.98;
