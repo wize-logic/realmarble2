@@ -2868,7 +2868,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 		4: 2.0    # Huge - massive arena
 	}
 	var arena_mult: float = arena_multipliers.get(level_size, 1.0)
-	current_arena_multiplier = arena_mult  # Store for player speed scaling
+	current_arena_multiplier = arena_mult / 2.0  # Store for player speed scaling (halved)
 
 	# Remove old level generator if it exists
 	if level_generator:

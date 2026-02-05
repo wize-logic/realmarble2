@@ -140,10 +140,10 @@ var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash
 # Level up system (3 levels max)
 var level: int = 0
 const MAX_LEVEL: int = 3
-const SPEED_BOOST_PER_LEVEL: float = 25.0  # Roll force boost per level (halved)
-const MAX_SPEED_BOOST_PER_LEVEL: float = 2.5  # Max speed boost per level (halved)
+const SPEED_BOOST_PER_LEVEL: float = 12.5  # Roll force boost per level
+const MAX_SPEED_BOOST_PER_LEVEL: float = 1.25  # Max speed boost per level
 const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
-const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
+const SPIN_BOOST_PER_LEVEL: float = 25.0   # Spin dash boost per level
 const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
 
 # Killstreak system
