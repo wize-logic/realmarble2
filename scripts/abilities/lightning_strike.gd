@@ -6,7 +6,7 @@ extends Ability
 
 @export var strike_damage: int = 1  # Base damage
 @export var strike_delay: float = 0.55  # Delay before strike lands (warning flash gives time to react)
-@export var lock_range: float = 100.0  # Auto-aim range
+@export var lock_range: float = 40.0  # Auto-aim range (nerfed from 100)
 @export var fire_rate: float = 1.75  # Cooldown between strikes
 @onready var ability_sound: AudioStreamPlayer3D = $LightningSound
 
@@ -256,10 +256,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 	# Delay then strike
 	await get_tree().create_timer(strike_delay).timeout
 
-	# Re-target: snap strike position to where the target actually is now
-	if target and is_instance_valid(target) and target.is_inside_tree():
-		position = target.global_position
-
+	# Strike lands where the warning appeared - no re-targeting so players can dodge
 	# Spawn the actual lightning bolt (scaled by level)
 	spawn_lightning_bolt(position, level)
 
