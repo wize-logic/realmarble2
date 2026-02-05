@@ -9,9 +9,9 @@ extends Area3D
 
 # Visual properties
 var base_height: float = 0.0
-var bob_speed: float = 2.0
+var bob_speed: float = 1.0
 var bob_amount: float = 0.3
-var rotation_speed: float = 2.0
+var rotation_speed: float = 1.0
 var time: float = 0.0
 
 # Respawn properties

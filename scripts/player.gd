@@ -77,15 +77,15 @@ var camera_max_pitch: float = 45.0  # Max look up (degrees)
 
 # Marble movement properties - Shooter style (responsive)
 var marble_mass: float = 8.0  # Marbles are dense (glass/steel)
-var base_roll_force: float = 300.0  # Significantly increased for climbing slopes
-var base_jump_impulse: float = 70.0
-var current_roll_force: float = 300.0
-var current_jump_impulse: float = 70.0
-var base_max_speed: float = 12.0  # Base max speed (scales with arena size)
-var max_speed: float = 12.0  # Current max speed (scaled)
+var base_roll_force: float = 150.0  # Halved for slower marble speed
+var base_jump_impulse: float = 35.0
+var current_roll_force: float = 150.0
+var current_jump_impulse: float = 35.0
+var base_max_speed: float = 6.0  # Base max speed (scales with arena size)
+var max_speed: float = 6.0  # Current max speed (scaled)
 var air_control: float = 0.4  # Better air control for shooter feel
-var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
-var current_spin_dash_force: float = 250.0
+var base_spin_dash_force: float = 125.0  # Halved for slower marble speed
+var current_spin_dash_force: float = 125.0
 
 # Arena size scaling - larger arenas need faster movement
 var arena_size_multiplier: float = 1.0  # Set by world based on level size
@@ -96,9 +96,9 @@ var max_jumps: int = 2  # Double jump!
 
 # Bounce mechanic (Sonic Adventure 2 style)
 var is_bouncing: bool = false  # Currently performing bounce attack
-var bounce_velocity: float = 40.0  # Strong downward velocity
-var base_bounce_back_impulse: float = 90.0  # Base upward impulse on ground hit
-var current_bounce_back_impulse: float = 90.0  # Current bounce impulse (scales with level)
+var bounce_velocity: float = 20.0  # Halved downward velocity
+var base_bounce_back_impulse: float = 45.0  # Halved base upward impulse on ground hit
+var current_bounce_back_impulse: float = 45.0  # Current bounce impulse (scales with level)
 var bounce_cooldown: float = 0.0  # Cooldown timer
 var bounce_cooldown_time: float = 0.3  # Cooldown duration
 var bounce_count: int = 0  # Consecutive bounce counter
@@ -119,7 +119,7 @@ var consecutive_air_frames: int = 0  # Counter for consecutive frames in the air
 # Jump pad system (Q3 Arena style)
 var jump_pad_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
 var jump_pad_cooldown_time: float = 1.0  # Cooldown duration
-var jump_pad_boost_force: float = 300.0  # Upward boost force (strong launch!)
+var jump_pad_boost_force: float = 150.0  # Halved upward boost force
 
 # Teleporter system (Q3 Arena style)
 var teleporter_cooldown: float = 0.0  # Cooldown to prevent repeated triggering
@@ -140,11 +140,11 @@ var spin_dash_target_rotation: float = 0.0  # Target Y rotation during spin dash
 # Level up system (3 levels max)
 var level: int = 0
 const MAX_LEVEL: int = 3
-const SPEED_BOOST_PER_LEVEL: float = 50.0  # Roll force boost per level (increased for impactful level ups)
-const MAX_SPEED_BOOST_PER_LEVEL: float = 5.0  # Max speed boost per level (significant increase per level)
-const JUMP_BOOST_PER_LEVEL: float = 15.0   # Jump boost per level
-const SPIN_BOOST_PER_LEVEL: float = 50.0   # Spin dash boost per level (increased from 30.0)
-const BOUNCE_BOOST_PER_LEVEL: float = 20.0  # Bounce impulse boost per level
+const SPEED_BOOST_PER_LEVEL: float = 25.0  # Roll force boost per level (halved)
+const MAX_SPEED_BOOST_PER_LEVEL: float = 2.5  # Max speed boost per level (halved)
+const JUMP_BOOST_PER_LEVEL: float = 7.5   # Jump boost per level (halved)
+const SPIN_BOOST_PER_LEVEL: float = 25.0   # Spin dash boost per level (halved)
+const BOUNCE_BOOST_PER_LEVEL: float = 10.0  # Bounce impulse boost per level (halved)
 
 # Killstreak system
 var killstreak: int = 0  # Current killstreak count
