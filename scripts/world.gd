@@ -2862,13 +2862,13 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 
 	# Size multipliers for arena dimensions
 	var arena_multipliers: Dictionary = {
-		1: 0.7,   # Small - compact arena
-		2: 1.0,   # Medium - standard arena (default)
-		3: 1.5,   # Large - significantly expanded
-		4: 2.0    # Huge - massive arena
+		1: 1.0,   # Small - compact arena
+		2: 1.1,   # Medium - standard arena (default)
+		3: 1.2,   # Large - significantly expanded
+		4: 1.3    # Huge - massive arena
 	}
 	var arena_mult: float = arena_multipliers.get(level_size, 1.0)
-	current_arena_multiplier = arena_mult / 2.0  # Store for player speed scaling (halved)
+	current_arena_multiplier = arena_mult  # Store for player speed scaling
 
 	# Remove old level generator if it exists
 	if level_generator:
