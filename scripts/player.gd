@@ -1985,10 +1985,17 @@ func create_rail_reticle_ui() -> void:
 	label.name = "AttachLabel"
 	label.text = "[E] ATTACH TO RAIL"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 16)
-	label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
-	label.add_theme_color_override("font_outline_color", Color.BLACK)
-	label.add_theme_constant_override("outline_size", 4)
+	# Match HUD style: Rajdhani-Bold, accent blue, outline + shadow
+	var hud_font: Font = load("res://fonts/Rajdhani-Bold.ttf")
+	if hud_font:
+		label.add_theme_font_override("font", hud_font)
+	label.add_theme_font_size_override("font_size", 24)
+	label.add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
+	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
+	label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.4))
+	label.add_theme_constant_override("outline_size", 3)
+	label.add_theme_constant_override("shadow_offset_x", 2)
+	label.add_theme_constant_override("shadow_offset_y", 2)
 	label.position = Vector2(0, 0)
 	label.size = Vector2(200, 30)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2106,7 +2113,7 @@ func update_rail_targeting() -> void:
 		var label: Control = rail_reticle_ui.get_node_or_null("AttachLabel")
 		if label is Label:
 			(label as Label).text = "[E] ATTACH TO RAIL"
-			(label as Label).add_theme_color_override("font_color", Color(0.2, 1.0, 0.4, 1.0))
+			(label as Label).add_theme_color_override("font_color", Color(0.3, 0.7, 1, 1))
 	else:
 		rail_reticle_ui.visible = false
 
