@@ -5,9 +5,9 @@ extends Ability
 ## Works like cannon's auto-aim but the attack comes from the heavens!
 
 @export var strike_damage: int = 1  # Base damage
-@export var strike_delay: float = 0.5  # Delay before strike lands (for dramatic effect)
+@export var strike_delay: float = 0.15  # Short delay before strike lands (brief warning flash)
 @export var lock_range: float = 100.0  # Auto-aim range
-@export var fire_rate: float = 1.8  # Cooldown between strikes
+@export var fire_rate: float = 1.0  # Cooldown between strikes
 @onready var ability_sound: AudioStreamPlayer3D = $LightningSound
 
 # Track strike targets
@@ -159,8 +159,8 @@ func activate() -> void:
 		var target = targets[i]
 		var strike_position: Vector3 = target.global_position
 		if target is RigidBody3D and target.linear_velocity.length() > 1.0:
-			# Predict where they'll be
-			strike_position += target.linear_velocity * strike_delay * 0.5
+			# Predict where they'll be for warning indicator placement
+			strike_position += target.linear_velocity * strike_delay
 
 		# Delay additional strikes slightly for cascade effect
 		if i > 0:
@@ -239,10 +239,10 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 	if not player or not player.get_parent():
 		return
 
-	# Level-based strike radius scaling
-	var base_strike_radius: float = 3.0
-	var strike_radius: float = base_strike_radius + ((level - 1) * 0.5)  # +0.5 radius per level
-	var aoe_radius: float = 2.5 + ((level - 1) * 0.3)  # +0.3 AoE per level
+	# Level-based strike radius scaling (clamped so level 0 doesn't shrink below baseline)
+	var base_strike_radius: float = 4.0
+	var strike_radius: float = base_strike_radius + (maxi(level - 1, 0) * 0.5)  # +0.5 radius per level above 1
+	var aoe_radius: float = 3.5 + (maxi(level - 1, 0) * 0.3)  # +0.3 AoE per level above 1
 
 	# Spawn warning circle at strike location (scaled by level)
 	spawn_warning_indicator(position, level)
@@ -255,6 +255,10 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 
 	# Delay then strike
 	await get_tree().create_timer(strike_delay).timeout
+
+	# Re-target: snap strike position to where the target actually is now
+	if target and is_instance_valid(target) and target.is_inside_tree():
+		position = target.global_position
 
 	# Spawn the actual lightning bolt (scaled by level)
 	spawn_lightning_bolt(position, level)
