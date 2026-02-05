@@ -175,6 +175,7 @@ func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vec
 	_shader_material.set_shader_parameter("glow_intensity", glow_intensity)
 	_shader_material.set_shader_parameter("animation_speed", animation_speed)
 	_shader_material.set_shader_parameter("quality_level", quality_level)
+	_shader_material.set_shader_parameter("dome_mode", true)  # Enable dome-optimized rendering
 
 	# Create spectrum textures (32x1 RGBA8 images)
 	_spectrum_image = Image.create(32, 1, false, Image.FORMAT_RGBA8)
@@ -444,10 +445,9 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 	return mesh_instance
 
 
-func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, bottom_gap_deg: float = 8.0, h_segments: int = 64, v_segments: int = 32) -> MeshInstance3D:
-	## Create an inward-facing dome with the visualizer shader.
-	## bottom_gap_deg: elevation angle in degrees where the dome starts (gap below this).
-	## The dome goes from bottom_gap_deg up to 90 degrees (zenith).
+func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, h_segments: int = 64, v_segments: int = 32) -> MeshInstance3D:
+	## Create an inward-facing complete sphere with the visualizer shader.
+	## This creates a fully enclosed sphere with no gaps.
 
 	if not is_initialized:
 		push_warning("VisualizerWallManager: Not initialized")
@@ -461,7 +461,8 @@ func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, 
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 
-	var min_elevation := deg_to_rad(bottom_gap_deg)
+	# Complete sphere: from nadir (-90°) to zenith (+90°)
+	var min_elevation := deg_to_rad(-90.0)
 	var max_elevation := deg_to_rad(90.0)
 
 	# Generate vertices ring-by-ring from bottom to top
@@ -526,8 +527,7 @@ func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, 
 	visualizer_panels.append(mesh_instance)
 	add_child(mesh_instance)
 
-	var bottom_edge_y := sin(min_elevation) * dome_radius + center.y
-	print("[VisualizerWallManager] Created dome: radius=%.1f, bottom_edge_y=%.1f, gap_angle=%.1f°" % [dome_radius, bottom_edge_y, bottom_gap_deg])
+	print("[VisualizerWallManager] Created complete sphere dome: radius=%.1f" % dome_radius)
 
 	return mesh_instance
 
