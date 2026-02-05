@@ -345,19 +345,32 @@ func create_projectile(level: int = 0) -> Node3D:
 	sphere.height = 0.8 * size_mult
 	mesh_instance.mesh = sphere
 
-	# Create material - lime green for visibility, brighter at higher levels
+	# Create material - lime green for visibility, brighter at higher levels (GL Compatibility - no emission)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var green_intensity: float = 1.0 + ((level - 1) * 0.1)  # Slightly brighter at higher levels
-	mat.albedo_color = Color(0.5, minf(green_intensity, 1.0), 0.0)  # Lime green
-	mat.metallic = 0.3
-	mat.roughness = 0.3
-	# Add emission glow at higher levels
-	if level >= 1:
-		mat.emission_enabled = true
-		mat.emission = Color(0.3, 0.6, 0.0)  # Subtle green glow
-		mat.emission_energy_multiplier = 0.5 + ((level - 1) * 0.3)
+	var green_intensity: float = 1.0 + ((level - 1) * 0.15)  # Brighter at higher levels
+	mat.albedo_color = Color(0.6, minf(green_intensity, 1.0), 0.1)  # Bright lime green
+	mat.metallic = 0.2
+	mat.roughness = 0.4
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always bright
 	mesh_instance.material_override = mat
 	projectile.add_child(mesh_instance)
+
+	# GL Compatibility: Add outer glow layer instead of emission
+	if level >= 1:
+		var glow_mesh: MeshInstance3D = MeshInstance3D.new()
+		var glow_sphere: SphereMesh = SphereMesh.new()
+		glow_sphere.radius = (0.4 * size_mult) * 1.4  # Slightly larger
+		glow_sphere.height = (0.8 * size_mult) * 1.4
+		glow_mesh.mesh = glow_sphere
+
+		var glow_mat: StandardMaterial3D = StandardMaterial3D.new()
+		var glow_alpha: float = 0.25 + ((level - 1) * 0.1)
+		glow_mat.albedo_color = Color(0.5, 1.0, 0.2, glow_alpha)  # Green glow
+		glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		glow_mesh.material_override = glow_mat
+		projectile.add_child(glow_mesh)
 
 	# Create collision shape - larger, scales with level
 	var collision: CollisionShape3D = CollisionShape3D.new()
