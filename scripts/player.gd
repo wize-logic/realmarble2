@@ -77,12 +77,12 @@ var camera_max_pitch: float = 45.0  # Max look up (degrees)
 
 # Marble movement properties - Shooter style (responsive)
 var marble_mass: float = 8.0  # Marbles are dense (glass/steel)
-var base_roll_force: float = 150.0  # Reduced by half for slower movement
+var base_roll_force: float = 300.0
 var base_jump_impulse: float = 70.0
-var current_roll_force: float = 150.0
+var current_roll_force: float = 300.0
 var current_jump_impulse: float = 70.0
-var base_max_speed: float = 6.0  # Base max speed (scales with arena size) - reduced by half
-var max_speed: float = 6.0  # Current max speed (scaled)
+var base_max_speed: float = 12.0  # Base max speed (scales with arena size)
+var max_speed: float = 12.0  # Current max speed (scaled)
 var air_control: float = 0.4  # Better air control for shooter feel
 var base_spin_dash_force: float = 250.0  # Increased from 150.0 for more power
 var current_spin_dash_force: float = 250.0

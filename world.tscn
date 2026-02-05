@@ -9,15 +9,15 @@
 [ext_resource type="Script" uid="uid://co76seoupgayb" path="res://scripts/ui/menu/options/back.gd" id="6_2hany"]
 [ext_resource type="Script" uid="uid://du5qtfmm8p5du" path="res://scripts/ui/menu/pause/resume.gd" id="7_5cdyw"]
 [ext_resource type="Script" uid="uid://bmy1ha2maxmwg" path="res://scripts/ui/menu/options/controller_sensitivity.gd" id="7_jhf7u"]
-[ext_resource type="Script" uid="uid://duvylx3p5trwi" path="res://scripts/orb_spawner.gd" id="7_orbspawner"]
-[ext_resource type="Script" uid="uid://e0sl2qrky7s1" path="res://scripts/ability_spawner.gd" id="8_abilityspawner"]
+[ext_resource type="Script" uid="uid://m6e4rjrt4jo8" path="res://scripts/orb_spawner.gd" id="7_orbspawner"]
+[ext_resource type="Script" uid="uid://bros2yyotk2f5" path="res://scripts/ability_spawner.gd" id="8_abilityspawner"]
 [ext_resource type="Script" uid="uid://o3k14mw74n81" path="res://scripts/ui/menu/pause/quit.gd" id="9_ucmny"]
-[ext_resource type="Script" uid="uid://15mer25iggtb" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
-[ext_resource type="Script" uid="uid://d2abcv1lw0rfe" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
-[ext_resource type="Script" uid="uid://1asabpkd504j" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
+[ext_resource type="Script" uid="uid://ck3www2t3jhu2" path="res://scripts/ui/game_hud.gd" id="15_gamehud"]
+[ext_resource type="Script" uid="uid://c2gs8p3ocbho6" path="res://scripts/music_playlist.gd" id="16_musicplaylist"]
+[ext_resource type="Script" uid="uid://dg1npfn0we0ge" path="res://scripts/ui/music_notification.gd" id="17_musicnotification"]
 [ext_resource type="PackedScene" path="res://rl_main_menu.tscn" id="19_rlmenu"]
-[ext_resource type="FontFile" path="res://fonts/Rajdhani-Bold.ttf" id="20_fontbold"]
-[ext_resource type="FontFile" path="res://fonts/Rajdhani-SemiBold.ttf" id="21_fontsemibold"]
+[ext_resource type="FontFile" uid="uid://drnhkeso62jgq" path="res://fonts/Rajdhani-Bold.ttf" id="20_fontbold"]
+[ext_resource type="FontFile" uid="uid://dyk783ccd5kes" path="res://fonts/Rajdhani-SemiBold.ttf" id="21_fontsemibold"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
 energy_multiplier = 1.25
@@ -34,7 +34,6 @@ ambient_light_energy = 0.5
 reflected_light_source = 2
 tonemap_mode = 2
 tonemap_white = 6.0
-tonemap_exposure = 1.0
 glow_enabled = true
 glow_intensity = 0.12
 glow_strength = 0.25
@@ -43,9 +42,7 @@ glow_blend_mode = 0
 glow_hdr_threshold = 2.0
 glow_hdr_scale = 0.35
 glow_hdr_luminance_cap = 10.0
-fog_enabled = false
 adjustment_enabled = true
-adjustment_brightness = 1.0
 adjustment_contrast = 1.15
 adjustment_saturation = 1.02
 
@@ -121,7 +118,7 @@ camera_attributes = SubResource("CameraAttributesPractical_wntx8")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.835807, -0.47011, 0.283589, -0.375944, 0.866496, 0.328406, -0.400115, 0.167871, -0.900959, 0, 4.88489, 0)
-light_color = Color(0.95, 0.90, 0.82, 1)
+light_color = Color(0.95, 0.9, 0.82, 1)
 light_energy = 0.85
 light_indirect_energy = 0.5
 shadow_enabled = true
@@ -163,11 +160,11 @@ theme_override_constants/separation = 4
 [node name="TimerLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.4)
-theme_override_constants/outline_size = 3
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 3
 theme_override_fonts/font = ExtResource("20_fontbold")
 theme_override_font_sizes/font_size = 32
 text = "5:00"
@@ -175,11 +172,11 @@ text = "5:00"
 [node name="ScoreLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.4)
-theme_override_constants/outline_size = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("21_fontsemibold")
 theme_override_font_sizes/font_size = 22
 text = "KILLS  0"
@@ -187,11 +184,11 @@ text = "KILLS  0"
 [node name="LevelLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.7, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.4)
-theme_override_constants/outline_size = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("21_fontsemibold")
 theme_override_font_sizes/font_size = 22
 text = "LVL  0/3"
@@ -199,11 +196,11 @@ text = "LVL  0/3"
 [node name="AbilityLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.7, 0.8, 0.9, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.4)
-theme_override_constants/outline_size = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("21_fontsemibold")
 theme_override_font_sizes/font_size = 18
 text = "NONE"
@@ -211,11 +208,11 @@ text = "NONE"
 [node name="HealthLabel" type="Label" parent="GameHUD/HUD/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.4)
-theme_override_constants/outline_size = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.6)
 theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
+theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("21_fontsemibold")
 theme_override_font_sizes/font_size = 22
 text = "HP  3"
@@ -269,7 +266,7 @@ theme_override_constants/separation = 6
 
 [node name="NowPlaying" type="Label" parent="MusicNotification/NotificationUI/Panel/MarginContainer/VBoxOuter"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.8, 1.0, 1)
+theme_override_colors/font_color = Color(0.6, 0.8, 1, 1)
 theme_override_font_sizes/font_size = 10
 text = "NOW PLAYING"
 horizontal_alignment = 1
