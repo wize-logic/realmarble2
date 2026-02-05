@@ -1358,8 +1358,16 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
 	if not skip_level_regen and multiplayer.has_multiplayer_peer():
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d)..." % current_level_size)
-		await generate_procedural_level(true, current_level_size)
+		# FIX: Pass video/music wall settings from room_settings for multiplayer fallback path
+		var fallback_video_walls: bool = false
+		var fallback_music_walls: bool = false
+		var fallback_seed: int = 0
+		if MultiplayerManager:
+			fallback_video_walls = MultiplayerManager.room_settings.get("video_walls", false)
+			fallback_music_walls = MultiplayerManager.room_settings.get("music_walls", false)
+			fallback_seed = MultiplayerManager.room_settings.get("level_seed", 0)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, video: %s, music: %s)..." % [current_level_size, fallback_video_walls, fallback_music_walls])
+		await generate_procedural_level(true, current_level_size, fallback_video_walls, false, fallback_seed, fallback_music_walls)
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 	elif skip_level_regen:
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skipping level regeneration (practice mode already generated level)")
@@ -1374,7 +1382,10 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 			add_player(peer_id)
 
 	game_active = false  # Don't start until countdown finishes
-	game_time_remaining = 300.0
+	# FIX: Only reset game_time_remaining if not already set by caller (e.g. practice mode)
+	# When skip_level_regen is true, practice mode already set the correct match time
+	if not skip_level_regen:
+		game_time_remaining = 300.0
 	timer_sync_accumulator = 0.0  # Reset timer sync for clean start
 	player_scores.clear()
 	player_deaths.clear()
@@ -1388,7 +1399,7 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	countdown_time = 2.0  # 2 seconds: "READY" (1s), "GO!" (1s)
 	if countdown_label:
 		countdown_label.visible = true
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting countdown...")
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting countdown (match time: %.0fs)..." % game_time_remaining)
 
 func is_game_active() -> bool:
 	"""Check if the game is currently active"""
