@@ -103,7 +103,7 @@ const CANNON_OPTIMAL_RANGE: float = 15.0
 const SWORD_OPTIMAL_RANGE: float = 3.5
 const DASH_ATTACK_OPTIMAL_RANGE: float = 8.0
 const EXPLOSION_OPTIMAL_RANGE: float = 6.0
-const LIGHTNING_OPTIMAL_RANGE: float = 25.0  # Lightning has long range auto-aim
+const LIGHTNING_OPTIMAL_RANGE: float = 18.0  # Lightning auto-aim (reduced with lock_range nerf)
 
 # Ability proficiency scores
 const ABILITY_SCORES: Dictionary = {

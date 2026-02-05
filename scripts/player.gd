@@ -1385,8 +1385,8 @@ func receive_damage_from(damage: int, attacker_id: int) -> void:
 		if attacker and is_instance_valid(attacker):
 			var distance: float = global_position.distance_to(attacker.global_position)
 			# Maximum valid attack distance - must accommodate ranged abilities
-			# (lightning lock_range=100, cannon projectiles travel far from shooter)
-			const MAX_VALID_ATTACK_DISTANCE: float = 120.0
+			# (lightning lock_range=40, cannon projectiles travel far from shooter)
+			const MAX_VALID_ATTACK_DISTANCE: float = 80.0
 			if distance > MAX_VALID_ATTACK_DISTANCE:
 				DebugLogger.dlog(DebugLogger.Category.PLAYER, "DAMAGE REJECTED: Attacker %d too far (%.1f > %.1f)" % [attacker_id, distance, MAX_VALID_ATTACK_DISTANCE], false, get_entity_id())
 				return  # Reject damage from too far
