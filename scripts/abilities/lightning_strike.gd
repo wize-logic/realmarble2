@@ -395,8 +395,8 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	# Remove after strike
 	get_tree().create_timer(strike_delay + 0.1).timeout.connect(indicator.queue_free)
 
-func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color, emission_energy: float, transparent: bool) -> void:
-	"""Create a single layer of the lightning bolt (used for multi-layer glow effect)"""
+func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color, _emission_energy: float, transparent: bool) -> void:
+	"""Create a single layer of the lightning bolt (GL Compatibility friendly - no emission)"""
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
 		segment.name = "BoltLayer_%d" % i
@@ -413,12 +413,9 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		cylinder.radial_segments = 8
 		segment.mesh = cylinder
 
-		# Create material with intense glow
+		# GL Compatibility: Use bright albedo color with unshaded material (no emission)
 		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.albedo_color = color
-		mat.emission_enabled = true
-		mat.emission = Color(color.r, color.g, color.b)
-		mat.emission_energy_multiplier = emission_energy
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		if transparent:
 			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -434,12 +431,10 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		segment.rotation.x += PI / 2.0
 
 func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
-	"""Spawn the dramatic lightning bolt effect, scaled by level"""
+	"""Spawn the dramatic lightning bolt effect, scaled by level (GL Compatibility friendly)"""
 	if not player or not player.get_parent():
 		return
 
-	# Scale bolt intensity with level
-	var intensity_scale: float = 1.0 + ((level - 1) * 0.3)
 	var bolt_height: float = 80.0  # Height of the lightning bolt
 
 	# Create main bolt line using multiple segments
@@ -448,81 +443,58 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	player.get_parent().add_child(bolt_container)
 	bolt_container.global_position = position
 
-	# Create INTENSE bright core flash at impact - this is the main "shine" effect
-	var impact_flash: OmniLight3D = OmniLight3D.new()
-	impact_flash.name = "ImpactFlash"
-	bolt_container.add_child(impact_flash)
-	impact_flash.light_color = Color(0.9, 0.95, 1.0)  # Near-white with slight blue
-	impact_flash.light_energy = 50.0 * intensity_scale  # MUCH brighter
-	impact_flash.omni_range = 40.0 * intensity_scale  # Larger range
-	impact_flash.omni_attenuation = 0.5  # Slower falloff for wider illumination
-
-	# Add secondary sky flash light (simulates sky being lit up)
-	var sky_flash: OmniLight3D = OmniLight3D.new()
-	sky_flash.name = "SkyFlash"
-	bolt_container.add_child(sky_flash)
-	sky_flash.position = Vector3.UP * (bolt_height * 0.5)
-	sky_flash.light_color = Color(0.85, 0.9, 1.0)
-	sky_flash.light_energy = 30.0 * intensity_scale
-	sky_flash.omni_range = 60.0 * intensity_scale
-	sky_flash.omni_attenuation = 1.5
-
-	# Add ground reflection light
-	var ground_light: OmniLight3D = OmniLight3D.new()
-	ground_light.name = "GroundLight"
-	bolt_container.add_child(ground_light)
-	ground_light.position = Vector3.DOWN * 0.5
-	ground_light.light_color = Color(0.7, 0.85, 1.0)
-	ground_light.light_energy = 25.0 * intensity_scale
-	ground_light.omni_range = 25.0 * intensity_scale
-
 	# Generate the main bolt path first (we'll use this for all layers)
 	var bolt_path: Array[Vector3] = []
 	var current_pos: Vector3 = Vector3.ZERO
-	var num_segments: int = 16  # More segments for smoother bolt
+	var num_segments: int = 20  # More segments for jagged look
 	var segment_height: float = bolt_height / num_segments
 
 	bolt_path.append(current_pos)
 	for i in range(num_segments):
 		var next_pos: Vector3 = current_pos + Vector3.UP * segment_height
 		if i < num_segments - 1:  # Don't offset the top
-			# More dramatic jaggedness
-			next_pos.x += randf_range(-2.5, 2.5)
-			next_pos.z += randf_range(-2.5, 2.5)
+			# Dramatic jaggedness - this is what makes it look like lightning
+			next_pos.x += randf_range(-3.5, 3.5)
+			next_pos.z += randf_range(-3.5, 3.5)
 		bolt_path.append(next_pos)
 		current_pos = next_pos
 
-	# Create THREE layers for the bolt: outer glow, middle glow, bright core
-	# MUCH THICKER for visibility
-	create_bolt_layer(bolt_container, bolt_path, 2.5, Color(0.3, 0.5, 1.0, 0.5), 2.0, true)  # Outer blue glow - THICK
-	create_bolt_layer(bolt_container, bolt_path, 1.4, Color(0.6, 0.85, 1.0, 0.8), 8.0, true)  # Middle cyan glow
-	create_bolt_layer(bolt_container, bolt_path, 0.7, Color(1.0, 1.0, 1.0), 20.0, false)  # WHITE HOT CORE - THICK
+	# GL COMPATIBILITY: Create FOUR layers for maximum visibility without emission
+	# Layer 1: Wide dark blue outer glow
+	create_bolt_layer(bolt_container, bolt_path, 4.0, Color(0.2, 0.4, 0.9, 0.3), 0.0, true)
+	# Layer 2: Medium cyan glow
+	create_bolt_layer(bolt_container, bolt_path, 2.5, Color(0.4, 0.7, 1.0, 0.5), 0.0, true)
+	# Layer 3: Bright white-cyan inner glow
+	create_bolt_layer(bolt_container, bolt_path, 1.2, Color(0.8, 0.95, 1.0, 0.85), 0.0, true)
+	# Layer 4: PURE WHITE solid core - this is the bright center
+	create_bolt_layer(bolt_container, bolt_path, 0.5, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)
 
-	# Add branching bolts for realism (3-5 branches)
-	var num_branches: int = 3 + int(level)
+	# Add branching bolts for realism (4-6 branches)
+	var num_branches: int = 4 + int(level)
 	for b in range(num_branches):
 		# Pick a random point along the main bolt to branch from
-		var branch_start_idx: int = randi_range(2, num_segments - 3)
+		var branch_start_idx: int = randi_range(3, num_segments - 4)
 		var branch_start: Vector3 = bolt_path[branch_start_idx]
 
-		# Generate branch path (shorter, goes outward and down slightly)
+		# Generate branch path
 		var branch_path: Array[Vector3] = []
 		var branch_pos: Vector3 = branch_start
-		var branch_segments: int = randi_range(5, 10)  # More segments
-		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.4, randf_range(-1, 1)).normalized()
+		var branch_segments: int = randi_range(4, 8)
+		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.5, randf_range(-1, 1)).normalized()
 
 		branch_path.append(branch_pos)
 		for s in range(branch_segments):
-			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(4.0, 8.0)  # Longer branches
-			branch_next.x += randf_range(-2.0, 2.0)
-			branch_next.z += randf_range(-2.0, 2.0)
+			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(5.0, 10.0)
+			branch_next.x += randf_range(-2.5, 2.5)
+			branch_next.z += randf_range(-2.5, 2.5)
 			branch_path.append(branch_next)
 			branch_pos = branch_next
-			branch_dir.y -= 0.08  # Gradually angle more downward
+			branch_dir.y -= 0.1
 
-		# Create branch layers - THICKER for visibility
-		create_bolt_layer(bolt_container, branch_path, 1.0, Color(0.5, 0.75, 1.0, 0.6), 4.0, true)  # Outer glow
-		create_bolt_layer(bolt_container, branch_path, 0.4, Color(1.0, 1.0, 1.0), 15.0, false)  # Bright white core
+		# Branch layers - bright and visible
+		create_bolt_layer(bolt_container, branch_path, 1.5, Color(0.4, 0.7, 1.0, 0.4), 0.0, true)
+		create_bolt_layer(bolt_container, branch_path, 0.6, Color(0.85, 0.95, 1.0, 0.8), 0.0, true)
+		create_bolt_layer(bolt_container, branch_path, 0.25, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)
 
 	# Spawn BRIGHT impact explosion particles - white-hot core sparks
 	var impact_particles: CPUParticles3D = CPUParticles3D.new()
@@ -540,15 +512,13 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.8, 0.8)  # Larger particles
 
+	# GL Compatibility: No emission, just bright colors via color_ramp
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.emission_enabled = true
-	particle_material.emission = Color(0.8, 0.9, 1.0)
-	particle_material.emission_energy_multiplier = 3.0
 	particle_mesh.material = particle_material
 	impact_particles.mesh = particle_mesh
 
@@ -655,20 +625,8 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	if player and player.has_method("add_camera_shake"):
 		player.add_camera_shake(0.25)  # More intense shake
 
-	# Animate the lights fading out with dramatic timing
-	var tween: Tween = get_tree().create_tween()
-	tween.set_parallel(true)
-
-	# Quick initial flash then fade
-	tween.tween_property(impact_flash, "light_energy", impact_flash.light_energy * 0.3, 0.05)
-	tween.chain().tween_property(impact_flash, "light_energy", 0.0, 0.35)
-
-	tween.tween_property(sky_flash, "light_energy", 0.0, 0.3)
-	tween.tween_property(ground_light, "light_energy", 0.0, 0.4)
-
-	tween.set_parallel(false)
-	tween.tween_interval(0.4)
-	tween.tween_callback(bolt_container.queue_free)
+	# Clean up bolt after particles finish
+	get_tree().create_timer(1.2).timeout.connect(bolt_container.queue_free)
 
 func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 	"""Spawn chain lightning to nearby enemies (Level 2+ effect)"""
@@ -726,7 +684,7 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 				potential_target.apply_central_impulse(knockback_dir * 60.0)
 
 func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
-	"""Spawn a visual lightning arc between two positions - bright and dramatic"""
+	"""Spawn a visual lightning arc between two positions (GL Compatibility friendly)"""
 	if not player or not player.get_parent():
 		return
 
@@ -742,48 +700,28 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 	var direction: Vector3 = (to_pos - from_pos).normalized()
 	var distance: float = from_pos.distance_to(to_pos)
 
-	# Add bright flash light along the chain
-	var chain_light: OmniLight3D = OmniLight3D.new()
-	chain_light.name = "ChainLight"
-	chain_container.add_child(chain_light)
-	chain_light.light_color = Color(0.85, 0.93, 1.0)
-	chain_light.light_energy = 20.0  # Bright flash
-	chain_light.omni_range = distance * 0.6
-
-	# Create a simple visual bolt using cylinder segments
-	var num_chain_segments: int = 5
+	# Generate jagged chain path
+	var chain_path: Array[Vector3] = []
+	var num_chain_segments: int = 8
 	var segment_length: float = distance / num_chain_segments
 	var chain_pos: Vector3 = from_pos - midpoint  # Relative to container
 
+	chain_path.append(chain_pos)
 	for i in range(num_chain_segments):
 		var next_chain_pos: Vector3 = chain_pos + direction * segment_length
 		if i < num_chain_segments - 1:
 			# Add jaggedness
-			next_chain_pos += Vector3(randf_range(-0.5, 0.5), randf_range(-0.3, 0.3), randf_range(-0.5, 0.5))
-
-		var chain_segment: MeshInstance3D = MeshInstance3D.new()
-		var chain_cyl: CylinderMesh = CylinderMesh.new()
-		chain_cyl.top_radius = 0.08
-		chain_cyl.bottom_radius = 0.1
-		chain_cyl.height = chain_pos.distance_to(next_chain_pos)
-		chain_segment.mesh = chain_cyl
-
-		var chain_mat: StandardMaterial3D = StandardMaterial3D.new()
-		chain_mat.albedo_color = Color(1.0, 1.0, 1.0)  # White hot core
-		chain_mat.emission_enabled = true
-		chain_mat.emission = Color(0.9, 0.95, 1.0)
-		chain_mat.emission_energy_multiplier = 15.0
-		chain_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		chain_segment.material_override = chain_mat
-
-		chain_container.add_child(chain_segment)
-
-		var seg_mid: Vector3 = (chain_pos + next_chain_pos) / 2.0
-		chain_segment.position = seg_mid
-		chain_segment.look_at(chain_container.global_position + next_chain_pos, Vector3.FORWARD)
-		chain_segment.rotation.x += PI / 2.0
-
+			next_chain_pos += Vector3(randf_range(-1.0, 1.0), randf_range(-0.5, 0.5), randf_range(-1.0, 1.0))
+		chain_path.append(next_chain_pos)
 		chain_pos = next_chain_pos
+
+	# GL Compatibility: Create multi-layer chain bolt (no emission, just bright colors)
+	# Outer cyan glow
+	create_chain_layer(chain_container, chain_path, 0.8, Color(0.4, 0.7, 1.0, 0.4))
+	# Inner bright layer
+	create_chain_layer(chain_container, chain_path, 0.4, Color(0.8, 0.95, 1.0, 0.8))
+	# Pure white core
+	create_chain_layer(chain_container, chain_path, 0.15, Color(1.0, 1.0, 1.0, 1.0))
 
 	# Create particle effect for the chain
 	var chain_particles: CPUParticles3D = CPUParticles3D.new()
@@ -791,7 +729,7 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 	chain_container.add_child(chain_particles)
 
 	chain_particles.emitting = true
-	chain_particles.amount = 50  # More particles
+	chain_particles.amount = 40
 	chain_particles.lifetime = 0.4
 	chain_particles.one_shot = true
 	chain_particles.explosiveness = 0.9
@@ -799,17 +737,15 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 	chain_particles.local_coords = false
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)  # Larger
+	particle_mesh.size = Vector2(0.4, 0.4)
 
+	# GL Compatibility: No emission on particles
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	particle_material.vertex_color_use_as_albedo = true
 	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.emission_enabled = true
-	particle_material.emission = Color(0.7, 0.85, 1.0)
-	particle_material.emission_energy_multiplier = 2.0
 	particle_mesh.material = particle_material
 	chain_particles.mesh = particle_mesh
 
@@ -828,27 +764,48 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 	chain_particles.scale_amount_min = 2.0
 	chain_particles.scale_amount_max = 4.0
 
-	# Electric cyan gradient
+	# Bright white to cyan gradient
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.8, 1.0, 1.0, 1.0))  # Bright cyan
-	gradient.add_point(0.3, Color(0.5, 0.9, 1.0, 0.9))  # Electric blue
-	gradient.add_point(0.7, Color(0.3, 0.7, 1.0, 0.5))  # Blue
-	gradient.add_point(1.0, Color(0.1, 0.3, 0.6, 0.0))  # Fade
+	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
+	gradient.add_point(0.2, Color(0.8, 0.95, 1.0, 0.9))  # Near white
+	gradient.add_point(0.5, Color(0.5, 0.8, 1.0, 0.7))  # Cyan
+	gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
 	chain_particles.color_ramp = gradient
 
-	# Also create a brief light flash along the chain
-	var chain_light: OmniLight3D = OmniLight3D.new()
-	chain_light.name = "ChainLight"
-	chain_particles.add_child(chain_light)
-	chain_light.light_color = Color(0.6, 0.9, 1.0)
-	chain_light.light_energy = 5.0
-	chain_light.omni_range = distance * 0.5
-
 	# Auto-cleanup
-	get_tree().create_timer(chain_particles.lifetime + 0.3).timeout.connect(func():
-		if is_instance_valid(chain_particles):
-			chain_particles.queue_free()
-	)
+	get_tree().create_timer(0.5).timeout.connect(chain_container.queue_free)
+
+func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color) -> void:
+	"""Create a single layer for chain lightning (GL Compatibility friendly)"""
+	for i in range(path.size() - 1):
+		var segment: MeshInstance3D = MeshInstance3D.new()
+		segment.name = "ChainLayer_%d" % i
+
+		var start_pos: Vector3 = path[i]
+		var end_pos: Vector3 = path[i + 1]
+
+		var cylinder: CylinderMesh = CylinderMesh.new()
+		cylinder.top_radius = radius
+		cylinder.bottom_radius = radius
+		cylinder.height = start_pos.distance_to(end_pos)
+		cylinder.radial_segments = 6
+		segment.mesh = cylinder
+
+		# GL Compatibility: bright color, no emission
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		if color.a < 1.0:
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		segment.material_override = mat
+
+		container.add_child(segment)
+
+		var mid_point: Vector3 = (start_pos + end_pos) / 2.0
+		segment.position = mid_point
+		segment.look_at(container.global_position + end_pos, Vector3.FORWARD)
+		segment.rotation.x += PI / 2.0
 
 func create_reticle() -> void:
 	"""Create a 3D reticle that follows the locked target"""
