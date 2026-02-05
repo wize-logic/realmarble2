@@ -431,88 +431,77 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		segment.rotation.x += PI / 2.0
 
 func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
-	"""Spawn the dramatic lightning bolt effect, scaled by level (GL Compatibility friendly)"""
+	"""Spawn a clean lightning bolt effect (GL Compatibility friendly)"""
 	if not player or not player.get_parent():
 		return
 
-	var bolt_height: float = 80.0  # Height of the lightning bolt
+	var bolt_height: float = 80.0
 
-	# Create main bolt line using multiple segments
 	var bolt_container: Node3D = Node3D.new()
 	bolt_container.name = "LightningBolt"
 	player.get_parent().add_child(bolt_container)
 	bolt_container.global_position = position
 
-	# Generate the main bolt path first (we'll use this for all layers)
+	# Generate main bolt path with sharp zigzag pattern
 	var bolt_path: Array[Vector3] = []
 	var current_pos: Vector3 = Vector3.ZERO
-	var num_segments: int = 20  # More segments for jagged look
+	var num_segments: int = 16
 	var segment_height: float = bolt_height / num_segments
 
 	bolt_path.append(current_pos)
 	for i in range(num_segments):
 		var next_pos: Vector3 = current_pos + Vector3.UP * segment_height
-		if i < num_segments - 1:  # Don't offset the top
-			# Dramatic jaggedness - this is what makes it look like lightning
-			next_pos.x += randf_range(-3.5, 3.5)
-			next_pos.z += randf_range(-3.5, 3.5)
+		if i < num_segments - 1:
+			# Sharp zigzag offsets for lightning look
+			next_pos.x += randf_range(-2.5, 2.5)
+			next_pos.z += randf_range(-2.5, 2.5)
 		bolt_path.append(next_pos)
 		current_pos = next_pos
 
-	# GL COMPATIBILITY: Create FOUR layers for maximum visibility without emission
-	# Layer 1: Wide dark blue outer glow
-	create_bolt_layer(bolt_container, bolt_path, 4.0, Color(0.2, 0.4, 0.9, 0.3), 0.0, true)
-	# Layer 2: Medium cyan glow
-	create_bolt_layer(bolt_container, bolt_path, 2.5, Color(0.4, 0.7, 1.0, 0.5), 0.0, true)
-	# Layer 3: Bright white-cyan inner glow
-	create_bolt_layer(bolt_container, bolt_path, 1.2, Color(0.8, 0.95, 1.0, 0.85), 0.0, true)
-	# Layer 4: PURE WHITE solid core - this is the bright center
-	create_bolt_layer(bolt_container, bolt_path, 0.5, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)
+	# Simple 2-layer bolt: subtle glow + bright white core
+	create_bolt_layer(bolt_container, bolt_path, 1.0, Color(0.5, 0.7, 1.0, 0.4), 0.0, true)  # Subtle blue glow
+	create_bolt_layer(bolt_container, bolt_path, 0.3, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)  # White core
 
-	# Add branching bolts for realism (4-6 branches)
-	var num_branches: int = 4 + int(level)
+	# Add 1-2 small branches
+	var num_branches: int = 1 + int(level * 0.5)
 	for b in range(num_branches):
-		# Pick a random point along the main bolt to branch from
-		var branch_start_idx: int = randi_range(3, num_segments - 4)
+		var branch_start_idx: int = randi_range(4, num_segments - 5)
 		var branch_start: Vector3 = bolt_path[branch_start_idx]
 
-		# Generate branch path
 		var branch_path: Array[Vector3] = []
 		var branch_pos: Vector3 = branch_start
-		var branch_segments: int = randi_range(4, 8)
-		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.5, randf_range(-1, 1)).normalized()
+		var branch_segments: int = randi_range(3, 5)
+		var branch_dir: Vector3 = Vector3(randf_range(-1, 1), -0.3, randf_range(-1, 1)).normalized()
 
 		branch_path.append(branch_pos)
 		for s in range(branch_segments):
-			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(5.0, 10.0)
-			branch_next.x += randf_range(-2.5, 2.5)
-			branch_next.z += randf_range(-2.5, 2.5)
+			var branch_next: Vector3 = branch_pos + branch_dir * randf_range(4.0, 7.0)
+			branch_next.x += randf_range(-1.5, 1.5)
+			branch_next.z += randf_range(-1.5, 1.5)
 			branch_path.append(branch_next)
 			branch_pos = branch_next
-			branch_dir.y -= 0.1
+			branch_dir.y -= 0.15
 
-		# Branch layers - bright and visible
-		create_bolt_layer(bolt_container, branch_path, 1.5, Color(0.4, 0.7, 1.0, 0.4), 0.0, true)
-		create_bolt_layer(bolt_container, branch_path, 0.6, Color(0.85, 0.95, 1.0, 0.8), 0.0, true)
-		create_bolt_layer(bolt_container, branch_path, 0.25, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)
+		# Thinner branch layers
+		create_bolt_layer(bolt_container, branch_path, 0.5, Color(0.6, 0.8, 1.0, 0.35), 0.0, true)
+		create_bolt_layer(bolt_container, branch_path, 0.15, Color(1.0, 1.0, 1.0, 0.9), 0.0, false)
 
-	# Spawn BRIGHT impact explosion particles - white-hot core sparks
+	# Small impact spark particles at ground
 	var impact_particles: CPUParticles3D = CPUParticles3D.new()
 	impact_particles.name = "ImpactParticles"
 	bolt_container.add_child(impact_particles)
 
 	impact_particles.emitting = true
-	impact_particles.amount = 100  # More particles
-	impact_particles.lifetime = 1.0
+	impact_particles.amount = 25
+	impact_particles.lifetime = 0.4
 	impact_particles.one_shot = true
 	impact_particles.explosiveness = 1.0
-	impact_particles.randomness = 0.5
+	impact_particles.randomness = 0.4
 	impact_particles.local_coords = false
 
 	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.8, 0.8)  # Larger particles
+	particle_mesh.size = Vector2(0.3, 0.3)
 
-	# GL Compatibility: No emission, just bright colors via color_ramp
 	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
 	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -523,110 +512,35 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	impact_particles.mesh = particle_mesh
 
 	impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	impact_particles.emission_sphere_radius = 1.5
+	impact_particles.emission_sphere_radius = 0.5
 
 	impact_particles.direction = Vector3.UP
-	impact_particles.spread = 180.0
-	impact_particles.gravity = Vector3(0, -8.0, 0)
-	impact_particles.initial_velocity_min = 12.0
-	impact_particles.initial_velocity_max = 25.0  # Faster particles
+	impact_particles.spread = 120.0
+	impact_particles.gravity = Vector3(0, -12.0, 0)
+	impact_particles.initial_velocity_min = 8.0
+	impact_particles.initial_velocity_max = 15.0
 
-	impact_particles.scale_amount_min = 3.0  # Larger
-	impact_particles.scale_amount_max = 6.0
+	impact_particles.scale_amount_min = 1.5
+	impact_particles.scale_amount_max = 3.0
 
-	# BRIGHT gradient starting with white-hot core
 	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # WHITE HOT start
-	gradient.add_point(0.1, Color(0.95, 0.98, 1.0, 1.0))  # Near white
-	gradient.add_point(0.3, Color(0.8, 0.92, 1.0, 0.95))  # Bright cyan-white
-	gradient.add_point(0.5, Color(0.5, 0.8, 1.0, 0.8))  # Electric blue
-	gradient.add_point(0.75, Color(0.3, 0.5, 0.9, 0.4))  # Blue
-	gradient.add_point(1.0, Color(0.1, 0.2, 0.5, 0.0))  # Fade
+	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
+	gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))  # Light blue
+	gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
 	impact_particles.color_ramp = gradient
 
-	# Spawn BRIGHT core flash particles (instant white burst)
-	var flash_particles: CPUParticles3D = CPUParticles3D.new()
-	flash_particles.name = "FlashParticles"
-	bolt_container.add_child(flash_particles)
-
-	flash_particles.emitting = true
-	flash_particles.amount = 40
-	flash_particles.lifetime = 0.15  # Very quick flash
-	flash_particles.one_shot = true
-	flash_particles.explosiveness = 1.0
-	flash_particles.local_coords = false
-
-	var flash_mesh: QuadMesh = QuadMesh.new()
-	flash_mesh.size = Vector2(2.0, 2.0)  # Large flash quads
-	var flash_material: StandardMaterial3D = StandardMaterial3D.new()
-	flash_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	flash_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	flash_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	flash_material.vertex_color_use_as_albedo = true
-	flash_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	flash_mesh.material = flash_material
-	flash_particles.mesh = flash_mesh
-
-	flash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	flash_particles.emission_sphere_radius = 0.5
-	flash_particles.direction = Vector3.UP
-	flash_particles.spread = 180.0
-	flash_particles.gravity = Vector3.ZERO
-	flash_particles.initial_velocity_min = 20.0
-	flash_particles.initial_velocity_max = 40.0
-	flash_particles.scale_amount_min = 4.0
-	flash_particles.scale_amount_max = 8.0
-
-	var flash_gradient: Gradient = Gradient.new()
-	flash_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # Pure white
-	flash_gradient.add_point(0.5, Color(0.9, 0.95, 1.0, 0.6))  # Bright white-blue
-	flash_gradient.add_point(1.0, Color(0.6, 0.8, 1.0, 0.0))  # Fade
-	flash_particles.color_ramp = flash_gradient
-
-	# Spawn electric arc particles along bolt (more and brighter)
-	var arc_particles: CPUParticles3D = CPUParticles3D.new()
-	arc_particles.name = "ArcParticles"
-	bolt_container.add_child(arc_particles)
-	arc_particles.position = Vector3.UP * (bolt_height / 2.0)
-
-	arc_particles.emitting = true
-	arc_particles.amount = 150  # More arc particles
-	arc_particles.lifetime = 0.5
-	arc_particles.one_shot = true
-	arc_particles.explosiveness = 0.9
-	arc_particles.randomness = 0.6
-	arc_particles.local_coords = false
-
-	var arc_mesh: QuadMesh = QuadMesh.new()
-	arc_mesh.size = Vector2(0.25, 0.25)  # Slightly larger
-	arc_mesh.material = particle_material  # Reuse bright material
-	arc_particles.mesh = arc_mesh
-
-	arc_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	arc_particles.emission_box_extents = Vector3(3.0, bolt_height / 2.0, 3.0)  # Wider emission
-
-	arc_particles.direction = Vector3(1, 0, 0)
-	arc_particles.spread = 180.0
-	arc_particles.gravity = Vector3.ZERO
-	arc_particles.initial_velocity_min = 8.0
-	arc_particles.initial_velocity_max = 15.0
-
-	arc_particles.scale_amount_min = 1.5
-	arc_particles.scale_amount_max = 3.0
-	arc_particles.color_ramp = gradient
-
-	# Play thunder sound (louder, lower pitch)
+	# Play thunder sound
 	if ability_sound:
-		ability_sound.pitch_scale = 0.6  # Deep thunder
-		ability_sound.volume_db = 8.0  # Louder
+		ability_sound.pitch_scale = 0.7
+		ability_sound.volume_db = 5.0
 		ability_sound.play()
 
-	# Stronger camera shake for nearby players
+	# Camera shake
 	if player and player.has_method("add_camera_shake"):
-		player.add_camera_shake(0.25)  # More intense shake
+		player.add_camera_shake(0.15)
 
-	# Clean up bolt after particles finish
-	get_tree().create_timer(1.2).timeout.connect(bolt_container.queue_free)
+	# Clean up after effect ends
+	get_tree().create_timer(0.6).timeout.connect(bolt_container.queue_free)
 
 func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 	"""Spawn chain lightning to nearby enemies (Level 2+ effect)"""
@@ -715,65 +629,12 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 		chain_path.append(next_chain_pos)
 		chain_pos = next_chain_pos
 
-	# GL Compatibility: Create multi-layer chain bolt (no emission, just bright colors)
-	# Outer cyan glow
-	create_chain_layer(chain_container, chain_path, 0.8, Color(0.4, 0.7, 1.0, 0.4))
-	# Inner bright layer
-	create_chain_layer(chain_container, chain_path, 0.4, Color(0.8, 0.95, 1.0, 0.8))
-	# Pure white core
-	create_chain_layer(chain_container, chain_path, 0.15, Color(1.0, 1.0, 1.0, 1.0))
-
-	# Create particle effect for the chain
-	var chain_particles: CPUParticles3D = CPUParticles3D.new()
-	chain_particles.name = "ChainParticles"
-	chain_container.add_child(chain_particles)
-
-	chain_particles.emitting = true
-	chain_particles.amount = 40
-	chain_particles.lifetime = 0.4
-	chain_particles.one_shot = true
-	chain_particles.explosiveness = 0.9
-	chain_particles.randomness = 0.5
-	chain_particles.local_coords = false
-
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.4)
-
-	# GL Compatibility: No emission on particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
-	chain_particles.mesh = particle_mesh
-
-	chain_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	chain_particles.emission_box_extents = Vector3(0.5, 0.5, distance / 2.0)
-
-	# Orient the emission box along the chain direction
-	chain_particles.look_at(chain_particles.global_position + direction, Vector3.UP)
-
-	chain_particles.direction = direction
-	chain_particles.spread = 30.0
-	chain_particles.gravity = Vector3.ZERO
-	chain_particles.initial_velocity_min = 5.0
-	chain_particles.initial_velocity_max = 10.0
-
-	chain_particles.scale_amount_min = 2.0
-	chain_particles.scale_amount_max = 4.0
-
-	# Bright white to cyan gradient
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
-	gradient.add_point(0.2, Color(0.8, 0.95, 1.0, 0.9))  # Near white
-	gradient.add_point(0.5, Color(0.5, 0.8, 1.0, 0.7))  # Cyan
-	gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
-	chain_particles.color_ramp = gradient
+	# Simple 2-layer chain: subtle glow + white core
+	create_chain_layer(chain_container, chain_path, 0.4, Color(0.5, 0.7, 1.0, 0.35))
+	create_chain_layer(chain_container, chain_path, 0.12, Color(1.0, 1.0, 1.0, 1.0))
 
 	# Auto-cleanup
-	get_tree().create_timer(0.5).timeout.connect(chain_container.queue_free)
+	get_tree().create_timer(0.3).timeout.connect(chain_container.queue_free)
 
 func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color) -> void:
 	"""Create a single layer for chain lightning (GL Compatibility friendly)"""
