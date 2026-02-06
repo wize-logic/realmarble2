@@ -23,5 +23,8 @@ mono_crash.*.json
 # Build outputs
 /build/
 
+# Node modules
+node_modules/
+
 #extra
 /.vscode
