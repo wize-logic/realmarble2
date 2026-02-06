@@ -128,6 +128,8 @@ var strafe_direction: float = 1.0
 var is_charging_ability: bool = false
 var charge_locked_target: Node = null
 var aggression_level: float = 0.7
+var _retreat_decision_health: int = -1  # Health value when retreat decision was last made
+var _retreat_decision_result: bool = false  # Cached retreat decision to avoid per-frame RNG thrashing
 
 # ============================================================================
 # PERSONALITY TRAITS (OpenArena-inspired)
@@ -1544,7 +1546,7 @@ func update_state() -> void:
 # ============================================================================
 
 func should_retreat() -> bool:
-	"""NEW: Determine if bot should retreat (health <= 2 with caution modifier) - uses seeded RNG"""
+	"""Determine if bot should retreat (health <= 2 with caution modifier) - uses seeded RNG"""
 	if not bot:
 		return false
 
@@ -1554,13 +1556,18 @@ func should_retreat() -> bool:
 	if bot_health <= 1:
 		return true
 
-	# Retreat if health is low and bot is cautious (using seeded RNG)
+	# Retreat if health is low and bot is cautious
 	if bot_health == 2:
-		# Caution level affects retreat threshold
-		# High caution (0.8) = 80% chance to retreat
-		# Low caution (0.2) = 20% chance to retreat
-		return rng.randf() < caution_level
+		# Cache the RNG decision per health value to avoid state thrashing.
+		# Without caching, rng.randf() returns a different result every frame,
+		# causing 30+ state changes/second between RETREAT and other states.
+		if _retreat_decision_health != bot_health:
+			_retreat_decision_health = bot_health
+			_retreat_decision_result = rng.randf() < caution_level
+		return _retreat_decision_result
 
+	# Health recovered - reset cached decision so it re-rolls next time health drops
+	_retreat_decision_health = -1
 	return false
 
 func should_chase() -> bool:
