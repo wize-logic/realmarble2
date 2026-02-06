@@ -14,6 +14,9 @@ uniform vec3 slime_base_color : source_color = vec3(0.15, 0.6, 0.15);
 uniform vec3 slime_bright_color : source_color = vec3(0.3, 0.9, 0.25);
 uniform vec3 slime_glow_color : source_color = vec3(0.1, 0.5, 0.1);
 
+// Performance quality: 0=Low (best FPS), 1=Medium, 2=High
+uniform int quality_level : hint_range(0, 2) = 1;
+
 // Animation parameters
 uniform float flow_speed : hint_range(0.0, 2.0) = 0.4;
 uniform float turbulence : hint_range(0.0, 2.0) = 1.0;
@@ -40,13 +43,13 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// FBM for flowing patterns
-float fbm(vec2 p) {
+// FBM for flowing patterns (octave count scales with quality_level)
+float fbm(vec2 p, int octaves) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
 
-	for(int i = 0; i < 5; i++) {
+	for(int i = 0; i < octaves; i++) {
 		value += amplitude * noise(p * frequency);
 		frequency *= 2.0;
 		amplitude *= 0.5;
@@ -93,23 +96,39 @@ void fragment() {
 
 	float time = TIME * flow_speed;
 
-	// Create flowing distortion
-	vec2 flow_offset = vec2(
-		fbm(uv * 2.0 + vec2(time * 0.3, 0.0)) * surface_distortion,
-		fbm(uv * 2.0 + vec2(0.0, time * 0.4)) * surface_distortion
-	);
+	// Scale FBM octaves: low=2, medium=3, high=5
+	int fbm_octaves = quality_level == 0 ? 2 : (quality_level == 1 ? 3 : 5);
+
+	// Create flowing distortion (skip on low quality - use simple noise instead)
+	vec2 flow_offset;
+	if (quality_level > 0) {
+		flow_offset = vec2(
+			fbm(uv * 2.0 + vec2(time * 0.3, 0.0), fbm_octaves) * surface_distortion,
+			fbm(uv * 2.0 + vec2(0.0, time * 0.4), fbm_octaves) * surface_distortion
+		);
+	} else {
+		flow_offset = vec2(
+			noise(uv * 2.0 + vec2(time * 0.3, 0.0)) * surface_distortion,
+			noise(uv * 2.0 + vec2(0.0, time * 0.4)) * surface_distortion
+		);
+	}
 
 	vec2 distorted_uv = uv + flow_offset;
 
 	// Generate base flowing pattern
-	float flow_pattern = fbm(distorted_uv * turbulence + vec2(time * 0.2, time * 0.15));
+	float flow_pattern = fbm(distorted_uv * turbulence + vec2(time * 0.2, time * 0.15), fbm_octaves);
 
-	// Add cellular/crack pattern
-	float cells = voronoi(distorted_uv * 3.0 + time * 0.1);
-	cells = smoothstep(0.1, 0.4, cells);
+	// Add cellular/crack pattern (skip voronoi on low quality - expensive 9-tap loop)
+	float cells;
+	if (quality_level > 0) {
+		cells = voronoi(distorted_uv * 3.0 + time * 0.1);
+		cells = smoothstep(0.1, 0.4, cells);
+	} else {
+		cells = noise(distorted_uv * 3.0 + time * 0.1);
+	}
 
-	// Add bubbles
-	float bubble = bubbles(distorted_uv, TIME);
+	// Add bubbles (skip on low quality)
+	float bubble = quality_level >= 2 ? bubbles(distorted_uv, TIME) : 0.0;
 
 	// Pulsing glow effect
 	float pulse = sin(TIME * 2.0) * 0.15 + 0.85;

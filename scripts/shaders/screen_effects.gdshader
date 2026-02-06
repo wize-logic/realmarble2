@@ -89,8 +89,8 @@ void fragment() {
 	// Apply color tint
 	color *= color_tint;
 
-	// Apply speed lines (skip on low quality when not active)
-	if (quality_level > 0 || speed_line_intensity > 0.1) {
+	// Apply speed lines (skip on low quality unless actively visible)
+	if (quality_level > 0 && speed_line_intensity > 0.1) {
 		float lines = speed_lines(uv, TIME);
 		color = mix(color, speed_line_color, lines * 0.4);
 	}

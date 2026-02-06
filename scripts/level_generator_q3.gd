@@ -2316,6 +2316,7 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 		var material: ShaderMaterial = ShaderMaterial.new()
 		material.shader = hazard_shader
 		material.set_shader_parameter("hazard_type", hazard_type)
+		material.set_shader_parameter("quality_level", lighting_quality)
 		if hazard_type == 0:  # Lava
 			material.set_shader_parameter("glow_intensity", 2.8)
 			material.set_shader_parameter("flow_speed", 0.5)

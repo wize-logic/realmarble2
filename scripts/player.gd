@@ -182,6 +182,9 @@ var fall_camera_position: Vector3 = Vector3.ZERO
 # Debug/cheat properties
 var god_mode: bool = false
 
+# Platform detection for particle scaling
+var _is_web: bool = false
+
 # ============================================================================
 # MULTIPLAYER POSITION SYNC
 # ============================================================================
@@ -261,6 +264,8 @@ func _enter_tree() -> void:
 	set_multiplayer_authority(str(name).to_int())
 
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
+
 	# Set up RigidBody3D physics properties - shooter style
 	mass = marble_mass  # Marbles are dense (glass/steel)
 	gravity_scale = 2.5  # Marble gravity - dense and heavy
@@ -365,7 +370,7 @@ func _ready() -> void:
 
 		# Configure death particles - explosive burst
 		death_particles.emitting = false
-		death_particles.amount = 200  # Lots of particles for dramatic effect
+		death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
 		death_particles.lifetime = 2.5
 		death_particles.one_shot = true
 		death_particles.explosiveness = 1.0
@@ -2356,7 +2361,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.color_ramp = jump_pad_gradient
 	death_particles.initial_velocity_min = 15.0  # Faster burst
 	death_particles.initial_velocity_max = 25.0
-	death_particles.amount = 150  # Lots of particles
+	death_particles.amount = 60 if _is_web else 150  # Reduced on web for performance
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2380,7 +2385,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.color_ramp = teleporter_gradient
 	death_particles.initial_velocity_min = 12.0  # Swirling motion
 	death_particles.initial_velocity_max = 20.0
-	death_particles.amount = 200  # Many particles for swirl effect
+	death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position

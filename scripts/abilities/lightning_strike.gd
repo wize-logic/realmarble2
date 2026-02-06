@@ -399,6 +399,16 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 
 func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color, _emission_energy: float, transparent: bool) -> void:
 	"""Create a single layer of the lightning bolt (GL Compatibility friendly - no emission)"""
+	# Share one material across all segments in this layer (was creating one per segment)
+	var shared_mat: StandardMaterial3D = StandardMaterial3D.new()
+	shared_mat.albedo_color = color
+	shared_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if transparent:
+		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+
+	var radial_segs: int = 4 if OS.has_feature("web") else 8
+
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
 		segment.name = "BoltLayer_%d" % i
@@ -412,17 +422,9 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		cylinder.top_radius = radius * (1.0 - taper * 0.3)
 		cylinder.bottom_radius = radius * (1.0 - taper * 0.2)
 		cylinder.height = start_pos.distance_to(end_pos)
-		cylinder.radial_segments = 8
+		cylinder.radial_segments = radial_segs
 		segment.mesh = cylinder
-
-		# GL Compatibility: Use bright albedo color with unshaded material (no emission)
-		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		if transparent:
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		segment.material_override = mat
+		segment.material_override = shared_mat
 
 		container.add_child(segment)
 
@@ -447,7 +449,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	# Generate main bolt path with sharp zigzag pattern
 	var bolt_path: Array[Vector3] = []
 	var current_pos: Vector3 = Vector3.ZERO
-	var num_segments: int = 16
+	var num_segments: int = 8 if OS.has_feature("web") else 16
 	var segment_height: float = bolt_height / num_segments
 
 	bolt_path.append(current_pos)
