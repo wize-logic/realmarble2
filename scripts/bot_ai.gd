@@ -34,6 +34,7 @@ class_name BotAI
 # ============================================================================
 
 var bot: Node = null
+var cached_world: Node = null  # Cached World node to avoid per-frame tree traversal
 var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ORB, COLLECT_ABILITY, RETREAT
 var previous_state: String = "WANDER"
 
@@ -224,6 +225,9 @@ func _ready() -> void:
 	bot_repulsion_timer = rng.randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
 	ult_check_timer = rng.randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
 
+	# Cache the World node (refreshed if invalidated)
+	cached_world = get_tree().get_root().get_node_or_null("World")
+
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
@@ -242,7 +246,7 @@ func _initialize_seeded_rng() -> void:
 
 	# If no level_seed available (practice mode), get from World's level generator
 	if level_seed == 0:
-		var world: Node = get_tree().get_root().get_node_or_null("World")
+		var world: Node = cached_world if cached_world and is_instance_valid(cached_world) else get_tree().get_root().get_node_or_null("World")
 		if world and world.level_generator and "level_seed" in world.level_generator:
 			level_seed = world.level_generator.level_seed
 
@@ -355,9 +359,10 @@ func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
 
-	# Only run AI when game is active
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world or not world.game_active:
+	# Only run AI when game is active (use cached World node to avoid tree traversal)
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world or not cached_world.game_active:
 		return
 
 	# NEW: Pause after death to prevent immediate re-engagement
@@ -565,13 +570,14 @@ func refresh_platform_cache() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
-	var level_gen: Node = world.get_node_or_null("LevelGenerator")
+	var level_gen: Node = cached_world.get_node_or_null("LevelGenerator")
 	if not level_gen:
-		level_gen = world.get_node_or_null("LevelGeneratorQ3")
+		level_gen = cached_world.get_node_or_null("LevelGeneratorQ3")
 
 	if not level_gen or not "platforms" in level_gen:
 		return
@@ -864,13 +870,14 @@ func teleport_to_safe_position() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
 	# Try to use world spawns (using seeded RNG for deterministic spawn selection)
-	if "spawns" in world and world.spawns.size() > 0:
-		var spawn_pos: Vector3 = world.spawns[rng.randi() % world.spawns.size()]
+	if "spawns" in cached_world and cached_world.spawns.size() > 0:
+		var spawn_pos: Vector3 = cached_world.spawns[rng.randi() % cached_world.spawns.size()]
 		bot.global_position = spawn_pos
 		bot.linear_velocity = Vector3.ZERO
 		bot.angular_velocity = Vector3.ZERO
