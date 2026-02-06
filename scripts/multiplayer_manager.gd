@@ -74,11 +74,20 @@ func create_game(player_name: String, color_index: int = -1) -> String:
 	# Create server
 	if use_websocket:
 		var peer: WebSocketMultiplayerPeer = WebSocketMultiplayerPeer.new()
-		# Include room code in URL so relay server can route clients
-		var url: String = relay_server_url + "?room=" + room_code
-		var error: Error = peer.create_server(relay_server_port)
+		# CRITICAL HTML5 FIX: Browsers cannot open server sockets (TCP listen).
+		# Both host and client must connect as WebSocket clients to a relay server.
+		# The relay server assigns peer ID 1 to the first client (the host).
+		var url: String = relay_server_url + "?room=" + room_code + "&host=true"
+		var error: Error
+		if OS.has_feature("web"):
+			# On HTML5: connect to relay server as a client
+			error = peer.create_client(url)
+		else:
+			# On desktop: can act as a real WebSocket server
+			error = peer.create_server(relay_server_port)
 		if error != OK:
-			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to create WebSocket server: %s" % error)
+			var mode_str: String = "client (relay)" if OS.has_feature("web") else "server"
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to create WebSocket %s: %s" % [mode_str, error])
 			network_mode = NetworkMode.OFFLINE
 			return ""
 		multiplayer.multiplayer_peer = peer
