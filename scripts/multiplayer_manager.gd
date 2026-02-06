@@ -38,7 +38,7 @@ signal room_settings_changed(settings: Dictionary)
 # WebSocket settings (for production, point to your relay server)
 # CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
 var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force WebSocket
-var relay_server_url: String = "ws://localhost:9080"  # Change to your server URL
+var relay_server_url: String = "wss://localhost:9080" if OS.has_feature("web") else "ws://localhost:9080"  # IMPORTANT: HTML5 over HTTPS requires wss:// (browsers block mixed content ws://)
 var relay_server_port: int = 9080
 
 # Connection retry settings
@@ -185,7 +185,9 @@ func leave_game() -> void:
 		# Host leaving - could implement host migration here
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Host leaving game")
 
-	# Disconnect
+	# Disconnect - close the peer before nulling to properly teardown WebSocket/ENet connections
+	if multiplayer.multiplayer_peer:
+		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
 	network_mode = NetworkMode.OFFLINE
 	players.clear()
@@ -462,6 +464,14 @@ func _on_connected_to_server() -> void:
 	# Reset retry state on successful connection
 	connection_retry_count = 0
 	_pending_retry_room_code = ""
+
+	# HTML5 HOST FIX: When the host connects via relay (create_client on web),
+	# this callback fires but the host already registered itself in create_game().
+	# Skip client registration for the host to avoid double-registration.
+	if network_mode == NetworkMode.HOST:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Host connected to relay server (peer ID: %d)" % multiplayer.get_unique_id())
+		connection_succeeded.emit()
+		return
 
 	# Register ourselves with the host, including room code and color for validation
 	var peer_id: int = multiplayer.get_unique_id()
