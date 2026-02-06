@@ -954,7 +954,8 @@ func _register_light(light: OmniLight3D) -> void:
 	if lights.size() >= max_light_count:
 		light.queue_free()
 		return
-	_register_light(light)
+	add_child(light)
+	lights.append(light)
 
 func add_interior_light(position: Vector3, index: int, suffix: String = "") -> void:
 	## Add a warm interior light for enclosed spaces (like torches in a cave)
