@@ -1188,8 +1188,8 @@ func check_ground() -> void:
 			is_grounded = false
 			return
 
-	# Force raycast update
-	ground_ray.force_raycast_update()
+	# RayCast3D auto-updates during the physics step before _physics_process,
+	# so force_raycast_update() was redundant here (doubled ground detection cost)
 
 	var was_grounded: bool = is_grounded
 	is_grounded = ground_ray.is_colliding()
