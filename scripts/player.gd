@@ -112,6 +112,7 @@ var grind_particles: CPUParticles3D = null  # Spark particles while grinding
 var targeted_rail: GrindRail = null  # The rail currently being looked at
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
+var rail_targeting_timer: float = 0.0  # Throttle rail targeting checks (perf: was every frame)
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
 var post_rail_detach_frames: int = 0  # Grace period frames after detaching from rail
 var consecutive_air_frames: int = 0  # Counter for consecutive frames in the air
@@ -829,8 +830,11 @@ func _process(delta: float) -> void:
 	# Make camera look at player
 	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
 
-	# Update rail targeting
-	update_rail_targeting()
+	# Update rail targeting (throttled to 4Hz - was every frame doing 30×N curve samples)
+	rail_targeting_timer -= delta
+	if rail_targeting_timer <= 0.0:
+		update_rail_targeting()
+		rail_targeting_timer = 0.25
 
 # MARBLE ROLLING ANIMATION - Always update for all marbles (including bots)
 func _physics_process_marble_roll(delta: float) -> void:
@@ -2048,18 +2052,15 @@ func update_rail_targeting() -> void:
 		if world:
 			var prev_count: int = cached_rails.size()
 			cached_rails = find_all_rails(world)
+			# Clean up invalid rails during cache refresh (not every targeting call)
+			cached_rails = cached_rails.filter(func(r): return r and is_instance_valid(r) and r.is_inside_tree())
 			if prev_count == 0 and cached_rails.size() > 0:
 				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Found %d rails in scene" % cached_rails.size(), false, get_entity_id())
 			elif cached_rails.size() == 0:
 				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] WARNING: No rails found in scene!", false, get_entity_id())
 			rails_cache_timer = 0.0
 
-	# Clean up invalid rails from cache
-	cached_rails = cached_rails.filter(func(r): return r and is_instance_valid(r) and r.is_inside_tree())
-
-	var all_rails: Array[GrindRail] = cached_rails
-
-	for rail in all_rails:
+	for rail in cached_rails:
 		# Validate rail is still valid and in the scene
 		if not rail or not is_instance_valid(rail) or not rail.is_inside_tree():
 			continue
@@ -2070,7 +2071,7 @@ func update_rail_targeting() -> void:
 			continue
 
 		# Sample points along the rail and find closest to ray
-		var sample_count: int = 30  # Increased for better detection
+		var sample_count: int = 10  # Reduced from 30 - sufficient for UI targeting reticle
 		for i in range(sample_count):
 			var t: float = float(i) / float(sample_count - 1)
 			var offset: float = t * rail_curve.get_baked_length()
