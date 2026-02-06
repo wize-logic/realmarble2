@@ -177,6 +177,11 @@ progressive_web_app/icon_512x512=""
 progressive_web_app/background_color=Color(0, 0, 0, 1)
 progressive_web_app/offline_page=""
 
+[physics]
+
+common/max_physics_steps_per_frame=4
+common/physics_jitter_fix=0.0
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"

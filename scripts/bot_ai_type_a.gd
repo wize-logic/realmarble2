@@ -72,8 +72,10 @@ func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world or not world.game_active:
+	# Re-use cached_world from base class to avoid a second tree traversal per frame
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world or not cached_world.game_active:
 		return
 
 	# RAIL LAUNCH RECOVERY: Override all AI while recovering from rail launch

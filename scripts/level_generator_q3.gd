@@ -210,15 +210,28 @@ const RAIL_RADIUS: float = 0.3  # Visual radius for rail tubes
 # INITIALIZATION
 # ============================================================================
 
+## When false, world.gd calls generate_level() explicitly after add_child().
+## This prevents the entire level from generating synchronously in _ready(),
+## which blocks the browser main thread on HTML5 and causes a multi-second freeze.
+var auto_generate: bool = false
+
 func _ready() -> void:
+	# _process() is only used for the editor BSP preview — disable it at runtime
+	# to avoid an unnecessary virtual-function call every frame.
 	if not Engine.is_editor_hint():
+		set_process(false)
+	if not Engine.is_editor_hint() and auto_generate:
 		generate_level()
 
 func generate_level() -> void:
 	## Main entry point - generates the complete level
+	## On HTML5 this is called with `await` from world.gd so the frame yields
+	## below keep the browser responsive during heavy generation work.
+
+	var is_web: bool = OS.has_feature("web")
 
 	# Auto-reduce light cap on web platform (forward renderer is much slower in WebGL)
-	if OS.has_feature("web"):
+	if is_web:
 		max_light_count = mini(max_light_count, 32)
 		lighting_quality = mini(lighting_quality, 0)
 
@@ -256,6 +269,10 @@ func generate_level() -> void:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
 
+	# --- yield to let the browser paint a frame ---
+	if is_web:
+		await get_tree().process_frame
+
 	# Add hazard zones if enabled (before interactive elements so they can avoid them)
 	if enable_hazards:
 		generate_hazard_zones()
@@ -270,6 +287,10 @@ func generate_level() -> void:
 		if leak_result.has_leak:
 			DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "WARNING: %s" % leak_result.details)
 
+	# --- yield ---
+	if is_web:
+		await get_tree().process_frame
+
 	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
 
@@ -279,15 +300,27 @@ func generate_level() -> void:
 	# Apply visualizer walls if enabled (WMP9 style audio visualizer)
 	apply_visualizer_walls()
 
+	# --- yield ---
+	if is_web:
+		await get_tree().process_frame
+
 	# Godot-specific features
 	if generate_lights:
 		generate_room_lights()
+
+	# --- yield after lighting (heaviest single phase on the forward renderer) ---
+	if is_web:
+		await get_tree().process_frame
 
 	if generate_navmesh:
 		generate_navigation_mesh()
 
 	if generate_occluders:
 		generate_occlusion_culling()
+
+	# --- yield ---
+	if is_web:
+		await get_tree().process_frame
 
 	# Add interactive elements LAST - after all geometry is in place
 	# This ensures we can properly check for geometry clipping

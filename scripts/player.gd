@@ -185,6 +185,9 @@ var god_mode: bool = false
 # Platform detection for particle scaling
 var _is_web: bool = false
 
+# Cached World node to avoid per-frame tree traversal (same pattern as bot_ai.gd)
+var _cached_world: Node = null
+
 # ============================================================================
 # MULTIPLAYER POSITION SYNC
 # ============================================================================
@@ -263,8 +266,15 @@ func _apply_position_sync(delta: float) -> void:
 func _enter_tree() -> void:
 	set_multiplayer_authority(str(name).to_int())
 
+func _get_world() -> Node:
+	"""Return cached World node, refreshing if stale."""
+	if not _cached_world or not is_instance_valid(_cached_world):
+		_cached_world = get_tree().get_root().get_node_or_null("World")
+	return _cached_world
+
 func _ready() -> void:
 	_is_web = OS.has_feature("web")
+	_cached_world = get_tree().get_root().get_node_or_null("World")
 
 	# Set up RigidBody3D physics properties - shooter style
 	mass = marble_mass  # Marbles are dense (glass/steel)
@@ -990,7 +1000,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed and not event.echo:
 			if ult_system and ult_system.has_method("try_activate"):
 				# Check if game is active
-				var world: Node = get_tree().get_root().get_node_or_null("World")
+				var world: Node = _get_world()
 				var game_is_active: bool = world and world.get("game_active")
 				if game_is_active:
 					if ult_system.try_activate():
@@ -1003,7 +1013,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift key detected! Pressed: %s | Grounded: %s | Cooldown: %s" % [event.pressed, is_grounded, spin_cooldown], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Check if game is active
-			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var world: Node = _get_world()
 			var game_is_active: bool = world and world.get("game_active")
 
 			if not game_is_active:
@@ -1022,7 +1032,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not event.pressed:
 			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift released! Charging: %s | Charge amount: %s" % [is_charging_spin, spin_charge], false, get_entity_id())
 			# Check if game is active
-			var world: Node = get_tree().get_root().get_node_or_null("World")
+			var world: Node = _get_world()
 			var game_is_active: bool = world and world.get("game_active")
 
 			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
@@ -1117,7 +1127,7 @@ func _physics_process(delta: float) -> void:
 		charge_spin_rotation = 0.0
 
 	# Freeze movement until game starts (but allow charging and other systems above)
-	var world: Node = get_tree().get_root().get_node_or_null("World")
+	var world: Node = _get_world()
 	if world and not world.get("game_active"):
 		return  # Don't process movement until game is active
 
@@ -2048,7 +2058,7 @@ func update_rail_targeting() -> void:
 	# Refresh rail cache every 2 seconds or if empty
 	rails_cache_timer += get_process_delta_time()
 	if cached_rails.is_empty() or rails_cache_timer >= 2.0:
-		var world: Node = get_tree().root.get_node_or_null("World")
+		var world: Node = _get_world()
 		if not world:
 			world = get_parent()
 

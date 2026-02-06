@@ -104,6 +104,13 @@ var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var current_arena_multiplier: float = 1.0  # Arena size multiplier for player speed scaling
 
 func _ready() -> void:
+	# HTML5 PERFORMANCE FIX: Cap framerate to 60 on web to prevent runaway frame
+	# accumulation.  Without this the browser's requestAnimationFrame still delivers
+	# ~60 fps, but Godot's render loop spins uncapped between rAF ticks, wasting
+	# CPU and causing the physics step budget to spike.
+	if OS.has_feature("web"):
+		Engine.max_fps = 60
+
 	# Load saved marble color preference from Global settings
 	selected_marble_color_index = Global.marble_color_index
 
@@ -2910,12 +2917,12 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 
 	add_child(level_generator)
 
-	# Wait a frame for level to generate
-	await get_tree().process_frame
+	# Explicitly generate level (async on HTML5 — yields between heavy phases
+	# to keep the browser responsive instead of freezing for several seconds).
+	await level_generator.generate_level()
 
-	# Apply procedural textures
-	if level_generator.has_method("apply_procedural_textures"):
-		level_generator.apply_procedural_textures()
+	# Wait one more frame for the scene tree to settle after generation
+	await get_tree().process_frame
 
 	# Update player spawn points from generated level
 	update_player_spawns()
