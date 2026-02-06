@@ -17,6 +17,7 @@ var active_projectiles: Array[Node3D] = []
 # Reticle system for target lock visualization
 var reticle: MeshInstance3D = null
 var reticle_target: Node3D = null
+var _target_scan_timer: float = 0.0  # Throttle find_nearest_player() calls
 
 func _ready() -> void:
 	super._ready()
@@ -680,8 +681,12 @@ func _process(delta: float) -> void:
 			# Get player level for multi-shot indicator
 			var player_level: int = player.level if "level" in player else 0
 
-			# Find the nearest player in the auto-aim cone
-			var target = find_nearest_player()
+			# Throttle find_nearest_player() to 8Hz (was every frame with O(N) acos per player)
+			_target_scan_timer -= delta
+			if _target_scan_timer <= 0.0:
+				reticle_target = find_nearest_player()
+				_target_scan_timer = 0.125
+			var target = reticle_target
 
 			if target and is_instance_valid(target):
 				# We have a lock - show reticle and update position

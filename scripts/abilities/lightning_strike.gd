@@ -16,6 +16,7 @@ var pending_strikes: Array = []
 # Reticle system for target lock visualization
 var reticle: MeshInstance3D = null
 var reticle_target: Node3D = null
+var _target_scan_timer: float = 0.0  # Throttle find_nearest_player() calls
 
 # Warning indicator that appears at strike location
 var warning_indicator: MeshInstance3D = null
@@ -754,7 +755,12 @@ func _process(delta: float) -> void:
 			# Get player level for level-based indicator
 			var player_level: int = player.level if "level" in player else 0
 
-			var target = find_nearest_player()
+			# Throttle find_nearest_player() to 8Hz (was every frame with O(N) acos per player)
+			_target_scan_timer -= delta
+			if _target_scan_timer <= 0.0:
+				reticle_target = find_nearest_player()
+				_target_scan_timer = 0.125
+			var target = reticle_target
 
 			if target and is_instance_valid(target):
 				if not reticle.is_inside_tree():
@@ -762,7 +768,6 @@ func _process(delta: float) -> void:
 						player.get_parent().add_child(reticle)
 
 				reticle.visible = true
-				reticle_target = target
 
 				# Position reticle ABOVE target (lightning comes from above!)
 				var target_position = target.global_position + Vector3(0, 3.0, 0)
