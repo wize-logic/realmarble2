@@ -2016,16 +2016,12 @@ func create_rail_reticle_ui() -> void:
 	DebugLogger.dlog(DebugLogger.Category.UI, "Rail attachment prompt UI created (text only)", false, get_entity_id())
 
 
-func find_all_rails(node: Node) -> Array[GrindRail]:
-	"""Recursively find all GrindRail nodes in the scene"""
+func find_all_rails(_node: Node) -> Array[GrindRail]:
+	"""Find all GrindRail nodes via group query (replaces recursive DFS)"""
 	var rails: Array[GrindRail] = []
-
-	if node is GrindRail:
-		rails.append(node as GrindRail)
-
-	for child in node.get_children():
-		rails.append_array(find_all_rails(child))
-
+	for n in get_tree().get_nodes_in_group("grind_rails"):
+		if n is GrindRail:
+			rails.append(n as GrindRail)
 	return rails
 
 func update_rail_targeting() -> void:
