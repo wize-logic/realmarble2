@@ -67,6 +67,7 @@ var ability_check_timer: float = 0.0  # NEW: Timer for checking abilities
 var death_pause_timer: float = 0.0  # NEW: Pause after death before resuming AI
 var bot_repulsion_timer: float = 0.0  # NEW: Timer for bot-bot repulsion
 var ult_check_timer: float = 0.0  # Timer for checking ult availability
+var terrain_stuck_check_timer: float = 0.0  # Timer for throttling terrain stuck checks
 
 # ============================================================================
 # CONSTANTS
@@ -97,6 +98,7 @@ const BOT_REPULSION_INTERVAL: float = 0.15  # NEW: Check bot repulsion frequentl
 const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
 const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
 const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
+const TERRAIN_STUCK_CHECK_INTERVAL: float = 0.5  # Only check terrain stuck every 0.5s (was every frame = 63 raycasts/frame)
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
@@ -387,8 +389,10 @@ func _physics_process(delta: float) -> void:
 		check_if_stuck()
 		stuck_timer = 0.0
 
-	# Check for stuck under terrain
-	handle_stuck_under_terrain(delta)
+	# Check for stuck under terrain (throttled - was 63 raycasts/frame unthrottled)
+	if terrain_stuck_check_timer <= 0.0:
+		handle_stuck_under_terrain(delta)
+		terrain_stuck_check_timer = TERRAIN_STUCK_CHECK_INTERVAL
 
 	# Handle unstuck behavior (overrides normal AI)
 	if is_stuck and unstuck_timer > 0.0:
@@ -481,6 +485,7 @@ func update_timers(delta: float) -> void:
 	bot_repulsion_timer -= delta
 	ability_blacklist_timer -= delta
 	ult_check_timer -= delta
+	terrain_stuck_check_timer -= delta
 
 	# Clear ability blacklist every 30 seconds
 	if ability_blacklist_timer <= 0.0:
@@ -801,43 +806,34 @@ func handle_stuck_under_terrain(delta: float) -> void:
 		stuck_under_terrain_timer = 0.0
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if bot is stuck under terrain using 9-point overhead detection"""
+	"""Check if bot is stuck under terrain using 5-point overhead detection (optimized from 9)"""
 	if not bot or not cached_space_state:
 		return false
 
 	var bot_pos: Vector3 = bot.global_position
 	var check_distance: float = 1.5
-
-	# 9 check points (center + 8 cardinal/diagonal directions)
-	var check_points: Array[Vector3] = [
-		Vector3.ZERO,  # Center
-		Vector3(check_distance, 0, 0),
-		Vector3(-check_distance, 0, 0),
-		Vector3(0, 0, check_distance),
-		Vector3(0, 0, -check_distance),
-		Vector3(check_distance, 0, check_distance),
-		Vector3(-check_distance, 0, check_distance),
-		Vector3(check_distance, 0, -check_distance),
-		Vector3(-check_distance, 0, -check_distance)
-	]
-
 	var stuck_count: int = 0
 
-	for offset in check_points:
-		var check_pos: Vector3 = bot_pos + offset
-		var ray_start: Vector3 = check_pos + Vector3(0, BOT_EYE_HEIGHT, 0)
-		var ray_end: Vector3 = ray_start + Vector3(0, 2.3, 0)  # Check 2.3 units above
+	# Reuse a single query object across all rays to avoid per-ray allocations
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
+	query.exclude = [bot]
+	query.collision_mask = 1  # World layer
 
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-		query.exclude = [bot]
-		query.collision_mask = 1  # World layer
+	# 5 check points (center + 4 cardinal) - diagonals removed as redundant
+	var offsets_x: Array[float] = [0.0, check_distance, -check_distance, 0.0, 0.0]
+	var offsets_z: Array[float] = [0.0, 0.0, 0.0, check_distance, -check_distance]
+
+	for i in range(5):
+		var ray_start_y: float = bot_pos.y + BOT_EYE_HEIGHT
+		query.from = Vector3(bot_pos.x + offsets_x[i], ray_start_y, bot_pos.z + offsets_z[i])
+		query.to = Vector3(query.from.x, ray_start_y + 2.3, query.from.z)
 
 		var result: Dictionary = cached_space_state.intersect_ray(query)
 		if result:
 			stuck_count += 1
 
-	# If more than 4 points hit overhead terrain, we're stuck
-	return stuck_count > 4
+	# If more than 2 points (of 5) hit overhead terrain, we're stuck
+	return stuck_count > 2
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Apply aggressive unstuck forces"""
