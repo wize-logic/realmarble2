@@ -1,0 +1,15 @@
+{
+  "name": "realmarble-relay",
+  "version": "1.0.0",
+  "description": "Godot WebSocket multiplayer relay server",
+  "main": "relay.js",
+  "scripts": {
+    "start": "node relay.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}

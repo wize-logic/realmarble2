@@ -35,10 +35,13 @@ var room_settings: Dictionary = {
 
 signal room_settings_changed(settings: Dictionary)
 
-# WebSocket settings (for production, point to your relay server)
+# WebSocket settings
 # CRITICAL HTML5 REQUIREMENT: MUST use WebSocket on HTML5 (ENet not supported in browsers)
 var use_websocket: bool = OS.has_feature("web")  # Auto-detect HTML5 to force WebSocket
-var relay_server_url: String = "wss://localhost:9080" if OS.has_feature("web") else "ws://localhost:9080"  # IMPORTANT: HTML5 over HTTPS requires wss:// (browsers block mixed content ws://)
+# Set RELAY_SERVER_URL to your deployed relay server (e.g. "wss://your-server.example.com")
+# On HTML5 you can also set window.RELAY_SERVER_URL in the page to override at runtime.
+const RELAY_SERVER_URL_DEFAULT: String = "wss://localhost:9080"
+var relay_server_url: String = ""  # Resolved in _ready()
 var relay_server_port: int = 9080
 
 # Connection retry settings
@@ -51,12 +54,27 @@ var _pending_retry_room_code: String = ""
 var enet_port: int = 9999
 
 func _ready() -> void:
+	# Resolve relay server URL
+	relay_server_url = _resolve_relay_url()
+	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Relay server URL: %s" % relay_server_url)
+
 	# Connect multiplayer signals
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+func _resolve_relay_url() -> String:
+	# On HTML5, check for a page-level override (window.RELAY_SERVER_URL)
+	if OS.has_feature("web"):
+		var js_url = JavaScriptBridge.eval("(typeof window.RELAY_SERVER_URL !== 'undefined') ? window.RELAY_SERVER_URL : '';", true)
+		if js_url is String and js_url != "":
+			return js_url
+		# Default for web: wss:// (browsers on HTTPS block mixed-content ws://)
+		return RELAY_SERVER_URL_DEFAULT.replace("ws://", "wss://") if RELAY_SERVER_URL_DEFAULT.begins_with("ws://") else RELAY_SERVER_URL_DEFAULT
+	# Desktop: use ws:// (no TLS needed locally)
+	return RELAY_SERVER_URL_DEFAULT.replace("wss://", "ws://") if RELAY_SERVER_URL_DEFAULT.begins_with("wss://") else RELAY_SERVER_URL_DEFAULT
 
 func create_game(player_name: String, color_index: int = -1) -> String:
 	"""Create a new game lobby as host"""
@@ -77,7 +95,7 @@ func create_game(player_name: String, color_index: int = -1) -> String:
 		# CRITICAL HTML5 FIX: Browsers cannot open server sockets (TCP listen).
 		# Both host and client must connect as WebSocket clients to a relay server.
 		# The relay server assigns peer ID 1 to the first client (the host).
-		var url: String = relay_server_url + "?room=" + room_code + "&host=true"
+		var url: String = relay_server_url.rstrip("/") + "/?room=" + room_code + "&host=true"
 		var error: Error
 		if OS.has_feature("web"):
 			# On HTML5: connect to relay server as a client
@@ -135,7 +153,7 @@ func join_game(player_name: String, join_room_code: String, host_address: String
 	if use_websocket:
 		var peer: WebSocketMultiplayerPeer = WebSocketMultiplayerPeer.new()
 		# Include room code in URL so relay server routes to the correct host
-		var url: String = relay_server_url + "?room=" + join_room_code
+		var url: String = relay_server_url.rstrip("/") + "/?room=" + join_room_code
 		var error: Error = peer.create_client(url)
 		if error != OK:
 			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Failed to connect to WebSocket server: %s" % error)
