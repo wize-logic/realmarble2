@@ -4,8 +4,10 @@ extends Node3D
 ## Creates a puffy cloud effect when new areas appear
 
 var particles: GPUParticles3D = null
+var _is_web: bool = false
 
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
 	create_poof_effect()
 
 func create_poof_effect() -> void:
@@ -14,7 +16,7 @@ func create_poof_effect() -> void:
 	particles.name = "PoofParticles"
 	particles.emitting = false
 	particles.one_shot = true
-	particles.amount = 200
+	particles.amount = 50 if _is_web else 200
 	particles.lifetime = 1.5
 	particles.explosiveness = 1.0  # All particles emit at once
 	particles.randomness = 0.8
@@ -53,11 +55,16 @@ func create_poof_effect() -> void:
 
 	particles.process_material = material
 
-	# Create mesh for particles - use sphere for puffy look
-	var sphere_mesh = SphereMesh.new()
-	sphere_mesh.radial_segments = 8
-	sphere_mesh.rings = 4
-	particles.draw_pass_1 = sphere_mesh
+	# Create mesh for particles - QuadMesh on web (2 tris), SphereMesh on desktop
+	if _is_web:
+		var quad_mesh = QuadMesh.new()
+		quad_mesh.size = Vector2(1.0, 1.0)
+		particles.draw_pass_1 = quad_mesh
+	else:
+		var sphere_mesh = SphereMesh.new()
+		sphere_mesh.radial_segments = 8
+		sphere_mesh.rings = 4
+		particles.draw_pass_1 = sphere_mesh
 
 	print("POOF particle effect created")
 

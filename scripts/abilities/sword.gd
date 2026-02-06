@@ -22,6 +22,9 @@ var slash_particles: CPUParticles3D = null
 
 # Arc indicator for sword swing range
 var arc_indicator: Node3D = null
+var _ground_ray_timer: float = 0.0  # Throttle ground raycast for indicator
+var _cached_ground_pos: Vector3 = Vector3.ZERO  # Cached ground hit position
+var _indicator_ray_query: PhysicsRayQueryParameters3D = null  # Reuse query object
 
 func _ready() -> void:
 	super._ready()
@@ -154,28 +157,25 @@ func _process(delta: float) -> void:
 				slash_direction = slash_direction.normalized()
 
 			# Position at player's center (mesh child is already offset forward)
-			# Use raycasting to find ground below the player
+			# Throttle ground raycast to 4Hz and cache query object (was every frame)
 			var base_position = player.global_position
-			var indicator_position = base_position
+			_ground_ray_timer -= delta
+			if _ground_ray_timer <= 0.0:
+				_ground_ray_timer = 0.25
+				if not _indicator_ray_query:
+					_indicator_ray_query = PhysicsRayQueryParameters3D.new()
+					_indicator_ray_query.exclude = [player]
+					_indicator_ray_query.collision_mask = 1
+				_indicator_ray_query.from = base_position + Vector3.UP * 50.0
+				_indicator_ray_query.to = base_position + Vector3.DOWN * 100.0
+				var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+				var result: Dictionary = space_state.intersect_ray(_indicator_ray_query)
+				if result:
+					_cached_ground_pos = result.position + Vector3.UP * 0.15
+				else:
+					_cached_ground_pos = base_position
 
-			# Raycast downward to find ground below player
-			var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
-			var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-				base_position + Vector3.UP * 50.0,  # Start well above
-				base_position + Vector3.DOWN * 100.0  # Check far below
-			)
-			query.exclude = [player]
-			query.collision_mask = 1  # Only check world geometry (layer 1)
-			var result: Dictionary = space_state.intersect_ray(query)
-
-			if result:
-				# Ground found - position indicator slightly above it
-				indicator_position = result.position + Vector3.UP * 0.15
-			else:
-				# No ground found - keep at player's Y level
-				indicator_position.y = player.global_position.y
-
-			arc_indicator.global_position = indicator_position
+			arc_indicator.global_position = _cached_ground_pos
 
 			# Update indicator mesh based on level (spin attack vs forward arc)
 			var mesh_instance: MeshInstance3D = arc_indicator.get_child(0) if arc_indicator.get_child_count() > 0 else null

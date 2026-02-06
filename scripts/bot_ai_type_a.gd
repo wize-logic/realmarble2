@@ -96,12 +96,11 @@ func refresh_rail_cache() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
-		return
-
-	# Find all rails in the scene
-	var all_rails: Array[GrindRail] = find_all_rails(world)
+	# Find all rails via group query (O(1) vs recursive DFS)
+	var all_rails: Array[GrindRail] = []
+	for node in get_tree().get_nodes_in_group("grind_rails"):
+		if node is GrindRail:
+			all_rails.append(node as GrindRail)
 	var bot_pos: Vector3 = bot.global_position
 
 	# Filter rails by distance

@@ -81,10 +81,13 @@ func _process(delta: float) -> void:
 	# Update animation time
 	time += delta
 
-	# Bob up and down
-	var new_pos: Vector3 = global_position
-	new_pos.y = base_height + sin(time * bob_speed) * bob_amount
-	global_position = new_pos
+	# Bob up and down - only write position when change exceeds threshold
+	# (avoids per-frame transform notification propagation)
+	var target_y: float = base_height + sin(time * bob_speed) * bob_amount
+	if absf(global_position.y - target_y) > 0.005:
+		var new_pos: Vector3 = global_position
+		new_pos.y = target_y
+		global_position = new_pos
 
 	# Rotate slowly
 	if mesh_instance:

@@ -66,6 +66,8 @@ extends Node3D
 @export var q3_structure_boost: float = 1.5  ## Extra lighting on structures
 ## Lighting quality for performance: 0=Low (few lights), 1=Medium, 2=High (full)
 @export var lighting_quality: int = 1
+## Maximum total OmniLight3D nodes (forward renderer evaluates each per-fragment)
+@export var max_light_count: int = 64
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
@@ -214,6 +216,11 @@ func _ready() -> void:
 
 func generate_level() -> void:
 	## Main entry point - generates the complete level
+
+	# Auto-reduce light cap on web platform (forward renderer is much slower in WebGL)
+	if OS.has_feature("web"):
+		max_light_count = mini(max_light_count, 32)
+		lighting_quality = mini(lighting_quality, 0)
 
 	# Initialize random number generator
 	rng = RandomNumberGenerator.new()
@@ -938,9 +945,21 @@ func get_structure_cell_radius(type: int) -> int:
 			return 1
 	return 0
 
+func _can_add_light() -> bool:
+	## Check if we're under the global light cap (forward renderer perf guard)
+	return lights.size() < max_light_count
+
+func _register_light(light: OmniLight3D) -> void:
+	## Add a light to the scene and tracking array (respecting the cap)
+	if lights.size() >= max_light_count:
+		light.queue_free()
+		return
+	add_child(light)
+	lights.append(light)
+
 func add_interior_light(position: Vector3, index: int, suffix: String = "") -> void:
 	## Add a warm interior light for enclosed spaces (like torches in a cave)
-	if not generate_lights:
+	if not generate_lights or not _can_add_light():
 		return
 	var light: OmniLight3D = OmniLight3D.new()
 	light.name = "InteriorLight_%d%s" % [index, suffix]
@@ -950,84 +969,37 @@ func add_interior_light(position: Vector3, index: int, suffix: String = "") -> v
 	light.omni_range = q3_light_range * 1.2
 	light.omni_attenuation = 1.0  # Linear falloff for full coverage
 	light.shadow_enabled = false
-	add_child(light)
-	lights.append(light)
+	_register_light(light)
 
 func add_structure_light(pos: Vector3, height: float, structure_size: float, index: int) -> void:
-	## Quake 3 style structure lighting - fully illuminate all surfaces
-	## Uses multiple overlapping lights to ensure no dark spots on structures
-	if not generate_lights:
+	## Quake 3 style structure lighting - reduced from 10 lights to 2 per structure
+	if not generate_lights or not _can_add_light():
 		return
 
 	var base_energy: float = q3_light_energy * q3_structure_boost
 	var base_range: float = maxf(structure_size * 2.5, q3_light_range * 1.5)
 
-	# Top light - bright overhead illumination
+	# Top light - bright overhead illumination (increased range to compensate for removed side/corner lights)
 	var top_light: OmniLight3D = OmniLight3D.new()
 	top_light.name = "StructureTopLight_%d" % index
 	top_light.position = Vector3(pos.x, height + 3.0, pos.z)
 	top_light.light_color = q3_light_color
-	top_light.light_energy = base_energy
-	top_light.omni_range = base_range
-	top_light.omni_attenuation = 1.0  # Linear falloff for full range coverage
+	top_light.light_energy = base_energy * 1.3
+	top_light.omni_range = base_range * 1.5
+	top_light.omni_attenuation = 0.8
 	top_light.shadow_enabled = false
-	add_child(top_light)
-	lights.append(top_light)
+	_register_light(top_light)
 
-	# Mid-height lights at 4 cardinal directions - illuminate sides
-	var mid_height: float = height * 0.5
-	var offset: float = structure_size * 0.6
-	var side_positions: Array[Vector3] = [
-		Vector3(pos.x + offset, mid_height, pos.z),
-		Vector3(pos.x - offset, mid_height, pos.z),
-		Vector3(pos.x, mid_height, pos.z + offset),
-		Vector3(pos.x, mid_height, pos.z - offset),
-	]
-
-	for i in range(side_positions.size()):
-		var side_light: OmniLight3D = OmniLight3D.new()
-		side_light.name = "StructureSideLight_%d_%d" % [index, i]
-		side_light.position = side_positions[i]
-		side_light.light_color = q3_light_color
-		side_light.light_energy = base_energy * 0.8
-		side_light.omni_range = base_range
-		side_light.omni_attenuation = 1.0  # Linear falloff
-		side_light.shadow_enabled = false
-		add_child(side_light)
-		lights.append(side_light)
-
-	# Ground-level fill - illuminate base and underneath
+	# Ground-level fill (increased range to compensate)
 	var ground_light: OmniLight3D = OmniLight3D.new()
 	ground_light.name = "StructureGroundLight_%d" % index
 	ground_light.position = Vector3(pos.x, 1.0, pos.z)
 	ground_light.light_color = q3_light_color
-	ground_light.light_energy = base_energy
-	ground_light.omni_range = base_range * 1.5
-	ground_light.omni_attenuation = 1.0  # Linear falloff
+	ground_light.light_energy = base_energy * 1.2
+	ground_light.omni_range = base_range * 2.0
+	ground_light.omni_attenuation = 0.8
 	ground_light.shadow_enabled = false
-	add_child(ground_light)
-	lights.append(ground_light)
-
-	# Corner fill lights for complete coverage
-	var corner_offset: float = structure_size * 0.5
-	var corner_positions: Array[Vector3] = [
-		Vector3(pos.x + corner_offset, 2.0, pos.z + corner_offset),
-		Vector3(pos.x - corner_offset, 2.0, pos.z + corner_offset),
-		Vector3(pos.x + corner_offset, 2.0, pos.z - corner_offset),
-		Vector3(pos.x - corner_offset, 2.0, pos.z - corner_offset),
-	]
-
-	for i in range(corner_positions.size()):
-		var corner_light: OmniLight3D = OmniLight3D.new()
-		corner_light.name = "StructureCornerLight_%d_%d" % [index, i]
-		corner_light.position = corner_positions[i]
-		corner_light.light_color = q3_light_color
-		corner_light.light_energy = base_energy * 0.7
-		corner_light.omni_range = base_range * 0.8
-		corner_light.omni_attenuation = 1.0  # Linear falloff
-		corner_light.shadow_enabled = false
-		add_child(corner_light)
-		lights.append(corner_light)
+	_register_light(ground_light)
 
 func generate_structure(type: int, pos: Vector3, scale: float, index: int) -> void:
 	# Generate the structure
@@ -2345,6 +2317,7 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 		var material: ShaderMaterial = ShaderMaterial.new()
 		material.shader = hazard_shader
 		material.set_shader_parameter("hazard_type", hazard_type)
+		material.set_shader_parameter("quality_level", lighting_quality)
 		if hazard_type == 0:  # Lava
 			material.set_shader_parameter("glow_intensity", 2.8)
 			material.set_shader_parameter("flow_speed", 0.5)
@@ -2501,8 +2474,7 @@ func _generate_arena_light_grid() -> void:
 				ceiling_light.omni_range = q3_light_range * 1.2 * range_boost
 				ceiling_light.omni_attenuation = 0.7
 				ceiling_light.shadow_enabled = false
-				add_child(ceiling_light)
-				lights.append(ceiling_light)
+				_register_light(ceiling_light)
 				lights_created += 1
 
 			# Floor fill light - only on medium/high quality
@@ -2515,8 +2487,7 @@ func _generate_arena_light_grid() -> void:
 				floor_light.omni_range = q3_light_range * range_boost
 				floor_light.omni_attenuation = 0.6
 				floor_light.shadow_enabled = false
-				add_child(floor_light)
-				lights.append(floor_light)
+				_register_light(floor_light)
 				lights_created += 1
 
 			# Mid-height ambient light - only on high quality
@@ -2529,8 +2500,7 @@ func _generate_arena_light_grid() -> void:
 				mid_light.omni_range = q3_light_range * 0.9 * range_boost
 				mid_light.omni_attenuation = 0.6
 				mid_light.shadow_enabled = false
-				add_child(mid_light)
-				lights.append(mid_light)
+				_register_light(mid_light)
 				lights_created += 1
 
 			grid_idx += 1
@@ -2559,8 +2529,7 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 	main_light.omni_range = maxf(q3_light_range * 1.5, room_size)
 	main_light.omni_attenuation = 0.7
 	main_light.shadow_enabled = false
-	add_child(main_light)
-	lights.append(main_light)
+	_register_light(main_light)
 
 	# Corner lights - 4 corners to eliminate dark spots
 	var corner_inset: float = minf(room.room.size.x, room.room.size.y) * 0.2
@@ -2581,8 +2550,7 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 		corner_light.omni_range = q3_light_range * 0.9
 		corner_light.omni_attenuation = 0.7
 		corner_light.shadow_enabled = false
-		add_child(corner_light)
-		lights.append(corner_light)
+		_register_light(corner_light)
 
 	# Floor-level corner lights - brighten ground in corners
 	for c_idx in range(corners.size()):
@@ -2594,8 +2562,7 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 		floor_corner.omni_range = q3_light_range * 0.7
 		floor_corner.omni_attenuation = 0.6
 		floor_corner.shadow_enabled = false
-		add_child(floor_corner)
-		lights.append(floor_corner)
+		_register_light(floor_corner)
 
 	# Edge midpoint lights for larger rooms
 	if room_size >= 15.0:
@@ -2620,8 +2587,7 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 			edge_light.omni_range = q3_light_range * 0.85
 			edge_light.omni_attenuation = 0.7
 			edge_light.shadow_enabled = false
-			add_child(edge_light)
-			lights.append(edge_light)
+			_register_light(edge_light)
 
 	# Additional sub-grid lights for very large rooms
 	if room_size >= 25.0:
@@ -2644,8 +2610,7 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 				sub_light.omni_range = q3_light_range * 0.75
 				sub_light.omni_attenuation = 0.7
 				sub_light.shadow_enabled = false
-				add_child(sub_light)
-				lights.append(sub_light)
+				_register_light(sub_light)
 
 
 func _generate_corridor_q3_lights() -> void:
@@ -2667,8 +2632,7 @@ func _generate_corridor_q3_lights() -> void:
 			main_light.omni_range = q3_light_range * 1.2
 			main_light.omni_attenuation = 0.7
 			main_light.shadow_enabled = false
-			add_child(main_light)
-			lights.append(main_light)
+			_register_light(main_light)
 
 			# Floor light for corridor
 			var floor_light: OmniLight3D = OmniLight3D.new()
@@ -2679,8 +2643,7 @@ func _generate_corridor_q3_lights() -> void:
 			floor_light.omni_range = q3_light_range * 0.9
 			floor_light.omni_attenuation = 0.6
 			floor_light.shadow_enabled = false
-			add_child(floor_light)
-			lights.append(floor_light)
+			_register_light(floor_light)
 
 			# Additional lights for long corridors
 			if seg_length > q3_grid_spacing:
@@ -2712,8 +2675,7 @@ func _generate_corridor_q3_lights() -> void:
 					extra_light.omni_range = q3_light_range
 					extra_light.omni_attenuation = 0.7
 					extra_light.shadow_enabled = false
-					add_child(extra_light)
-					lights.append(extra_light)
+					_register_light(extra_light)
 
 			corridor_idx += 1
 
@@ -2750,8 +2712,7 @@ func _generate_bounce_lights() -> void:
 			low_bounce.omni_range = q3_light_range * 0.8
 			low_bounce.omni_attenuation = 0.6
 			low_bounce.shadow_enabled = false
-			add_child(low_bounce)
-			lights.append(low_bounce)
+			_register_light(low_bounce)
 
 			# High bounce light
 			var high_bounce: OmniLight3D = OmniLight3D.new()
@@ -2762,8 +2723,7 @@ func _generate_bounce_lights() -> void:
 			high_bounce.omni_range = q3_light_range * 0.7
 			high_bounce.omni_attenuation = 0.6
 			high_bounce.shadow_enabled = false
-			add_child(high_bounce)
-			lights.append(high_bounce)
+			_register_light(high_bounce)
 
 			bounce_idx += 1
 

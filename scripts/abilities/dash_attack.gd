@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure fire particles - Trail effect (enhanced for more powerful dash)
 	fire_trail.emitting = false
-	fire_trail.amount = 180  # Increased from 120 for more intense trail
+	fire_trail.amount = 60 if OS.has_feature("web") else 180  # Reduced on web for performance
 	fire_trail.lifetime = 1.4  # Increased from 1.2s for longer lasting trail
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.3

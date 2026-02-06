@@ -37,7 +37,7 @@ func _ready() -> void:
 
 	# Configure explosion particles
 	explosion_particles.emitting = false
-	explosion_particles.amount = 100
+	explosion_particles.amount = 40 if OS.has_feature("web") else 100
 	explosion_particles.lifetime = 0.5
 	explosion_particles.one_shot = true
 	explosion_particles.explosiveness = 1.0
@@ -93,7 +93,7 @@ func _ready() -> void:
 
 	# Configure magma particles - chunky projectiles
 	magma_particles.emitting = false
-	magma_particles.amount = 30  # Base amount, will scale with level
+	magma_particles.amount = 15 if OS.has_feature("web") else 30  # Base amount, will scale with level
 	magma_particles.lifetime = 1.5  # Magma chunks last longer
 	magma_particles.one_shot = true
 	magma_particles.explosiveness = 0.8  # Most spawn at once
@@ -526,7 +526,7 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 
 		# Configure lingering fire
 		fire.emitting = true
-		fire.amount = 20
+		fire.amount = 10 if OS.has_feature("web") else 20
 		fire.lifetime = 1.5
 		fire.explosiveness = 0.0
 		fire.randomness = 0.3
@@ -611,7 +611,7 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	explosion.global_position = position
 
 	explosion.emitting = true
-	explosion.amount = 50
+	explosion.amount = 20 if OS.has_feature("web") else 50
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0

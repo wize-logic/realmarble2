@@ -7,6 +7,9 @@ extends Node
 # Pre-load the shader
 const PROCEDURAL_SHADER = preload("res://scripts/shaders/procedural_surface.gdshader")
 
+# Material cache: keyed by preset name, shared across identical geometry
+var _material_cache: Dictionary = {}
+
 # Material presets - balanced for good lighting coverage with proper shadows
 const MATERIAL_PRESETS = {
 	"floor": {
@@ -265,6 +268,10 @@ const MATERIAL_PRESETS = {
 
 func create_material(preset_name: String, color_variation: float = 0.0) -> ShaderMaterial:
 	"""Create a procedural material from a preset with optional color variation"""
+	# Return cached material for zero-variation presets (shared across meshes = fewer draw calls)
+	if color_variation == 0.0 and _material_cache.has(preset_name):
+		return _material_cache[preset_name]
+
 	var material = ShaderMaterial.new()
 	material.shader = PROCEDURAL_SHADER
 
@@ -306,6 +313,9 @@ func create_material(preset_name: String, color_variation: float = 0.0) -> Shade
 		)
 		material.set_shader_parameter("base_color", varied_base.clamp())
 		material.set_shader_parameter("accent_color", varied_accent.clamp())
+	else:
+		# Cache zero-variation materials for reuse
+		_material_cache[preset_name] = material
 
 	return material
 

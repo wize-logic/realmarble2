@@ -23,6 +23,7 @@ var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
 
 
 func _ready() -> void:
+	add_to_group("grind_rails")
 	if not curve:
 		curve = Curve3D.new()
 

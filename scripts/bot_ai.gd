@@ -34,6 +34,7 @@ class_name BotAI
 # ============================================================================
 
 var bot: Node = null
+var cached_world: Node = null  # Cached World node to avoid per-frame tree traversal
 var state: String = "WANDER"  # WANDER, CHASE, ATTACK, COLLECT_ORB, COLLECT_ABILITY, RETREAT
 var previous_state: String = "WANDER"
 
@@ -67,6 +68,7 @@ var ability_check_timer: float = 0.0  # NEW: Timer for checking abilities
 var death_pause_timer: float = 0.0  # NEW: Pause after death before resuming AI
 var bot_repulsion_timer: float = 0.0  # NEW: Timer for bot-bot repulsion
 var ult_check_timer: float = 0.0  # Timer for checking ult availability
+var terrain_stuck_check_timer: float = 0.0  # Timer for throttling terrain stuck checks
 
 # ============================================================================
 # CONSTANTS
@@ -97,6 +99,7 @@ const BOT_REPULSION_INTERVAL: float = 0.15  # NEW: Check bot repulsion frequentl
 const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
 const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
 const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
+const TERRAIN_STUCK_CHECK_INTERVAL: float = 0.5  # Only check terrain stuck every 0.5s (was every frame = 63 raycasts/frame)
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
@@ -125,6 +128,8 @@ var strafe_direction: float = 1.0
 var is_charging_ability: bool = false
 var charge_locked_target: Node = null
 var aggression_level: float = 0.7
+var _retreat_decision_health: int = -1  # Health value when retreat decision was last made
+var _retreat_decision_result: bool = false  # Cached retreat decision to avoid per-frame RNG thrashing
 
 # ============================================================================
 # PERSONALITY TRAITS (OpenArena-inspired)
@@ -222,6 +227,9 @@ func _ready() -> void:
 	bot_repulsion_timer = rng.randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
 	ult_check_timer = rng.randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
 
+	# Cache the World node (refreshed if invalidated)
+	cached_world = get_tree().get_root().get_node_or_null("World")
+
 	# Initial cache refresh
 	call_deferred("refresh_cached_groups")
 	call_deferred("find_target")
@@ -240,7 +248,7 @@ func _initialize_seeded_rng() -> void:
 
 	# If no level_seed available (practice mode), get from World's level generator
 	if level_seed == 0:
-		var world: Node = get_tree().get_root().get_node_or_null("World")
+		var world: Node = cached_world if cached_world and is_instance_valid(cached_world) else get_tree().get_root().get_node_or_null("World")
 		if world and world.level_generator and "level_seed" in world.level_generator:
 			level_seed = world.level_generator.level_seed
 
@@ -353,9 +361,10 @@ func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
 
-	# Only run AI when game is active
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world or not world.game_active:
+	# Only run AI when game is active (use cached World node to avoid tree traversal)
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world or not cached_world.game_active:
 		return
 
 	# NEW: Pause after death to prevent immediate re-engagement
@@ -387,8 +396,10 @@ func _physics_process(delta: float) -> void:
 		check_if_stuck()
 		stuck_timer = 0.0
 
-	# Check for stuck under terrain
-	handle_stuck_under_terrain(delta)
+	# Check for stuck under terrain (throttled - was 63 raycasts/frame unthrottled)
+	if terrain_stuck_check_timer <= 0.0:
+		handle_stuck_under_terrain(delta)
+		terrain_stuck_check_timer = TERRAIN_STUCK_CHECK_INTERVAL
 
 	# Handle unstuck behavior (overrides normal AI)
 	if is_stuck and unstuck_timer > 0.0:
@@ -481,6 +492,7 @@ func update_timers(delta: float) -> void:
 	bot_repulsion_timer -= delta
 	ability_blacklist_timer -= delta
 	ult_check_timer -= delta
+	terrain_stuck_check_timer -= delta
 
 	# Clear ability blacklist every 30 seconds
 	if ability_blacklist_timer <= 0.0:
@@ -560,13 +572,14 @@ func refresh_platform_cache() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
-	var level_gen: Node = world.get_node_or_null("LevelGenerator")
+	var level_gen: Node = cached_world.get_node_or_null("LevelGenerator")
 	if not level_gen:
-		level_gen = world.get_node_or_null("LevelGeneratorQ3")
+		level_gen = cached_world.get_node_or_null("LevelGeneratorQ3")
 
 	if not level_gen or not "platforms" in level_gen:
 		return
@@ -801,43 +814,34 @@ func handle_stuck_under_terrain(delta: float) -> void:
 		stuck_under_terrain_timer = 0.0
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if bot is stuck under terrain using 9-point overhead detection"""
+	"""Check if bot is stuck under terrain using 5-point overhead detection (optimized from 9)"""
 	if not bot or not cached_space_state:
 		return false
 
 	var bot_pos: Vector3 = bot.global_position
 	var check_distance: float = 1.5
-
-	# 9 check points (center + 8 cardinal/diagonal directions)
-	var check_points: Array[Vector3] = [
-		Vector3.ZERO,  # Center
-		Vector3(check_distance, 0, 0),
-		Vector3(-check_distance, 0, 0),
-		Vector3(0, 0, check_distance),
-		Vector3(0, 0, -check_distance),
-		Vector3(check_distance, 0, check_distance),
-		Vector3(-check_distance, 0, check_distance),
-		Vector3(check_distance, 0, -check_distance),
-		Vector3(-check_distance, 0, -check_distance)
-	]
-
 	var stuck_count: int = 0
 
-	for offset in check_points:
-		var check_pos: Vector3 = bot_pos + offset
-		var ray_start: Vector3 = check_pos + Vector3(0, BOT_EYE_HEIGHT, 0)
-		var ray_end: Vector3 = ray_start + Vector3(0, 2.3, 0)  # Check 2.3 units above
+	# Reuse a single query object across all rays to avoid per-ray allocations
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
+	query.exclude = [bot]
+	query.collision_mask = 1  # World layer
 
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(ray_start, ray_end)
-		query.exclude = [bot]
-		query.collision_mask = 1  # World layer
+	# 5 check points (center + 4 cardinal) - diagonals removed as redundant
+	var offsets_x: Array[float] = [0.0, check_distance, -check_distance, 0.0, 0.0]
+	var offsets_z: Array[float] = [0.0, 0.0, 0.0, check_distance, -check_distance]
+
+	for i in range(5):
+		var ray_start_y: float = bot_pos.y + BOT_EYE_HEIGHT
+		query.from = Vector3(bot_pos.x + offsets_x[i], ray_start_y, bot_pos.z + offsets_z[i])
+		query.to = Vector3(query.from.x, ray_start_y + 2.3, query.from.z)
 
 		var result: Dictionary = cached_space_state.intersect_ray(query)
 		if result:
 			stuck_count += 1
 
-	# If more than 4 points hit overhead terrain, we're stuck
-	return stuck_count > 4
+	# If more than 2 points (of 5) hit overhead terrain, we're stuck
+	return stuck_count > 2
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Apply aggressive unstuck forces"""
@@ -868,13 +872,14 @@ func teleport_to_safe_position() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
 	# Try to use world spawns (using seeded RNG for deterministic spawn selection)
-	if "spawns" in world and world.spawns.size() > 0:
-		var spawn_pos: Vector3 = world.spawns[rng.randi() % world.spawns.size()]
+	if "spawns" in cached_world and cached_world.spawns.size() > 0:
+		var spawn_pos: Vector3 = cached_world.spawns[rng.randi() % cached_world.spawns.size()]
 		bot.global_position = spawn_pos
 		bot.linear_velocity = Vector3.ZERO
 		bot.angular_velocity = Vector3.ZERO
@@ -1541,7 +1546,7 @@ func update_state() -> void:
 # ============================================================================
 
 func should_retreat() -> bool:
-	"""NEW: Determine if bot should retreat (health <= 2 with caution modifier) - uses seeded RNG"""
+	"""Determine if bot should retreat (health <= 2 with caution modifier) - uses seeded RNG"""
 	if not bot:
 		return false
 
@@ -1551,13 +1556,18 @@ func should_retreat() -> bool:
 	if bot_health <= 1:
 		return true
 
-	# Retreat if health is low and bot is cautious (using seeded RNG)
+	# Retreat if health is low and bot is cautious
 	if bot_health == 2:
-		# Caution level affects retreat threshold
-		# High caution (0.8) = 80% chance to retreat
-		# Low caution (0.2) = 20% chance to retreat
-		return rng.randf() < caution_level
+		# Cache the RNG decision per health value to avoid state thrashing.
+		# Without caching, rng.randf() returns a different result every frame,
+		# causing 30+ state changes/second between RETREAT and other states.
+		if _retreat_decision_health != bot_health:
+			_retreat_decision_health = bot_health
+			_retreat_decision_result = rng.randf() < caution_level
+		return _retreat_decision_result
 
+	# Health recovered - reset cached decision so it re-rolls next time health drops
+	_retreat_decision_health = -1
 	return false
 
 func should_chase() -> bool:

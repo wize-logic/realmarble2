@@ -112,6 +112,8 @@ var grind_particles: CPUParticles3D = null  # Spark particles while grinding
 var targeted_rail: GrindRail = null  # The rail currently being looked at
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
+var rail_targeting_timer: float = 0.0  # Throttle rail targeting checks (perf: was every frame)
+var _camera_occlusion_query: PhysicsRayQueryParameters3D = null  # Cached to avoid per-frame alloc
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
 var post_rail_detach_frames: int = 0  # Grace period frames after detaching from rail
 var consecutive_air_frames: int = 0  # Counter for consecutive frames in the air
@@ -179,6 +181,9 @@ var fall_camera_position: Vector3 = Vector3.ZERO
 
 # Debug/cheat properties
 var god_mode: bool = false
+
+# Platform detection for particle scaling
+var _is_web: bool = false
 
 # ============================================================================
 # MULTIPLAYER POSITION SYNC
@@ -259,6 +264,8 @@ func _enter_tree() -> void:
 	set_multiplayer_authority(str(name).to_int())
 
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
+
 	# Set up RigidBody3D physics properties - shooter style
 	mass = marble_mass  # Marbles are dense (glass/steel)
 	gravity_scale = 2.5  # Marble gravity - dense and heavy
@@ -363,7 +370,7 @@ func _ready() -> void:
 
 		# Configure death particles - explosive burst
 		death_particles.emitting = false
-		death_particles.amount = 200  # Lots of particles for dramatic effect
+		death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
 		death_particles.lifetime = 2.5
 		death_particles.one_shot = true
 		death_particles.explosiveness = 1.0
@@ -805,15 +812,16 @@ func _process(delta: float) -> void:
 	)
 
 	# Camera occlusion - raycast to prevent clipping through walls
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-		camera_arm.global_position,
-		camera_arm.global_position + camera_arm.global_transform.basis * rotated_offset
-	)
-	query.exclude = [self]  # Don't hit the player
-	query.collision_mask = 1  # Only check world geometry (layer 1)
+	# Reuse cached query object to avoid per-frame PhysicsRayQueryParameters3D + Array alloc
+	if not _camera_occlusion_query:
+		_camera_occlusion_query = PhysicsRayQueryParameters3D.new()
+		_camera_occlusion_query.exclude = [self]
+		_camera_occlusion_query.collision_mask = 1  # Only check world geometry (layer 1)
+	_camera_occlusion_query.from = camera_arm.global_position
+	_camera_occlusion_query.to = camera_arm.global_position + camera_arm.global_transform.basis * rotated_offset
 
-	var result: Dictionary = space_state.intersect_ray(query)
+	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var result: Dictionary = space_state.intersect_ray(_camera_occlusion_query)
 	var final_offset: Vector3 = rotated_offset
 
 	if result:
@@ -829,8 +837,11 @@ func _process(delta: float) -> void:
 	# Make camera look at player
 	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
 
-	# Update rail targeting
-	update_rail_targeting()
+	# Update rail targeting (throttled to 4Hz - was every frame doing 30×N curve samples)
+	rail_targeting_timer -= delta
+	if rail_targeting_timer <= 0.0:
+		update_rail_targeting()
+		rail_targeting_timer = 0.25
 
 # MARBLE ROLLING ANIMATION - Always update for all marbles (including bots)
 func _physics_process_marble_roll(delta: float) -> void:
@@ -1184,8 +1195,8 @@ func check_ground() -> void:
 			is_grounded = false
 			return
 
-	# Force raycast update
-	ground_ray.force_raycast_update()
+	# RayCast3D auto-updates during the physics step before _physics_process,
+	# so force_raycast_update() was redundant here (doubled ground detection cost)
 
 	var was_grounded: bool = is_grounded
 	is_grounded = ground_ray.is_colliding()
@@ -2005,16 +2016,12 @@ func create_rail_reticle_ui() -> void:
 	DebugLogger.dlog(DebugLogger.Category.UI, "Rail attachment prompt UI created (text only)", false, get_entity_id())
 
 
-func find_all_rails(node: Node) -> Array[GrindRail]:
-	"""Recursively find all GrindRail nodes in the scene"""
+func find_all_rails(_node: Node) -> Array[GrindRail]:
+	"""Find all GrindRail nodes via group query (replaces recursive DFS)"""
 	var rails: Array[GrindRail] = []
-
-	if node is GrindRail:
-		rails.append(node as GrindRail)
-
-	for child in node.get_children():
-		rails.append_array(find_all_rails(child))
-
+	for n in get_tree().get_nodes_in_group("grind_rails"):
+		if n is GrindRail:
+			rails.append(n as GrindRail)
 	return rails
 
 func update_rail_targeting() -> void:
@@ -2048,18 +2055,15 @@ func update_rail_targeting() -> void:
 		if world:
 			var prev_count: int = cached_rails.size()
 			cached_rails = find_all_rails(world)
+			# Clean up invalid rails during cache refresh (not every targeting call)
+			cached_rails = cached_rails.filter(func(r): return r and is_instance_valid(r) and r.is_inside_tree())
 			if prev_count == 0 and cached_rails.size() > 0:
 				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] Found %d rails in scene" % cached_rails.size(), false, get_entity_id())
 			elif cached_rails.size() == 0:
 				DebugLogger.dlog(DebugLogger.Category.RAILS, "[RAIL] WARNING: No rails found in scene!", false, get_entity_id())
 			rails_cache_timer = 0.0
 
-	# Clean up invalid rails from cache
-	cached_rails = cached_rails.filter(func(r): return r and is_instance_valid(r) and r.is_inside_tree())
-
-	var all_rails: Array[GrindRail] = cached_rails
-
-	for rail in all_rails:
+	for rail in cached_rails:
 		# Validate rail is still valid and in the scene
 		if not rail or not is_instance_valid(rail) or not rail.is_inside_tree():
 			continue
@@ -2070,7 +2074,7 @@ func update_rail_targeting() -> void:
 			continue
 
 		# Sample points along the rail and find closest to ray
-		var sample_count: int = 30  # Increased for better detection
+		var sample_count: int = 10  # Reduced from 30 - sufficient for UI targeting reticle
 		for i in range(sample_count):
 			var t: float = float(i) / float(sample_count - 1)
 			var offset: float = t * rail_curve.get_baked_length()
@@ -2353,7 +2357,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.color_ramp = jump_pad_gradient
 	death_particles.initial_velocity_min = 15.0  # Faster burst
 	death_particles.initial_velocity_max = 25.0
-	death_particles.amount = 150  # Lots of particles
+	death_particles.amount = 60 if _is_web else 150  # Reduced on web for performance
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2377,7 +2381,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.color_ramp = teleporter_gradient
 	death_particles.initial_velocity_min = 12.0  # Swirling motion
 	death_particles.initial_velocity_max = 20.0
-	death_particles.amount = 200  # Many particles for swirl effect
+	death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position

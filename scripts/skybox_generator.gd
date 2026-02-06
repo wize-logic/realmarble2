@@ -132,6 +132,7 @@ uniform float star_twinkle_speed = 2.0;
 uniform float cloud_density = 0.4;
 uniform float cloud_speed = 0.1;
 uniform float nebula_intensity = 0.5;
+uniform int quality_level = 1; // 0=low (web), 1=medium, 2=high
 
 // Improved hash function for smoother noise
 float hash(vec2 p) {
@@ -160,13 +161,16 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// High-quality Fractal Brownian Motion
+// Fractal Brownian Motion with quality-dependent octave count
+// quality 0: 3 octaves (web), quality 1: 5 octaves, quality 2: 8 octaves
 float fbm(vec2 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
 	float frequency = 1.0;
+	int octaves = quality_level >= 2 ? 8 : (quality_level >= 1 ? 5 : 3);
 
 	for (int i = 0; i < 8; i++) {
+		if (i >= octaves) break;
 		value += amplitude * noise(p * frequency);
 		frequency *= 2.0;
 		amplitude *= 0.5;
@@ -206,13 +210,17 @@ float stars(vec2 uv, float density, float twinkle_time) {
 	return star;
 }
 
-// Cloud layer
+// Cloud layer (quality-adaptive: 1 fbm call on low, 3 on high)
 float clouds(vec2 uv, float cloud_time, float density) {
 	vec2 moving_uv = uv + vec2(cloud_time * 0.3, cloud_time * 0.15);
 
 	float cloud = fbm(moving_uv * 3.0);
-	cloud += fbm(moving_uv * 6.0 + 10.0) * 0.5;
-	cloud += fbm(moving_uv * 12.0 + 20.0) * 0.25;
+	if (quality_level >= 1) {
+		cloud += fbm(moving_uv * 6.0 + 10.0) * 0.5;
+	}
+	if (quality_level >= 2) {
+		cloud += fbm(moving_uv * 12.0 + 20.0) * 0.25;
+	}
 
 	// Threshold for cloud coverage
 	cloud = smoothstep(0.4 - density * 0.3, 0.7, cloud);
@@ -220,7 +228,7 @@ float clouds(vec2 uv, float cloud_time, float density) {
 	return cloud * density;
 }
 
-// Nebula effect
+// Nebula effect (skipped entirely on quality 0)
 vec3 nebula(vec2 uv, float neb_time, vec3 col1, vec3 col2, vec3 col3) {
 	vec2 moving_uv = uv + vec2(neb_time * 0.05, -neb_time * 0.03);
 
@@ -261,22 +269,24 @@ void sky() {
 	// Base psychedelic background
 	float n1 = fbm(uv * 3.0 + vec2(time * 0.1, -time * 0.08));
 	float n2 = fbm(uv * 5.0 + vec2(-time * 0.15, time * 0.12));
-	float n3 = fbm(uv * 7.0 + vec2(time * 0.2, time * 0.18));
 
 	// Base color mixing
 	vec3 color = smooth_color_mix(color1, color2, n1);
 	color = smooth_color_mix(color, color3, n2);
 
-	// Add nebula effect
-	vec3 neb = nebula(uv, time, color1 * 0.8, color2 * 0.8, color3 * 0.8);
-	color = mix(color, color + neb, nebula_intensity);
+	// Add nebula effect (skip on low quality - saves 3 fbm calls per pixel)
+	if (quality_level >= 1) {
+		vec3 neb = nebula(uv, time, color1 * 0.8, color2 * 0.8, color3 * 0.8);
+		color = mix(color, color + neb, nebula_intensity);
+	}
 
 	// Add cloud layer (tinted, not white)
 	float cloud_layer = clouds(uv, time * cloud_speed, cloud_density);
 	vec3 cloud_color = mix(color1, color2, 0.5) * 0.9 + vec3(0.1);  // Tinted clouds
 	color = mix(color, cloud_color, cloud_layer * 0.4);
 
-	// Add shimmer
+	// Add shimmer (use n2 instead of separate n3 fbm on low quality)
+	float n3 = quality_level >= 1 ? fbm(uv * 7.0 + vec2(time * 0.2, time * 0.18)) : n2;
 	color += vec3(n3 * 0.15);
 
 	// Ultra-smooth gradient from top to bottom
@@ -313,6 +323,9 @@ void sky() {
 	material.set_shader_parameter("star_density", star_density)
 	material.set_shader_parameter("cloud_density", cloud_density)
 	material.set_shader_parameter("nebula_intensity", nebula_intensity)
+	# Auto-reduce quality on web platform (sky shader is the most expensive full-screen pass)
+	var sky_quality: int = 0 if OS.has_feature("web") else 1
+	material.set_shader_parameter("quality_level", sky_quality)
 
 	return material
 
