@@ -2,10 +2,16 @@
 
 ## Architecture
 
-The game uses Godot's built-in peer-to-peer multiplayer. One player acts as the **host** (server) and other players connect directly to them as **clients**. No dedicated server is required.
+The game uses Godot's built-in peer-to-peer multiplayer. One player acts as the **host** and other players connect as **clients**.
 
-- **Desktop**: Uses ENet for direct P2P connections
-- **Web/HTML5**: Uses WebSocket (ENet is not supported in browsers)
+- **Desktop**: Uses ENet for direct P2P connections (no relay server needed)
+- **Web/HTML5**: Uses WebSocket through a relay server (ENet is not supported in browsers)
+
+### Relay Server (HTML5)
+
+Browsers cannot open server sockets, so HTML5 multiplayer requires a **WebSocket relay server**. Both the host and clients connect to the relay as WebSocket clients. The relay groups players by room code, assigns peer IDs, and forwards packets between them.
+
+The relay server is located in the `server/` directory. See [Relay Server Setup](#relay-server-setup) below.
 
 ## How to Play
 
@@ -67,16 +73,46 @@ When the game starts, the host generates a random seed that is shared with all p
 
 ## Connecting
 
-### Local Network (LAN)
+### Web/HTML5
+
+HTML5 multiplayer works automatically through the relay server. Players only need a room code to connect — no IP addresses or port forwarding required.
+
+The relay server URL is configured in `scripts/multiplayer_manager.gd` via the `RELAY_SERVER_URL_DEFAULT` constant. You can also override it at runtime by setting `window.RELAY_SERVER_URL` in the HTML page before the game loads.
+
+### Desktop — Local Network (LAN)
 
 Players on the same local network can connect directly. The joining player needs the host's local IP address (e.g. `192.168.1.x`). The game connects on port `9999` by default using ENet.
 
-### Over the Internet
+### Desktop — Over the Internet
 
 For internet play, the host needs to either:
 
 - **Port forward** port `9999` (UDP) on their router to their local machine
 - Use a VPN/tunnel service (e.g. ZeroTier, Tailscale, Radmin VPN) so all players appear on the same virtual LAN
+
+## Relay Server Setup
+
+The `server/` directory contains a Node.js WebSocket relay server that implements the Godot `WebSocketMultiplayerPeer` binary protocol.
+
+### Running Locally
+
+```bash
+cd server
+npm install
+npm start
+```
+
+The server listens on port `9080` by default. Set the `PORT` environment variable to change it.
+
+### Deploying for Production
+
+The relay server can be deployed to any platform that supports Node.js and WebSockets:
+
+1. **Deploy** the `server/` directory to your hosting provider (Render, Railway, Fly.io, a VPS, etc.)
+2. **Update the game URL** — set `RELAY_SERVER_URL_DEFAULT` in `scripts/multiplayer_manager.gd` to your deployed server (e.g. `wss://your-relay.onrender.com`), or set `window.RELAY_SERVER_URL` in the HTML shell
+3. **Re-export** the Godot project for HTML5
+
+The relay server must use `wss://` (WebSocket Secure) when the game is served over HTTPS, since browsers block mixed content.
 
 ## Game Flow
 
@@ -119,8 +155,11 @@ Practice mode (bots only, no multiplayer) returns to the main menu instead.
 
 | Problem | Solution |
 |---------|----------|
+| "Invalid URL" error in browser console | Ensure the relay server URL includes a path (e.g. `wss://host:9080/`, not `wss://host:9080`) |
 | "Connection failed" | Verify the room code is correct and the host's game is still open |
-| Can't connect over internet | Host needs to port forward UDP 9999, or use a VPN/tunnel |
+| Can't connect on HTML5 | Make sure the relay server is running and reachable; check the browser console for WebSocket errors |
+| Mixed content blocked | The relay must use `wss://` when the game is served over HTTPS |
+| Can't connect over internet (desktop) | Host needs to port forward UDP 9999, or use a VPN/tunnel |
 | Game lags | The host's connection quality affects all players since they act as the server |
 | Host disconnects mid-game | The game attempts host migration to the next player automatically |
 | Bots don't move | Verify the game has fully started (countdown finished) |
