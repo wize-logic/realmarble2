@@ -145,7 +145,7 @@ vec3 sss_color(vec3 base_color, vec3 view_dir, vec3 normal, float strength) {
 
 void fragment() {
 	// Get world position for consistent patterns
-	vec3 world_pos = (WORLD_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
 	// Create marble swirl pattern
 	float swirl = marble_pattern(world_pos, TIME);
