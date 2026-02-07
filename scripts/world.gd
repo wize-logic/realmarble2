@@ -790,31 +790,10 @@ func ask_level_config() -> Dictionary:
 	video_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	wall_toggle_container.add_child(video_checkbox)
 
-	var music_checkbox = CheckBox.new()
-	music_checkbox.text = "Music Visualizer"
-	music_checkbox.button_pressed = false
-	music_checkbox.add_theme_font_size_override("font_size", 14)
-	music_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	wall_toggle_container.add_child(music_checkbox)
-
 	# Connect video checkbox to toggle (with mutual exclusivity)
 	video_checkbox.toggled.connect(func(enabled: bool):
 		level_config_video_walls = enabled
 		DebugLogger.dlog(DebugLogger.Category.UI, "Video walls toggled: %s" % enabled)
-		# Disable music walls if video walls is enabled
-		if enabled and music_checkbox.button_pressed:
-			music_checkbox.button_pressed = false
-			level_config_music_walls = false
-	)
-
-	# Connect music checkbox to toggle (with mutual exclusivity)
-	music_checkbox.toggled.connect(func(enabled: bool):
-		level_config_music_walls = enabled
-		DebugLogger.dlog(DebugLogger.Category.UI, "Music walls toggled: %s" % enabled)
-		# Disable video walls if music walls is enabled
-		if enabled and video_checkbox.button_pressed:
-			video_checkbox.button_pressed = false
-			level_config_video_walls = false
 	)
 
 	# Add separator before start button
