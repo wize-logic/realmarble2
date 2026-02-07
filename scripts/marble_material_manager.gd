@@ -5,7 +5,7 @@ extends Node
 
 # Pre-load the marble shader
 const MARBLE_SHADER = preload("res://scripts/shaders/marble_shader.gdshader")
-const ROLL_TEXTURE = preload("res://textures/kenney_prototype_textures/orange/texture_07.png")
+const ROLL_TEXTURE = preload("res://textures/kenney_prototype_textures/orange/texture_09.png")
 const COMPATIBILITY_RENDERER_SETTING := "rendering/renderer/rendering_method"
 
 # Predefined color schemes for variety - all highly distinct
@@ -103,7 +103,8 @@ func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial
 	material.roughness = randf_range(0.6, 0.75)
 	material.metallic = randf_range(0.0, 0.05)
 	material.specular = 0.1
-	material.uv1_scale = Vector3(2.0, 2.0, 2.0)
+	material.uv1_scale = Vector3(3.5, 3.5, 3.5)
+	material.uv1_triplanar = true
 	return material
 
 func _resolve_color_scheme(color_index: int = -1) -> Dictionary:
@@ -142,7 +143,8 @@ func create_marble_material_from_hue(hue: float) -> Material:
 		material.roughness = 0.7
 		material.metallic = 0.05
 		material.specular = 0.1
-		material.uv1_scale = Vector3(2.0, 2.0, 2.0)
+		material.uv1_scale = Vector3(3.5, 3.5, 3.5)
+		material.uv1_triplanar = true
 		return material
 
 	var material = ShaderMaterial.new()
@@ -182,7 +184,7 @@ func get_random_marble_material() -> Material:
 
 func _boost_color(color: Color) -> Color:
 	var h := color.h
-	var s := minf(color.s * 1.4, 1.0)
+	var s := minf(color.s * 1.25, 1.0)
 	var v := minf(color.v * 1.35, 1.0)
 	return Color.from_hsv(h, s, v)
 
