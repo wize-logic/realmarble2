@@ -69,37 +69,37 @@ func _generate_marble_texture(primary: Color) -> ImageTexture:
 
 	var noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 2.0
+	noise.frequency = 1.1
 
 	var detail = FastNoiseLite.new()
 	detail.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	detail.frequency = 10.0
+	detail.frequency = 5.2
 
 	var swirl = FastNoiseLite.new()
 	swirl.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	swirl.frequency = 1.4
+	swirl.frequency = 0.85
 
 	var sparkle_noise = FastNoiseLite.new()
 	sparkle_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	sparkle_noise.frequency = 22.0
+	sparkle_noise.frequency = 14.0
 
 	for y in range(size):
 		for x in range(size):
 			var nx: float = float(x) / float(size)
 			var ny: float = float(y) / float(size)
-			var swirl_offset: float = swirl.get_noise_2d(nx * size, ny * size) * 0.7
-			var wave: float = sin((nx + ny + swirl_offset) * TAU * 2.6)
-			var base_noise: float = noise.get_noise_2d(nx * size * 1.3, ny * size * 1.3)
-			var fine_noise: float = detail.get_noise_2d(nx * size * 3.0, ny * size * 3.0) * 0.2
-			var sparkle_mask: float = pow(clamp(sparkle_noise.get_noise_2d(nx * size * 4.0, ny * size * 4.0) * 0.5 + 0.5, 0.0, 1.0), 10.0)
+			var swirl_offset: float = swirl.get_noise_2d(nx * size, ny * size) * 0.45
+			var wave: float = sin((nx + ny + swirl_offset) * TAU * 1.6)
+			var base_noise: float = noise.get_noise_2d(nx * size * 0.9, ny * size * 0.9)
+			var fine_noise: float = detail.get_noise_2d(nx * size * 1.8, ny * size * 1.8) * 0.12
+			var sparkle_mask: float = pow(clamp(sparkle_noise.get_noise_2d(nx * size * 2.5, ny * size * 2.5) * 0.5 + 0.5, 0.0, 1.0), 8.0)
 
 			var marble_value: float = clamp((wave + base_noise) * 0.5 + 0.5 + fine_noise, 0.0, 1.0)
-			var vein_mask: float = pow(clamp(1.0 - abs(marble_value - 0.5) * 2.0, 0.0, 1.0), 3.0)
-			var highlight_mask: float = clamp(detail.get_noise_2d(nx * size * 6.0, ny * size * 6.0) * 0.5 + 0.5, 0.0, 1.0)
+			var vein_mask: float = pow(clamp(1.0 - abs(marble_value - 0.5) * 2.0, 0.0, 1.0), 2.2)
+			var highlight_mask: float = clamp(detail.get_noise_2d(nx * size * 2.6, ny * size * 2.6) * 0.5 + 0.5, 0.0, 1.0)
 
 			var color: Color = base.lerp(vein, vein_mask)
-			color = color.lerp(highlight, highlight_mask * 0.08)
-			color = color.lerp(sparkle, sparkle_mask * 0.03)
+			color = color.lerp(highlight, highlight_mask * 0.06)
+			color = color.lerp(sparkle, sparkle_mask * 0.02)
 			img.set_pixel(x, y, color)
 
 	var tex: ImageTexture = ImageTexture.create_from_image(img)
