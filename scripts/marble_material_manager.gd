@@ -99,7 +99,7 @@ func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial
 	material.albedo_color = _boost_color(scheme.primary)
 	material.albedo_texture = ROLL_TEXTURE
 	material.emission_enabled = true
-	material.emission = material.albedo_color * 0.2
+	material.emission = material.albedo_color * 0.12
 	material.roughness = randf_range(0.6, 0.75)
 	material.metallic = randf_range(0.0, 0.05)
 	material.specular = 0.1
@@ -139,7 +139,7 @@ func create_marble_material_from_hue(hue: float) -> Material:
 		material.albedo_color = _boost_color(Color.from_hsv(hue, 0.85, 0.9))
 		material.albedo_texture = ROLL_TEXTURE
 		material.emission_enabled = true
-		material.emission = material.albedo_color * 0.2
+		material.emission = material.albedo_color * 0.12
 		material.roughness = 0.7
 		material.metallic = 0.05
 		material.specular = 0.1
@@ -185,7 +185,7 @@ func get_random_marble_material() -> Material:
 func _boost_color(color: Color) -> Color:
 	var h := color.h
 	var s := minf(color.s * 1.25, 1.0)
-	var v := minf(color.v * 1.35, 1.0)
+	var v := minf(color.v * 1.15, 1.0)
 	return Color.from_hsv(h, s, v)
 
 func reset_used_colors() -> void:
