@@ -7,8 +7,8 @@ uniform vec3 secondary_color : source_color = vec3(0.9, 0.4, 0.4);
 uniform vec3 swirl_color : source_color = vec3(1.0, 0.8, 0.8);
 
 // Material properties
-uniform float glossiness : hint_range(0.0, 1.0) = 0.85;
-uniform float metallic_amount : hint_range(0.0, 1.0) = 0.3;
+uniform float glossiness : hint_range(0.0, 1.0) = 0.6;
+uniform float metallic_amount : hint_range(0.0, 1.0) = 0.1;
 uniform float transparency : hint_range(0.0, 1.0) = 0.02;
 
 // Pattern controls
@@ -18,11 +18,11 @@ uniform float bubble_density : hint_range(0.0, 2.0) = 0.4;
 uniform float time_speed : hint_range(0.0, 2.0) = 0.2;
 
 // Enhanced visual effects
-uniform float iridescence_strength : hint_range(0.0, 1.0) = 0.3;
+uniform float iridescence_strength : hint_range(0.0, 1.0) = 0.15;
 uniform float sss_strength : hint_range(0.0, 1.0) = 0.4;
-uniform float specular_intensity : hint_range(0.0, 2.0) = 0.8;
+uniform float specular_intensity : hint_range(0.0, 2.0) = 0.45;
 uniform float rim_power : hint_range(1.0, 8.0) = 2.5;
-uniform float rim_intensity : hint_range(0.0, 1.0) = 0.15;
+uniform float rim_intensity : hint_range(0.0, 1.0) = 0.08;
 
 // Special marble lighting - subtle glow to help marbles stand out (reduced values)
 uniform float glow_strength : hint_range(0.0, 1.0) = 0.12;
@@ -161,8 +161,8 @@ void fragment() {
 	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.2;
 	final_color = mix(final_color, bubble_tint, bubble * 0.35);
 
-	// Calculate view direction from fragment to camera to avoid uneven lighting
-	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);
+	// Calculate view direction
+	vec3 view_dir = normalize(VERTEX);
 
 	// Apply subsurface scattering simulation
 	final_color = sss_color(final_color, view_dir, NORMAL, sss_strength);
