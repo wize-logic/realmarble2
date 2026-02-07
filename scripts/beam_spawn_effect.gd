@@ -1,194 +1,59 @@
 extends Node3D
 
-## Star Trek-style Beam Spawn Effect
-## Creates a smooth transporter beam effect with particles rising from below
+## Simple Beam Spawn Effect
+## Lightweight spawn indicator with minimal particles
 
-var beam_particles: GPUParticles3D = null
-var glow_particles: GPUParticles3D = null
+var beam_particles: CPUParticles3D = null
 
 func _ready() -> void:
 	create_beam_effect()
 
 func create_beam_effect() -> void:
-	"""Create a smooth Star Trek-style beam spawn effect (HTML5-optimized)"""
-	# Main beam particles - rising column of light
-	beam_particles = GPUParticles3D.new()
+	"""Create a simple spawn effect with minimal particles"""
+	beam_particles = CPUParticles3D.new()
 	beam_particles.name = "BeamParticles"
 	beam_particles.emitting = false
 	beam_particles.one_shot = true
-	beam_particles.amount = 50  # Reduced from 150 for HTML5 performance
-	beam_particles.lifetime = 1.0  # Reduced from 1.2 for faster cleanup
-	beam_particles.explosiveness = 0.0  # Continuous emission over time
+	beam_particles.amount = 12
+	beam_particles.lifetime = 0.8
+	beam_particles.explosiveness = 0.8
 	beam_particles.randomness = 0.3
+	beam_particles.local_coords = false
 	add_child(beam_particles)
 
-	# Create particle process material for main beam
-	var material = ParticleProcessMaterial.new()
+	# Simple upward burst
+	beam_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	beam_particles.emission_sphere_radius = 0.5
+	beam_particles.direction = Vector3(0, 1, 0)
+	beam_particles.spread = 30.0
+	beam_particles.initial_velocity_min = 4.0
+	beam_particles.initial_velocity_max = 8.0
+	beam_particles.gravity = Vector3(0, 2.0, 0)
+	beam_particles.damping_min = 2.0
+	beam_particles.damping_max = 3.0
+	beam_particles.scale_amount_min = 0.3
+	beam_particles.scale_amount_max = 0.5
+	beam_particles.color = Color(0.4, 0.7, 0.95, 0.8)
 
-	# Emission shape - box (tall and narrow) for beam effect
-	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	material.emission_box_extents = Vector3(1.5, 4.0, 1.5)  # Wide base, tall height
-
-	# Direction - upward with slight inward convergence
-	material.direction = Vector3(0, 1, 0)
-	material.spread = 15.0  # Slight spread for natural beam look
-
-	# Initial velocity - rising upward
-	material.initial_velocity_min = 6.0
-	material.initial_velocity_max = 10.0
-
-	# Gravity - slight upward pull for beam effect
-	material.gravity = Vector3(0, 5.0, 0)
-
-	# Damping - particles slow down as they rise
-	material.damping_min = 1.5
-	material.damping_max = 2.5
-
-	# Radial accel - pull particles toward center for beam convergence
-	material.radial_accel_min = -8.0
-	material.radial_accel_max = -12.0
-
-	# Scale - start medium and fade out
-	material.scale_min = 0.3
-	material.scale_max = 0.5
-	material.scale_curve = create_scale_curve()
-
-	# Color - cyan-blue transporter beam with glow (no white)
-	material.color = Color(0.4, 0.7, 0.95, 0.9)  # Cyan-blue
-	material.color_ramp = create_color_ramp()
-
-	beam_particles.process_material = material
-
-	# Use circular texture for smooth appearance (no jagged edges)
-	var particle_material = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Self-illuminated
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
-
+	# Simple mesh
 	var quad_mesh = QuadMesh.new()
-	quad_mesh.size = Vector2(1.0, 1.0)
-	quad_mesh.material = particle_material
-	beam_particles.draw_pass_1 = quad_mesh
-
-	# Create secondary glow particles for extra shine
-	create_glow_particles()
+	quad_mesh.size = Vector2(0.5, 0.5)
+	var mat = StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.vertex_color_use_as_albedo = true
+	quad_mesh.material = mat
+	beam_particles.mesh = quad_mesh
 
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Beam spawn effect created")
 
-func create_glow_particles() -> void:
-	"""Create additional glow particles for enhanced beam effect (HTML5-optimized)"""
-	glow_particles = GPUParticles3D.new()
-	glow_particles.name = "GlowParticles"
-	glow_particles.emitting = false
-	glow_particles.one_shot = true
-	glow_particles.amount = 25  # Reduced from 80 for HTML5 performance
-	glow_particles.lifetime = 1.0  # Reduced from 1.2 for faster cleanup
-	glow_particles.explosiveness = 0.0
-	glow_particles.randomness = 0.4
-	add_child(glow_particles)
-
-	# Create particle process material for glow
-	var material = ParticleProcessMaterial.new()
-
-	# Emission shape - box (tall and narrow) for beam effect
-	material.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	material.emission_box_extents = Vector3(1.2, 4.0, 1.2)  # Slightly smaller than main beam
-
-	# Direction - upward
-	material.direction = Vector3(0, 1, 0)
-	material.spread = 20.0
-
-	# Initial velocity - slower rising
-	material.initial_velocity_min = 4.0
-	material.initial_velocity_max = 7.0
-
-	# Gravity - upward pull
-	material.gravity = Vector3(0, 4.0, 0)
-
-	# Damping
-	material.damping_min = 2.0
-	material.damping_max = 3.0
-
-	# Radial accel - strong convergence
-	material.radial_accel_min = -10.0
-	material.radial_accel_max = -15.0
-
-	# Scale - larger glow particles
-	material.scale_min = 0.6
-	material.scale_max = 1.0
-	material.scale_curve = create_glow_scale_curve()
-
-	# Color - soft cyan-blue glow (no white)
-	material.color = Color(0.5, 0.75, 0.95, 0.7)
-	material.color_ramp = create_glow_color_ramp()
-
-	glow_particles.process_material = material
-
-	# Use star texture for glow variation
-	var particle_material = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/star_05.png")
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for glow
-
-	var quad_mesh = QuadMesh.new()
-	quad_mesh.size = Vector2(1.0, 1.0)
-	quad_mesh.material = particle_material
-	glow_particles.draw_pass_1 = quad_mesh
-
-func create_scale_curve() -> Curve:
-	"""Create a curve for particle scale over lifetime (simplified for HTML5)"""
-	var curve = Curve.new()
-	curve.add_point(Vector2(0.0, 0.5))  # Start small
-	curve.add_point(Vector2(0.4, 1.0))  # Grow quickly
-	curve.add_point(Vector2(1.0, 0.0))  # Fade to nothing
-	return curve
-
-func create_glow_scale_curve() -> Curve:
-	"""Create a curve for glow particle scale (simplified for HTML5)"""
-	var curve = Curve.new()
-	curve.add_point(Vector2(0.0, 0.3))  # Start small
-	curve.add_point(Vector2(0.3, 1.0))  # Grow fast
-	curve.add_point(Vector2(1.0, 0.0))  # Fade out
-	return curve
-
-func create_color_ramp() -> Gradient:
-	"""Create a color gradient for beam particles (simplified for HTML5)"""
-	var gradient = Gradient.new()
-	# Start with transparent cyan-blue
-	gradient.set_offset(0, 0.0)
-	gradient.set_color(0, Color(0.4, 0.7, 0.95, 0.0))
-	# Peak brightness (cyan-blue, not white)
-	gradient.add_point(0.5, Color(0.5, 0.8, 0.95, 0.9))
-	# Fade to transparent blue
-	gradient.set_offset(1, 1.0)
-	gradient.set_color(1, Color(0.3, 0.6, 0.9, 0.0))
-	return gradient
-
-func create_glow_color_ramp() -> Gradient:
-	"""Create a color gradient for glow particles (simplified for HTML5)"""
-	var gradient = Gradient.new()
-	# Start transparent cyan
-	gradient.set_offset(0, 0.0)
-	gradient.set_color(0, Color(0.5, 0.75, 0.95, 0.0))
-	# Peak brightness (soft cyan, not white)
-	gradient.add_point(0.4, Color(0.6, 0.85, 0.95, 0.7))
-	# Fade to transparent blue
-	gradient.set_offset(1, 1.0)
-	gradient.set_color(1, Color(0.4, 0.7, 0.9, 0.0))
-	return gradient
-
 func play_beam() -> void:
 	"""Play the beam spawn effect"""
-	if beam_particles and glow_particles:
+	if beam_particles:
 		beam_particles.emitting = true
-		glow_particles.emitting = true
 		DebugLogger.dlog(DebugLogger.Category.WORLD, "Beam spawn effect playing at position: %s" % global_position)
-		# Auto-cleanup after effect finishes
-		await get_tree().create_timer(beam_particles.lifetime + 0.5).timeout
+		await get_tree().create_timer(beam_particles.lifetime + 0.3).timeout
 		queue_free()
 
 func play_at_position(pos: Vector3) -> void:
