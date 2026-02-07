@@ -319,7 +319,7 @@ func create_visual_effects() -> void:
 	var trail_mesh: QuadMesh = QuadMesh.new()
 	trail_mesh.size = Vector2(0.6, 0.6)
 	trail_particles.mesh = trail_mesh
-	trail_particles.mesh.material = aura_material  # Reuse material
+	trail_particles.mesh.material = MaterialPool.particle_additive  # Reuse shared material
 
 	trail_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	trail_particles.emission_sphere_radius = 0.8
@@ -487,8 +487,15 @@ func spawn_motion_lines() -> void:
 	box.size = Vector3(0.05, 0.05, randf_range(2.0, 4.0))
 	line.mesh = box
 
-	# Use cached emissive material from pool
-	line.material_override = MaterialPool.get_colored_emissive_unshaded(Color(1.0, 0.8, 0.3, 0.8), 2.0)
+	# Unique instance needed - this is tweened (alpha faded) at runtime
+	var line_mat: StandardMaterial3D = StandardMaterial3D.new()
+	line_mat.albedo_color = Color(1.0, 0.8, 0.3, 0.8)
+	line_mat.emission_enabled = true
+	line_mat.emission = Color(1.0, 0.6, 0.1)
+	line_mat.emission_energy_multiplier = 2.0
+	line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	line.material_override = line_mat
 
 	player.get_parent().add_child(line)
 

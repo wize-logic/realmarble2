@@ -604,7 +604,13 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	outer_sphere.rings = 8
 	outer_flash.mesh = outer_sphere
 
-	outer_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.4, 0.6, 1.0, 0.3))
+	# Unique instances needed - these are tweened (alpha faded) at runtime
+	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
+	outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
+	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = outer_mat
 	flash_container.add_child(outer_flash)
 
 	# Layer 2: Middle bright layer
@@ -616,7 +622,12 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	middle_sphere.rings = 8
 	middle_flash.mesh = middle_sphere
 
-	middle_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.7, 0.85, 1.0, 0.6))
+	var middle_mat: StandardMaterial3D = StandardMaterial3D.new()
+	middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+	middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	middle_flash.material_override = middle_mat
 	flash_container.add_child(middle_flash)
 
 	# Layer 3: Bright white core
@@ -628,7 +639,12 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	core_sphere.rings = 6
 	core_flash.mesh = core_sphere
 
-	core_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(1.0, 1.0, 1.0, 0.9))
+	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
+	core_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)
+	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = core_mat
 	flash_container.add_child(core_flash)
 
 	# Add burst particles for extra impact
