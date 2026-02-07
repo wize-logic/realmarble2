@@ -32,9 +32,24 @@ func _ready() -> void:
 		push_warning("MarbleEffects: Parent is not a RigidBody3D")
 		return
 
-	create_trail_particles()
-	create_speed_trail_particles()
-	create_impact_pool()
+	# On HTML5, skip trail particles for bots — 8 players × 2 trail systems
+	# + 3 impact pools = 40 GPUParticles3D; on WebGL2 each is expensive.
+	var is_web: bool = OS.has_feature("web")
+	var is_bot: bool = marble_body.name.to_int() >= 9000
+
+	if is_web and is_bot:
+		# Bots get no particles on web — saves ~5 GPUParticles3D per bot
+		set_physics_process(false)
+		return
+
+	# Reduce particle amounts on web for the local player
+	var trail_amount: int = 10 if is_web else 20
+	var speed_amount: int = 15 if is_web else 30
+	var impact_amount: int = 8 if is_web else 15
+
+	create_trail_particles(trail_amount)
+	create_speed_trail_particles(speed_amount)
+	create_impact_pool(impact_amount)
 
 func set_marble_color(color: Color) -> void:
 	"""Set the marble's color for trail effects"""
@@ -52,12 +67,12 @@ func update_trail_colors() -> void:
 		var bright_color = marble_color.lightened(0.3)
 		mat.color = Color(bright_color.r, bright_color.g, bright_color.b, 0.8)
 
-func create_trail_particles() -> void:
+func create_trail_particles(amount: int = 20) -> void:
 	"""Create the basic trail particle effect"""
 	trail_particles = GPUParticles3D.new()
 	trail_particles.name = "TrailParticles"
 	trail_particles.emitting = false
-	trail_particles.amount = 20  # Light for HTML5
+	trail_particles.amount = amount
 	trail_particles.lifetime = 0.4
 	trail_particles.explosiveness = 0.0
 	trail_particles.randomness = 0.2
@@ -105,12 +120,12 @@ func create_trail_particles() -> void:
 	quad.material = mesh_mat
 	trail_particles.draw_pass_1 = quad
 
-func create_speed_trail_particles() -> void:
+func create_speed_trail_particles(amount: int = 30) -> void:
 	"""Create enhanced speed trail for fast movement"""
 	speed_trail_particles = GPUParticles3D.new()
 	speed_trail_particles.name = "SpeedTrailParticles"
 	speed_trail_particles.emitting = false
-	speed_trail_particles.amount = 30  # Light for HTML5
+	speed_trail_particles.amount = amount
 	speed_trail_particles.lifetime = 0.3
 	speed_trail_particles.explosiveness = 0.0
 	speed_trail_particles.randomness = 0.15
@@ -154,14 +169,14 @@ func create_speed_trail_particles() -> void:
 	quad.material = mesh_mat
 	speed_trail_particles.draw_pass_1 = quad
 
-func create_impact_pool() -> void:
+func create_impact_pool(amount: int = 15) -> void:
 	"""Create a pool of impact particle effects"""
 	for i in range(IMPACT_POOL_SIZE):
 		var impact = GPUParticles3D.new()
 		impact.name = "ImpactParticles_%d" % i
 		impact.emitting = false
 		impact.one_shot = true
-		impact.amount = 15  # Light for HTML5
+		impact.amount = amount
 		impact.lifetime = 0.35
 		impact.explosiveness = 1.0
 		impact.randomness = 0.4

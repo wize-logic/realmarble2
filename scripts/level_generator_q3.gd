@@ -230,9 +230,12 @@ func generate_level() -> void:
 
 	var is_web: bool = OS.has_feature("web")
 
-	# Auto-reduce light cap on web platform (forward renderer is much slower in WebGL)
+	# Auto-reduce light cap on web platform — each OmniLight3D is evaluated
+	# per-fragment in the forward renderer.  32 lights was still causing
+	# major frame-time spikes on WebGL2.  16 lights with boosted range gives
+	# acceptable coverage at ~half the GPU cost.
 	if is_web:
-		max_light_count = mini(max_light_count, 32)
+		max_light_count = mini(max_light_count, 16)
 		lighting_quality = mini(lighting_quality, 0)
 
 	# Initialize random number generator

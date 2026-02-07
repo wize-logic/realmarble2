@@ -34,7 +34,14 @@ var is_spawning: bool = true
 # MULTIPLAYER SYNC FIX: Seeded RNG for deterministic animation across clients
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
+# HTML5 frame-skip for animation (same pattern as collectible_orb.gd)
+var _is_web: bool = false
+var _anim_frame_offset: int = 0
+
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
+	_anim_frame_offset = get_instance_id() % 3
+
 	# Add to ability pickups group for bot AI
 	add_to_group("ability_pickups")
 
@@ -137,20 +144,24 @@ func _process(delta: float) -> void:
 			if mesh_instance:
 				mesh_instance.scale = Vector3.ONE
 
-	# Update animation time
+	# Update animation time (always, so phase stays correct)
 	time += delta
 
+	# On HTML5 skip visual updates 2 out of 3 frames (same pattern as orbs)
+	if _is_web and (Engine.get_process_frames() + _anim_frame_offset) % 3 != 0:
+		return
+
 	# Bob up and down - only write position when change exceeds threshold
-	# (avoids per-frame transform notification propagation)
 	var target_y: float = base_height + sin(time * bob_speed) * bob_amount
 	if absf(global_position.y - target_y) > 0.005:
 		var new_pos: Vector3 = global_position
 		new_pos.y = target_y
 		global_position = new_pos
 
-	# Rotate
+	# Rotate (compensate for skipped frames on web)
+	var rot_mult: float = 3.0 if _is_web else 1.0
 	if mesh_instance:
-		mesh_instance.rotation.y += rotation_speed * delta
+		mesh_instance.rotation.y += rotation_speed * delta * rot_mult
 		mesh_instance.rotation.x = sin(time * 1.5) * 0.2  # Slight tilt
 
 func _on_body_entered(body: Node3D) -> void:

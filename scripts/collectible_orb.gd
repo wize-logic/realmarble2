@@ -28,7 +28,15 @@ var glow_material: StandardMaterial3D
 # MULTIPLAYER SYNC FIX: Seeded RNG for deterministic animation across clients
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
+# HTML5 frame-skip: spread animation updates across frames so not all orbs update the same frame
+var _is_web: bool = false
+var _anim_frame_offset: int = 0
+
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
+	# Stagger which frame each orb updates on so they don't all animate the same frame
+	_anim_frame_offset = get_instance_id() % 3
+
 	# Add to orbs group for bot AI
 	add_to_group("orbs")
 
@@ -78,8 +86,14 @@ func _process(delta: float) -> void:
 				respawn_orb()
 		return
 
-	# Update animation time
+	# Update animation time (always, so phase stays correct)
 	time += delta
+
+	# On HTML5 skip the visual update 2 out of every 3 frames — bobbing
+	# items still look smooth at ~20 Hz and this saves sin()+position writes
+	# for 25-80 orbs every frame.
+	if _is_web and (Engine.get_process_frames() + _anim_frame_offset) % 3 != 0:
+		return
 
 	# Bob up and down - only write position when change exceeds threshold
 	# (avoids per-frame transform notification propagation)
@@ -91,7 +105,7 @@ func _process(delta: float) -> void:
 
 	# Rotate slowly
 	if mesh_instance:
-		mesh_instance.rotation.y += rotation_speed * delta
+		mesh_instance.rotation.y += rotation_speed * delta * 3.0  # compensate for skipped frames
 
 func _on_body_entered(body: Node3D) -> void:
 	# Check if it's a player and not already collected
