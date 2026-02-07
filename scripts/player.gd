@@ -2375,7 +2375,7 @@ func apply_marble_material() -> void:
 		return
 
 	# Generate unique material based on player ID or custom selection
-	var material: StandardMaterial3D
+	var material: Material
 
 	# Check if a custom color was set from the customize panel
 	if custom_color_index >= 0:
