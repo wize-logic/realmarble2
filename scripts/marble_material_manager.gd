@@ -5,6 +5,7 @@ extends Node
 
 # Pre-load the marble shader
 const MARBLE_SHADER = preload("res://scripts/shaders/marble_shader.gdshader")
+const COMPATIBILITY_RENDERER_SETTING := "rendering/renderer/rendering_method"
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
@@ -51,31 +52,16 @@ const COLOR_SCHEMES = [
 # Track used color indices to avoid duplicates when possible
 var used_colors: Array = []
 
-func create_marble_material(color_index: int = -1) -> ShaderMaterial:
+func create_marble_material(color_index: int = -1) -> Material:
 	"""Create a unique marble material with optional specific color index"""
+	if _should_use_standard_material():
+		return _create_standard_marble_material(color_index)
+
 	var material = ShaderMaterial.new()
 	material.shader = MARBLE_SHADER
 
 	# Select color scheme
-	var scheme: Dictionary
-	if color_index >= 0 and color_index < COLOR_SCHEMES.size():
-		scheme = COLOR_SCHEMES[color_index]
-	else:
-		# Pick a random unused color, or random if all used
-		var available_colors = []
-		for i in range(COLOR_SCHEMES.size()):
-			if not used_colors.has(i):
-				available_colors.append(i)
-
-		if available_colors.is_empty():
-			# All colors used, pick random
-			color_index = randi() % COLOR_SCHEMES.size()
-		else:
-			# Pick random from available
-			color_index = available_colors[randi() % available_colors.size()]
-
-		scheme = COLOR_SCHEMES[color_index]
-		used_colors.append(color_index)
+	var scheme := _resolve_color_scheme(color_index)
 
 	# Apply color scheme
 	material.set_shader_parameter("primary_color", scheme.primary)
@@ -103,8 +89,47 @@ func create_marble_material(color_index: int = -1) -> ShaderMaterial:
 
 	return material
 
-func create_marble_material_from_hue(hue: float) -> ShaderMaterial:
+func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	var scheme := _resolve_color_scheme(color_index)
+	material.albedo_color = scheme.primary
+	material.roughness = randf_range(0.1, 0.3)
+	material.metallic = randf_range(0.2, 0.4)
+	return material
+
+func _resolve_color_scheme(color_index: int = -1) -> Dictionary:
+	var scheme: Dictionary
+	if color_index >= 0 and color_index < COLOR_SCHEMES.size():
+		scheme = COLOR_SCHEMES[color_index]
+	else:
+		var available_colors = []
+		for i in range(COLOR_SCHEMES.size()):
+			if not used_colors.has(i):
+				available_colors.append(i)
+
+		if available_colors.is_empty():
+			color_index = randi() % COLOR_SCHEMES.size()
+		else:
+			color_index = available_colors[randi() % available_colors.size()]
+
+		scheme = COLOR_SCHEMES[color_index]
+		used_colors.append(color_index)
+	return scheme
+
+func _should_use_standard_material() -> bool:
+	if not ProjectSettings.has_setting(COMPATIBILITY_RENDERER_SETTING):
+		return false
+	return str(ProjectSettings.get_setting(COMPATIBILITY_RENDERER_SETTING)) == "compatibility"
+
+func create_marble_material_from_hue(hue: float) -> Material:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
+	if _should_use_standard_material():
+		var material := StandardMaterial3D.new()
+		material.albedo_color = Color.from_hsv(hue, 0.85, 0.9)
+		material.roughness = 0.2
+		material.metallic = 0.3
+		return material
+
 	var material = ShaderMaterial.new()
 	material.shader = MARBLE_SHADER
 
