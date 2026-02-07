@@ -119,7 +119,8 @@ func _resolve_color_scheme(color_index: int = -1) -> Dictionary:
 func _should_use_standard_material() -> bool:
 	if not ProjectSettings.has_setting(COMPATIBILITY_RENDERER_SETTING):
 		return false
-	return str(ProjectSettings.get_setting(COMPATIBILITY_RENDERER_SETTING)) == "compatibility"
+	var rendering_method := str(ProjectSettings.get_setting(COMPATIBILITY_RENDERER_SETTING))
+	return rendering_method == "compatibility" or rendering_method == "gl_compatibility"
 
 func create_marble_material_from_hue(hue: float) -> Material:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
