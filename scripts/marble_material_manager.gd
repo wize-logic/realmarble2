@@ -2,7 +2,7 @@ extends Node
 
 ## Marble Material Manager
 ## Creates distinct colored marble materials for each player using StandardMaterial3D
-## Generates a stripe texture so rolling is visible
+## Generates a marble-like texture so rolling is visible
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
@@ -52,32 +52,47 @@ var used_colors: Array = []
 # Texture cache so we don't regenerate for the same color
 var _texture_cache: Dictionary = {}
 
-func _generate_stripe_texture(primary: Color) -> ImageTexture:
-	"""Generate a simple stripe texture so rolling is visible"""
+func _generate_marble_texture(primary: Color) -> ImageTexture:
+	"""Generate a marble-like texture so rolling is visible"""
 	var cache_key: int = primary.to_rgba32()
 	if _texture_cache.has(cache_key):
 		return _texture_cache[cache_key]
 
-	var size: int = 64
+	var size: int = 128
 	var img: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
 
-	# Derive a contrasting stripe color from the primary
-	var stripe: Color
 	var brightness: float = primary.r * 0.299 + primary.g * 0.587 + primary.b * 0.114
-	if brightness > 0.5:
-		# Dark stripe on light marble
-		stripe = primary.darkened(0.35)
-	else:
-		# Light stripe on dark marble
-		stripe = primary.lightened(0.35)
+	var base: Color = primary.lightened(0.12 if brightness < 0.55 else 0.05)
+	var vein: Color = primary.darkened(0.35 if brightness > 0.45 else 0.2)
+	var highlight: Color = primary.lightened(0.35 if brightness < 0.6 else 0.25)
 
-	# Paint horizontal stripes (4 bands visible on the sphere)
-	var band_count: int = 4
-	var band_height: int = size / (band_count * 2)
+	var noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 2.2
+
+	var detail = FastNoiseLite.new()
+	detail.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	detail.frequency = 8.0
+
+	var swirl = FastNoiseLite.new()
+	swirl.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	swirl.frequency = 1.2
+
 	for y in range(size):
-		var in_stripe: bool = (y / band_height) % 2 == 1
-		var color: Color = stripe if in_stripe else primary
 		for x in range(size):
+			var nx: float = float(x) / float(size)
+			var ny: float = float(y) / float(size)
+			var swirl_offset: float = swirl.get_noise_2d(nx * size, ny * size) * 0.6
+			var wave: float = sin((nx + ny + swirl_offset) * TAU * 2.2)
+			var base_noise: float = noise.get_noise_2d(nx * size * 1.3, ny * size * 1.3)
+			var fine_noise: float = detail.get_noise_2d(nx * size * 3.0, ny * size * 3.0) * 0.2
+
+			var marble_value: float = clamp((wave + base_noise) * 0.5 + 0.5 + fine_noise, 0.0, 1.0)
+			var vein_mask: float = pow(clamp(1.0 - abs(marble_value - 0.5) * 2.0, 0.0, 1.0), 3.0)
+			var highlight_mask: float = clamp(detail.get_noise_2d(nx * size * 6.0, ny * size * 6.0) * 0.5 + 0.5, 0.0, 1.0)
+
+			var color: Color = base.lerp(vein, vein_mask)
+			color = color.lerp(highlight, highlight_mask * 0.18)
 			img.set_pixel(x, y, color)
 
 	var tex: ImageTexture = ImageTexture.create_from_image(img)
@@ -105,9 +120,9 @@ func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
 
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.WHITE  # Texture provides the color
-	material.albedo_texture = _generate_stripe_texture(scheme.primary)
-	material.metallic = 0.3
-	material.roughness = 0.15
+	material.albedo_texture = _generate_marble_texture(scheme.primary)
+	material.metallic = 0.15
+	material.roughness = 0.08
 	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	return material
 
@@ -116,9 +131,9 @@ func create_marble_material_from_hue(hue: float) -> StandardMaterial3D:
 	var primary: Color = Color.from_hsv(hue, 0.85, 0.9)
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.WHITE
-	material.albedo_texture = _generate_stripe_texture(primary)
-	material.metallic = 0.3
-	material.roughness = 0.15
+	material.albedo_texture = _generate_marble_texture(primary)
+	material.metallic = 0.15
+	material.roughness = 0.08
 	return material
 
 func get_random_marble_material() -> StandardMaterial3D:
