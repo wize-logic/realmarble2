@@ -47,11 +47,6 @@ scripts/
 │                       #   - Movement, combat, collection, caching
 │                       #   - Platform navigation, validation helpers
 │
-├── bot_ai_type_a.gd    # TYPE A: Sonic-style arenas (570 lines)
-│                       #   - Extends bot_ai.gd
-│                       #   - Rail grinding system
-│                       #   - Rail launch recovery (aerial navigation)
-│
 ├── bot_ai_type_b.gd    # TYPE B: Quake 3-style arenas (370 lines)
 │                       #   - Extends bot_ai.gd
 │                       #   - Jump pads and teleporters
@@ -62,7 +57,7 @@ scripts/
 ```
 
 **Architecture Benefits:**
-- Eliminated ~90% code duplication between Type A and Type B
+- Eliminated code duplication via inheritance
 - Net reduction: 2,097 lines (-3,944 deleted, +1,847 added)
 - Clear separation of concerns (base vs. arena-specific)
 - Easy to extend for new arena types
@@ -71,7 +66,7 @@ scripts/
 
 1. **Spawning**: Host adds bots via lobby UI (max 7 bots + 1 player = 8 total)
 2. **AI Controller**: Each bot has a `BotAI` node (type-specific) that manages decision-making
-3. **Inheritance**: Type A/B scripts extend base class, override arena-specific methods
+3. **Inheritance**: Type B script extends base class, overrides arena-specific methods
 4. **State Machine**: Bots switch between 6 states (WANDER, CHASE, ATTACK, RETREAT, COLLECT_ORB, **COLLECT_ABILITY**)
 5. **Physics Integration**: Uses RigidBody3D physics (no direct transform manipulation)
 
@@ -594,9 +589,6 @@ bot_ai.gd (BASE CLASS)
     ├─ Caching & validation
     └─ Virtual methods for arena-specific overrides
 
-bot_ai_type_a.gd (EXTENDS BASE)
-    └─ Rail grinding system
-
 bot_ai_type_b.gd (EXTENDS BASE)
     └─ Jump pads & teleporters
 ```
@@ -606,7 +598,7 @@ bot_ai_type_b.gd (EXTENDS BASE)
 ```gdscript
 # Base class defines these for subclasses to override:
 func get_ai_type() -> String:
-    """Return 'Type A' or 'Type B' for debug logging"""
+    """Return 'Type B' for debug logging"""
 
 func setup_arena_specific_caches() -> void:
     """Cache rails/jump pads/teleporters"""
@@ -617,43 +609,6 @@ func consider_arena_specific_navigation() -> void:
 func handle_arena_specific_state_updates() -> void:
     """Arena-specific state transitions (optional)"""
 ```
-
-### Type A: Rail Grinding (Sonic Arenas)
-
-**Features**:
-- 12 rail grinding paths per arena
-- Rail caching system (50-unit radius)
-- Tactical rail evaluation (score-based)
-- Rail launch recovery (aerial navigation)
-
-**Rail Navigation**:
-```gdscript
-# Rail evaluation factors
-- Accessibility: Distance to rail (closer = better)
-- Height advantage: Elevated rails preferred
-- Rail length: Longer rails = more mobility
-- Tactical value: Does rail help reach target?
-- Occupancy: Avoid crowded rails (2+ bots)
-```
-
-**Rail Callbacks**:
-```gdscript
-func start_grinding(rail: GrindRail) -> void:
-    """Called by rail when bot attaches"""
-
-func stop_grinding() -> void:
-    """Called by rail when bot detaches"""
-
-func launch_from_rail(velocity: Vector3) -> void:
-    """Called at rail end - activates aerial recovery"""
-```
-
-**Rail Launch Recovery**:
-- Finds nearest platform as landing target
-- Applies aggressive aerial correction forces
-- Uses double jump if needed to extend airtime
-- Bounce attack for downward control if very high
-- 6-second timeout before giving up
 
 ### Type B: Jump Pads & Teleporters (Quake Arenas)
 
@@ -697,17 +652,15 @@ func launch_from_rail(velocity: Vector3) -> void:
 
 **Before v5.0**:
 ```
-bot_ai_type_a.gd: ~2,200 lines (duplicated code)
 bot_ai_type_b.gd: ~2,200 lines (duplicated code)
-Total: 4,400 lines
+Total: ~2,200 lines
 ```
 
 **After v5.0**:
 ```
 bot_ai.gd (base): 1,100 lines (shared)
-bot_ai_type_a.gd: 570 lines (rails only)
 bot_ai_type_b.gd: 370 lines (pads/teleporters only)
-Total: 2,040 lines
+Total: 1,470 lines
 ```
 
 **Savings**: -2,360 lines (53% reduction!)
@@ -736,13 +689,10 @@ Total: 2,040 lines
 - [ ] All abilities used at correct ranges
 
 #### Navigation
-- [ ] **NEW v5.0**: Bots use rails in Type A arenas
-- [ ] **NEW v5.0**: Rail launch recovery works (aerial navigation)
 - [ ] **NEW v5.0**: Bots use jump pads in Type B arenas
 - [ ] **NEW v5.0**: Bots use teleporters in Type B arenas
 - [ ] **NEW v5.0**: Bot-bot repulsion prevents clumping
 - [ ] **NEW v5.0**: Wander biases toward hotspots (60% chance)
-- [ ] Bots navigate Type A arena (platforms + rails)
 - [ ] Bots navigate Type B arena (platforms + pads + teleporters)
 - [ ] Stuck recovery works (teleport after ~3s)
 - [ ] No stuck-under-ramps issues
@@ -819,7 +769,7 @@ Total: 2,040 lines
 
 #### v5.0 - Inheritance Refactor
 20. **Base class architecture** → bot_ai.gd with shared functionality
-21. **Type-specific extensions** → bot_ai_type_a.gd (rails), bot_ai_type_b.gd (pads/teleporters)
+21. **Type-specific extensions** → bot_ai_type_b.gd (pads/teleporters)
 22. **Code deduplication** → 90% duplication eliminated (-2,097 lines)
 23. **Safe ability collection** → 15s timeout, blacklist, no awaits
 24. **Retreat enabled** → Health ≤ 2 with caution modifier
@@ -929,13 +879,6 @@ cached_platforms: Array[Dictionary]
 cached_orb_positions: Dictionary
 cached_ability_positions: Dictionary  # NEW v5.0
 
-# Type A: Rail Grinding (bot_ai_type_a.gd)
-is_grinding: bool
-current_rail: GrindRail
-cached_rails: Array[GrindRail]
-post_rail_launch: bool
-safe_landing_target: Vector3
-
 # Type B: Jump Pads & Teleporters (bot_ai_type_b.gd)
 cached_jump_pads: Array[Node]
 cached_teleporters: Array[Node]
@@ -1026,11 +969,6 @@ aggression_level = randf_range(0.8, 0.95)
 
 ### Arena Compatibility
 
-**Type A** (Platform Arena):
-- ✅ Full support
-- Uses bounce attacks for vertical mobility
-- Navigates platforms with edge detection
-
 **Type B** (Room/Corridor Arena):
 - ✅ Full support
 - Uses jump pads/teleporters
@@ -1083,7 +1021,6 @@ v4.0 (Stuck Prevention)
 
 v5.0 (2026-01-24) - Inheritance Refactor
 ├─ Base class architecture (bot_ai.gd)
-├─ Type A extension (rails for Sonic arenas)
 ├─ Type B extension (pads/teleporters for Quake arenas)
 ├─ Code deduplication: -2,097 lines (90% reduction)
 ├─ Safe ability collection (15s timeout, blacklist, no freezes)
@@ -1111,7 +1048,6 @@ v5.0 (2026-01-24) - Inheritance Refactor
 
 **Main Implementation (v5.0):**
 - `scripts/bot_ai.gd` (1,100+ lines, base class)
-- `scripts/bot_ai_type_a.gd` (570 lines, rails)
 - `scripts/bot_ai_type_b.gd` (370 lines, pads/teleporters)
 - `scripts/lobby_ui.gd` (bot spawning UI)
 
@@ -1164,7 +1100,7 @@ v5.0 (2026-01-24) - Inheritance Refactor
 - Bots can now collect abilities without freezing
 - Bots properly retreat when low on health
 - Clean inheritance eliminates massive code duplication
-- Arena-specific AI (rails for Type A, pads/teleporters for Type B)
+- Arena-specific AI (pads/teleporters for Type B)
 - Bot repulsion prevents clumping
 - Wander biases toward strategic hotspots
 

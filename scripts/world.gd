@@ -2991,19 +2991,6 @@ func trigger_mid_round_expansion() -> void:
 	# Wait 1 second for dramatic effect
 	await get_tree().create_timer(1.0).timeout
 
-	# Spawn POOF particle effect at the secondary arena location
-	var PoofEffect = preload("res://scripts/poof_particle_effect.gd")
-	var poof = Node3D.new()
-	poof.set_script(PoofEffect)
-	add_child(poof)
-	poof.global_position = expansion_offset
-	# Trigger the effect
-	if poof.has_method("play_poof"):
-		poof.play_poof()
-
-	# Wait a brief moment for the POOF to be visible
-	await get_tree().create_timer(0.3).timeout
-
 	# Generate secondary arena
 	if level_generator and level_generator.has_method("generate_secondary_map"):
 		level_generator.generate_secondary_map(expansion_offset)
