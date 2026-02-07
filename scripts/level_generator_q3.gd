@@ -186,14 +186,12 @@ var spawn_markers: Array[Marker3D] = []
 # Grid system for structure placement
 const CELL_SIZE: float = 8.0
 
-# Material cache for Compatibility renderer
-var _floor_material: StandardMaterial3D
-var _wall_material: StandardMaterial3D
-var _ceiling_material: StandardMaterial3D
-var _hazard_material: StandardMaterial3D
-
 # Material manager for runtime textures (if available)
 var material_manager = null
+
+# Cached level generation for HTML5 performance
+static var _cached_level_scene: PackedScene = null
+static var _cached_level_key: String = ""
 
 # Video wall manager for WebM display on perimeter walls
 var video_wall_manager = null
@@ -212,10 +210,19 @@ const RAIL_RADIUS: float = 0.3  # Visual radius for rail tubes
 
 func _ready() -> void:
 	if not Engine.is_editor_hint():
-		generate_level()
+		await generate_level()
 
 func generate_level() -> void:
 	## Main entry point - generates the complete level
+	if OS.has_feature("web"):
+		await _generate_level_core(true)
+	else:
+		await _generate_level_core(false)
+
+func _generate_level_core(yield_between_steps: bool) -> void:
+	var cache_key: String = _make_cache_key()
+	if OS.has_feature("web") and _try_load_cached_level(cache_key):
+		return
 
 	# Auto-reduce light cap on web platform (forward renderer is much slower in WebGL)
 	if OS.has_feature("web"):
@@ -231,9 +238,11 @@ func generate_level() -> void:
 
 	# Initialize materials for Compatibility renderer
 	setup_materials()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Clear previous data
 	clear_level()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Menu preview mode: only floor + video walls (no structures, obstacles, etc.)
 	if menu_preview_mode:
@@ -247,6 +256,8 @@ func generate_level() -> void:
 		enable_video_walls = true
 		apply_video_walls()
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "=== MENU PREVIEW GENERATION COMPLETE ===")
+		if OS.has_feature("web"):
+			_cache_generated_level(cache_key)
 		return
 
 	if use_bsp_layout:
@@ -255,6 +266,7 @@ func generate_level() -> void:
 	else:
 		# Generate using procedural structures (original method)
 		generate_procedural_level()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Add hazard zones if enabled (before interactive elements so they can avoid them)
 	if enable_hazards:
@@ -263,6 +275,7 @@ func generate_level() -> void:
 	# Boundaries
 	generate_perimeter_walls()
 	generate_death_zone()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Connectivity check
 	if use_bsp_layout:
@@ -272,22 +285,27 @@ func generate_level() -> void:
 
 	# Apply materials (Compatibility renderer safe)
 	apply_procedural_textures()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Apply video walls if enabled (after procedural textures to override them)
 	apply_video_walls()
 
 	# Apply visualizer walls if enabled (WMP9 style audio visualizer)
 	apply_visualizer_walls()
+	await _yield_frame_if_needed(yield_between_steps)
 
 	# Godot-specific features
 	if generate_lights:
 		generate_room_lights()
+		await _yield_frame_if_needed(yield_between_steps)
 
 	if generate_navmesh:
 		generate_navigation_mesh()
+		await _yield_frame_if_needed(yield_between_steps)
 
 	if generate_occluders:
 		generate_occlusion_culling()
+		await _yield_frame_if_needed(yield_between_steps)
 
 	# Add interactive elements LAST - after all geometry is in place
 	# This ensures we can properly check for geometry clipping
@@ -300,6 +318,83 @@ func generate_level() -> void:
 	generate_spawn_markers()
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "=== GENERATION COMPLETE === Rooms: %d, Corridors: %d, Platforms: %d, Rails: %d, Lights: %d, Spawns: %d" % [bsp_rooms.size(), corridors.size(), platforms.size(), rail_positions.size() / 2, lights.size(), spawn_markers.size()])
+	if OS.has_feature("web"):
+		_cache_generated_level(cache_key)
+
+func _yield_frame_if_needed(yield_between_steps: bool) -> void:
+	if yield_between_steps:
+		await get_tree().process_frame
+
+func _make_cache_key() -> String:
+	var settings := {
+		"seed": level_seed,
+		"arena_size": arena_size,
+		"complexity": complexity,
+		"use_bsp": use_bsp_layout,
+		"min_room": min_room_size,
+		"max_depth": max_bsp_depth,
+		"levels": num_levels,
+		"corridor_min": corridor_width_min,
+		"corridor_max": corridor_width_max,
+		"hazards": enable_hazards,
+		"hazard_count": hazard_count,
+		"hazard_type": hazard_type,
+		"lights": generate_lights,
+		"lighting_quality": lighting_quality,
+		"occluders": generate_occluders,
+		"navmesh": generate_navmesh,
+		"video_walls": enable_video_walls,
+		"visualizer_walls": enable_visualizer_walls,
+		"menu_preview": menu_preview_mode,
+	}
+	return JSON.stringify(settings)
+
+func _try_load_cached_level(cache_key: String) -> bool:
+	if _cached_level_scene == null or _cached_level_key != cache_key:
+		return false
+
+	clear_level()
+	var cached_root: Node = _cached_level_scene.instantiate()
+	add_child(cached_root)
+	_rebuild_cached_references(cached_root)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Loaded cached level for HTML5 performance.")
+	return true
+
+func _cache_generated_level(cache_key: String) -> void:
+	var cache_root := Node3D.new()
+	cache_root.name = "CachedLevelRoot"
+	for child in get_children():
+		if not is_instance_valid(child):
+			continue
+		var duplicated = child.duplicate(
+			Node.DUPLICATE_USE_INSTANTIATION | Node.DUPLICATE_SIGNALS | Node.DUPLICATE_GROUPS
+		)
+		cache_root.add_child(duplicated)
+
+	var packed := PackedScene.new()
+	if packed.pack(cache_root) == OK:
+		_cached_level_scene = packed
+		_cached_level_key = cache_key
+
+func _rebuild_cached_references(root: Node) -> void:
+	lights.clear()
+	occluders.clear()
+	spawn_markers.clear()
+	navigation_region = null
+	_collect_cached_nodes(root)
+
+func _collect_cached_nodes(node: Node) -> void:
+	if node is OmniLight3D:
+		lights.append(node)
+	elif node is OccluderInstance3D:
+		occluders.append(node)
+	elif node is Marker3D:
+		spawn_markers.append(node)
+	elif node is NavigationRegion3D:
+		navigation_region = node
+
+	for child in node.get_children():
+		_collect_cached_nodes(child)
 
 func clear_level() -> void:
 	## Remove all generated content
@@ -2224,7 +2319,8 @@ func add_platform_with_collision(pos: Vector3, size: Vector3, name_prefix: Strin
 	return instance
 
 func apply_procedural_textures() -> void:
-	material_manager.apply_materials_to_level(self)
+	if material_manager:
+		material_manager.apply_materials_to_level(self)
 
 # ============================================================================
 # GEOMETRY HELPER FUNCTIONS
@@ -2329,18 +2425,7 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 		hazard_instance.set_surface_override_material(0, material)
 	else:
 		# Fallback to standard material (no white glow)
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		if hazard_type == 0:  # Lava
-			material.albedo_color = Color(0.9, 0.25, 0.0)
-			material.emission_enabled = true
-			material.emission = Color(1.0, 0.4, 0.05)
-			material.emission_energy_multiplier = 2.8
-		else:  # Slime
-			material.albedo_color = Color(0.15, 0.65, 0.15)
-			material.emission_enabled = true
-			material.emission = Color(0.1, 0.5, 0.1)
-			material.emission_energy_multiplier = 1.5
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var material: StandardMaterial3D = MaterialPool.get_hazard_fallback_material(hazard_type)
 		hazard_instance.set_surface_override_material(0, material)
 
 	# Create damage area
@@ -2370,34 +2455,7 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 func setup_materials() -> void:
 	## Initialize materials optimized for Compatibility renderer
 	## Uses simple StandardMaterial3D with no advanced features
-
-	# Floor material - basic diffuse
-	_floor_material = StandardMaterial3D.new()
-	_floor_material.albedo_color = Color(0.4, 0.4, 0.45)
-	_floor_material.roughness = 0.8
-	_floor_material.metallic = 0.0
-	# Compatibility renderer: avoid fancy shading
-	_floor_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-	# Wall material
-	_wall_material = StandardMaterial3D.new()
-	_wall_material.albedo_color = Color(0.5, 0.45, 0.4)
-	_wall_material.roughness = 0.9
-	_wall_material.metallic = 0.0
-	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-	# Ceiling material
-	_ceiling_material = StandardMaterial3D.new()
-	_ceiling_material.albedo_color = Color(0.35, 0.35, 0.4)
-	_ceiling_material.roughness = 0.85
-	_ceiling_material.metallic = 0.0
-	_ceiling_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-	# Try to load material manager if available
-	if ResourceLoader.exists("res://scripts/procedural_material_manager.gd"):
-		var manager_script = load("res://scripts/procedural_material_manager.gd")
-		if manager_script:
-			material_manager = manager_script.new()
+	material_manager = MaterialPool.get_procedural_manager()
 
 func generate_room_lights() -> void:
 	## Quake 3 Style Lighting System
