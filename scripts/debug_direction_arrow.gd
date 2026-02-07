@@ -18,13 +18,8 @@ func _ready() -> void:
 	var mesh = ImmediateMesh.new()
 	arrow_mesh.mesh = mesh
 
-	# Create material for the arrow
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color(1.0, 0.3, 0.3, 0.9)  # Bright red with slight transparency
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always visible
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.no_depth_test = true  # Always visible through walls
-	arrow_mesh.material_override = material
+	# Use shared debug arrow material from pool
+	arrow_mesh.material_override = MaterialPool.debug_arrow_material
 
 	# Build the arrow shape
 	build_arrow_mesh()

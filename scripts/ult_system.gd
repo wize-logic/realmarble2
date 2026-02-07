@@ -284,13 +284,8 @@ func create_visual_effects() -> void:
 	aura_mesh.size = Vector2(0.4, 0.4)
 	power_aura.mesh = aura_mesh
 
-	var aura_material: StandardMaterial3D = StandardMaterial3D.new()
-	aura_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	aura_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	aura_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	aura_material.vertex_color_use_as_albedo = true
-	aura_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	power_aura.mesh.material = aura_material
+	# Use shared particle material from pool
+	power_aura.mesh.material = MaterialPool.particle_additive
 
 	power_aura.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	power_aura.emission_sphere_radius = 1.5
@@ -447,13 +442,8 @@ func spawn_activation_explosion() -> void:
 	burst_mesh.size = Vector2(0.5, 0.5)
 	burst.mesh = burst_mesh
 
-	var burst_material: StandardMaterial3D = StandardMaterial3D.new()
-	burst_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	burst_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	burst_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	burst_material.vertex_color_use_as_albedo = true
-	burst_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	burst.mesh.material = burst_material
+	# Use shared particle material from pool
+	burst.mesh.material = MaterialPool.particle_additive
 
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	burst.emission_sphere_radius = 1.0
@@ -497,14 +487,8 @@ func spawn_motion_lines() -> void:
 	box.size = Vector3(0.05, 0.05, randf_range(2.0, 4.0))
 	line.mesh = box
 
-	var line_mat: StandardMaterial3D = StandardMaterial3D.new()
-	line_mat.albedo_color = Color(1.0, 0.8, 0.3, 0.8)
-	line_mat.emission_enabled = true
-	line_mat.emission = Color(1.0, 0.6, 0.1)
-	line_mat.emission_energy_multiplier = 2.0
-	line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	line.material_override = line_mat
+	# Use cached emissive material from pool
+	line.material_override = MaterialPool.get_colored_emissive_unshaded(Color(1.0, 0.8, 0.3, 0.8), 2.0)
 
 	player.get_parent().add_child(line)
 
@@ -544,13 +528,8 @@ func spawn_hit_impact(position: Vector3) -> void:
 	impact_mesh.size = Vector2(0.4, 0.4)
 	impact.mesh = impact_mesh
 
-	var impact_material: StandardMaterial3D = StandardMaterial3D.new()
-	impact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	impact_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	impact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	impact_material.vertex_color_use_as_albedo = true
-	impact_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	impact.mesh.material = impact_material
+	# Use shared particle material from pool
+	impact.mesh.material = MaterialPool.particle_additive
 
 	impact.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	impact.emission_sphere_radius = 0.5

@@ -73,17 +73,9 @@ func _ready() -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.6, 0.3)  # Larger slash particles
 
-	# Create material for slash effect
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES  # Always face camera for visibility
-	particle_material.disable_receive_shadows = true
-
+	# Use shared particle material from pool
 	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	particle_mesh.material = MaterialPool.particle_additive
 	slash_particles.mesh = particle_mesh
 
 	# Emission shape - arc in front
@@ -428,13 +420,8 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	# Rotate to face forward direction
 	wave_mesh.rotation.x = PI / 2
 
-	# Create material - steel blue energy wave (GL Compatibility - no emission)
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.9, 1.0, 0.85)  # Brighter color to compensate for no emission
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	wave_mesh.material_override = mat
+	# Cached colored additive material from pool
+	wave_mesh.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.8, 0.9, 1.0, 0.85))
 
 	# Add inner brighter core ring for layered glow effect
 	var inner_wave: MeshInstance3D = MeshInstance3D.new()
@@ -446,12 +433,7 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	inner_wave.rotation.x = PI / 2
 	shockwave.add_child(inner_wave)
 
-	var inner_mat: StandardMaterial3D = StandardMaterial3D.new()
-	inner_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)  # White core
-	inner_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	inner_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	inner_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	inner_wave.material_override = inner_mat
+	inner_wave.material_override = MaterialPool.get_colored_additive_unshaded(Color(1.0, 1.0, 1.0, 0.9))
 
 	# Add trailing particles
 	var trail: CPUParticles3D = CPUParticles3D.new()
@@ -468,15 +450,8 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.3, 0.3)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	# Set shared material on mesh BEFORE assigning to particles
+	particle_mesh.material = MaterialPool.particle_additive
 	trail.mesh = particle_mesh
 
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -572,15 +547,8 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.2)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	# Set shared material (no billboard) on mesh BEFORE assigning to particles
+	particle_mesh.material = MaterialPool.particle_additive_no_billboard
 	ring_particles.mesh = particle_mesh
 
 	# Emit in a ring around player
@@ -636,12 +604,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	outer_sphere.rings = 8
 	outer_flash.mesh = outer_sphere
 
-	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
-	outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
-	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	outer_flash.material_override = outer_mat
+	outer_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.4, 0.6, 1.0, 0.3))
 	flash_container.add_child(outer_flash)
 
 	# Layer 2: Middle bright layer
@@ -653,12 +616,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	middle_sphere.rings = 8
 	middle_flash.mesh = middle_sphere
 
-	var middle_mat: StandardMaterial3D = StandardMaterial3D.new()
-	middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
-	middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	middle_flash.material_override = middle_mat
+	middle_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.7, 0.85, 1.0, 0.6))
 	flash_container.add_child(middle_flash)
 
 	# Layer 3: Bright white core
@@ -670,12 +628,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	core_sphere.rings = 6
 	core_flash.mesh = core_sphere
 
-	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
-	core_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)
-	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_flash.material_override = core_mat
+	core_flash.material_override = MaterialPool.get_colored_additive_unshaded(Color(1.0, 1.0, 1.0, 0.9))
 	flash_container.add_child(core_flash)
 
 	# Add burst particles for extra impact
@@ -693,13 +646,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.4, 0.4)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
+	particle_mesh.material = MaterialPool.particle_additive
 	burst_particles.mesh = particle_mesh
 
 	burst_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -740,16 +687,8 @@ func create_arc_indicator() -> void:
 	box.size = Vector3(slash_range * 2, 0.1, slash_range)  # Match hitbox width and depth, thin for visibility
 	mesh_instance.mesh = box
 
-	# Create material - very subtle, transparent, non-distracting
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.85, 0.9, 0.15)  # Subtle cool tone, 15% opacity
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	mat.disable_fog = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
-	mesh_instance.material_override = mat
+	# Cached indicator material from pool
+	mesh_instance.material_override = MaterialPool.get_indicator_material(Color(0.8, 0.85, 0.9, 0.15))
 
 	# Position in front of player to match hitbox position
 	# Hitbox collision_shape.position = Vector3(0, 0, -slash_range / 2)
@@ -773,15 +712,8 @@ func create_arc_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	edge_particles.mesh = particle_mesh
 
 	# Emission shape - box matching the hitbox area

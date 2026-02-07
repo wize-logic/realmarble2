@@ -72,18 +72,8 @@ func _ready() -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
 
-	# Create material for additive blending (fire effect)
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	fire_trail.mesh = particle_mesh
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH
@@ -444,17 +434,8 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.5)
 
-	# Create material for explosion
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	explosion.mesh = particle_mesh
 
 	# Emission shape - sphere burst
@@ -562,15 +543,8 @@ func create_direction_indicator() -> void:
 	# Set up particle mesh
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	sphere_particles.mesh = particle_mesh
 
 	# Emission shape - sphere surface matching hitbox

@@ -266,6 +266,13 @@ const MATERIAL_PRESETS = {
 	}
 }
 
+func prewarm_cache() -> void:
+	"""Pre-create all zero-variation preset materials to avoid runtime shader compilation."""
+	for preset_name in MATERIAL_PRESETS.keys():
+		if not _material_cache.has(preset_name):
+			create_material(preset_name, 0.0)
+	print("[ProceduralMaterialManager] Pre-warmed %d material presets" % _material_cache.size())
+
 func create_material(preset_name: String, color_variation: float = 0.0) -> ShaderMaterial:
 	"""Create a procedural material from a preset with optional color variation"""
 	# Return cached material for zero-variation presets (shared across meshes = fewer draw calls)

@@ -59,17 +59,10 @@ func create_beam_effect() -> void:
 
 	beam_particles.process_material = material
 
-	# Use circular texture for smooth appearance (no jagged edges)
-	var particle_material = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Self-illuminated
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/circle_05.png")
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
-
+	# Use shared textured particle material from pool
 	var quad_mesh = QuadMesh.new()
 	quad_mesh.size = Vector2(1.0, 1.0)
-	quad_mesh.material = particle_material
+	quad_mesh.material = MaterialPool.beam_circle_particle_material
 	beam_particles.draw_pass_1 = quad_mesh
 
 	# Create secondary glow particles for extra shine
@@ -126,17 +119,10 @@ func create_glow_particles() -> void:
 
 	glow_particles.process_material = material
 
-	# Use star texture for glow variation
-	var particle_material = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.albedo_texture = load("res://textures/kenney_particle_pack/star_05.png")
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for glow
-
+	# Use shared textured particle material from pool
 	var quad_mesh = QuadMesh.new()
 	quad_mesh.size = Vector2(1.0, 1.0)
-	quad_mesh.material = particle_material
+	quad_mesh.material = MaterialPool.beam_star_particle_material
 	glow_particles.draw_pass_1 = quad_mesh
 
 func create_scale_curve() -> Curve:

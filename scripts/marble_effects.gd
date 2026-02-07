@@ -93,16 +93,10 @@ func create_trail_particles() -> void:
 
 	trail_particles.process_material = mat
 
-	# Create mesh
-	var mesh_mat = StandardMaterial3D.new()
-	mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
+	# Create mesh with shared material from pool
 	var quad = QuadMesh.new()
 	quad.size = Vector2(1.0, 1.0)
-	quad.material = mesh_mat
+	quad.material = MaterialPool.particle_additive
 	trail_particles.draw_pass_1 = quad
 
 func create_speed_trail_particles() -> void:
@@ -142,16 +136,10 @@ func create_speed_trail_particles() -> void:
 
 	speed_trail_particles.process_material = mat
 
-	# Create mesh
-	var mesh_mat = StandardMaterial3D.new()
-	mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
+	# Create mesh with shared material from pool
 	var quad = QuadMesh.new()
 	quad.size = Vector2(1.0, 1.0)
-	quad.material = mesh_mat
+	quad.material = MaterialPool.particle_additive
 	speed_trail_particles.draw_pass_1 = quad
 
 func create_impact_pool() -> void:
@@ -192,16 +180,10 @@ func create_impact_pool() -> void:
 
 		impact.process_material = mat
 
-		# Create mesh
-		var mesh_mat = StandardMaterial3D.new()
-		mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
+		# Create mesh with shared material from pool
 		var quad = QuadMesh.new()
 		quad.size = Vector2(1.0, 1.0)
-		quad.material = mesh_mat
+		quad.material = MaterialPool.particle_additive
 		impact.draw_pass_1 = quad
 
 		impact_pool.append(impact)

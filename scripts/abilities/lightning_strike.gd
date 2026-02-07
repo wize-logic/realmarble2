@@ -340,14 +340,8 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	cylinder.height = 0.1
 	indicator.mesh = cylinder
 
-	# Pulsing electric material
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.4, 0.8, 1.0, 0.5)  # Electric blue
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	indicator.material_override = mat
+	# Cached colored additive material from pool
+	indicator.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.4, 0.8, 1.0, 0.5))
 
 	player.get_parent().add_child(indicator)
 	indicator.global_position = position + Vector3.UP * 0.1
@@ -367,13 +361,8 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.2, 0.2)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	warning_particles.mesh = particle_mesh
 
 	warning_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -399,13 +388,8 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 
 func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color, _emission_energy: float, transparent: bool) -> void:
 	"""Create a single layer of the lightning bolt (GL Compatibility friendly - no emission)"""
-	# Share one material across all segments in this layer (was creating one per segment)
-	var shared_mat: StandardMaterial3D = StandardMaterial3D.new()
-	shared_mat.albedo_color = color
-	shared_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if transparent:
-		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	# Use cached bolt segment material from pool
+	var shared_mat: StandardMaterial3D = MaterialPool.get_bolt_segment_material(color, transparent)
 
 	var radial_segs: int = 4 if OS.has_feature("web") else 8
 
@@ -506,13 +490,8 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.3, 0.3)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	impact_particles.mesh = particle_mesh
 
 	impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -656,14 +635,8 @@ func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, 
 		cylinder.radial_segments = 6
 		segment.mesh = cylinder
 
-		# GL Compatibility: bright color, no emission
-		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		if color.a < 1.0:
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		segment.material_override = mat
+		# Use cached bolt segment material from pool
+		segment.material_override = MaterialPool.get_bolt_segment_material(color, color.a < 1.0)
 
 		container.add_child(segment)
 
@@ -712,13 +685,8 @@ func create_reticle() -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.1, 0.1)
 
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	particles.mesh = particle_mesh
 
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING

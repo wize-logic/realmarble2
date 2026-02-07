@@ -69,13 +69,8 @@ func _create_rope_visual() -> MeshInstance3D:
 	cylinder.rings = 1
 	mesh_instance.mesh = cylinder
 
-	# Create thin wire/cable material
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 0.3, 0.35)  # Dark metallic gray (wire/cable look)
-	mat.metallic = 0.7  # Metallic sheen
-	mat.roughness = 0.4  # Slightly shiny
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	mesh_instance.material_override = mat
+	# Use shared wire material from pool
+	mesh_instance.material_override = MaterialPool.grind_rail_wire_material
 
 	get_tree().root.add_child(mesh_instance)
 	return mesh_instance

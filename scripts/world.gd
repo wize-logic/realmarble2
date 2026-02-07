@@ -104,6 +104,9 @@ var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var current_arena_multiplier: float = 1.0  # Arena size multiplier for player speed scaling
 
 func _ready() -> void:
+	# Warm up all shaders/materials at startup to avoid mid-game compilation stalls
+	MaterialPool.warmup_shaders()
+
 	# Load saved marble color preference from Global settings
 	selected_marble_color_index = Global.marble_color_index
 

@@ -382,15 +382,8 @@ func _ready() -> void:
 		particle_mesh.size = Vector2(0.3, 0.3)
 		death_particles.mesh = particle_mesh
 
-		# Create material for particles
-		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		particle_material.vertex_color_use_as_albedo = true
-		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		particle_material.disable_receive_shadows = true
-		death_particles.mesh.material = particle_material
+		# Use shared particle material from pool
+		death_particles.mesh.material = MaterialPool.particle_additive
 
 		# Emission shape - sphere burst
 		death_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -439,15 +432,8 @@ func _ready() -> void:
 		collection_particle_mesh.size = Vector2(0.2, 0.2)
 		collection_particles.mesh = collection_particle_mesh
 
-		# Create material for particles
-		var collection_particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		collection_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		collection_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive blending for glow
-		collection_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		collection_particle_material.vertex_color_use_as_albedo = true
-		collection_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		collection_particle_material.disable_receive_shadows = true
-		collection_particles.mesh.material = collection_particle_material
+		# Use shared particle material from pool
+		collection_particles.mesh.material = MaterialPool.particle_additive
 
 		# Emission shape - ring at base of player
 		collection_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
@@ -505,14 +491,8 @@ func _ready() -> void:
 		jump_particle_mesh.rings = 8
 		jump_bounce_particles.mesh = jump_particle_mesh
 
-		# Create material for dark blue semi-transparent circles
-		var jump_particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		jump_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		jump_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		jump_particle_material.albedo_color = Color(0.1, 0.2, 0.5, 0.12)  # Dark blue, almost entirely transparent
-		jump_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-		jump_particle_material.disable_receive_shadows = true
-		jump_bounce_particles.mesh.material = jump_particle_material
+		# Use shared jump bounce material from pool
+		jump_bounce_particles.mesh.material = MaterialPool.jump_bounce_material
 
 		# Emission shape - point below player
 		jump_bounce_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
@@ -593,15 +573,8 @@ func _ready() -> void:
 		grind_particle_mesh.size = Vector2(0.15, 0.15)
 		grind_particles.mesh = grind_particle_mesh
 
-		# Create material for bright spark particles
-		var grind_particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		grind_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		grind_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD  # Additive for bright sparks
-		grind_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		grind_particle_material.vertex_color_use_as_albedo = true
-		grind_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		grind_particle_material.disable_receive_shadows = true
-		grind_particles.mesh.material = grind_particle_material
+		# Use shared particle material from pool
+		grind_particles.mesh.material = MaterialPool.particle_additive
 
 		# Emission shape - point below player
 		grind_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT

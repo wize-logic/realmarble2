@@ -1482,14 +1482,8 @@ func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	pad_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)  # Slightly above ground
 	add_child(pad_instance)
 
-	# High quality glowing green material (Compatibility renderer safe)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
-	material.emission_enabled = true
-	material.emission = Color(0.3, 1.0, 0.4)  # Match albedo for solid color
-	material.emission_energy_multiplier = 2.0  # Glow intensity
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
-	pad_instance.set_surface_override_material(0, material)
+	# High quality glowing green material - shared from pool
+	pad_instance.set_surface_override_material(0, MaterialPool.jumppad_material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -1597,14 +1591,8 @@ func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: fl
 	teleporter_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)
 	add_child(teleporter_instance)
 
-	# High quality glowing purple material (Compatibility renderer safe)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
-	material.emission_enabled = true
-	material.emission = Color(0.7, 0.3, 1.0)  # Match albedo for solid color
-	material.emission_energy_multiplier = 2.0  # Glow intensity
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
-	teleporter_instance.set_surface_override_material(0, material)
+	# High quality glowing purple material - shared from pool
+	teleporter_instance.set_surface_override_material(0, MaterialPool.teleporter_material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -1816,14 +1804,8 @@ func _create_rail_visual(rail: Path3D) -> void:
 
 	rail_visual.mesh = surface_tool.commit()
 
-	# Compatibility renderer safe material - dark grey with subtle sheen
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.25, 0.25, 0.28)  # Dark grey
-	material.emission_enabled = true
-	material.emission = Color(0.15, 0.15, 0.18)  # Subtle grey glow for visibility
-	material.emission_energy_multiplier = 0.8
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rail_visual.set_surface_override_material(0, material)
+	# Compatibility renderer safe material - shared from pool
+	rail_visual.set_surface_override_material(0, MaterialPool.rail_material)
 
 	rail.add_child(rail_visual)
 
@@ -2307,13 +2289,11 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 	hazard_instance.position = pos
 	add_child(hazard_instance)
 
-	# Try to load animated hazard shader
-	var hazard_shader: Shader = null
-	if ResourceLoader.exists("res://scripts/shaders/hazard_surface.gdshader"):
-		hazard_shader = load("res://scripts/shaders/hazard_surface.gdshader")
+	# Use hazard shader from pool (pre-loaded at startup)
+	var hazard_shader: Shader = MaterialPool.get_hazard_shader()
 
 	if hazard_shader:
-		# Use animated shader material
+		# Use animated shader material (each hazard instance needs unique params)
 		var material: ShaderMaterial = ShaderMaterial.new()
 		material.shader = hazard_shader
 		material.set_shader_parameter("hazard_type", hazard_type)
@@ -2328,20 +2308,11 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 			material.set_shader_parameter("bubble_amount", 0.7)
 		hazard_instance.set_surface_override_material(0, material)
 	else:
-		# Fallback to standard material (no white glow)
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		if hazard_type == 0:  # Lava
-			material.albedo_color = Color(0.9, 0.25, 0.0)
-			material.emission_enabled = true
-			material.emission = Color(1.0, 0.4, 0.05)
-			material.emission_energy_multiplier = 2.8
-		else:  # Slime
-			material.albedo_color = Color(0.15, 0.65, 0.15)
-			material.emission_enabled = true
-			material.emission = Color(0.1, 0.5, 0.1)
-			material.emission_energy_multiplier = 1.5
-		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		hazard_instance.set_surface_override_material(0, material)
+		# Fallback to shared standard material from pool
+		if hazard_type == 0:
+			hazard_instance.set_surface_override_material(0, MaterialPool.hazard_lava_fallback)
+		else:
+			hazard_instance.set_surface_override_material(0, MaterialPool.hazard_slime_fallback)
 
 	# Create damage area
 	var damage_area: Area3D = Area3D.new()
@@ -2369,29 +2340,12 @@ func create_hazard_zone(pos: Vector3, size: Vector3, index: int) -> void:
 
 func setup_materials() -> void:
 	## Initialize materials optimized for Compatibility renderer
-	## Uses simple StandardMaterial3D with no advanced features
+	## Uses shared materials from MaterialPool to reduce shader variety
 
-	# Floor material - basic diffuse
-	_floor_material = StandardMaterial3D.new()
-	_floor_material.albedo_color = Color(0.4, 0.4, 0.45)
-	_floor_material.roughness = 0.8
-	_floor_material.metallic = 0.0
-	# Compatibility renderer: avoid fancy shading
-	_floor_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-	# Wall material
-	_wall_material = StandardMaterial3D.new()
-	_wall_material.albedo_color = Color(0.5, 0.45, 0.4)
-	_wall_material.roughness = 0.9
-	_wall_material.metallic = 0.0
-	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-	# Ceiling material
-	_ceiling_material = StandardMaterial3D.new()
-	_ceiling_material.albedo_color = Color(0.35, 0.35, 0.4)
-	_ceiling_material.roughness = 0.85
-	_ceiling_material.metallic = 0.0
-	_ceiling_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	# Use shared materials from pool instead of creating new ones
+	_floor_material = MaterialPool.floor_material
+	_wall_material = MaterialPool.wall_material
+	_ceiling_material = MaterialPool.ceiling_material
 
 	# Try to load material manager if available
 	if ResourceLoader.exists("res://scripts/procedural_material_manager.gd"):

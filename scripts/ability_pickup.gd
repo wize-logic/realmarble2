@@ -46,11 +46,8 @@ func _ready() -> void:
 
 	# Set up visual appearance
 	if mesh_instance and mesh_instance.mesh:
-		# Create material based on ability color (no emission/glow)
-		glow_material = StandardMaterial3D.new()
-		glow_material.albedo_color = ability_color
-		glow_material.metallic = 0.3
-		glow_material.roughness = 0.3
+		# Use cached pickup material from pool
+		glow_material = MaterialPool.get_ability_pickup_material(ability_color)
 		mesh_instance.material_override = glow_material
 
 	# Customize animation based on ability type for variety

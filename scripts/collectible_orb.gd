@@ -44,12 +44,8 @@ func _ready() -> void:
 
 	# Set up visual appearance if mesh exists
 	if mesh_instance and mesh_instance.mesh:
-		# Create material for orb - NO emission, rely on light for glow
-		glow_material = StandardMaterial3D.new()
-		glow_material.albedo_color = Color(0.3, 0.7, 1.0, 1.0)  # Cyan/blue color
-		glow_material.emission_enabled = false  # Disabled - use light instead
-		glow_material.metallic = 0.2
-		glow_material.roughness = 0.3
+		# Use shared orb material from pool
+		glow_material = MaterialPool.collectible_orb_material
 		mesh_instance.material_override = glow_material
 
 	# Use seeded RNG for starting animation phase (deterministic across clients)

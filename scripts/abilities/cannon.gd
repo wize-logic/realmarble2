@@ -346,14 +346,9 @@ func create_projectile(level: int = 0) -> Node3D:
 	sphere.height = 0.8 * size_mult
 	mesh_instance.mesh = sphere
 
-	# Create material - lime green for visibility, brighter at higher levels (GL Compatibility - no emission)
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var green_intensity: float = 1.0 + ((level - 1) * 0.075)  # Brighter at higher levels
-	mat.albedo_color = Color(0.6, minf(green_intensity, 1.0), 0.1)  # Bright lime green
-	mat.metallic = 0.2
-	mat.roughness = 0.4
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always bright
-	mesh_instance.material_override = mat
+	# Cached unshaded material from pool - lime green, brighter at higher levels
+	var green_intensity: float = 1.0 + ((level - 1) * 0.075)
+	mesh_instance.material_override = MaterialPool.get_bolt_segment_material(Color(0.6, minf(green_intensity, 1.0), 0.1), false)
 	projectile.add_child(mesh_instance)
 
 	# GL Compatibility: Add outer glow layer instead of emission
@@ -364,13 +359,8 @@ func create_projectile(level: int = 0) -> Node3D:
 		glow_sphere.height = (0.8 * size_mult) * 1.4
 		glow_mesh.mesh = glow_sphere
 
-		var glow_mat: StandardMaterial3D = StandardMaterial3D.new()
 		var glow_alpha: float = 0.25 + ((level - 1) * 0.05)
-		glow_mat.albedo_color = Color(0.5, 1.0, 0.2, glow_alpha)  # Green glow
-		glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		glow_mesh.material_override = glow_mat
+		glow_mesh.material_override = MaterialPool.get_colored_additive_unshaded(Color(0.5, 1.0, 0.2, glow_alpha))
 		projectile.add_child(glow_mesh)
 
 	# Create collision shape - larger, scales with level
@@ -412,15 +402,8 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.3, 0.3)  # Larger than gun (was 0.15)
 
-	# Create material for trail
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	trail.mesh = particle_mesh
 
 	# Emission shape - point source
@@ -474,15 +457,8 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.8, 0.8)  # Much larger than gun (was 0.4)
 
-	# Create material for flash
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	muzzle_flash.mesh = particle_mesh
 
 	# Emission shape - larger sphere
@@ -539,15 +515,8 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.6, 0.6)
 
-	# Create material for explosion
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	explosion.mesh = particle_mesh
 
 	# Emission shape - sphere burst
@@ -626,15 +595,8 @@ func create_reticle() -> void:
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.15, 0.15)
 
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
+	# Use shared particle material from pool
+	particle_mesh.material = MaterialPool.particle_additive
 	particles.mesh = particle_mesh
 
 	# Emission shape - ring around reticle
