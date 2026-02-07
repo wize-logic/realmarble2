@@ -24,6 +24,7 @@ CrazyGamesSDK="*res://scripts/crazygames_sdk.gd"
 ProfileManager="*res://scripts/profile_manager.gd"
 FriendsManager="*res://scripts/friends_manager.gd"
 DebugLogger="*res://scripts/debug_logger.gd"
+MaterialPool="*res://scripts/material_pool.gd"
 
 [debug]
 
