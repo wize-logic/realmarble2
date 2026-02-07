@@ -1,10 +1,10 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_always, depth_prepass_alpha, cull_back, diffuse_burley, specular_schlick_ggx;
+render_mode cull_back, depth_draw_opaque, diffuse_lambert, specular_schlick_ggx;
 
 // Marble appearance parameters
-uniform vec4 primary_color : source_color = vec4(0.8, 0.2, 0.2, 1.0);
-uniform vec4 secondary_color : source_color = vec4(0.9, 0.4, 0.4, 1.0);
-uniform vec4 swirl_color : source_color = vec4(1.0, 0.8, 0.8, 1.0);
+uniform vec3 primary_color : source_color = vec3(0.8, 0.2, 0.2);
+uniform vec3 secondary_color : source_color = vec3(0.9, 0.4, 0.4);
+uniform vec3 swirl_color : source_color = vec3(1.0, 0.8, 0.8);
 
 // Material properties
 uniform float glossiness : hint_range(0.0, 1.0) = 0.6;
@@ -157,11 +157,11 @@ void fragment() {
 	float bubble = bubbles(world_pos);
 
 	// Mix colors based on patterns
-	vec3 base_mix = mix(primary_color.rgb, secondary_color.rgb, swirl);
-	vec3 final_color = mix(base_mix, swirl_color.rgb, swirl * swirl_intensity);
+	vec3 base_mix = mix(primary_color, secondary_color, swirl);
+	vec3 final_color = mix(base_mix, swirl_color, swirl * swirl_intensity);
 
 	// Add colored spots where bubbles are (not white, use swirl color tinted)
-	vec3 bubble_tint = mix(swirl_color.rgb, secondary_color.rgb, 0.5) * 1.2;
+	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.2;
 	final_color = mix(final_color, bubble_tint, bubble * 0.35);
 
 	// Calculate view direction from camera to fragment (world space)
@@ -178,12 +178,12 @@ void fragment() {
 	float fresnel_amount = fresnel(rim_power, NORMAL, view_dir);
 
 	// Add rim highlight with color tint (not white) - reduced intensity
-	vec3 rim_color = mix(secondary_color.rgb, swirl_color.rgb, 0.5) * 1.2;
+	vec3 rim_color = mix(secondary_color, swirl_color, 0.5) * 1.2;
 	final_color += fresnel_amount * rim_intensity * rim_color;
 
 	// Calculate outer rim glow - subtle wider glow (reduced intensity)
 	float outer_fresnel = fresnel(outer_rim_power, NORMAL, view_dir);
-	vec3 outer_glow_color = mix(primary_color.rgb, secondary_color.rgb, 0.3) * 1.3;
+	vec3 outer_glow_color = mix(primary_color, secondary_color, 0.3) * 1.3;
 	final_color += outer_fresnel * outer_rim_intensity * outer_glow_color;
 
 	// Output material properties
@@ -208,7 +208,7 @@ void fragment() {
 	float pulse = 1.0 + sin(TIME * glow_pulse_speed) * glow_pulse_amount;
 
 	// Base emission color from marble colors
-	vec3 emission_base = mix(primary_color.rgb, secondary_color.rgb, 0.4);
+	vec3 emission_base = mix(primary_color, secondary_color, 0.4);
 
 	// Core glow - subtle inner light
 	float core_glow = glow_strength * pulse;
@@ -220,7 +220,7 @@ void fragment() {
 	vec3 total_emission = emission_base * core_glow * (0.15 + rim_emission * 0.2);
 
 	// Add a very subtle highlight at steep angles
-	total_emission += swirl_color.rgb * outer_fresnel * outer_fresnel * 0.08 * pulse;
+	total_emission += swirl_color * outer_fresnel * outer_fresnel * 0.08 * pulse;
 
 	EMISSION = total_emission;
 }
