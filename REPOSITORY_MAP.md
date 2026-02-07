@@ -126,9 +126,7 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── audio_metadata_parser.gd
 │   ├── beam_spawn_effect.gd       # Star Trek-style transporter beam spawn effect
 │   ├── bot_ai.gd                  # BASE bot AI class (1,100+ lines) - v5.0 inheritance
-│   ├── bot_ai_type_a.gd           # Type A bot AI extension (570 lines) - rails for Sonic arenas
 │   ├── bot_ai_type_b.gd           # Type B bot AI extension (370 lines) - pads/teleporters for Quake arenas
-│   ├── camera_occlusion.gd
 │   ├── collectible_orb.gd         # Collectible orb logic
 │   ├── crazygames_sdk.gd
 │   ├── debug_menu.gd              # Debug menu with cheats
@@ -145,7 +143,6 @@ A **Sonic-inspired physics-based multiplayer deathmatch** where players control 
 │   ├── orbit_camera.gd            # Orbiting camera for menus
 │   ├── player.gd                  # Player controller (1,695 lines)
 │   ├── procedural_material_manager.gd  # Context-aware level geometry materials
-│   ├── poof_particle_effect.gd    # Particle effect system
 │   ├── profile_manager.gd
 │   ├── scoreboard.gd
 │   ├── skybox_generator.gd
@@ -346,7 +343,7 @@ Bounce: 150.0 * multiplier  # Up to 3x consecutive
 
 ### 9. Bot AI System (v5.0 - Inheritance Architecture)
 
-**Location:** `scripts/bot_ai.gd` (base class), `scripts/bot_ai_type_a.gd` (Sonic arenas), `scripts/bot_ai_type_b.gd` (Quake arenas)
+**Location:** `scripts/bot_ai.gd` (base class), `scripts/bot_ai_type_b.gd` (Quake arenas)
 
 **Architecture:**
 ```
@@ -360,9 +357,6 @@ bot_ai.gd (BASE CLASS - 1,100+ lines)
     ├─ Retreat behavior (NEW v5.0)
     ├─ Bot-bot repulsion (NEW v5.0)
     └─ Virtual methods for arena-specific overrides
-
-bot_ai_type_a.gd (EXTENDS BASE - 570 lines)
-    └─ Rail grinding system for Sonic arenas
 
 bot_ai_type_b.gd (EXTENDS BASE - 370 lines)
     └─ Jump pads & teleporters for Quake arenas
@@ -385,7 +379,7 @@ Priority 6: WANDER (default, biased to hotspots) - v5.0 IMPROVED
 - **Bot repulsion:** 3-unit separation prevents clumping
 - **Wander hotspot bias:** 60% chance to seek items/platforms
 - **Performance:** Cache refresh 0.5s (was 0.1s, 5x improvement)
-- **Arena-specific AI:** Rails for Type A, jump pads/teleporters for Type B
+- **Arena-specific AI:** Jump pads/teleporters for Type B
 
 **AI Features:**
 - **Combat tactics:** Ability-specific optimal ranges, strafing, charging, lead prediction
@@ -405,8 +399,8 @@ Priority 6: WANDER (default, biased to hotspots) - v5.0 IMPROVED
 #### v5.0 Bot AI Refactor Details
 
 **Architecture Changes:**
-- **Before v5.0:** Two massive duplicated files (bot_ai_type_a.gd ~2,200 lines, bot_ai_type_b.gd ~2,200 lines)
-- **After v5.0:** Clean inheritance (bot_ai.gd 1,100 lines + type_a.gd 570 lines + type_b.gd 370 lines)
+- **Before v5.0:** Massive duplicated bot AI files
+- **After v5.0:** Clean inheritance (bot_ai.gd 1,100 lines + type_b.gd 370 lines)
 - **Result:** -2,097 lines total (90% code deduplication)
 
 **Ability Collection System (FIXED):**
@@ -609,7 +603,6 @@ MarblePlayer (RigidBody3D) [scripts/player.gd]
 ├── CollisionShape3D
 ├── MeshInstance3D
 ├── Camera3D
-│   └── CameraOcclusion [scripts/camera_occlusion.gd]
 ├── GroundDetector (RayCast3D)
 ├── AudioPlayers (jump, spin, bounce, hit, death)
 ├── Particles (death, collection, trails)
@@ -642,7 +635,6 @@ Sword (Node3D) [scripts/abilities/sword.gd]
 | `world.gd` | 1,646 | Main game controller, match logic, menu system |
 | `player.gd` | 1,695 | Player physics, movement, abilities, health |
 | `bot_ai.gd` | 1,100+ | Base bot AI class (v5.0 inheritance architecture) |
-| `bot_ai_type_a.gd` | 570 | Type A bot AI extension (rails for Sonic arenas) |
 | `bot_ai_type_b.gd` | 370 | Type B bot AI extension (pads/teleporters for Quake arenas) |
 | `multiplayer_manager.gd` | - | WebSocket/ENet networking, room management |
 | `level_generator.gd` | - | Type A arena generation |
@@ -681,7 +673,6 @@ Sword (Node3D) [scripts/abilities/sword.gd]
 | `ability_spawner.gd` | Manages ability pickup spawning |
 | `audio_metadata_parser.gd` | Audio file metadata extraction |
 | `beam_spawn_effect.gd` | Star Trek-style transporter beam spawn effect |
-| `camera_occlusion.gd` | Camera anti-clipping |
 | `collectible_orb.gd` | Orb pickup logic |
 | `crazygames_sdk.gd` | CrazyGames SDK bridge |
 | `debug_menu.gd` | Debug menu with cheats |
@@ -692,7 +683,6 @@ Sword (Node3D) [scripts/abilities/sword.gd]
 | `music_playlist.gd` | Music playlist system |
 | `orbit_camera.gd` | Orbiting camera for menus |
 | `orb_spawner.gd` | Manages orb spawning |
-| `poof_particle_effect.gd` | Particle effect system |
 | `procedural_material_manager.gd` | Context-aware level geometry materials |
 | `profile_manager.gd` | User profile management |
 | `scoreboard.gd` | Scoreboard display |
@@ -1042,7 +1032,6 @@ Clients (Peer 2-16)
 | Level-up | `player.gd:_on_collectible_orb_collected()` (~800) |
 | Ability system | `abilities/ability_base.gd` |
 | Bot AI (base) | `bot_ai.gd` (v5.0 inheritance architecture) |
-| Bot AI (Type A) | `bot_ai_type_a.gd` (rails for Sonic arenas) |
 | Bot AI (Type B) | `bot_ai_type_b.gd` (pads/teleporters for Quake arenas) |
 | Multiplayer | `multiplayer_manager.gd` |
 | Match logic | `world.gd` |
@@ -1080,11 +1069,10 @@ Clients (Peer 2-16)
    - Add state to state machine
    - Implement in `_physics_process()` or helper methods
    - Add state transitions in `update_state()`
-2. **For arena-specific behavior:** Edit `bot_ai_type_a.gd` or `bot_ai_type_b.gd`
+2. **For arena-specific behavior:** Edit `bot_ai_type_b.gd`
    - Override virtual methods: `setup_arena_specific_caches()`, `consider_arena_specific_navigation()`, `handle_arena_specific_state_updates()`
    - Add arena-specific variables and methods
    - Call `super.method_name()` to preserve base functionality
-3. **Example:** Adding Type A rail grinding was done entirely in `bot_ai_type_a.gd` without touching base class
 
 **Customize Level Generation:**
 - **Type A:** Edit `level_generator.gd` (platforms, rails, ramps)

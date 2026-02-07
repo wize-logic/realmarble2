@@ -7,7 +7,6 @@ class_name BotAI
 ##
 ## Architecture:
 ## - bot_ai.gd: Base class with all shared logic
-## - bot_ai_type_a.gd: Extends base for Sonic arenas (rails, ramps, slopes)
 ## - bot_ai_type_b.gd: Extends base for Quake arenas (platforms, jump pads, teleporters)
 ##
 ## IMPROVEMENTS:

@@ -113,7 +113,6 @@ var targeted_rail: GrindRail = null  # The rail currently being looked at
 var cached_rails: Array[GrindRail] = []  # Cached list of rails in scene (refreshed periodically)
 var rails_cache_timer: float = 0.0  # Timer for refreshing rail cache
 var rail_targeting_timer: float = 0.0  # Throttle rail targeting checks (perf: was every frame)
-var _camera_occlusion_query: PhysicsRayQueryParameters3D = null  # Cached to avoid per-frame alloc
 var movement_input_direction: Vector3 = Vector3.ZERO  # Stores current movement input (used by rails)
 var post_rail_detach_frames: int = 0  # Grace period frames after detaching from rail
 var consecutive_air_frames: int = 0  # Counter for consecutive frames in the air
@@ -811,28 +810,8 @@ func _process(delta: float) -> void:
 		offset.y * sin(pitch_rad) + offset.z * cos(pitch_rad)
 	)
 
-	# Camera occlusion - raycast to prevent clipping through walls
-	# Reuse cached query object to avoid per-frame PhysicsRayQueryParameters3D + Array alloc
-	if not _camera_occlusion_query:
-		_camera_occlusion_query = PhysicsRayQueryParameters3D.new()
-		_camera_occlusion_query.exclude = [self]
-		_camera_occlusion_query.collision_mask = 1  # Only check world geometry (layer 1)
-	_camera_occlusion_query.from = camera_arm.global_position
-	_camera_occlusion_query.to = camera_arm.global_position + camera_arm.global_transform.basis * rotated_offset
-
-	var space_state: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
-	var result: Dictionary = space_state.intersect_ray(_camera_occlusion_query)
-	var final_offset: Vector3 = rotated_offset
-
-	if result:
-		# Hit something - move camera closer
-		var hit_point: Vector3 = result.position
-		var local_hit: Vector3 = camera_arm.global_transform.inverse() * hit_point
-		# Pull camera back slightly from hit point to avoid clipping
-		final_offset = local_hit - (local_hit.normalized() * 0.2)
-
 	# Position camera
-	camera.position = final_offset
+	camera.position = rotated_offset
 
 	# Make camera look at player
 	camera.look_at(camera_arm.global_position + Vector3.UP * 0.5, Vector3.UP)
