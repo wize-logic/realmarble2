@@ -9,6 +9,10 @@ var is_occluded: bool = false
 var original_material: Material = null
 var transparent_material: StandardMaterial3D = null
 
+# Throttle occlusion raycast — 60 raycasts/sec is far too expensive on HTML5
+var _occlusion_check_timer: float = 0.0
+const OCCLUSION_CHECK_INTERVAL: float = 0.1  # 10 Hz
+
 # Transparency settings
 var occluded_transparency: float = 0.3  # How transparent when occluded (0.0 = invisible, 1.0 = opaque)
 var fade_speed: float = 10.0  # How fast to fade in/out
@@ -59,7 +63,11 @@ func _process(delta: float) -> void:
 	if not marble_mesh or not player:
 		return
 
-	check_occlusion()
+	# Throttle the expensive raycast; transparency fading still runs every frame
+	_occlusion_check_timer += delta
+	if _occlusion_check_timer >= OCCLUSION_CHECK_INTERVAL:
+		_occlusion_check_timer = 0.0
+		check_occlusion()
 	update_transparency(delta)
 
 func check_occlusion() -> void:

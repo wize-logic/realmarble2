@@ -250,19 +250,20 @@ func _physics_process(_delta: float) -> void:
 	if not marble_body:
 		return
 
-	var velocity = marble_body.linear_velocity
-	var speed = velocity.length()
+	var velocity: Vector3 = marble_body.linear_velocity
+	# Use length_squared() to avoid 3 per-frame sqrt calls
+	var speed_sq: float = velocity.length_squared()
 
-	# Update trail visibility based on speed
+	# Update trail visibility based on speed (compare squared thresholds)
 	if trail_particles:
-		trail_particles.emitting = speed > TRAIL_SPEED_MIN
+		trail_particles.emitting = speed_sq > TRAIL_SPEED_MIN * TRAIL_SPEED_MIN
 
 	if speed_trail_particles:
-		speed_trail_particles.emitting = speed > SPEED_TRAIL_MIN
+		speed_trail_particles.emitting = speed_sq > SPEED_TRAIL_MIN * SPEED_TRAIL_MIN
 
-	# Check for impacts (sudden deceleration)
-	var decel = (last_velocity - velocity).length()
-	if decel > IMPACT_SPEED_MIN and speed < last_velocity.length() * 0.5:
+	# Check for impacts (sudden deceleration) — all squared comparisons
+	var decel_sq: float = (last_velocity - velocity).length_squared()
+	if decel_sq > IMPACT_SPEED_MIN * IMPACT_SPEED_MIN and speed_sq < last_velocity.length_squared() * 0.25:
 		spawn_impact_effect(global_position)
 
 	last_velocity = velocity

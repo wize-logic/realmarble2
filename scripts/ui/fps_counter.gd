@@ -4,7 +4,16 @@ var fps_bool := false
 var ping_bool := false
 
 func _process(_delta: float) -> void:
-	var fps: String = "FPS " + str(Engine.get_frames_per_second()) + "\n" if fps_bool else ""
+	# Early-out: skip all work when both counters are off
+	if not fps_bool and not ping_bool:
+		if text != "":
+			text = ""
+		return
+
+	var fps: String = ""
+	if fps_bool:
+		fps = "FPS " + str(Engine.get_frames_per_second()) + "\n"
+
 	var ping: String = ""
 	if ping_bool:
 		# Get actual round-trip time from the multiplayer peer

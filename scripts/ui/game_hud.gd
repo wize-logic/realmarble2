@@ -50,6 +50,10 @@ var ult_bar: ProgressBar = null
 var ult_bar_fill_style: StyleBoxFlat = null
 var ult_pulse_time: float = 0.0
 
+# Throttle heavy label updates — strings and score don't change every frame
+var _hud_update_timer: float = 0.0
+const HUD_UPDATE_INTERVAL: float = 0.15  # ~7 Hz (was 60 Hz)
+
 func _ready() -> void:
 	# Load custom fonts
 	font_bold = load("res://fonts/Rajdhani-Bold.ttf")
@@ -88,8 +92,13 @@ func reset_hud() -> void:
 	call_deferred("find_local_player")
 
 func _process(delta: float) -> void:
-	update_hud()
-	update_ult_bar(delta)
+	# Throttle the expensive string-formatting path (timer/score/level/ability/HP labels)
+	_hud_update_timer += delta
+	if _hud_update_timer >= HUD_UPDATE_INTERVAL:
+		_hud_update_timer = 0.0
+		update_hud()
+		update_ult_bar(delta)
+	# Notifications still tick every frame for smooth fading
 	update_expansion_notification(delta)
 	update_kill_notification(delta)
 	update_killstreak_notification(delta)

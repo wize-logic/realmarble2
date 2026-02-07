@@ -75,7 +75,7 @@ var terrain_stuck_check_timer: float = 0.0  # Timer for throttling terrain stuck
 # ============================================================================
 
 const DEBUG_LOG_INTERVAL: float = 2.0
-const CACHE_REFRESH_INTERVAL: float = 0.75  # IMPROVED: Increased from 0.5s for better performance
+const CACHE_REFRESH_INTERVAL: float = 1.25  # Increased from 0.75s — 3 group scans × 8 bots is expensive on HTML5
 const TARGET_STUCK_TIMEOUT: float = 4.0
 const ABILITY_COLLECTION_TIMEOUT: float = 15.0  # Timeout for ability collection
 const STUCK_UNDER_TERRAIN_TELEPORT_TIMEOUT: float = 3.0
@@ -99,7 +99,7 @@ const BOT_REPULSION_INTERVAL: float = 0.15  # NEW: Check bot repulsion frequentl
 const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
 const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
 const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
-const TERRAIN_STUCK_CHECK_INTERVAL: float = 0.5  # Only check terrain stuck every 0.5s (was every frame = 63 raycasts/frame)
+const TERRAIN_STUCK_CHECK_INTERVAL: float = 1.0  # Check terrain stuck every 1s (5 raycasts × 8 bots = 40/sec at 0.5s)
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
@@ -533,19 +533,23 @@ func initialize_personality() -> void:
 # ============================================================================
 
 func refresh_cached_groups() -> void:
-	"""Cache all entities with filtering - runs every 0.5s"""
-	cached_players = get_tree().get_nodes_in_group("players").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
+	"""Cache all entities with filtering — runs every CACHE_REFRESH_INTERVAL."""
+	# Inline loops instead of .filter() with lambdas to avoid closure allocation
+	# overhead (3 lambda allocations + per-element virtual calls per refresh).
+	cached_players.clear()
+	for node in get_tree().get_nodes_in_group("players"):
+		if is_instance_valid(node) and node.is_inside_tree():
+			cached_players.append(node)
 
-	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
-	)
+	cached_orbs.clear()
+	for node in get_tree().get_nodes_in_group("orbs"):
+		if is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected):
+			cached_orbs.append(node)
 
-	# NEW: Cache abilities
-	cached_abilities = get_tree().get_nodes_in_group("ability_pickups").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1
-	)
+	cached_abilities.clear()
+	for node in get_tree().get_nodes_in_group("ability_pickups"):
+		if is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1:
+			cached_abilities.append(node)
 
 	# Store exact coordinates
 	cached_orb_positions.clear()
@@ -814,7 +818,7 @@ func handle_stuck_under_terrain(delta: float) -> void:
 		stuck_under_terrain_timer = 0.0
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if bot is stuck under terrain using 5-point overhead detection (optimized from 9)"""
+	"""Check if bot is stuck under terrain using 3-point overhead detection (optimized from 5)"""
 	if not bot or not cached_space_state:
 		return false
 
@@ -827,11 +831,11 @@ func is_stuck_under_terrain() -> bool:
 	query.exclude = [bot]
 	query.collision_mask = 1  # World layer
 
-	# 5 check points (center + 4 cardinal) - diagonals removed as redundant
-	var offsets_x: Array[float] = [0.0, check_distance, -check_distance, 0.0, 0.0]
-	var offsets_z: Array[float] = [0.0, 0.0, 0.0, check_distance, -check_distance]
+	# 3 check points (center + 2 opposing cardinal) — sufficient to detect overhead geometry
+	var offsets_x: Array[float] = [0.0, check_distance, -check_distance]
+	var offsets_z: Array[float] = [0.0, 0.0, 0.0]
 
-	for i in range(5):
+	for i in range(3):
 		var ray_start_y: float = bot_pos.y + BOT_EYE_HEIGHT
 		query.from = Vector3(bot_pos.x + offsets_x[i], ray_start_y, bot_pos.z + offsets_z[i])
 		query.to = Vector3(query.from.x, ray_start_y + 2.3, query.from.z)
@@ -840,8 +844,8 @@ func is_stuck_under_terrain() -> bool:
 		if result:
 			stuck_count += 1
 
-	# If more than 2 points (of 5) hit overhead terrain, we're stuck
-	return stuck_count > 2
+	# If 2+ of 3 check points hit overhead terrain, we're stuck
+	return stuck_count >= 2
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Apply aggressive unstuck forces"""

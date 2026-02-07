@@ -4,9 +4,14 @@ extends Label3D
 
 var target_player: Node = null
 var update_timer: float = 0.0
-const UPDATE_INTERVAL: float = 0.1  # Update 10 times per second
+# 10 Hz on desktop, 2 Hz on web — nametags are debug-only and 8 of them
+# running string formatting is expensive in the HTML5 single-threaded runtime
+var UPDATE_INTERVAL: float = 0.1
 
 func _ready() -> void:
+	if OS.has_feature("web"):
+		UPDATE_INTERVAL = 0.5  # 2 Hz on HTML5
+
 	# Configure label appearance
 	billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	no_depth_test = true
