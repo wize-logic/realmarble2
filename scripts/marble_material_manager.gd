@@ -1,159 +1,142 @@
 extends Node
 
 ## Marble Material Manager
-## Creates distinct colored marble materials for each player using StandardMaterial3D
-## Generates a marble-like texture so rolling is visible
+## Creates beautiful, unique marble materials for each player
+
+# Pre-load the marble shader
+const MARBLE_SHADER = preload("res://scripts/shaders/marble_shader.gdshader")
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
-	# Primary vibrant colors
-	{"name": "Ruby Red", "primary": Color(1.0, 0.0, 0.1)},
-	{"name": "Sapphire Blue", "primary": Color(0.0, 0.2, 1.0)},
-	{"name": "Emerald Green", "primary": Color(0.0, 0.9, 0.2)},
-	{"name": "Bright Purple", "primary": Color(0.7, 0.0, 1.0)},
-	{"name": "Vivid Orange", "primary": Color(1.0, 0.45, 0.0)},
-	{"name": "Hot Pink", "primary": Color(1.0, 0.0, 0.5)},
-	{"name": "Bright Cyan", "primary": Color(0.0, 0.9, 1.0)},
-	{"name": "Sunny Yellow", "primary": Color(1.0, 0.9, 0.0)},
+	# Primary vibrant colors - very distinct from each other
+	{"name": "Ruby Red", "primary": Color(1.0, 0.0, 0.1), "secondary": Color(1.0, 0.2, 0.25), "swirl": Color(1.0, 0.5, 0.55)},
+	{"name": "Sapphire Blue", "primary": Color(0.0, 0.2, 1.0), "secondary": Color(0.2, 0.4, 1.0), "swirl": Color(0.5, 0.7, 1.0)},
+	{"name": "Emerald Green", "primary": Color(0.0, 0.9, 0.2), "secondary": Color(0.2, 1.0, 0.4), "swirl": Color(0.5, 1.0, 0.7)},
+	{"name": "Bright Purple", "primary": Color(0.7, 0.0, 1.0), "secondary": Color(0.8, 0.3, 1.0), "swirl": Color(0.9, 0.6, 1.0)},
+	{"name": "Vivid Orange", "primary": Color(1.0, 0.45, 0.0), "secondary": Color(1.0, 0.65, 0.2), "swirl": Color(1.0, 0.8, 0.5)},
+	{"name": "Hot Pink", "primary": Color(1.0, 0.0, 0.5), "secondary": Color(1.0, 0.3, 0.7), "swirl": Color(1.0, 0.6, 0.85)},
+	{"name": "Bright Cyan", "primary": Color(0.0, 0.9, 1.0), "secondary": Color(0.3, 1.0, 1.0), "swirl": Color(0.6, 1.0, 1.0)},
+	{"name": "Sunny Yellow", "primary": Color(1.0, 0.9, 0.0), "secondary": Color(1.0, 1.0, 0.3), "swirl": Color(1.0, 1.0, 0.6)},
 
-	# Pure primary colors
-	{"name": "Blood Red", "primary": Color(0.8, 0.0, 0.0)},
-	{"name": "Deep Blue", "primary": Color(0.0, 0.0, 1.0)},
-	{"name": "Poison Green", "primary": Color(0.6, 1.0, 0.0)},
-	{"name": "Pure Yellow", "primary": Color(1.0, 1.0, 0.0)},
+	# Pure primary colors (maximum saturation)
+	{"name": "Blood Red", "primary": Color(0.8, 0.0, 0.0), "secondary": Color(0.9, 0.1, 0.1), "swirl": Color(1.0, 0.3, 0.3)},
+	{"name": "Deep Blue", "primary": Color(0.0, 0.0, 1.0), "secondary": Color(0.1, 0.1, 1.0), "swirl": Color(0.3, 0.3, 1.0)},
+	{"name": "Poison Green", "primary": Color(0.6, 1.0, 0.0), "secondary": Color(0.75, 1.0, 0.2), "swirl": Color(0.85, 1.0, 0.4)},
+	{"name": "Pure Yellow", "primary": Color(1.0, 1.0, 0.0), "secondary": Color(1.0, 1.0, 0.15), "swirl": Color(1.0, 1.0, 0.4)},
 
-	# Distinct darks
-	{"name": "Midnight Black", "primary": Color(0.05, 0.05, 0.08)},
-	{"name": "Navy Blue", "primary": Color(0.0, 0.0, 0.5)},
-	{"name": "Chocolate Brown", "primary": Color(0.5, 0.25, 0.1)},
+	# Distinct darks (high contrast)
+	{"name": "Midnight Black", "primary": Color(0.05, 0.05, 0.08), "secondary": Color(0.1, 0.1, 0.15), "swirl": Color(0.2, 0.2, 0.25)},
+	{"name": "Navy Blue", "primary": Color(0.0, 0.0, 0.5), "secondary": Color(0.1, 0.1, 0.65), "swirl": Color(0.2, 0.2, 0.8)},
+	{"name": "Chocolate Brown", "primary": Color(0.5, 0.25, 0.1), "secondary": Color(0.65, 0.35, 0.2), "swirl": Color(0.8, 0.5, 0.35)},
 
-	# Unique tones
-	{"name": "Salmon Pink", "primary": Color(1.0, 0.55, 0.45)},
-	{"name": "Jade Green", "primary": Color(0.0, 0.65, 0.5)},
-	{"name": "Lavender", "primary": Color(0.7, 0.5, 1.0)},
-	{"name": "Mint Green", "primary": Color(0.4, 1.0, 0.7)},
+	# Unique tones (distinct pastels and vivids)
+	{"name": "Salmon Pink", "primary": Color(1.0, 0.55, 0.45), "secondary": Color(1.0, 0.7, 0.6), "swirl": Color(1.0, 0.85, 0.8)},
+	{"name": "Jade Green", "primary": Color(0.0, 0.65, 0.5), "secondary": Color(0.2, 0.8, 0.65), "swirl": Color(0.4, 0.95, 0.8)},
+	{"name": "Lavender", "primary": Color(0.7, 0.5, 1.0), "secondary": Color(0.8, 0.65, 1.0), "swirl": Color(0.9, 0.8, 1.0)},
+	{"name": "Mint Green", "primary": Color(0.4, 1.0, 0.7), "secondary": Color(0.55, 1.0, 0.8), "swirl": Color(0.7, 1.0, 0.9)},
 
-	# Special colors
-	{"name": "Deep Black", "primary": Color(0.1, 0.1, 0.15)},
-	{"name": "Pearl", "primary": Color(0.92, 0.9, 0.95)},
-	{"name": "Bright Gold", "primary": Color(1.0, 0.75, 0.0)},
-	{"name": "Chrome Silver", "primary": Color(0.65, 0.7, 0.75)},
+	# Additional special colors
+	{"name": "Deep Black", "primary": Color(0.1, 0.1, 0.15), "secondary": Color(0.2, 0.2, 0.3), "swirl": Color(0.35, 0.35, 0.45)},
+	{"name": "Pearl", "primary": Color(0.92, 0.9, 0.95), "secondary": Color(0.88, 0.88, 0.95), "swirl": Color(0.82, 0.82, 0.9)},  # Pearlescent (not pure white)
+	{"name": "Bright Gold", "primary": Color(1.0, 0.75, 0.0), "secondary": Color(1.0, 0.85, 0.2), "swirl": Color(1.0, 0.95, 0.5)},
+	{"name": "Chrome Silver", "primary": Color(0.65, 0.7, 0.75), "secondary": Color(0.8, 0.85, 0.9), "swirl": Color(0.9, 0.95, 1.0)},
 
 	# Bold unique colors
-	{"name": "Electric Magenta", "primary": Color(1.0, 0.0, 0.8)},
-	{"name": "Electric Lime", "primary": Color(0.5, 1.0, 0.0)},
-	{"name": "Teal", "primary": Color(0.0, 0.7, 0.65)},
-	{"name": "Deep Indigo", "primary": Color(0.2, 0.0, 0.6)},
+	{"name": "Electric Magenta", "primary": Color(1.0, 0.0, 0.8), "secondary": Color(1.0, 0.2, 0.9), "swirl": Color(1.0, 0.5, 1.0)},
+	{"name": "Electric Lime", "primary": Color(0.5, 1.0, 0.0), "secondary": Color(0.7, 1.0, 0.3), "swirl": Color(0.8, 1.0, 0.6)},
+	{"name": "Teal", "primary": Color(0.0, 0.7, 0.65), "secondary": Color(0.2, 0.85, 0.8), "swirl": Color(0.5, 1.0, 0.95)},
+	{"name": "Deep Indigo", "primary": Color(0.2, 0.0, 0.6), "secondary": Color(0.35, 0.2, 0.75), "swirl": Color(0.5, 0.4, 0.9)},
 ]
 
 # Track used color indices to avoid duplicates when possible
 var used_colors: Array = []
 
-# Texture cache so we don't regenerate for the same color
-var _texture_cache: Dictionary = {}
-
-func _generate_marble_texture(primary: Color) -> ImageTexture:
-	"""Generate a marble-like texture so rolling is visible"""
-	var cache_key: int = primary.to_rgba32()
-	if _texture_cache.has(cache_key):
-		return _texture_cache[cache_key]
-
-	var size: int = 256
-	var img: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
-
-	var brightness: float = primary.r * 0.299 + primary.g * 0.587 + primary.b * 0.114
-	var base: Color = primary.lightened(0.12 if brightness < 0.55 else 0.06)
-	var vein: Color = primary.darkened(0.5 if brightness > 0.45 else 0.32)
-	var highlight: Color = primary.lightened(0.2 if brightness < 0.6 else 0.12)
-	var sparkle: Color = primary.lightened(0.3 if brightness < 0.55 else 0.18)
-
-	var noise = FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	noise.frequency = 1.1
-
-	var detail = FastNoiseLite.new()
-	detail.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	detail.frequency = 5.2
-
-	var swirl = FastNoiseLite.new()
-	swirl.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	swirl.frequency = 0.85
-
-	var sparkle_noise = FastNoiseLite.new()
-	sparkle_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	sparkle_noise.frequency = 14.0
-
-	for y in range(size):
-		for x in range(size):
-			var nx: float = float(x) / float(size)
-			var ny: float = float(y) / float(size)
-			var swirl_offset: float = swirl.get_noise_2d(nx * size, ny * size) * 0.45
-			var wave: float = sin((nx + ny + swirl_offset) * TAU * 1.6)
-			var base_noise: float = noise.get_noise_2d(nx * size * 0.9, ny * size * 0.9)
-			var fine_noise: float = detail.get_noise_2d(nx * size * 1.8, ny * size * 1.8) * 0.12
-			var sparkle_mask: float = pow(clamp(sparkle_noise.get_noise_2d(nx * size * 2.5, ny * size * 2.5) * 0.5 + 0.5, 0.0, 1.0), 8.0)
-
-			var marble_value: float = clamp((wave + base_noise) * 0.5 + 0.5 + fine_noise, 0.0, 1.0)
-			var vein_mask: float = pow(clamp(1.0 - abs(marble_value - 0.5) * 2.0, 0.0, 1.0), 2.2)
-			var highlight_mask: float = clamp(detail.get_noise_2d(nx * size * 2.6, ny * size * 2.6) * 0.5 + 0.5, 0.0, 1.0)
-
-			var color: Color = base.lerp(vein, vein_mask)
-			color = color.lerp(highlight, highlight_mask * 0.06)
-			color = color.lerp(sparkle, sparkle_mask * 0.02)
-			img.set_pixel(x, y, color)
-
-	var tex: ImageTexture = ImageTexture.create_from_image(img)
-	_texture_cache[cache_key] = tex
-	return tex
-
-func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
+func create_marble_material(color_index: int = -1) -> ShaderMaterial:
 	"""Create a unique marble material with optional specific color index"""
+	var material = ShaderMaterial.new()
+	material.shader = MARBLE_SHADER
+
+	# Select color scheme
 	var scheme: Dictionary
 	if color_index >= 0 and color_index < COLOR_SCHEMES.size():
 		scheme = COLOR_SCHEMES[color_index]
 	else:
+		# Pick a random unused color, or random if all used
 		var available_colors = []
 		for i in range(COLOR_SCHEMES.size()):
 			if not used_colors.has(i):
 				available_colors.append(i)
 
 		if available_colors.is_empty():
+			# All colors used, pick random
 			color_index = randi() % COLOR_SCHEMES.size()
 		else:
+			# Pick random from available
 			color_index = available_colors[randi() % available_colors.size()]
 
 		scheme = COLOR_SCHEMES[color_index]
 		used_colors.append(color_index)
 
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color.WHITE  # Texture provides the color
-	material.albedo_texture = _generate_marble_texture(scheme.primary)
-	material.metallic = 0.05
-	material.roughness = 0.78
-	material.specular = 0.15
-	material.clearcoat = 0.02
-	material.clearcoat_roughness = 0.7
-	material.rim = 0.08
-	material.rim_tint = 0.2
-	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	# Apply color scheme
+	material.set_shader_parameter("primary_color", scheme.primary)
+	material.set_shader_parameter("secondary_color", scheme.secondary)
+	material.set_shader_parameter("swirl_color", scheme.swirl)
+
+	# Set material properties with slight randomization
+	material.set_shader_parameter("glossiness", randf_range(0.8, 0.95))
+	material.set_shader_parameter("metallic_amount", randf_range(0.2, 0.4))
+	material.set_shader_parameter("transparency", 0.02)  # Fixed low transparency for opaque marbles
+
+	# Randomize pattern properties for uniqueness
+	material.set_shader_parameter("swirl_scale", randf_range(1.5, 2.5))
+	material.set_shader_parameter("swirl_intensity", randf_range(0.5, 0.7))
+	material.set_shader_parameter("bubble_density", randf_range(0.3, 0.5))
+	material.set_shader_parameter("time_speed", randf_range(0.15, 0.25))
+
+	# Special marble lighting - subtle glow to help marbles stand out (reduced from previous bright values)
+	material.set_shader_parameter("glow_strength", randf_range(0.08, 0.15))
+	material.set_shader_parameter("glow_pulse_speed", randf_range(1.0, 1.4))
+	material.set_shader_parameter("glow_pulse_amount", randf_range(0.05, 0.1))
+	material.set_shader_parameter("outer_rim_power", randf_range(2.0, 2.5))
+	material.set_shader_parameter("outer_rim_intensity", randf_range(0.15, 0.25))
+	material.set_shader_parameter("rim_intensity", randf_range(0.12, 0.2))
+
 	return material
 
-func create_marble_material_from_hue(hue: float) -> StandardMaterial3D:
+func create_marble_material_from_hue(hue: float) -> ShaderMaterial:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
-	var primary: Color = Color.from_hsv(hue, 0.85, 0.9)
-	var material = StandardMaterial3D.new()
-	material.albedo_color = Color.WHITE
-	material.albedo_texture = _generate_marble_texture(primary)
-	material.metallic = 0.05
-	material.roughness = 0.78
-	material.specular = 0.15
-	material.clearcoat = 0.02
-	material.clearcoat_roughness = 0.7
-	material.rim = 0.08
-	material.rim_tint = 0.2
+	var material = ShaderMaterial.new()
+	material.shader = MARBLE_SHADER
+
+	# Generate colors from hue
+	var primary = Color.from_hsv(hue, 0.85, 0.9)
+	var secondary = Color.from_hsv(hue, 0.7, 1.0)
+	var swirl = Color.from_hsv(hue, 0.4, 1.0)
+
+	material.set_shader_parameter("primary_color", primary)
+	material.set_shader_parameter("secondary_color", secondary)
+	material.set_shader_parameter("swirl_color", swirl)
+
+	# Set material properties
+	material.set_shader_parameter("glossiness", 0.85)
+	material.set_shader_parameter("metallic_amount", 0.3)
+	material.set_shader_parameter("transparency", 0.02)  # Much less translucent
+	material.set_shader_parameter("swirl_scale", 2.0)
+	material.set_shader_parameter("swirl_intensity", 0.6)
+	material.set_shader_parameter("bubble_density", 0.4)
+	material.set_shader_parameter("time_speed", 0.2)
+
+	# Special marble lighting - subtle glow to help marbles stand out (reduced from previous bright values)
+	material.set_shader_parameter("glow_strength", 0.12)
+	material.set_shader_parameter("glow_pulse_speed", 1.2)
+	material.set_shader_parameter("glow_pulse_amount", 0.08)
+	material.set_shader_parameter("outer_rim_power", 2.2)
+	material.set_shader_parameter("outer_rim_intensity", 0.2)
+	material.set_shader_parameter("rim_intensity", 0.15)
+
 	return material
 
-func get_random_marble_material() -> StandardMaterial3D:
+func get_random_marble_material() -> ShaderMaterial:
 	"""Get a completely random marble material"""
 	return create_marble_material(-1)
 
