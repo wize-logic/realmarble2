@@ -161,8 +161,8 @@ void fragment() {
 	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.2;
 	final_color = mix(final_color, bubble_tint, bubble * 0.35);
 
-	// Calculate view direction
-	vec3 view_dir = normalize(VERTEX);
+	// Calculate view direction from fragment to camera to avoid uneven lighting
+	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);
 
 	// Apply subsurface scattering simulation
 	final_color = sss_color(final_color, view_dir, NORMAL, sss_strength);
