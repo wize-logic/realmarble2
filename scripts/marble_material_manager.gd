@@ -128,11 +128,13 @@ func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.WHITE  # Texture provides the color
 	material.albedo_texture = _generate_marble_texture(scheme.primary)
-	material.metallic = 0.25
-	material.roughness = 0.04
-	material.specular = 0.85
-	material.clearcoat = 0.6
-	material.clearcoat_roughness = 0.08
+	material.metallic = 0.3
+	material.roughness = 0.12
+	material.specular = 0.7
+	material.clearcoat = 0.2
+	material.clearcoat_roughness = 0.18
+	material.rim = 0.45
+	material.rim_tint = 0.6
 	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
 	return material
 
@@ -142,11 +144,13 @@ func create_marble_material_from_hue(hue: float) -> StandardMaterial3D:
 	var material = StandardMaterial3D.new()
 	material.albedo_color = Color.WHITE
 	material.albedo_texture = _generate_marble_texture(primary)
-	material.metallic = 0.25
-	material.roughness = 0.04
-	material.specular = 0.85
-	material.clearcoat = 0.6
-	material.clearcoat_roughness = 0.08
+	material.metallic = 0.3
+	material.roughness = 0.12
+	material.specular = 0.7
+	material.clearcoat = 0.2
+	material.clearcoat_roughness = 0.18
+	material.rim = 0.45
+	material.rim_tint = 0.6
 	return material
 
 func get_random_marble_material() -> StandardMaterial3D:
