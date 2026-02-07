@@ -21,7 +21,7 @@ The relay server is located in the `server/` directory. See [Relay Server Setup]
 2. Click **MULTIPLAYER**
 3. Click **QUICK PLAY**
 4. A game is created with 3 bots automatically added
-5. Configure room settings (level size, match duration, video walls)
+5. Configure room settings (level size, match duration)
 6. Click **START GAME** when ready
 
 ### Hosting a Game
@@ -64,9 +64,6 @@ Controls the arena dimensions and complexity:
 | 3 | 5 minutes (default) |
 | 4 | 10 minutes |
 | 5 | 15 minutes |
-
-### Video Walls
-Toggle to enable/disable video panels on the arena perimeter walls for visual atmosphere.
 
 ### Level Synchronization
 When the game starts, the host generates a random seed that is shared with all players. This ensures everyone generates the exact same level layout despite using procedural generation.
