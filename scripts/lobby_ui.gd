@@ -31,7 +31,6 @@ var size_slider: HSlider = null
 var size_value_label: Label = null
 var time_slider: HSlider = null
 var time_value_label: Label = null
-var video_walls_checkbox: CheckBox = null
 var settings_display_label: Label = null  # For clients to see current settings
 
 func _ready() -> void:
@@ -437,20 +436,6 @@ func _create_room_settings_ui() -> void:
 	time_value_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	time_section.add_child(time_value_label)
 
-	# === VIDEO WALLS ===
-	var video_section = HBoxContainer.new()
-	video_section.add_theme_constant_override("separation", 10)
-	video_section.alignment = BoxContainer.ALIGNMENT_CENTER
-	room_settings_container.add_child(video_section)
-
-	video_walls_checkbox = CheckBox.new()
-	video_walls_checkbox.text = "Video Walls"
-	video_walls_checkbox.button_pressed = false
-	video_walls_checkbox.add_theme_font_size_override("font_size", 14)
-	video_walls_checkbox.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-	video_walls_checkbox.toggled.connect(_on_video_walls_toggled)
-	video_section.add_child(video_walls_checkbox)
-
 	# Add separator after settings
 	var separator2 = HSeparator.new()
 	room_settings_container.add_child(separator2)
@@ -492,14 +477,6 @@ func _on_time_slider_changed(value: float) -> void:
 
 	multiplayer_manager.set_room_setting("match_time", time_values[index])
 
-func _on_video_walls_toggled(enabled: bool) -> void:
-	"""Handle video walls checkbox toggle"""
-	if not multiplayer_manager or not multiplayer_manager.is_host():
-		return
-
-	multiplayer_manager.set_room_setting("video_walls", enabled)
-
-
 func _on_room_settings_changed(settings: Dictionary) -> void:
 	"""Called when room settings are updated (host or received from host)"""
 	_update_settings_display(settings)
@@ -508,7 +485,6 @@ func _update_settings_display(settings: Dictionary) -> void:
 	"""Update the UI to show current room settings"""
 	var level_size: int = settings.get("level_size", 2)
 	var match_time: float = settings.get("match_time", 300.0)
-	var video_walls: bool = settings.get("video_walls", false)
 
 	# Update sliders/checkbox if we're host
 	if multiplayer_manager and multiplayer_manager.is_host():
@@ -518,9 +494,6 @@ func _update_settings_display(settings: Dictionary) -> void:
 			var time_index: int = _time_to_slider_index(match_time)
 			if int(time_slider.value) != time_index:
 				time_slider.value = time_index
-		if video_walls_checkbox and video_walls_checkbox.button_pressed != video_walls:
-			video_walls_checkbox.button_pressed = video_walls
-
 	# Update value labels
 	var size_names: Array[String] = ["", "Small", "Medium", "Large", "Huge"]
 	var size_display: String = size_names[level_size] if level_size >= 0 and level_size < size_names.size() else "Medium"
@@ -534,9 +507,8 @@ func _update_settings_display(settings: Dictionary) -> void:
 
 	# Update client display label
 	if settings_display_label:
-		var walls_str: String = "Video" if video_walls else "Off"
 		var time_display: String = time_labels[time_index] if time_index >= 0 and time_index < time_labels.size() else "5 Minutes"
-		settings_display_label.text = "Settings: %s map, %s, Walls: %s" % [size_display, time_display, walls_str]
+		settings_display_label.text = "Settings: %s map, %s" % [size_display, time_display]
 
 func _time_to_slider_index(time: float) -> int:
 	"""Convert time in seconds to slider index (1-5)"""
