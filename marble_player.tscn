@@ -1,11 +1,10 @@
-[gd_scene load_steps=20 format=3 uid="uid://b2qhxdrnviyqf"]
+[gd_scene load_steps=19 format=3 uid="uid://b2qhxdrnviyqf"]
 
 [ext_resource type="Script" uid="uid://c2vghseeow3se" path="res://scripts/player.gd" id="1_8tdgl"]
 [ext_resource type="AudioStream" uid="uid://b5am345wtwiex" path="res://audio/jump.mp3" id="4_5vlbe"]
 [ext_resource type="Texture2D" uid="uid://duu4nryr7idps" path="res://textures/kenney_particle_pack/circle_05.png" id="4_ssmal"]
 [ext_resource type="AudioStream" uid="uid://bjj2pdnm8dq1t" path="res://audio/revup.mp3" id="5_75ym2"]
 [ext_resource type="Script" uid="uid://c4yxabqyhk13e" path="res://scripts/ui/crosshair.gd" id="5_fnci2"]
-[ext_resource type="Script" uid="uid://b0y2hkdshodfi" path="res://scripts/camera_occlusion.gd" id="6_occlusion"]
 [ext_resource type="AudioStream" uid="uid://dk8128oo0y61t" path="res://audio/bouncehard2.wav" id="6_ogoxa"]
 [ext_resource type="AudioStream" uid="uid://caeiuciqkqfxy" path="res://audio/SonicBOUNCE.wav" id="7_qgc3e"]
 [ext_resource type="AudioStream" uid="uid://0hs50eoh4l26" path="res://audio/017.Synth_MLT_se_ch_sn_Spindash Charge with Ancient Light Loop.wav" id="8_ogoxa"]
@@ -104,11 +103,6 @@ stream = ExtResource("5_75ym2")
 
 [node name="LandSound" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("6_ogoxa")
-
-[node name="CameraOcclusion" type="Node3D" parent="."]
-script = ExtResource("6_occlusion")
-marble_mesh = NodePath("../MeshInstance3D")
-player = NodePath("..")
 
 [node name="BounceSound" type="AudioStreamPlayer3D" parent="."]
 stream = ExtResource("7_qgc3e")
