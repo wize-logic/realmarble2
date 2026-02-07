@@ -164,6 +164,14 @@ var cached_ability_positions: Dictionary = {}  # NEW: Cache ability positions
 var cached_platforms: Array[Dictionary] = []
 var cached_space_state: PhysicsDirectSpaceState3D = null
 var last_seen_targets: Dictionary = {}
+# Cached raycast query object — avoids allocating a new PhysicsRayQueryParameters3D
+# every time can_see_target() is called (7 bots × ~7 calls each = ~49 allocs/cycle).
+var _vision_query: PhysicsRayQueryParameters3D = null
+# Per-target vision cache: target_node_id → {visible: bool, time: float}
+# Prevents redundant raycasts when the same target is checked by multiple code paths
+# within the same cache window.
+var _vision_cache: Dictionary = {}
+const VISION_CACHE_TTL: float = 0.25  # Cache visibility results for 250 ms
 
 # ============================================================================
 # SEEDED RNG FOR MULTIPLAYER SYNC
@@ -1033,25 +1041,41 @@ func bot_bounce() -> void:
 # ============================================================================
 
 func can_see_target(target: Node) -> bool:
-	"""Check if bot has line of sight to target"""
+	"""Check if bot has line of sight to target (with per-target result caching)"""
 	if not bot or not target or not is_instance_valid(target) or not cached_space_state:
 		return false
 
+	# Check vision cache first — avoids redundant raycasts when the same target
+	# is queried by find_target, update_state, and find_nearest_* in the same cycle.
+	var target_id: int = target.get_instance_id()
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if _vision_cache.has(target_id):
+		var entry: Dictionary = _vision_cache[target_id]
+		if now - entry.time < VISION_CACHE_TTL:
+			return entry.visible
+
 	var bot_eye: Vector3 = bot.global_position + Vector3(0, BOT_EYE_HEIGHT, 0)
 	var target_pos: Vector3 = target.global_position
-	if "global_position" in target:
-		target_pos = target.global_position
 
 	# Add eye height to target if it's a player
 	if target.is_in_group("players"):
 		target_pos += Vector3(0, BOT_EYE_HEIGHT, 0)
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(bot_eye, target_pos)
-	query.exclude = [bot]
-	query.collision_mask = 1  # World layer only
+	# Reuse a single query object to avoid per-call allocation
+	if not _vision_query:
+		_vision_query = PhysicsRayQueryParameters3D.new()
+		_vision_query.collision_mask = 1  # World layer only
+	_vision_query.from = bot_eye
+	_vision_query.to = target_pos
+	_vision_query.exclude = [bot]
 
-	var result: Dictionary = cached_space_state.intersect_ray(query)
-	return not result  # No obstruction = can see
+	var result: Dictionary = cached_space_state.intersect_ray(_vision_query)
+	var visible: bool = result.is_empty()
+
+	# Store in cache
+	_vision_cache[target_id] = { "visible": visible, "time": now }
+
+	return visible
 
 # ============================================================================
 # BOT REPULSION (NEW)

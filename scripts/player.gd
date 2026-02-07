@@ -736,25 +736,22 @@ func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 
 func _process(delta: float) -> void:
 	# CRITICAL HTML5 FIX: Position camera arm FIRST, before ANY other code
-	# This MUST run every frame for the camera to follow the player
-	if camera_arm and is_instance_valid(camera_arm):
-		camera_arm.global_position = global_position
-	else:
-		if not camera_arm:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name, false, get_entity_id())
+	# This MUST run every frame for the camera to follow the player.
+	# Only the local player needs camera positioning — skip for bots.
+	if not is_bot():
+		if camera_arm and is_instance_valid(camera_arm):
+			camera_arm.global_position = global_position
+		else:
+			if not camera_arm:
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name, false, get_entity_id())
 
-	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
-	# Bots must NEVER activate their cameras or they'll hijack the player camera
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		# Skip camera activation for bots and non-authority players
-		pass
-	elif camera and is_instance_valid(camera):
-		if not camera.current:
-			camera.current = true
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
-	else:
-		if not camera:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera is NULL in _process!" % name, false, get_entity_id())
+		# CRITICAL FIX: Only force camera for local player with authority (not bots!)
+		if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+			pass
+		elif camera and is_instance_valid(camera):
+			if not camera.current:
+				camera.current = true
+				DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
 
 	# Handle last attacker timeout
 	if last_attacker_id != -1:
@@ -788,6 +785,13 @@ func _process(delta: float) -> void:
 	# Early return for non-authority (bots)
 	# In practice mode (no multiplayer peer), we're always the authority
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+		return
+
+	# HTML5 PERF FIX: Bots don't need camera processing, raycasts, or rail targeting.
+	# In practice mode (no multiplayer peer) every entity is "authority", so without
+	# this guard each of the 7 bots runs the full _process below — that's 7 extra
+	# camera-occlusion raycasts + 7 rail-targeting passes per frame.
+	if is_bot():
 		return
 
 	if not camera or not camera_arm:
@@ -867,6 +871,11 @@ func _process(delta: float) -> void:
 func _physics_process_marble_roll(delta: float) -> void:
 	"""Update marble rolling animation based on velocity"""
 	if not marble_mesh:
+		return
+
+	# HTML5 PERF FIX: Skip marble roll on web for bots every other physics frame.
+	# 7 bots × trig per frame is noticeable on single-threaded WebGL2.
+	if _is_web and is_bot() and Engine.get_physics_frames() % 2 != 0:
 		return
 
 	# Use normal rolling for both regular movement AND spin dash
@@ -1058,7 +1067,8 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	# CRITICAL HTML5 FIX: Also position camera arm in physics_process as fallback
-	if camera_arm and is_instance_valid(camera_arm):
+	# Only needed for the local player — bots don't use their cameras
+	if not is_bot() and camera_arm and is_instance_valid(camera_arm):
 		camera_arm.global_position = global_position
 
 	# Update marble rolling for ALL marbles (players and bots)
@@ -1113,6 +1123,11 @@ func _physics_process(delta: float) -> void:
 
 			# Apply gentle force to maintain direction (10% of normal roll force)
 			apply_central_force(reticle_direction * current_roll_force * 0.1)
+
+	# HTML5 PERF FIX: Bots get their movement from bot_ai.gd, not from keyboard input.
+	# Skip spin-dash charging, input reading, and movement code for bots.
+	if is_bot():
+		return
 
 	# Charge spin dash if holding button
 	if is_charging_spin:
@@ -2094,7 +2109,7 @@ func update_rail_targeting() -> void:
 			continue
 
 		# Sample points along the rail and find closest to ray
-		var sample_count: int = 10  # Reduced from 30 - sufficient for UI targeting reticle
+		var sample_count: int = 5 if _is_web else 10  # Reduced on web for perf
 		for i in range(sample_count):
 			var t: float = float(i) / float(sample_count - 1)
 			var offset: float = t * rail_curve.get_baked_length()

@@ -79,8 +79,10 @@ func refresh_jump_pad_cache() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	# Use inherited cached_world to avoid per-refresh tree traversal
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
 	# Find jump pads in scene
@@ -237,8 +239,10 @@ func refresh_teleporter_cache() -> void:
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
+	# Use inherited cached_world to avoid per-refresh tree traversal
+	if not cached_world or not is_instance_valid(cached_world):
+		cached_world = get_tree().get_root().get_node_or_null("World")
+	if not cached_world:
 		return
 
 	# Find teleporters in scene
