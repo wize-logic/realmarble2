@@ -70,6 +70,24 @@ var ult_check_timer: float = 0.0  # Timer for checking ult availability
 var terrain_stuck_check_timer: float = 0.0  # Timer for throttling terrain stuck checks
 
 # ============================================================================
+# HTML5 PERFORMANCE SCALING
+# ============================================================================
+
+var interval_scale: float = 1.0
+var cache_refresh_interval: float = CACHE_REFRESH_INTERVAL
+var player_avoidance_check_interval: float = PLAYER_AVOIDANCE_CHECK_INTERVAL
+var edge_check_interval: float = EDGE_CHECK_INTERVAL
+var platform_check_interval: float = PLATFORM_CHECK_INTERVAL
+var vision_update_interval: float = VISION_UPDATE_INTERVAL
+var space_state_cache_refresh: float = SPACE_STATE_CACHE_REFRESH
+var bot_repulsion_interval: float = BOT_REPULSION_INTERVAL
+var ult_check_interval: float = ULT_CHECK_INTERVAL
+var terrain_stuck_check_interval: float = TERRAIN_STUCK_CHECK_INTERVAL
+var player_search_interval: float = 0.8
+var orb_check_interval: float = 1.0
+var ability_check_interval: float = 0.5
+
+# ============================================================================
 # CONSTANTS
 # ============================================================================
 
@@ -200,6 +218,24 @@ func _ready() -> void:
 		push_error("ERROR: BotAI could not find parent bot!")
 		return
 
+	# HTML5 performance scaling (reduce expensive checks/raycasts)
+	if OS.has_feature("web"):
+		interval_scale = 1.75
+
+	cache_refresh_interval = CACHE_REFRESH_INTERVAL * interval_scale
+	player_avoidance_check_interval = PLAYER_AVOIDANCE_CHECK_INTERVAL * interval_scale
+	edge_check_interval = EDGE_CHECK_INTERVAL * interval_scale
+	platform_check_interval = PLATFORM_CHECK_INTERVAL * interval_scale
+	vision_update_interval = VISION_UPDATE_INTERVAL * interval_scale
+	space_state_cache_refresh = SPACE_STATE_CACHE_REFRESH * interval_scale
+	bot_repulsion_interval = BOT_REPULSION_INTERVAL * interval_scale
+	ult_check_interval = ULT_CHECK_INTERVAL * interval_scale
+	terrain_stuck_check_interval = TERRAIN_STUCK_CHECK_INTERVAL * interval_scale
+	player_search_interval = 0.8 * interval_scale
+	orb_check_interval = 1.0 * interval_scale
+	ability_check_interval = 0.5 * interval_scale
+	stuck_check_interval *= interval_scale
+
 	# CRITICAL MULTIPLAYER FIX: Seed RNG for deterministic behavior across all clients
 	# Uses level_seed + bot entity ID to ensure each bot has unique but consistent behavior
 	_initialize_seeded_rng()
@@ -215,16 +251,16 @@ func _ready() -> void:
 	initialize_personality()
 
 	# Stagger timer initialization to prevent simultaneous processing (using seeded RNG)
-	cache_refresh_timer = rng.randf_range(0.0, CACHE_REFRESH_INTERVAL)
-	platform_check_timer = rng.randf_range(0.0, PLATFORM_CHECK_INTERVAL)
-	orb_check_timer = rng.randf_range(0.0, 1.0)
-	player_search_timer = rng.randf_range(0.0, 0.5)
-	vision_update_timer = rng.randf_range(0.0, VISION_UPDATE_INTERVAL)
-	edge_check_timer = rng.randf_range(0.0, EDGE_CHECK_INTERVAL)
-	player_avoidance_timer = rng.randf_range(0.0, PLAYER_AVOIDANCE_CHECK_INTERVAL)
-	ability_check_timer = rng.randf_range(0.0, 1.0)  # NEW
-	bot_repulsion_timer = rng.randf_range(0.0, BOT_REPULSION_INTERVAL)  # NEW
-	ult_check_timer = rng.randf_range(0.0, ULT_CHECK_INTERVAL)  # Stagger ult checks
+	cache_refresh_timer = rng.randf_range(0.0, cache_refresh_interval)
+	platform_check_timer = rng.randf_range(0.0, platform_check_interval)
+	orb_check_timer = rng.randf_range(0.0, orb_check_interval)
+	player_search_timer = rng.randf_range(0.0, player_search_interval)
+	vision_update_timer = rng.randf_range(0.0, vision_update_interval)
+	edge_check_timer = rng.randf_range(0.0, edge_check_interval)
+	player_avoidance_timer = rng.randf_range(0.0, player_avoidance_check_interval)
+	ability_check_timer = rng.randf_range(0.0, ability_check_interval)  # NEW
+	bot_repulsion_timer = rng.randf_range(0.0, bot_repulsion_interval)  # NEW
+	ult_check_timer = rng.randf_range(0.0, ult_check_interval)  # Stagger ult checks
 
 	# Cache the World node (refreshed if invalidated)
 	cached_world = get_tree().get_root().get_node_or_null("World")
@@ -383,12 +419,12 @@ func _physics_process(delta: float) -> void:
 	if space_state_cache_timer <= 0.0:
 		if bot and bot is RigidBody3D:
 			cached_space_state = bot.get_world_3d().direct_space_state
-		space_state_cache_timer = SPACE_STATE_CACHE_REFRESH
+		space_state_cache_timer = space_state_cache_refresh
 
 	# Refresh cached groups
 	if cache_refresh_timer <= 0.0:
 		refresh_cached_groups()
-		cache_refresh_timer = CACHE_REFRESH_INTERVAL
+		cache_refresh_timer = cache_refresh_interval
 
 	# Check if stuck on obstacles
 	if stuck_timer >= stuck_check_interval:
@@ -398,7 +434,7 @@ func _physics_process(delta: float) -> void:
 	# Check for stuck under terrain (throttled - was 63 raycasts/frame unthrottled)
 	if terrain_stuck_check_timer <= 0.0:
 		handle_stuck_under_terrain(delta)
-		terrain_stuck_check_timer = TERRAIN_STUCK_CHECK_INTERVAL
+		terrain_stuck_check_timer = terrain_stuck_check_interval
 
 	# Handle unstuck behavior (overrides normal AI)
 	if is_stuck and unstuck_timer > 0.0:
@@ -411,37 +447,37 @@ func _physics_process(delta: float) -> void:
 	# NEW: Bot-bot repulsion to prevent clumping
 	if bot_repulsion_timer <= 0.0:
 		apply_bot_repulsion()
-		bot_repulsion_timer = BOT_REPULSION_INTERVAL
+		bot_repulsion_timer = bot_repulsion_interval
 
 	# Find nearest player
 	if not target_player or not is_instance_valid(target_player) or player_search_timer <= 0.0:
 		find_target()
-		player_search_timer = 0.8
+		player_search_timer = player_search_interval
 
 	# Check for orbs periodically
 	if orb_check_timer <= 0.0:
 		find_nearest_orb()
-		orb_check_timer = 1.0
+		orb_check_timer = orb_check_interval
 
 	# NEW: Check for abilities periodically
 	if ability_check_timer <= 0.0:
 		find_nearest_ability()
-		ability_check_timer = 0.5  # Check abilities twice per second
+		ability_check_timer = ability_check_interval
 
 	# Check for ult usage opportunity
 	if ult_check_timer <= 0.0:
 		try_use_ult()
-		ult_check_timer = ULT_CHECK_INTERVAL
+		ult_check_timer = ult_check_interval
 
 	# Check for platforms
 	if platform_check_timer <= 0.0:
 		find_best_platform()
 		if state == "ATTACK" or state == "CHASE":
-			platform_check_timer = PLATFORM_CHECK_INTERVAL * 2.0
+			platform_check_timer = platform_check_interval * 2.0
 		elif state == "RETREAT":
-			platform_check_timer = PLATFORM_CHECK_INTERVAL * 0.5
+			platform_check_timer = platform_check_interval * 0.5
 		else:
-			platform_check_timer = PLATFORM_CHECK_INTERVAL
+			platform_check_timer = platform_check_interval
 
 	# Arena-specific navigation (rails, jump pads, teleporters)
 	consider_arena_specific_navigation()
@@ -557,6 +593,11 @@ func refresh_cached_groups() -> void:
 	for ability in cached_abilities:
 		if is_instance_valid(ability) and "global_position" in ability:
 			cached_ability_positions[ability] = ability.global_position
+
+	# Clean up visibility cache entries for freed targets
+	for target in last_seen_targets.keys():
+		if not is_instance_valid(target):
+			last_seen_targets.erase(target)
 
 	# Cache platforms
 	refresh_platform_cache()
@@ -1032,6 +1073,14 @@ func can_see_target(target: Node) -> bool:
 	if not bot or not target or not is_instance_valid(target) or not cached_space_state:
 		return false
 
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if last_seen_targets.has(target):
+		var cached: Dictionary = last_seen_targets[target]
+		if cached.has("time") and cached.has("visible"):
+			var elapsed: float = now - cached.time
+			if elapsed < vision_update_interval:
+				return cached.visible
+
 	var bot_eye: Vector3 = bot.global_position + Vector3(0, BOT_EYE_HEIGHT, 0)
 	var target_pos: Vector3 = target.global_position
 	if "global_position" in target:
@@ -1046,7 +1095,12 @@ func can_see_target(target: Node) -> bool:
 	query.collision_mask = 1  # World layer only
 
 	var result: Dictionary = cached_space_state.intersect_ray(query)
-	return not result  # No obstruction = can see
+	var visible: bool = result.is_empty()
+	last_seen_targets[target] = {
+		"time": now,
+		"visible": visible
+	}
+	return visible  # No obstruction = can see
 
 # ============================================================================
 # BOT REPULSION (NEW)

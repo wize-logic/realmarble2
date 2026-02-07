@@ -11,6 +11,7 @@ extends "res://scripts/bot_ai.gd"
 var cached_jump_pads: Array[Node] = []
 var target_jump_pad: Node = null
 var jump_pad_check_timer: float = 0.0
+var jump_pad_check_interval: float = JUMP_PAD_CHECK_INTERVAL
 
 const JUMP_PAD_CHECK_INTERVAL: float = 2.5
 const MAX_CACHED_JUMP_PADS: int = 20
@@ -24,6 +25,7 @@ var cached_teleporters: Array[Node] = []
 var target_teleporter: Node = null
 var teleporter_check_timer: float = 0.0
 var teleporter_cooldown: float = 0.0
+var teleporter_check_interval: float = TELEPORTER_CHECK_INTERVAL
 
 const TELEPORTER_CHECK_INTERVAL: float = 3.0
 const MAX_CACHED_TELEPORTERS: int = 10
@@ -38,8 +40,10 @@ func get_ai_type() -> String:
 
 func _ready() -> void:
 	super._ready()
-	jump_pad_check_timer = randf_range(0.0, JUMP_PAD_CHECK_INTERVAL)
-	teleporter_check_timer = randf_range(0.0, TELEPORTER_CHECK_INTERVAL)
+	jump_pad_check_interval = JUMP_PAD_CHECK_INTERVAL * interval_scale
+	teleporter_check_interval = TELEPORTER_CHECK_INTERVAL * interval_scale
+	jump_pad_check_timer = rng.randf_range(0.0, jump_pad_check_interval)
+	teleporter_check_timer = rng.randf_range(0.0, teleporter_check_interval)
 
 func update_timers(delta: float) -> void:
 	super.update_timers(delta)
@@ -57,12 +61,12 @@ func consider_arena_specific_navigation() -> void:
 	# Check for jump pads periodically
 	if jump_pad_check_timer <= 0.0:
 		consider_jump_pad_usage()
-		jump_pad_check_timer = JUMP_PAD_CHECK_INTERVAL
+		jump_pad_check_timer = jump_pad_check_interval
 
 	# Check for teleporters periodically (if not on cooldown)
 	if teleporter_check_timer <= 0.0 and teleporter_cooldown <= 0.0:
 		consider_teleporter_usage()
-		teleporter_check_timer = TELEPORTER_CHECK_INTERVAL
+		teleporter_check_timer = teleporter_check_interval
 
 func handle_arena_specific_state_updates() -> void:
 	"""No special state updates needed for Type B"""
