@@ -34,6 +34,8 @@ uniform float outer_rim_intensity : hint_range(0.0, 1.0) = 0.2;
 // Performance quality: 0=Low (best FPS), 1=Medium, 2=High
 uniform int quality_level : hint_range(0, 2) = 1;
 
+varying vec3 world_pos;
+
 // Simple hash function
 float hash(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
@@ -143,10 +145,11 @@ vec3 sss_color(vec3 base_color, vec3 view_dir, vec3 normal, float strength) {
 	return mix(base_color, base_color * warm_tint * 1.3, sss_factor * strength);
 }
 
-void fragment() {
-	// Get world position for consistent patterns
-	vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
 
+void fragment() {
 	// Create marble swirl pattern
 	float swirl = marble_pattern(world_pos, TIME);
 
