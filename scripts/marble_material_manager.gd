@@ -2,6 +2,7 @@ extends Node
 
 ## Marble Material Manager
 ## Creates distinct colored marble materials for each player using StandardMaterial3D
+## Generates a stripe texture so rolling is visible
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
@@ -48,6 +49,41 @@ const COLOR_SCHEMES = [
 # Track used color indices to avoid duplicates when possible
 var used_colors: Array = []
 
+# Texture cache so we don't regenerate for the same color
+var _texture_cache: Dictionary = {}
+
+func _generate_stripe_texture(primary: Color) -> ImageTexture:
+	"""Generate a simple stripe texture so rolling is visible"""
+	var cache_key: int = primary.to_rgba32()
+	if _texture_cache.has(cache_key):
+		return _texture_cache[cache_key]
+
+	var size: int = 64
+	var img: Image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+
+	# Derive a contrasting stripe color from the primary
+	var stripe: Color
+	var brightness: float = primary.r * 0.299 + primary.g * 0.587 + primary.b * 0.114
+	if brightness > 0.5:
+		# Dark stripe on light marble
+		stripe = primary.darkened(0.35)
+	else:
+		# Light stripe on dark marble
+		stripe = primary.lightened(0.35)
+
+	# Paint horizontal stripes (4 bands visible on the sphere)
+	var band_count: int = 4
+	var band_height: int = size / (band_count * 2)
+	for y in range(size):
+		var in_stripe: bool = (y / band_height) % 2 == 1
+		var color: Color = stripe if in_stripe else primary
+		for x in range(size):
+			img.set_pixel(x, y, color)
+
+	var tex: ImageTexture = ImageTexture.create_from_image(img)
+	_texture_cache[cache_key] = tex
+	return tex
+
 func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
 	"""Create a unique marble material with optional specific color index"""
 	var scheme: Dictionary
@@ -68,7 +104,8 @@ func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
 		used_colors.append(color_index)
 
 	var material = StandardMaterial3D.new()
-	material.albedo_color = scheme.primary
+	material.albedo_color = Color.WHITE  # Texture provides the color
+	material.albedo_texture = _generate_stripe_texture(scheme.primary)
 	material.metallic = 0.3
 	material.roughness = 0.15
 	material.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
@@ -76,8 +113,10 @@ func create_marble_material(color_index: int = -1) -> StandardMaterial3D:
 
 func create_marble_material_from_hue(hue: float) -> StandardMaterial3D:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
+	var primary: Color = Color.from_hsv(hue, 0.85, 0.9)
 	var material = StandardMaterial3D.new()
-	material.albedo_color = Color.from_hsv(hue, 0.85, 0.9)
+	material.albedo_color = Color.WHITE
+	material.albedo_texture = _generate_stripe_texture(primary)
 	material.metallic = 0.3
 	material.roughness = 0.15
 	return material

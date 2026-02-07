@@ -2418,12 +2418,22 @@ func apply_marble_material() -> void:
 	marble_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 	# Update aura light color to match marble
-	if aura_light and material:
-		var albedo: Color = material.albedo_color
-		var h: float = albedo.h
-		var s: float = minf(albedo.s * 1.2, 1.0)
-		var v: float = minf(albedo.v * 1.3, 1.0)
-		aura_light.light_color = Color.from_hsv(h, s, v)
+	# Look up the primary color from the color scheme (albedo_color is WHITE since texture provides color)
+	if aura_light:
+		var scheme_index: int = -1
+		if custom_color_index >= 0:
+			scheme_index = custom_color_index
+		elif name.is_valid_int():
+			scheme_index = int(name) % marble_material_manager.get_color_scheme_count()
+		elif str(multiplayer.get_unique_id()) != "0":
+			scheme_index = multiplayer.get_unique_id() % marble_material_manager.get_color_scheme_count()
+
+		if scheme_index >= 0 and scheme_index < marble_material_manager.COLOR_SCHEMES.size():
+			var primary: Color = marble_material_manager.COLOR_SCHEMES[scheme_index].primary
+			var h: float = primary.h
+			var s: float = minf(primary.s * 1.2, 1.0)
+			var v: float = minf(primary.v * 1.3, 1.0)
+			aura_light.light_color = Color.from_hsv(h, s, v)
 
 	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Applied marble material to player: %s" % name, false, get_entity_id())
 
