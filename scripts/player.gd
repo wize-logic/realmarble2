@@ -370,8 +370,8 @@ func _ready() -> void:
 
 		# Configure death particles - explosive burst
 		death_particles.emitting = false
-		death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
-		death_particles.lifetime = 2.5
+		death_particles.amount = 20 if _is_web else 40
+		death_particles.lifetime = 1.5
 		death_particles.one_shot = true
 		death_particles.explosiveness = 1.0
 		death_particles.randomness = 0.4
@@ -427,8 +427,8 @@ func _ready() -> void:
 
 		# Configure collection particles - upward blue aura
 		collection_particles.emitting = false
-		collection_particles.amount = 80  # Moderate amount for smooth aura
-		collection_particles.lifetime = 1.5  # Duration of effect
+		collection_particles.amount = 15
+		collection_particles.lifetime = 1.0
 		collection_particles.one_shot = true
 		collection_particles.explosiveness = 0.2  # Slightly delayed emission for flowing effect
 		collection_particles.randomness = 0.3
@@ -581,7 +581,7 @@ func _ready() -> void:
 		# Configure grind particles - sparks flying backward
 		grind_particles.emitting = false
 		# HTML5 optimization: Reduce particle count for better performance in browsers
-		grind_particles.amount = 8 if OS.has_feature("web") else 30
+		grind_particles.amount = 5 if OS.has_feature("web") else 10
 		grind_particles.lifetime = 0.6
 		grind_particles.one_shot = false  # Continuous emission while grinding
 		grind_particles.explosiveness = 0.1
@@ -2357,7 +2357,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.color_ramp = jump_pad_gradient
 	death_particles.initial_velocity_min = 15.0  # Faster burst
 	death_particles.initial_velocity_max = 25.0
-	death_particles.amount = 60 if _is_web else 150  # Reduced on web for performance
+	death_particles.amount = 15 if _is_web else 30
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2381,7 +2381,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.color_ramp = teleporter_gradient
 	death_particles.initial_velocity_min = 12.0  # Swirling motion
 	death_particles.initial_velocity_max = 20.0
-	death_particles.amount = 80 if _is_web else 200  # Reduced on web for performance
+	death_particles.amount = 15 if _is_web else 30
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position
@@ -2396,7 +2396,7 @@ func apply_marble_material() -> void:
 		return
 
 	# Generate unique material based on player ID or custom selection
-	var material: ShaderMaterial
+	var material: StandardMaterial3D
 
 	# Check if a custom color was set from the customize panel
 	if custom_color_index >= 0:
@@ -2406,11 +2406,9 @@ func apply_marble_material() -> void:
 		var player_id = int(name)
 		material = marble_material_manager.create_marble_material(player_id % marble_material_manager.get_color_scheme_count())
 	elif str(multiplayer.get_unique_id()) != "0":
-		# Use multiplayer ID for consistent color across sessions
 		var peer_id = multiplayer.get_unique_id()
 		material = marble_material_manager.create_marble_material(peer_id % marble_material_manager.get_color_scheme_count())
 	else:
-		# Fallback to random material
 		material = marble_material_manager.get_random_marble_material()
 
 	# Apply the material
@@ -2419,20 +2417,13 @@ func apply_marble_material() -> void:
 	# Ensure shadow casting is enabled for proper lighting
 	marble_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
-	# Update aura light color to match marble - enhanced for visibility
+	# Update aura light color to match marble
 	if aura_light and material:
-		var primary_color = material.get_shader_parameter("primary_color")
-		var secondary_color = material.get_shader_parameter("secondary_color")
-		if primary_color:
-			# Blend primary and secondary for a more vibrant glow
-			var glow_color: Color = primary_color
-			if secondary_color:
-				glow_color = primary_color.lerp(secondary_color, 0.3)
-			# Boost saturation and brightness for visibility
-			var h: float = glow_color.h
-			var s: float = minf(glow_color.s * 1.2, 1.0)  # Boost saturation
-			var v: float = minf(glow_color.v * 1.3, 1.0)  # Boost brightness
-			aura_light.light_color = Color.from_hsv(h, s, v)
+		var albedo: Color = material.albedo_color
+		var h: float = albedo.h
+		var s: float = minf(albedo.s * 1.2, 1.0)
+		var v: float = minf(albedo.v * 1.3, 1.0)
+		aura_light.light_color = Color.from_hsv(h, s, v)
 
 	DebugLogger.dlog(DebugLogger.Category.PLAYER, "Applied marble material to player: %s" % name, false, get_entity_id())
 
