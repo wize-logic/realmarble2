@@ -63,11 +63,14 @@ func create_marble_material(color_index: int = -1) -> Material:
 
 	# Select color scheme
 	var scheme := _resolve_color_scheme(color_index)
+	var boosted_primary := _boost_color(scheme.primary)
+	var boosted_secondary := _boost_color(scheme.secondary)
+	var boosted_swirl := _boost_color(scheme.swirl)
 
 	# Apply color scheme
-	material.set_shader_parameter("primary_color", scheme.primary)
-	material.set_shader_parameter("secondary_color", scheme.secondary)
-	material.set_shader_parameter("swirl_color", scheme.swirl)
+	material.set_shader_parameter("primary_color", boosted_primary)
+	material.set_shader_parameter("secondary_color", boosted_secondary)
+	material.set_shader_parameter("swirl_color", boosted_swirl)
 
 	# Set material properties with slight randomization
 	material.set_shader_parameter("glossiness", randf_range(0.4, 0.6))
@@ -93,7 +96,7 @@ func create_marble_material(color_index: int = -1) -> Material:
 func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	var scheme := _resolve_color_scheme(color_index)
-	material.albedo_color = scheme.primary
+	material.albedo_color = _boost_color(scheme.primary)
 	material.albedo_texture = ROLL_TEXTURE
 	material.roughness = randf_range(0.6, 0.75)
 	material.metallic = randf_range(0.0, 0.05)
@@ -130,7 +133,7 @@ func create_marble_material_from_hue(hue: float) -> Material:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
 	if _should_use_standard_material():
 		var material := StandardMaterial3D.new()
-		material.albedo_color = Color.from_hsv(hue, 0.85, 0.9)
+		material.albedo_color = _boost_color(Color.from_hsv(hue, 0.85, 0.9))
 		material.albedo_texture = ROLL_TEXTURE
 		material.roughness = 0.7
 		material.metallic = 0.05
@@ -146,9 +149,9 @@ func create_marble_material_from_hue(hue: float) -> Material:
 	var secondary = Color.from_hsv(hue, 0.7, 1.0)
 	var swirl = Color.from_hsv(hue, 0.4, 1.0)
 
-	material.set_shader_parameter("primary_color", primary)
-	material.set_shader_parameter("secondary_color", secondary)
-	material.set_shader_parameter("swirl_color", swirl)
+	material.set_shader_parameter("primary_color", _boost_color(primary))
+	material.set_shader_parameter("secondary_color", _boost_color(secondary))
+	material.set_shader_parameter("swirl_color", _boost_color(swirl))
 
 	# Set material properties
 	material.set_shader_parameter("glossiness", 0.5)
@@ -172,6 +175,12 @@ func create_marble_material_from_hue(hue: float) -> Material:
 func get_random_marble_material() -> Material:
 	"""Get a completely random marble material"""
 	return create_marble_material(-1)
+
+func _boost_color(color: Color) -> Color:
+	var h := color.h
+	var s := minf(color.s * 1.2, 1.0)
+	var v := minf(color.v * 1.2, 1.0)
+	return Color.from_hsv(h, s, v)
 
 func reset_used_colors() -> void:
 	"""Reset the used colors tracker"""
