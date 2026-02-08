@@ -535,6 +535,7 @@ Refresh Rate: 0.5 seconds (v5.0: was 0.1s, now 5x better!)
 Groups Cached: players, abilities, orbs, platforms
 Filtering: Removes invalid/collected nodes on refresh
 Staggered Timers: Each bot starts at random offset (prevents simultaneous refresh)
+HTML5 Scaling: Interval scale increases with bot count (extra throttling above 4 bots)
 Performance Gain: 87% reduction vs every-frame, 80% reduction vs v4.0
 ```
 
