@@ -188,6 +188,7 @@ var cached_ability_positions: Dictionary = {}  # NEW: Cache ability positions
 var cached_platforms: Array[Dictionary] = []
 var cached_space_state: PhysicsDirectSpaceState3D = null
 var last_seen_targets: Dictionary = {}
+var _cached_vision_query: PhysicsRayQueryParameters3D = null  # PERF: Reuse instead of allocating per raycast
 
 # ============================================================================
 # SEEDED RNG FOR MULTIPLAYER SYNC
@@ -311,24 +312,20 @@ func handle_arena_specific_state_updates() -> void:
 # ============================================================================
 
 func create_bot_camera() -> void:
-	"""Create a CameraArm for bot aiming (same system as players)"""
+	"""Create a lightweight CameraArm for bot aiming direction (no Camera3D needed)"""
 	if not bot or not is_instance_valid(bot):
 		return
 
 	if bot.has_node("CameraArm"):
 		return
 
+	# PERF: Bots only need a Node3D for aim direction - no Camera3D needed
+	# Camera3D nodes are expensive (viewport processing, culling) and bots never render
 	var camera_arm: Node3D = Node3D.new()
 	camera_arm.name = "CameraArm"
 	bot.add_child(camera_arm)
 
-	var camera: Camera3D = Camera3D.new()
-	camera.name = "Camera3D"
-	camera.position = Vector3(0, 2.5, 5)
-	camera.current = false
-	camera_arm.add_child(camera)
-
-	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Created CameraArm for aiming" % get_ai_type(), false, get_entity_id())
+	DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Created CameraArm for aiming (lightweight, no Camera3D)" % get_ai_type(), false, get_entity_id())
 
 # ============================================================================
 # DEBUG HELPERS
@@ -1116,18 +1113,20 @@ func can_see_target(target: Node) -> bool:
 
 	var bot_eye: Vector3 = bot.global_position + Vector3(0, BOT_EYE_HEIGHT, 0)
 	var target_pos: Vector3 = target.global_position
-	if "global_position" in target:
-		target_pos = target.global_position
 
 	# Add eye height to target if it's a player
 	if target.is_in_group("players"):
 		target_pos += Vector3(0, BOT_EYE_HEIGHT, 0)
 
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(bot_eye, target_pos)
-	query.exclude = [bot]
-	query.collision_mask = 1  # World layer only
+	# PERF: Reuse cached query object instead of allocating a new one per raycast
+	if not _cached_vision_query:
+		_cached_vision_query = PhysicsRayQueryParameters3D.new()
+		_cached_vision_query.exclude = [bot]
+		_cached_vision_query.collision_mask = 1  # World layer only
+	_cached_vision_query.from = bot_eye
+	_cached_vision_query.to = target_pos
 
-	var result: Dictionary = cached_space_state.intersect_ray(query)
+	var result: Dictionary = cached_space_state.intersect_ray(_cached_vision_query)
 	var visible: bool = result.is_empty()
 	last_seen_targets[target] = {
 		"time": now,

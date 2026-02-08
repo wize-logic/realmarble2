@@ -26,9 +26,17 @@ func get_entity_id() -> int:
 		return player.name.to_int()
 	return -1
 
+func _is_bot_owner() -> bool:
+	"""Check if this ability is owned by a bot on HTML5"""
+	if not OS.has_feature("web"):
+		return false
+	var parent: Node = get_parent()
+	return parent and parent.has_method("is_bot") and parent.is_bot()
+
 func _ready() -> void:
 	# Create charge particles if charging is supported
-	if supports_charging:
+	# PERF: Skip charge particles for bots on HTML5 - bots never charge abilities
+	if supports_charging and not _is_bot_owner():
 		charge_particles = CPUParticles3D.new()
 		charge_particles.name = "ChargeParticles"
 		add_child(charge_particles)
