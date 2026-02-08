@@ -85,18 +85,20 @@ func spawn_orbs() -> void:
 	# Re-seed RNG before spawning to ensure deterministic positions across all clients
 	seed_rng_from_level()
 
-	# Scale orb count based on number of players (5 orbs per player)
-	# Type B arenas get more orbs due to larger vertical space and rooms
+	# Scale orb count based on number of players
+	# PERF: Reduced counts on HTML5 to cut per-frame _process overhead (each item runs bobbing animation)
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var orbs_per_player: float = 5.0  # Increased from 3.0
+	var _is_web: bool = OS.has_feature("web")
+	var orbs_per_player: float = 2.5 if _is_web else 5.0
 
 	# Check if Type B arena (more orbs needed for larger, multi-tier arenas)
 	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
-			orbs_per_player = 7.0  # Increased from 4.5
+			orbs_per_player = 3.5 if _is_web else 7.0
 
-	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 25, 80)  # Increased from 12-48
+	var max_orbs: int = 35 if _is_web else 80
+	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 12, max_orbs)
 
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ORB SPAWNER: Starting to spawn orbs ===")
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Players: %d | Total orbs: %d" % [player_count, scaled_orbs])

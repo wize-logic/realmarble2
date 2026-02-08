@@ -96,14 +96,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if is_collected:
-		# Check if game is active before respawning
-		var world: Node = get_parent()
-		if world and world.has_method("is_game_active") and world.is_game_active():
-			# Handle respawn timer only during active gameplay
-			respawn_timer -= delta
-			if respawn_timer <= 0.0:
-				respawn_pickup()
-		return
+		return  # PERF: Collected pickups have set_process(false) - this is a safety fallback
 
 	# Handle spawn animation
 	if is_spawning:
@@ -219,6 +212,8 @@ func _set_collected(collected: bool) -> void:
 			mesh_instance.visible = false
 		if collision_shape:
 			collision_shape.set_deferred("disabled", true)
+		# PERF: Stop _process for collected pickups (respawn handled by AbilitySpawner)
+		set_process(false)
 	else:
 		# Respawn - show the pickup with animation
 		if mesh_instance:
@@ -229,6 +224,8 @@ func _set_collected(collected: bool) -> void:
 		is_spawning = true
 		spawn_timer = 0.0
 		time += rng.randf() * 2.0
+		# PERF: Re-enable _process for bobbing animation
+		set_process(true)
 
 @rpc("authority", "call_local", "reliable")
 func _sync_collected(collected: bool) -> void:
@@ -263,6 +260,9 @@ func _do_respawn() -> void:
 
 	# MULTIPLAYER SYNC FIX: Use seeded RNG for deterministic animation phase
 	time += rng.randf() * 2.0
+
+	# PERF: Re-enable _process for bobbing animation
+	set_process(true)
 
 	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability pickup '%s' respawned!" % ability_name)
 

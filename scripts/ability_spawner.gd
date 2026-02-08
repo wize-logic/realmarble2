@@ -96,18 +96,20 @@ func spawn_abilities() -> void:
 	# Re-seed RNG before spawning to ensure deterministic positions across all clients
 	seed_rng_from_level()
 
-	# Scale ability count based on number of players (4.0 abilities per player)
-	# Type B arenas get more abilities due to larger vertical space and rooms
+	# Scale ability count based on number of players
+	# PERF: Reduced counts on HTML5 to cut per-frame _process overhead (each item runs bobbing animation)
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var abilities_per_player: float = 4.0  # Increased from 2.5
+	var _is_web: bool = OS.has_feature("web")
+	var abilities_per_player: float = 2.0 if _is_web else 4.0
 
 	# Check if Type B arena (more abilities needed for larger, multi-tier arenas)
 	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
-			abilities_per_player = 5.5  # Increased from 3.5
+			abilities_per_player = 3.0 if _is_web else 5.5
 
-	var total_abilities: int = clamp(int(player_count * abilities_per_player), 20, 60)  # Increased from 10-35
+	var max_abilities: int = 30 if _is_web else 60
+	var total_abilities: int = clamp(int(player_count * abilities_per_player), 10, max_abilities)
 
 	# Distribute abilities equally across all types (20% each for 5 abilities)
 	# All abilities are equally viable - none should be rare

@@ -69,14 +69,7 @@ func _initialize_seeded_rng() -> void:
 
 func _process(delta: float) -> void:
 	if is_collected:
-		# Check if game is active before respawning
-		var world: Node = get_parent()
-		if world and world.has_method("is_game_active") and world.is_game_active():
-			# Handle respawn timer only during active gameplay
-			respawn_timer -= delta
-			if respawn_timer <= 0.0:
-				respawn_orb()
-		return
+		return  # PERF: Collected orbs have set_process(false) - this is a safety fallback
 
 	# Update animation time
 	time += delta
@@ -166,6 +159,8 @@ func _set_collected(collected: bool) -> void:
 			mesh_instance.visible = false
 		if collision_shape:
 			collision_shape.set_deferred("disabled", true)
+		# PERF: Stop _process for collected orbs (respawn handled by OrbSpawner)
+		set_process(false)
 	else:
 		# Respawn - show the orb
 		if mesh_instance:
@@ -174,6 +169,8 @@ func _set_collected(collected: bool) -> void:
 			collision_shape.set_deferred("disabled", false)
 		# MULTIPLAYER SYNC FIX: Use seeded RNG for deterministic time offset
 		time += rng.randf() * 2.0
+		# PERF: Re-enable _process for bobbing animation
+		set_process(true)
 
 @rpc("authority", "call_local", "reliable")
 func _sync_collected(collected: bool) -> void:
