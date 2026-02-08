@@ -83,9 +83,9 @@ var space_state_cache_refresh: float = SPACE_STATE_CACHE_REFRESH
 var bot_repulsion_interval: float = BOT_REPULSION_INTERVAL
 var ult_check_interval: float = ULT_CHECK_INTERVAL
 var terrain_stuck_check_interval: float = TERRAIN_STUCK_CHECK_INTERVAL
-var player_search_interval: float = 0.8
-var orb_check_interval: float = 1.0
-var ability_check_interval: float = 0.5
+var player_search_interval: float = BASE_PLAYER_SEARCH_INTERVAL
+var orb_check_interval: float = BASE_ORB_CHECK_INTERVAL
+var ability_check_interval: float = BASE_ABILITY_CHECK_INTERVAL
 
 # ============================================================================
 # CONSTANTS
@@ -117,6 +117,13 @@ const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
 const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
 const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
 const TERRAIN_STUCK_CHECK_INTERVAL: float = 0.5  # Only check terrain stuck every 0.5s (was every frame = 63 raycasts/frame)
+const BASE_PLAYER_SEARCH_INTERVAL: float = 0.8
+const BASE_ORB_CHECK_INTERVAL: float = 1.0
+const BASE_ABILITY_CHECK_INTERVAL: float = 0.5
+const BASE_STUCK_CHECK_INTERVAL: float = 0.3
+const HTML5_BASE_INTERVAL_SCALE: float = 1.75
+const HTML5_EXTRA_INTERVAL_PER_BOT: float = 0.25
+const HTML5_MAX_INTERVAL_SCALE: float = 2.75
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
@@ -163,7 +170,7 @@ var strategic_preference: String = "balanced"  # "aggressive", "balanced", "defe
 # ============================================================================
 
 var last_position: Vector3 = Vector3.ZERO
-var stuck_check_interval: float = 0.3
+var stuck_check_interval: float = BASE_STUCK_CHECK_INTERVAL
 var is_stuck: bool = false
 var obstacle_avoid_direction: Vector3 = Vector3.ZERO
 var consecutive_stuck_checks: int = 0
@@ -219,22 +226,7 @@ func _ready() -> void:
 		return
 
 	# HTML5 performance scaling (reduce expensive checks/raycasts)
-	if OS.has_feature("web"):
-		interval_scale = 1.75
-
-	cache_refresh_interval = CACHE_REFRESH_INTERVAL * interval_scale
-	player_avoidance_check_interval = PLAYER_AVOIDANCE_CHECK_INTERVAL * interval_scale
-	edge_check_interval = EDGE_CHECK_INTERVAL * interval_scale
-	platform_check_interval = PLATFORM_CHECK_INTERVAL * interval_scale
-	vision_update_interval = VISION_UPDATE_INTERVAL * interval_scale
-	space_state_cache_refresh = SPACE_STATE_CACHE_REFRESH * interval_scale
-	bot_repulsion_interval = BOT_REPULSION_INTERVAL * interval_scale
-	ult_check_interval = ULT_CHECK_INTERVAL * interval_scale
-	terrain_stuck_check_interval = TERRAIN_STUCK_CHECK_INTERVAL * interval_scale
-	player_search_interval = 0.8 * interval_scale
-	orb_check_interval = 1.0 * interval_scale
-	ability_check_interval = 0.5 * interval_scale
-	stuck_check_interval *= interval_scale
+	_update_interval_scale(0)
 
 	# CRITICAL MULTIPLAYER FIX: Seed RNG for deterministic behavior across all clients
 	# Uses level_seed + bot entity ID to ensure each bot has unique but consistent behavior
@@ -535,6 +527,46 @@ func update_timers(delta: float) -> void:
 		ability_blacklist_timer = 30.0
 
 # ============================================================================
+# HTML5 PERFORMANCE SCALING
+# ============================================================================
+
+func _update_interval_scale(active_bot_count: int) -> void:
+	"""Adjust expensive check intervals based on platform and bot count."""
+	var desired_scale: float = 1.0
+	if OS.has_feature("web"):
+		var extra_scale: float = max(0, active_bot_count - 4) * HTML5_EXTRA_INTERVAL_PER_BOT
+		desired_scale = HTML5_BASE_INTERVAL_SCALE + extra_scale
+		desired_scale = min(desired_scale, HTML5_MAX_INTERVAL_SCALE)
+
+	if abs(desired_scale - interval_scale) < 0.05:
+		return
+
+	interval_scale = desired_scale
+	cache_refresh_interval = CACHE_REFRESH_INTERVAL * interval_scale
+	player_avoidance_check_interval = PLAYER_AVOIDANCE_CHECK_INTERVAL * interval_scale
+	edge_check_interval = EDGE_CHECK_INTERVAL * interval_scale
+	platform_check_interval = PLATFORM_CHECK_INTERVAL * interval_scale
+	vision_update_interval = VISION_UPDATE_INTERVAL * interval_scale
+	space_state_cache_refresh = SPACE_STATE_CACHE_REFRESH * interval_scale
+	bot_repulsion_interval = BOT_REPULSION_INTERVAL * interval_scale
+	ult_check_interval = ULT_CHECK_INTERVAL * interval_scale
+	terrain_stuck_check_interval = TERRAIN_STUCK_CHECK_INTERVAL * interval_scale
+	player_search_interval = BASE_PLAYER_SEARCH_INTERVAL * interval_scale
+	orb_check_interval = BASE_ORB_CHECK_INTERVAL * interval_scale
+	ability_check_interval = BASE_ABILITY_CHECK_INTERVAL * interval_scale
+	stuck_check_interval = BASE_STUCK_CHECK_INTERVAL * interval_scale
+
+func _count_active_bots(players: Array[Node]) -> int:
+	var bot_count: int = 0
+	for player in players:
+		if not is_instance_valid(player):
+			continue
+		var name_str := str(player.name)
+		if name_str.is_valid_int() and name_str.to_int() >= 9000:
+			bot_count += 1
+	return bot_count
+
+# ============================================================================
 # PERSONALITY INITIALIZATION
 # ============================================================================
 
@@ -572,6 +604,7 @@ func refresh_cached_groups() -> void:
 	cached_players = get_tree().get_nodes_in_group("players").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree()
 	)
+	_update_interval_scale(_count_active_bots(cached_players))
 
 	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
 		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
