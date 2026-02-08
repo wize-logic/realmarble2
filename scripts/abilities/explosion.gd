@@ -30,10 +30,9 @@ func _ready() -> void:
 	supports_charging = true  # Explosion supports charging for bigger boom
 	max_charge_time = 2.0  # 2 seconds for max charge
 
-	# PERF: Skip all particle effects for bots on HTML5
-	if not _is_bot_owner():
-		_create_explosion_particles()
-		_create_magma_particles()
+	# Create explosion particle effects (visible attack effects - keep for all players)
+	_create_explosion_particles()
+	_create_magma_particles()
 
 	# Create damage area for detecting hits
 	explosion_area = Area3D.new()

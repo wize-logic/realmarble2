@@ -55,9 +55,7 @@ func _ready() -> void:
 	# Disable hitbox by default
 	hitbox.monitoring = false
 
-	# Create fire trail particle effect (skip for bots on HTML5)
-	if _is_bot_owner():
-		return  # Skip fire_trail and direction_indicator creation
+	# Create fire trail particle effect (visible attack effect - keep for bots)
 	fire_trail = CPUParticles3D.new()
 	fire_trail.name = "FireTrail"
 	add_child(fire_trail)

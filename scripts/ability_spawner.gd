@@ -30,6 +30,7 @@ const MIN_SPAWN_SEPARATION: float = 3.0  # Minimum distance between abilities/or
 var spawned_pickups: Array[Area3D] = []
 var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _respawn_queue: Array[Area3D] = []  # PERF: Queue respawns to spread raycasts across frames
 
 func _ready() -> void:
 	# MULTIPLAYER SYNC FIX: Use level_seed for deterministic spawning across all clients
@@ -52,6 +53,18 @@ func _process(delta: float) -> void:
 	var world: Node = get_parent()
 	if not (world and world.has_method("is_game_active") and world.is_game_active()):
 		return
+
+	# PERF: Process respawn queue 1 item per frame to spread raycasts across frames
+	# (Previously respawned ALL items at once = up to 1800 raycasts in a single frame)
+	if not _respawn_queue.is_empty():
+		var pickup: Area3D = _respawn_queue.pop_front()
+		if pickup and is_instance_valid(pickup) and pickup.get("is_collected") == true:
+			var new_pos: Vector3 = get_random_spawn_position()
+			pickup.global_position = new_pos
+			if "base_height" in pickup:
+				pickup.base_height = new_pos.y
+			if pickup.has_method("respawn_pickup"):
+				pickup.respawn_pickup()
 
 	respawn_timer += delta
 	if respawn_timer >= respawn_interval:
@@ -144,7 +157,7 @@ func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground, avoiding overlap with existing items"""
 	const DEATH_ZONE_Y: float = -50.0  # Death zone position
 	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
-	const MAX_ATTEMPTS: int = 30  # Maximum attempts to find a non-overlapping position
+	const MAX_ATTEMPTS: int = 10  # Reduced from 30 to limit raycast spikes
 
 	var attempts: int = 0
 	while attempts < MAX_ATTEMPTS:
@@ -227,23 +240,14 @@ func spawn_ability_at(pos: Vector3, ability_scene: PackedScene, ability_name: St
 	spawned_pickups.append(pickup)
 
 func check_and_respawn_pickups() -> void:
-	"""Check collected pickups and respawn them at random locations"""
+	"""Queue collected pickups for respawn (processed 1 per frame to avoid raycast spikes)"""
 	if not respawn_at_random_location:
 		return
 
 	for pickup in spawned_pickups:
 		if pickup and pickup.get("is_collected") == true:
-			# Move pickup to new random location on the ground
-			var new_pos: Vector3 = get_random_spawn_position()
-			pickup.global_position = new_pos
-			# Update base_height for the bobbing animation
-			if "base_height" in pickup:
-				pickup.base_height = new_pos.y
-
-			# Properly reset the pickup state by calling its respawn function
-			if pickup.has_method("respawn_pickup"):
-				pickup.respawn_pickup()
-			DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Respawned pickup at new random location: %s" % pickup.global_position)
+			if pickup not in _respawn_queue:
+				_respawn_queue.append(pickup)
 
 func spawn_random_ability(pos: Vector3) -> void:
 	"""Spawn a random ability at the given position (for debug menu)"""

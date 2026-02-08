@@ -55,9 +55,7 @@ func _ready() -> void:
 	# Disable hitbox by default
 	slash_hitbox.monitoring = false
 
-	# Create slash particle effect (skip for bots on HTML5)
-	if _is_bot_owner():
-		return  # Skip slash_particles and arc_indicator creation
+	# Create slash particle effect (visible attack effect - keep for bots)
 	slash_particles = CPUParticles3D.new()
 	slash_particles.name = "SlashParticles"
 	add_child(slash_particles)

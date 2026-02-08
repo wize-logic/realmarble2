@@ -116,11 +116,20 @@ const BOT_REPULSION_INTERVAL: float = 0.15  # NEW: Check bot repulsion frequentl
 const BOT_REPULSION_DISTANCE: float = 3.0  # NEW: Start repelling at 3 units
 const ULT_CHECK_INTERVAL: float = 0.3  # Check ult availability frequently
 const ULT_OPTIMAL_RANGE: float = 15.0  # Best range to activate ult for dash attack
-const TERRAIN_STUCK_CHECK_INTERVAL: float = 0.5  # Only check terrain stuck every 0.5s (was every frame = 63 raycasts/frame)
+const TERRAIN_STUCK_CHECK_INTERVAL: float = 1.0  # Only check terrain stuck every 1.0s (was 0.5s = too frequent for HTML5)
 const BASE_PLAYER_SEARCH_INTERVAL: float = 0.8
 const BASE_ORB_CHECK_INTERVAL: float = 1.0
 const BASE_ABILITY_CHECK_INTERVAL: float = 0.5
 const BASE_STUCK_CHECK_INTERVAL: float = 0.3
+
+# PERF: Shared group cache - all bots reuse one get_nodes_in_group() call per physics frame
+# instead of 7 bots each doing 3 expensive tree traversals independently
+static var _shared_group_frame: int = -1
+static var _shared_raw_players: Array = []
+static var _shared_raw_orbs: Array = []
+static var _shared_raw_abilities: Array = []
+static var _shared_bot_count: int = 0
+
 const HTML5_BASE_INTERVAL_SCALE: float = 2.5
 const HTML5_EXTRA_INTERVAL_PER_BOT: float = 0.5
 const HTML5_MAX_INTERVAL_SCALE: float = 5.0
@@ -591,24 +600,31 @@ func initialize_personality() -> void:
 # ============================================================================
 
 func refresh_cached_groups() -> void:
-	"""Cache all entities with filtering"""
-	# Players - filter in-place to avoid closure allocation per call
-	var raw_players: Array = get_tree().get_nodes_in_group("players")
-	cached_players.clear()
-	var bot_count: int = 0
-	for node in raw_players:
-		if is_instance_valid(node) and node.is_inside_tree():
-			cached_players.append(node)
+	"""Cache all entities with filtering. Uses shared group cache to avoid redundant tree traversals."""
+	# PERF: Only query the scene tree once per physics frame across ALL bots
+	var frame: int = Engine.get_physics_frames()
+	if frame != _shared_group_frame:
+		_shared_group_frame = frame
+		_shared_raw_players = get_tree().get_nodes_in_group("players")
+		_shared_raw_orbs = get_tree().get_nodes_in_group("orbs")
+		_shared_raw_abilities = get_tree().get_nodes_in_group("ability_pickups")
+		_shared_bot_count = 0
+		for node in _shared_raw_players:
 			var n: String = str(node.name)
 			if n.is_valid_int() and n.to_int() >= 9000:
-				bot_count += 1
-	_update_interval_scale(bot_count)
+				_shared_bot_count += 1
+
+	# Per-bot filtering (fast - just validity checks on shared data)
+	cached_players.clear()
+	for node in _shared_raw_players:
+		if is_instance_valid(node) and node.is_inside_tree():
+			cached_players.append(node)
+	_update_interval_scale(_shared_bot_count)
 
 	# Orbs
-	var raw_orbs: Array = get_tree().get_nodes_in_group("orbs")
 	cached_orbs.clear()
 	cached_orb_positions.clear()
-	for node in raw_orbs:
+	for node in _shared_raw_orbs:
 		if is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected):
 			cached_orbs.append(node)
 			cached_orb_positions[node] = node.global_position
@@ -617,8 +633,7 @@ func refresh_cached_groups() -> void:
 	cached_abilities.clear()
 	cached_ability_positions.clear()
 	if not bot.current_ability:
-		var raw_abilities: Array = get_tree().get_nodes_in_group("ability_pickups")
-		for node in raw_abilities:
+		for node in _shared_raw_abilities:
 			if is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1:
 				cached_abilities.append(node)
 				cached_ability_positions[node] = node.global_position
@@ -872,34 +887,41 @@ func handle_stuck_under_terrain(delta: float) -> void:
 		stuck_under_terrain_timer = 0.0
 
 func is_stuck_under_terrain() -> bool:
-	"""Check if bot is stuck under terrain using 5-point overhead detection (optimized from 9)"""
+	"""Check if bot is stuck under terrain using 3-point overhead detection (optimized from 5)"""
 	if not bot or not cached_space_state:
 		return false
 
 	var bot_pos: Vector3 = bot.global_position
 	var check_distance: float = 1.5
-	var stuck_count: int = 0
+	var ray_start_y: float = bot_pos.y + BOT_EYE_HEIGHT
+	var ray_end_y: float = ray_start_y + 2.3
 
-	# Reuse a single query object across all rays to avoid per-ray allocations
-	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
-	query.exclude = [bot]
-	query.collision_mask = 1  # World layer
+	# Reuse a single query object across all rays
+	if not _cached_vision_query:
+		_cached_vision_query = PhysicsRayQueryParameters3D.new()
+		_cached_vision_query.exclude = [bot]
+		_cached_vision_query.collision_mask = 1
 
-	# 5 check points (center + 4 cardinal) - diagonals removed as redundant
-	var offsets_x: Array[float] = [0.0, check_distance, -check_distance, 0.0, 0.0]
-	var offsets_z: Array[float] = [0.0, 0.0, 0.0, check_distance, -check_distance]
+	# Center check first - early exit if clear overhead
+	_cached_vision_query.from = Vector3(bot_pos.x, ray_start_y, bot_pos.z)
+	_cached_vision_query.to = Vector3(bot_pos.x, ray_end_y, bot_pos.z)
+	if cached_space_state.intersect_ray(_cached_vision_query).is_empty():
+		return false  # Center is clear = not stuck
 
-	for i in range(5):
-		var ray_start_y: float = bot_pos.y + BOT_EYE_HEIGHT
-		query.from = Vector3(bot_pos.x + offsets_x[i], ray_start_y, bot_pos.z + offsets_z[i])
-		query.to = Vector3(query.from.x, ray_start_y + 2.3, query.from.z)
+	# Center hit - check 2 opposing cardinals
+	var stuck_count: int = 1
+	_cached_vision_query.from = Vector3(bot_pos.x + check_distance, ray_start_y, bot_pos.z)
+	_cached_vision_query.to = Vector3(bot_pos.x + check_distance, ray_end_y, bot_pos.z)
+	if not cached_space_state.intersect_ray(_cached_vision_query).is_empty():
+		stuck_count += 1
 
-		var result: Dictionary = cached_space_state.intersect_ray(query)
-		if result:
-			stuck_count += 1
+	_cached_vision_query.from = Vector3(bot_pos.x, ray_start_y, bot_pos.z + check_distance)
+	_cached_vision_query.to = Vector3(bot_pos.x, ray_end_y, bot_pos.z + check_distance)
+	if not cached_space_state.intersect_ray(_cached_vision_query).is_empty():
+		stuck_count += 1
 
-	# If more than 2 points (of 5) hit overhead terrain, we're stuck
-	return stuck_count > 2
+	# If 2+ of 3 points hit overhead terrain, we're stuck
+	return stuck_count >= 2
 
 func handle_unstuck_movement(delta: float) -> void:
 	"""Apply aggressive unstuck forces"""
