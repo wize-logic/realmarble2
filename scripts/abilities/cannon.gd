@@ -27,8 +27,9 @@ func _ready() -> void:
 	supports_charging = true  # Must support charging for input to work
 	max_charge_time = 0.01  # Instant fire - minimal charge time
 
-	# Create reticle for target lock visualization
-	create_reticle()
+	# Create reticle for target lock visualization (human player only)
+	if not _is_bot_owner():
+		create_reticle()
 
 func drop() -> void:
 	"""Override drop to clean up reticle"""
@@ -674,8 +675,8 @@ func _process(delta: float) -> void:
 		return  # Reticle was destroyed, skip processing
 
 	if player and is_instance_valid(player) and player.is_inside_tree():
-		# Check if this player is the local player (has multiplayer authority)
-		var is_local_player: bool = player.is_multiplayer_authority()
+		# PERF: Only show indicator for local human player (not bots)
+		var is_local_player: bool = is_local_human_player()
 
 		if is_local_player:
 			# Get player level for multi-shot indicator

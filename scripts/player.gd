@@ -293,9 +293,17 @@ func _ready() -> void:
 		camera_arm.top_level = true
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Camera arm top_level set to true", false, get_entity_id())
 
+	var _is_bot_entity: bool = is_bot()
+
+	# PERF: Disable _process, _input, _unhandled_input for bots entirely
+	# Fall death is handled in _physics_process. Bots never receive keyboard/mouse input.
+	if _is_bot_entity:
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+
 	# PERF: Remove the scene Camera3D for bots on HTML5 - they never render through it
-	# The bot AI only needs the CameraArm Node3D for aim direction
-	if is_bot() and _is_web and camera:
+	if _is_bot_entity and _is_web and camera:
 		camera.queue_free()
 		camera = null
 
@@ -306,15 +314,14 @@ func _ready() -> void:
 		add_child(ground_ray)
 
 	ground_ray.enabled = true
-	ground_ray.target_position = Vector3.DOWN * 0.85  # Cast down 0.85 units to detect ground on slopes up to 45°
-	ground_ray.collision_mask = 0xFFFFFFFF  # Check all layers
+	ground_ray.target_position = Vector3.DOWN * 0.85
+	ground_ray.collision_mask = 0xFFFFFFFF
 	ground_ray.collide_with_areas = false
 	ground_ray.collide_with_bodies = true
 
-	# Set up sound effects (create nodes if they don't exist)
-	# PERF: On HTML5, bots only get hit_sound and death_sound (audible to player)
-	# Other sounds (jump, spin, land, bounce, charge, spawn) are skipped to reduce node count
-	var _skip_bot_audio: bool = _is_web and is_bot()
+	# Set up sound effects
+	# PERF: On HTML5, bots get NO audio nodes at all. hit_sound/death_sound are also skipped.
+	var _skip_bot_audio: bool = _is_web and _is_bot_entity
 	if not jump_sound and not _skip_bot_audio:
 		jump_sound = AudioStreamPlayer3D.new()
 		jump_sound.name = "JumpSound"
@@ -350,19 +357,19 @@ func _ready() -> void:
 		charge_sound.max_distance = 20.0
 		charge_sound.volume_db = -3.0
 
-	if not hit_sound:
+	if not hit_sound and not _skip_bot_audio:
 		hit_sound = AudioStreamPlayer3D.new()
 		hit_sound.name = "HitSound"
 		add_child(hit_sound)
 		hit_sound.max_distance = 25.0
 		hit_sound.volume_db = 0.0
 
-	if not death_sound:
+	if not death_sound and not _skip_bot_audio:
 		death_sound = AudioStreamPlayer3D.new()
 		death_sound.name = "DeathSound"
 		add_child(death_sound)
-		death_sound.max_distance = 50.0  # Louder and further reaching
-		death_sound.volume_db = 5.0  # Louder than other sounds
+		death_sound.max_distance = 50.0
+		death_sound.volume_db = 5.0
 
 	if not spawn_sound and not _skip_bot_audio:
 		spawn_sound = AudioStreamPlayer3D.new()
@@ -741,25 +748,18 @@ func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 		_find_all_cameras(child, camera_list)
 
 func _process(delta: float) -> void:
-	# PERF: Bots skip almost all _process work - no camera, no input, no rail targeting
-	# In practice mode (no multiplayer peer), is_bot() distinguishes bots from the human player
-	var _is_bot_entity: bool = is_bot()
+	# PERF: Bots have set_process(false) in _ready, so this never runs for them.
+	# All bot fall-death logic is handled in _physics_process instead.
 
 	# CRITICAL HTML5 FIX: Position camera arm FIRST, before ANY other code
-	# This MUST run every frame for the camera to follow the player
-	# PERF: Only for human player - bots don't need camera arm updates
-	if not _is_bot_entity and camera_arm and is_instance_valid(camera_arm):
+	if camera_arm and is_instance_valid(camera_arm):
 		camera_arm.global_position = global_position
 
-	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
-	# Bots must NEVER activate their cameras or they'll hijack the player camera
-	if _is_bot_entity or (multiplayer.has_multiplayer_peer() and not is_multiplayer_authority()):
-		# Skip camera activation for bots and non-authority players
-		pass
-	elif camera and is_instance_valid(camera):
-		if not camera.current:
+	# Force camera current
+	if camera and is_instance_valid(camera) and not camera.current:
+		# Skip if we're a remote player in multiplayer
+		if not (multiplayer.has_multiplayer_peer() and not is_multiplayer_authority()):
 			camera.current = true
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
 
 	# Handle last attacker timeout
 	if last_attacker_id != -1:
@@ -768,30 +768,20 @@ func _process(delta: float) -> void:
 			last_attacker_id = -1
 			last_attacker_time = 0.0
 
-	# Handle falling death state - MUST run for ALL entities (players AND bots)
+	# Handle falling death state
 	if is_falling_to_death:
 		fall_death_timer += delta
-
-		# For players with cameras: keep camera watching the fall
-		if not _is_bot_entity and is_multiplayer_authority() and camera and camera_arm:
+		if camera and camera_arm:
 			if not fall_camera_detached:
 				fall_camera_position = camera_arm.global_position
 				fall_camera_detached = true
-
 			camera_arm.global_position = fall_camera_position
 			camera.look_at(global_position, Vector3.UP)
-
-		# Respawn after 2 seconds (works for both players and bots)
 		if fall_death_timer >= 2.0:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Fall death timer reached 2.0s, respawning %s" % name, false, get_entity_id())
 			respawn()
 			is_falling_to_death = false
 			fall_camera_detached = false
 			fall_death_timer = 0.0
-		return  # Skip normal processing while falling to death
-
-	# PERF: Bots skip ALL remaining _process work (camera, input, rail targeting)
-	if _is_bot_entity:
 		return
 
 	# Early return for non-authority (remote players in multiplayer)
@@ -1039,46 +1029,74 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	var _is_bot_entity: bool = is_bot()
 
-	# CRITICAL HTML5 FIX: Also position camera arm in physics_process as fallback
-	# PERF: Only for human player
-	if not _is_bot_entity and camera_arm and is_instance_valid(camera_arm):
+	# ---------------------------------------------------------------
+	# BOT FAST PATH: Minimal per-frame work for bots
+	# ---------------------------------------------------------------
+	if _is_bot_entity:
+		# Handle fall death (moved from _process which is disabled for bots)
+		if is_falling_to_death:
+			fall_death_timer += delta
+			if fall_death_timer >= 2.0:
+				respawn()
+				is_falling_to_death = false
+				fall_death_timer = 0.0
+			return
+
+		# Last attacker timeout
+		if last_attacker_id != -1:
+			var current_time: float = Time.get_ticks_msec() / 1000.0
+			if (current_time - last_attacker_time) > ATTACKER_TIMEOUT:
+				last_attacker_id = -1
+				last_attacker_time = 0.0
+
+		# Simple ground check for bots - just read the raycast, no sounds/particles/logging
+		if ground_ray:
+			var was_grounded: bool = is_grounded
+			is_grounded = ground_ray.is_colliding()
+			if is_grounded and not was_grounded:
+				jump_count = 0
+			if is_grounded and jump_count > 0:
+				jump_count = 0
+
+		# Minimal cooldown timers bots actually need
+		if bounce_cooldown > 0.0:
+			bounce_cooldown -= delta
+		if jump_pad_cooldown > 0.0:
+			jump_pad_cooldown -= delta
+		if teleporter_cooldown > 0.0:
+			teleporter_cooldown -= delta
+		if spin_cooldown > 0.0:
+			spin_cooldown -= delta
+		return  # Bot movement is handled by BotAI node
+
+	# ---------------------------------------------------------------
+	# HUMAN PLAYER PATH: Full processing
+	# ---------------------------------------------------------------
+
+	# Position camera arm in physics_process as fallback
+	if camera_arm and is_instance_valid(camera_arm):
 		camera_arm.global_position = global_position
 
-	# PERF: Skip marble roll animation for bots on HTML5 - purely visual
-	if not (_is_web and _is_bot_entity):
-		_physics_process_marble_roll(delta)
+	_physics_process_marble_roll(delta)
 
 	# MULTIPLAYER POSITION SYNC FIX: Handle position synchronization
 	if multiplayer.multiplayer_peer != null:
 		if is_multiplayer_authority():
-			# Authority broadcasts position to all clients
 			_sync_position_to_clients(delta)
 		else:
-			# Non-authority applies interpolated position from sync
 			_apply_position_sync(delta)
-			return  # Non-authority doesn't process physics locally
+			return
 
 	# Check if marble is on ground using raycast
 	check_ground()
 
-	# Update bounce cooldown
+	# Update cooldowns
 	if bounce_cooldown > 0.0:
 		bounce_cooldown -= delta
-
-	# Update jump pad cooldown
 	if jump_pad_cooldown > 0.0:
 		jump_pad_cooldown -= delta
-
-	# Update teleporter cooldown
 	if teleporter_cooldown > 0.0:
 		teleporter_cooldown -= delta
-
-	# PERF: Bots skip spin dash, charging, camera input, rail grinding - all human-only
-	if _is_bot_entity:
-		# Update spin dash cooldown (bots may spin dash via AI)
-		if spin_cooldown > 0.0:
-			spin_cooldown -= delta
-		return  # Bot movement is handled by BotAI node
 
 	# Update spin dash cooldown
 	if spin_cooldown > 0.0:

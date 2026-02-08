@@ -55,7 +55,9 @@ func _ready() -> void:
 	# Disable hitbox by default
 	hitbox.monitoring = false
 
-	# Create fire trail particle effect
+	# Create fire trail particle effect (skip for bots on HTML5)
+	if _is_bot_owner():
+		return  # Skip fire_trail and direction_indicator creation
 	fire_trail = CPUParticles3D.new()
 	fire_trail.name = "FireTrail"
 	add_child(fire_trail)
@@ -115,8 +117,9 @@ func _ready() -> void:
 	gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
 	fire_trail.color_ramp = gradient
 
-	# Create direction indicator for dash targeting
-	create_direction_indicator()
+	# Create direction indicator for dash targeting (human player only)
+	if not _is_bot_owner():
+		create_direction_indicator()
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -136,8 +139,8 @@ func _process(delta: float) -> void:
 	# Update direction indicator visibility and orientation based on charging state
 	# MULTIPLAYER FIX: Only show indicator to the local player using the ability
 	if direction_indicator and player and is_instance_valid(player) and player.is_inside_tree():
-		# Check if this player is the local player (has multiplayer authority)
-		var is_local_player: bool = player.is_multiplayer_authority()
+		# PERF: Only show indicator for local human player (not bots)
+		var is_local_player: bool = is_local_human_player()
 
 		if is_charging and is_local_player:
 			# Show indicator while charging (only to local player)

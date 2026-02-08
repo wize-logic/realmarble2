@@ -33,6 +33,14 @@ func _is_bot_owner() -> bool:
 	var parent: Node = get_parent()
 	return parent and parent.has_method("is_bot") and parent.is_bot()
 
+func is_local_human_player() -> bool:
+	"""Check if this ability is owned by the local human player (not a bot, not remote)"""
+	if not player:
+		return false
+	if not player.is_multiplayer_authority():
+		return false
+	return not (player.has_method("is_bot") and player.is_bot())
+
 func _ready() -> void:
 	# Create charge particles if charging is supported
 	# PERF: Skip charge particles for bots on HTML5 - bots never charge abilities
@@ -92,21 +100,24 @@ func _process(delta: float) -> void:
 		cooldown_timer -= delta
 		if cooldown_timer <= 0.0:
 			is_on_cooldown = false
+			# PERF: If not charging, nothing else to do - skip rest of _process
+			if not is_charging:
+				return
+	elif not is_charging:
+		return  # PERF: Nothing to do - early out
 
-	# Handle charging
+	# Handle charging (human players only - bots never charge)
 	if is_charging and supports_charging:
 		charge_time += delta
 		charge_time = min(charge_time, max_charge_time)
 
-		# Update charge level based on time
 		if charge_time >= 2.0:
-			charge_level = 3  # Max charge
+			charge_level = 3
 		elif charge_time >= 1.0:
-			charge_level = 2  # Medium charge
+			charge_level = 2
 		else:
-			charge_level = 1  # Weak charge
+			charge_level = 1
 
-		# Update particle effects based on charge level
 		update_charge_visuals()
 
 ## Called when the ability is picked up by a player

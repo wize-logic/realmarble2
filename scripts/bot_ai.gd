@@ -121,9 +121,9 @@ const BASE_PLAYER_SEARCH_INTERVAL: float = 0.8
 const BASE_ORB_CHECK_INTERVAL: float = 1.0
 const BASE_ABILITY_CHECK_INTERVAL: float = 0.5
 const BASE_STUCK_CHECK_INTERVAL: float = 0.3
-const HTML5_BASE_INTERVAL_SCALE: float = 1.75
-const HTML5_EXTRA_INTERVAL_PER_BOT: float = 0.25
-const HTML5_MAX_INTERVAL_SCALE: float = 2.75
+const HTML5_BASE_INTERVAL_SCALE: float = 2.5
+const HTML5_EXTRA_INTERVAL_PER_BOT: float = 0.5
+const HTML5_MAX_INTERVAL_SCALE: float = 5.0
 
 # Ability optimal ranges
 const CANNON_OPTIMAL_RANGE: float = 15.0
@@ -385,42 +385,36 @@ func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
 
-	# Only run AI when game is active (use cached World node to avoid tree traversal)
+	# Only run AI when game is active
 	if not cached_world or not is_instance_valid(cached_world):
 		cached_world = get_tree().get_root().get_node_or_null("World")
 	if not cached_world or not cached_world.game_active:
 		return
 
-	# NEW: Pause after death to prevent immediate re-engagement
+	# Pause after death
 	if death_pause_timer > 0.0:
 		death_pause_timer -= delta
 		return
 
-	# Update all timers
+	# Update all timers in one batch
 	update_timers(delta)
-
-	# Periodic debug logging
-	if DebugLogger.is_category_enabled(DebugLogger.Category.BOT_AI) and debug_log_timer >= DEBUG_LOG_INTERVAL:
-		debug_log_periodic()
-		debug_log_timer = 0.0
 
 	# Update cached physics space state
 	if space_state_cache_timer <= 0.0:
-		if bot and bot is RigidBody3D:
+		if bot is RigidBody3D:
 			cached_space_state = bot.get_world_3d().direct_space_state
 		space_state_cache_timer = space_state_cache_refresh
 
-	# Refresh cached groups
+	# Refresh cached groups (most expensive periodic operation)
 	if cache_refresh_timer <= 0.0:
 		refresh_cached_groups()
 		cache_refresh_timer = cache_refresh_interval
 
-	# Check if stuck on obstacles
+	# Stuck detection
 	if stuck_timer >= stuck_check_interval:
 		check_if_stuck()
 		stuck_timer = 0.0
 
-	# Check for stuck under terrain (throttled - was 63 raycasts/frame unthrottled)
 	if terrain_stuck_check_timer <= 0.0:
 		handle_stuck_under_terrain(delta)
 		terrain_stuck_check_timer = terrain_stuck_check_interval
@@ -433,7 +427,7 @@ func _physics_process(delta: float) -> void:
 	# Check target timeout
 	check_target_timeout(delta)
 
-	# NEW: Bot-bot repulsion to prevent clumping
+	# Bot-bot repulsion
 	if bot_repulsion_timer <= 0.0:
 		apply_bot_repulsion()
 		bot_repulsion_timer = bot_repulsion_interval
@@ -448,17 +442,17 @@ func _physics_process(delta: float) -> void:
 		find_nearest_orb()
 		orb_check_timer = orb_check_interval
 
-	# NEW: Check for abilities periodically
+	# Check for abilities periodically
 	if ability_check_timer <= 0.0:
 		find_nearest_ability()
 		ability_check_timer = ability_check_interval
 
-	# Check for ult usage opportunity
+	# Check for ult usage
 	if ult_check_timer <= 0.0:
 		try_use_ult()
 		ult_check_timer = ult_check_interval
 
-	# Check for platforms
+	# Platform search
 	if platform_check_timer <= 0.0:
 		find_best_platform()
 		if state == "ATTACK" or state == "CHASE":
@@ -468,7 +462,7 @@ func _physics_process(delta: float) -> void:
 		else:
 			platform_check_timer = platform_check_interval
 
-	# Arena-specific navigation (rails, jump pads, teleporters)
+	# Arena-specific navigation
 	consider_arena_specific_navigation()
 
 	# Execute state behavior
@@ -483,7 +477,7 @@ func _physics_process(delta: float) -> void:
 			do_retreat(delta)
 		"COLLECT_ORB":
 			do_collect_orb(delta)
-		"COLLECT_ABILITY":  # NEW
+		"COLLECT_ABILITY":
 			do_collect_ability(delta)
 
 	# Update state transitions
@@ -597,34 +591,39 @@ func initialize_personality() -> void:
 # ============================================================================
 
 func refresh_cached_groups() -> void:
-	"""Cache all entities with filtering - runs every 0.5s"""
-	cached_players = get_tree().get_nodes_in_group("players").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree()
-	)
-	_update_interval_scale(_count_active_bots(cached_players))
+	"""Cache all entities with filtering"""
+	# Players - filter in-place to avoid closure allocation per call
+	var raw_players: Array = get_tree().get_nodes_in_group("players")
+	cached_players.clear()
+	var bot_count: int = 0
+	for node in raw_players:
+		if is_instance_valid(node) and node.is_inside_tree():
+			cached_players.append(node)
+			var n: String = str(node.name)
+			if n.is_valid_int() and n.to_int() >= 9000:
+				bot_count += 1
+	_update_interval_scale(bot_count)
 
-	cached_orbs = get_tree().get_nodes_in_group("orbs").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected)
-	)
-
-	# NEW: Cache abilities
-	cached_abilities = get_tree().get_nodes_in_group("ability_pickups").filter(
-		func(node): return is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1
-	)
-
-	# Store exact coordinates
+	# Orbs
+	var raw_orbs: Array = get_tree().get_nodes_in_group("orbs")
+	cached_orbs.clear()
 	cached_orb_positions.clear()
-	for orb in cached_orbs:
-		if is_instance_valid(orb) and "global_position" in orb:
-			cached_orb_positions[orb] = orb.global_position
+	for node in raw_orbs:
+		if is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected):
+			cached_orbs.append(node)
+			cached_orb_positions[node] = node.global_position
 
-	# NEW: Store ability coordinates
+	# Abilities (skip if we already have one)
+	cached_abilities.clear()
 	cached_ability_positions.clear()
-	for ability in cached_abilities:
-		if is_instance_valid(ability) and "global_position" in ability:
-			cached_ability_positions[ability] = ability.global_position
+	if not bot.current_ability:
+		var raw_abilities: Array = get_tree().get_nodes_in_group("ability_pickups")
+		for node in raw_abilities:
+			if is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1:
+				cached_abilities.append(node)
+				cached_ability_positions[node] = node.global_position
 
-	# Clean up visibility cache entries for freed targets
+	# Clean up stale visibility cache
 	for target in last_seen_targets.keys():
 		if not is_instance_valid(target):
 			last_seen_targets.erase(target)
@@ -632,7 +631,7 @@ func refresh_cached_groups() -> void:
 	# Cache platforms
 	refresh_platform_cache()
 
-	# Arena-specific caches (rails, jump pads, teleporters)
+	# Arena-specific caches
 	setup_arena_specific_caches()
 
 func refresh_platform_cache() -> void:
@@ -655,7 +654,7 @@ func refresh_platform_cache() -> void:
 		return
 
 	var bot_pos: Vector3 = bot.global_position
-	var candidate_platforms: Array[Dictionary] = []
+	var max_dist_sq: float = MAX_PLATFORM_DISTANCE * MAX_PLATFORM_DISTANCE
 
 	for platform_node in level_gen.platforms:
 		if not is_instance_valid(platform_node) or not platform_node.is_inside_tree():
@@ -663,13 +662,13 @@ func refresh_platform_cache() -> void:
 
 		var platform_pos: Vector3 = platform_node.global_position
 
-		# Only cache elevated platforms
 		if platform_pos.y < MIN_PLATFORM_HEIGHT:
 			continue
 
-		# Only cache nearby platforms
-		var distance: float = bot_pos.distance_to(platform_pos)
-		if distance > MAX_PLATFORM_DISTANCE:
+		# Use squared distance to avoid sqrt
+		var diff: Vector3 = platform_pos - bot_pos
+		var dist_sq: float = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z
+		if dist_sq > max_dist_sq:
 			continue
 
 		var platform_size: Vector3 = Vector3(8, 1, 8)
@@ -677,26 +676,15 @@ func refresh_platform_cache() -> void:
 			if platform_node.mesh is BoxMesh:
 				platform_size = platform_node.mesh.size
 
-		candidate_platforms.append({
+		cached_platforms.append({
 			"node": platform_node,
 			"position": platform_pos,
 			"size": platform_size,
-			"height": platform_pos.y,
-			"distance": distance
+			"height": platform_pos.y
 		})
 
-	# Sort by distance and keep closest
-	if candidate_platforms.size() > MAX_CACHED_PLATFORMS:
-		candidate_platforms.sort_custom(func(a, b): return a.distance < b.distance)
-		candidate_platforms = candidate_platforms.slice(0, MAX_CACHED_PLATFORMS)
-
-	for platform_data in candidate_platforms:
-		cached_platforms.append({
-			"node": platform_data.node,
-			"position": platform_data.position,
-			"size": platform_data.size,
-			"height": platform_data.height
-		})
+		if cached_platforms.size() >= MAX_CACHED_PLATFORMS:
+			break
 
 # ============================================================================
 # TARGET FINDING
@@ -1139,35 +1127,33 @@ func can_see_target(target: Node) -> bool:
 # ============================================================================
 
 func apply_bot_repulsion() -> void:
-	"""NEW: Apply repulsion force to prevent bots from clumping together"""
+	"""Apply repulsion force to prevent bots from clumping together"""
 	if not bot:
 		return
 
 	var repulsion_force: Vector3 = Vector3.ZERO
-	var bot_count: int = 0
+	var nearby_count: int = 0
+	var bot_pos: Vector3 = bot.global_position
 
 	for player in cached_players:
 		if player == bot or not is_instance_valid(player):
 			continue
 
-		# Skip human players
-		if not player.is_in_group("bots"):
+		# Only repel other bots (entity_id >= 9000)
+		if player.has_method("is_bot") and not player.is_bot():
 			continue
 
-		var distance: float = bot.global_position.distance_to(player.global_position)
+		var diff: Vector3 = bot_pos - player.global_position
+		diff.y = 0
+		var dist_sq: float = diff.length_squared()
 
-		# Apply repulsion if too close
-		if distance < BOT_REPULSION_DISTANCE and distance > 0.1:
-			var direction: Vector3 = (bot.global_position - player.global_position).normalized()
-			direction.y = 0  # Keep horizontal
+		if dist_sq < BOT_REPULSION_DISTANCE * BOT_REPULSION_DISTANCE and dist_sq > 0.01:
+			var dist: float = sqrt(dist_sq)
+			var strength: float = (BOT_REPULSION_DISTANCE - dist) / BOT_REPULSION_DISTANCE
+			repulsion_force += (diff / dist) * strength * current_roll_force * 0.3
+			nearby_count += 1
 
-			# Stronger repulsion when closer
-			var strength: float = (BOT_REPULSION_DISTANCE - distance) / BOT_REPULSION_DISTANCE
-			repulsion_force += direction * strength * current_roll_force * 0.3
-			bot_count += 1
-
-	# Apply averaged repulsion force
-	if bot_count > 0:
+	if nearby_count > 0:
 		bot.apply_central_force(repulsion_force)
 
 # ============================================================================
