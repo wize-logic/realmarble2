@@ -84,7 +84,6 @@ var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 # Player marble customization
 var selected_marble_color_index: int = 0  # Default to first color (Ruby Red)
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
-var level_config_music_walls: bool = false  # Enable WMP9-style music visualizer on walls
 
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
@@ -402,9 +401,8 @@ func _on_practice_button_pressed() -> void:
 		return
 
 	# Now start practice mode with the chosen settings (Q3 generator only)
-	var music_walls_enabled: bool = level_config.get("music_walls", false)
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, music_walls: %s..." % [bot_count_choice, level_config.size, level_config.time, music_walls_enabled])
-	start_practice_mode(bot_count_choice, level_config.size, level_config.time, music_walls_enabled)
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs..." % [bot_count_choice, level_config.size, level_config.time])
+	start_practice_mode(bot_count_choice, level_config.size, level_config.time)
 
 func ask_bot_count() -> int:
 	"""Ask the user how many bots they want to play against"""
@@ -632,7 +630,6 @@ func ask_level_config() -> Dictionary:
 	level_config_dialog_closed = false
 	level_config_size = 2  # Default: Medium
 	level_config_time = 300.0  # Default: 5 minutes
-	level_config_music_walls = false  # Default: disabled
 
 	# === LEVEL SIZE/COMPLEXITY SECTION ===
 	var size_section = VBoxContainer.new()
@@ -848,8 +845,8 @@ func ask_level_config() -> Dictionary:
 		DebugLogger.dlog(DebugLogger.Category.UI, "Level config cancelled")
 		return {}
 
-	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f, music_walls: %s" % [level_config_size, level_config_time, level_config_music_walls])
-	return {"size": level_config_size, "time": level_config_time, "music_walls": level_config_music_walls}
+	DebugLogger.dlog(DebugLogger.Category.UI, "Level config final values - size: %d, time: %.0f" % [level_config_size, level_config_time])
+	return {"size": level_config_size, "time": level_config_time}
 
 func _on_size_slider_changed(value: float, label: Label) -> void:
 	"""Callback for size slider - properly sets instance variable"""
@@ -870,15 +867,14 @@ func _on_time_slider_changed(value: float, label: Label) -> void:
 	label.text = time_labels[index]
 	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
 
-func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0, music_walls: bool = false) -> void:
+func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
 	Args:
 		bot_count: Number of bots to spawn
 		level_size: 1=Small, 2=Medium, 3=Large, 4=Huge
 		match_time: Match duration in seconds
-		music_walls: Enable WMP9-style music visualizer on walls
 	"""
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs, music_walls: %s" % [bot_count, level_size, match_time, music_walls])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "Starting practice mode with %d bots, size %d, time %.0fs" % [bot_count, level_size, match_time])
 
 	if main_menu:
 		main_menu.hide()
@@ -907,8 +903,8 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 
 	# Regenerate level with selected size and wall settings
 	current_level_size = level_size
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d, music_walls: %s..." % [level_size, music_walls])
-	await generate_procedural_level(true, level_size, false, false, 0, music_walls)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level with size %d..." % level_size)
+	await generate_procedural_level(true, level_size, false, false, 0, false)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -1188,14 +1184,13 @@ func show_main_menu() -> void:
 func start_multiplayer_match(settings: Dictionary) -> void:
 	"""Start a multiplayer match with the specified room settings.
 	Args:
-		settings: Dictionary with level_size, match_time, music_walls, and level_seed
+		settings: Dictionary with level_size, match_time, and level_seed
 	"""
 	var level_size: int = settings.get("level_size", 2)
 	var match_time: float = settings.get("match_time", 300.0)
-	var music_walls: bool = settings.get("music_walls", false)
 	var level_seed: int = settings.get("level_seed", 0)
 
-	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, music_walls: %s, seed: %d" % [level_size, match_time, music_walls, level_seed])
+	DebugLogger.dlog(DebugLogger.Category.WORLD, "start_multiplayer_match() - size: %d, time: %.0f, seed: %d" % [level_size, match_time, level_seed])
 
 	# Store settings for level generation
 	current_level_size = level_size
@@ -1231,8 +1226,8 @@ func start_multiplayer_match(settings: Dictionary) -> void:
 		gameplay_music.start_playlist()
 
 	# Regenerate level with multiplayer settings (using shared seed for sync)
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Music Walls: %s, Seed: %d)..." % [level_size, music_walls, level_seed])
-	await generate_procedural_level(true, level_size, false, false, level_seed, music_walls)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, Seed: %d)..." % [level_size, level_seed])
+	await generate_procedural_level(true, level_size, false, false, level_seed, false)
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 
 	# Capture mouse for gameplay
@@ -1302,13 +1297,11 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
 	if not skip_level_regen and multiplayer.has_multiplayer_peer():
 		# FIX: Pass video/music wall settings from room_settings for multiplayer fallback path
-		var fallback_music_walls: bool = false
 		var fallback_seed: int = 0
 		if MultiplayerManager:
-			fallback_music_walls = MultiplayerManager.room_settings.get("music_walls", false)
 			fallback_seed = MultiplayerManager.room_settings.get("level_seed", 0)
-		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d, music: %s)..." % [current_level_size, fallback_music_walls])
-		await generate_procedural_level(true, current_level_size, false, false, fallback_seed, fallback_music_walls)
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Regenerating level for multiplayer match (Size %d)..." % current_level_size)
+		await generate_procedural_level(true, current_level_size, false, false, fallback_seed, false)
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Level regeneration complete!")
 	elif skip_level_regen:
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skipping level regeneration (practice mode already generated level)")

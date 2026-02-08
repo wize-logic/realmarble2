@@ -28,7 +28,6 @@ var bot_counter: int = 0  # Counter for generating bot IDs
 var room_settings: Dictionary = {
 	"level_size": 2,        # 1=Small, 2=Medium, 3=Large, 4=Huge
 	"match_time": 300.0,    # Match duration in seconds (default 5 minutes)
-	"music_walls": false,   # Enable WMP9-style audio visualizer on walls
 	"level_seed": 0         # Level generation seed (0 = will be set on game start)
 }
 
@@ -337,7 +336,6 @@ func reset_room_settings() -> void:
 	room_settings = {
 		"level_size": 2,
 		"match_time": 300.0,
-		"music_walls": false,
 		"level_seed": 0
 	}
 	room_settings_changed.emit(room_settings)
