@@ -19,6 +19,7 @@ const MIN_SPAWN_SEPARATION: float = 3.0  # Minimum distance between abilities/or
 var spawned_orbs: Array[Area3D] = []
 var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _respawn_queue: Array[Area3D] = []  # PERF: Queue respawns to spread raycasts across frames
 
 func _ready() -> void:
 	# MULTIPLAYER SYNC FIX: Use level_seed for deterministic spawning across all clients
@@ -41,6 +42,18 @@ func _process(delta: float) -> void:
 	var world: Node = get_parent()
 	if not (world and world.has_method("is_game_active") and world.is_game_active()):
 		return
+
+	# PERF: Process respawn queue 1 item per frame to spread raycasts across frames
+	# (Previously respawned ALL items at once = up to 2400 raycasts in a single frame)
+	if not _respawn_queue.is_empty():
+		var orb: Area3D = _respawn_queue.pop_front()
+		if orb and is_instance_valid(orb) and orb.get("is_collected") == true:
+			var new_pos: Vector3 = get_random_spawn_position()
+			orb.global_position = new_pos
+			if "base_height" in orb:
+				orb.base_height = new_pos.y
+			if orb.has_method("respawn_orb"):
+				orb.respawn_orb()
 
 	respawn_timer += delta
 	if respawn_timer >= respawn_interval:
@@ -72,18 +85,20 @@ func spawn_orbs() -> void:
 	# Re-seed RNG before spawning to ensure deterministic positions across all clients
 	seed_rng_from_level()
 
-	# Scale orb count based on number of players (5 orbs per player)
-	# Type B arenas get more orbs due to larger vertical space and rooms
+	# Scale orb count based on number of players
+	# PERF: Reduced counts on HTML5 to cut per-frame _process overhead (each item runs bobbing animation)
 	var player_count: int = get_tree().get_nodes_in_group("players").size()
-	var orbs_per_player: float = 5.0  # Increased from 3.0
+	var _is_web: bool = OS.has_feature("web")
+	var orbs_per_player: float = 2.5 if _is_web else 5.0
 
 	# Check if Type B arena (more orbs needed for larger, multi-tier arenas)
 	# Reuse world variable from above
 	if world and world.has_method("get_current_level_type"):
 		if world.get_current_level_type() == "B":
-			orbs_per_player = 7.0  # Increased from 4.5
+			orbs_per_player = 3.5 if _is_web else 7.0
 
-	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 25, 80)  # Increased from 12-48
+	var max_orbs: int = 35 if _is_web else 80
+	var scaled_orbs: int = clamp(int(player_count * orbs_per_player), 12, max_orbs)
 
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "=== ORB SPAWNER: Starting to spawn orbs ===")
 	DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Players: %d | Total orbs: %d" % [player_count, scaled_orbs])
@@ -100,7 +115,7 @@ func get_random_spawn_position() -> Vector3:
 	"""Generate a random position on top of the ground, avoiding overlap with existing items"""
 	const DEATH_ZONE_Y: float = -50.0  # Death zone position
 	const MIN_SAFE_Y: float = -40.0    # Minimum safe Y position (above death zone)
-	const MAX_ATTEMPTS: int = 30  # Maximum attempts to find a non-overlapping position
+	const MAX_ATTEMPTS: int = 10  # Reduced from 30 to limit raycast spikes
 
 	var attempts: int = 0
 	while attempts < MAX_ATTEMPTS:
@@ -181,23 +196,14 @@ func spawn_orb_at_position(pos: Vector3) -> void:
 	# Note: Orbs have built-in bob animation, no need for velocity
 
 func check_and_respawn_orbs() -> void:
-	"""Check collected orbs and respawn them at random locations"""
+	"""Queue collected orbs for respawn (processed 1 per frame to avoid raycast spikes)"""
 	if not respawn_at_random_location:
 		return
 
 	for orb in spawned_orbs:
 		if orb and orb.get("is_collected") == true:
-			# Move orb to new random location on the ground
-			var new_pos: Vector3 = get_random_spawn_position()
-			orb.global_position = new_pos
-			# Update base_height for the bobbing animation
-			if "base_height" in orb:
-				orb.base_height = new_pos.y
-
-			# Properly reset the orb state by calling its respawn function
-			if orb.has_method("respawn_orb"):
-				orb.respawn_orb()
-			DebugLogger.dlog(DebugLogger.Category.SPAWNERS, "Respawned orb at new random location: %s" % orb.global_position)
+			if orb not in _respawn_queue:
+				_respawn_queue.append(orb)
 
 func clear_all() -> void:
 	"""Clear all orbs without respawning (called when match ends)"""

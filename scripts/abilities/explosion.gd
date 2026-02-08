@@ -30,117 +30,9 @@ func _ready() -> void:
 	supports_charging = true  # Explosion supports charging for bigger boom
 	max_charge_time = 2.0  # 2 seconds for max charge
 
-	# Create explosion particle effect
-	explosion_particles = CPUParticles3D.new()
-	explosion_particles.name = "ExplosionParticles"
-	add_child(explosion_particles)
-
-	# Configure explosion particles
-	explosion_particles.emitting = false
-	explosion_particles.amount = 40 if OS.has_feature("web") else 100
-	explosion_particles.lifetime = 0.5
-	explosion_particles.one_shot = true
-	explosion_particles.explosiveness = 1.0
-	explosion_particles.randomness = 0.5
-	explosion_particles.local_coords = false
-
-	# Set up particle mesh and material for visibility
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.8, 0.8)
-	# Create material for additive blending (explosion effect)
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_material.albedo_color = Color(1.0, 0.6, 0.1, 1.0)
-	particle_mesh.material = particle_material
-	explosion_particles.mesh = particle_mesh
-
-	# Emission shape - sphere explosion
-	explosion_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	explosion_particles.emission_sphere_radius = 0.5
-
-	# Movement - explode outward
-	explosion_particles.direction = Vector3(0, 1, 0)
-	explosion_particles.spread = 180.0  # Full sphere
-	explosion_particles.gravity = Vector3(0, -15.0, 0)
-	explosion_particles.initial_velocity_min = 8.0
-	explosion_particles.initial_velocity_max = 15.0
-
-	# Size over lifetime
-	explosion_particles.scale_amount_min = 1.5
-	explosion_particles.scale_amount_max = 3.0
-	explosion_particles.scale_amount_curve = Curve.new()
-	explosion_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
-	explosion_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
-	explosion_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
-
-	# Color - explosion (bright orange/yellow -> dark red) - no white
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.9, 0.35, 1.0))  # Bright golden-yellow (no white)
-	gradient.add_point(0.2, Color(1.0, 0.7, 0.0, 1.0))  # Orange
-	gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))  # Red-orange
-	gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
-	explosion_particles.color_ramp = gradient
-
-	# Create magma chunk particle effect (scales with player level)
-	var magma_particles: CPUParticles3D = CPUParticles3D.new()
-	magma_particles.name = "MagmaParticles"
-	add_child(magma_particles)
-
-	# Configure magma particles - chunky projectiles
-	magma_particles.emitting = false
-	magma_particles.amount = 15 if OS.has_feature("web") else 30  # Base amount, will scale with level
-	magma_particles.lifetime = 1.5  # Magma chunks last longer
-	magma_particles.one_shot = true
-	magma_particles.explosiveness = 0.8  # Most spawn at once
-	magma_particles.randomness = 0.4
-	magma_particles.local_coords = false
-
-	# Set up particle mesh - larger chunks
-	var magma_mesh: QuadMesh = QuadMesh.new()
-	magma_mesh.size = Vector2(0.4, 0.4)
-	# Create material for magma chunks (glowing lava)
-	var magma_material: StandardMaterial3D = StandardMaterial3D.new()
-	magma_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	magma_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	magma_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	magma_material.vertex_color_use_as_albedo = true
-	magma_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	magma_material.disable_receive_shadows = true
-	magma_material.albedo_color = Color(1.0, 0.3, 0.0, 1.0)
-	magma_mesh.material = magma_material
-	magma_particles.mesh = magma_mesh
-
-	# Emission shape - sphere around player
-	magma_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	magma_particles.emission_sphere_radius = 0.8
-
-	# Movement - shoot outward like projectiles
-	magma_particles.direction = Vector3(0, 0.3, 0)  # Slight upward bias
-	magma_particles.spread = 180.0  # Full sphere
-	magma_particles.gravity = Vector3(0, -20.0, 0)  # Fall down like real chunks
-	magma_particles.initial_velocity_min = 6.0  # Fast shooting chunks
-	magma_particles.initial_velocity_max = 12.0
-
-	# Size over lifetime - start small, shrink to nothing
-	magma_particles.scale_amount_min = 1.2
-	magma_particles.scale_amount_max = 2.0
-	magma_particles.scale_amount_curve = Curve.new()
-	magma_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
-	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.7))
-	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.0))  # Shrink to 0 to prevent stuck particles
-
-	# Color - lava/magma gradient (bright orange -> dark red)
-	var magma_gradient: Gradient = Gradient.new()
-	magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))  # Bright yellow-orange
-	magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))  # Orange
-	magma_gradient.add_point(0.7, Color(0.8, 0.1, 0.0, 0.8))  # Dark red
-	magma_gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))  # Black/transparent
-	magma_particles.color_ramp = magma_gradient
+	# Create explosion particle effects (visible attack effects - keep for all players)
+	_create_explosion_particles()
+	_create_magma_particles()
 
 	# Create damage area for detecting hits
 	explosion_area = Area3D.new()
@@ -158,8 +50,9 @@ func _ready() -> void:
 	# Disable by default
 	explosion_area.monitoring = false
 
-	# Create radius indicator for visual feedback
-	create_radius_indicator()
+	# Create radius indicator for visual feedback (human player only)
+	if not _is_bot_owner():
+		create_radius_indicator()
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -172,8 +65,8 @@ func _process(delta: float) -> void:
 	# Update radius indicator visibility and scale based on charging state
 	# MULTIPLAYER FIX: Only show indicator to the local player using the ability
 	if radius_indicator and player and is_instance_valid(player) and player.is_inside_tree():
-		# Check if this player is the local player (has multiplayer authority)
-		var is_local_player: bool = player.is_multiplayer_authority()
+		# PERF: Only show indicator for local human player (not bots)
+		var is_local_player: bool = is_local_human_player()
 
 		if is_charging and is_local_player:
 			# Show indicator while charging (only to local player)
@@ -655,6 +548,92 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 		if is_instance_valid(explosion):
 			explosion.queue_free()
 	)
+
+func _create_explosion_particles() -> void:
+	explosion_particles = CPUParticles3D.new()
+	explosion_particles.name = "ExplosionParticles"
+	add_child(explosion_particles)
+	explosion_particles.emitting = false
+	explosion_particles.amount = 40 if OS.has_feature("web") else 100
+	explosion_particles.lifetime = 0.5
+	explosion_particles.one_shot = true
+	explosion_particles.explosiveness = 1.0
+	explosion_particles.randomness = 0.5
+	explosion_particles.local_coords = false
+	var particle_mesh: QuadMesh = QuadMesh.new()
+	particle_mesh.size = Vector2(0.8, 0.8)
+	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
+	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	particle_material.vertex_color_use_as_albedo = true
+	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	particle_material.disable_receive_shadows = true
+	particle_material.albedo_color = Color(1.0, 0.6, 0.1, 1.0)
+	particle_mesh.material = particle_material
+	explosion_particles.mesh = particle_mesh
+	explosion_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	explosion_particles.emission_sphere_radius = 0.5
+	explosion_particles.direction = Vector3(0, 1, 0)
+	explosion_particles.spread = 180.0
+	explosion_particles.gravity = Vector3(0, -15.0, 0)
+	explosion_particles.initial_velocity_min = 8.0
+	explosion_particles.initial_velocity_max = 15.0
+	explosion_particles.scale_amount_min = 1.5
+	explosion_particles.scale_amount_max = 3.0
+	explosion_particles.scale_amount_curve = Curve.new()
+	explosion_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
+	explosion_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
+	explosion_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+	var gradient: Gradient = Gradient.new()
+	gradient.add_point(0.0, Color(1.0, 0.9, 0.35, 1.0))
+	gradient.add_point(0.2, Color(1.0, 0.7, 0.0, 1.0))
+	gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))
+	gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))
+	explosion_particles.color_ramp = gradient
+
+func _create_magma_particles() -> void:
+	var magma_particles: CPUParticles3D = CPUParticles3D.new()
+	magma_particles.name = "MagmaParticles"
+	add_child(magma_particles)
+	magma_particles.emitting = false
+	magma_particles.amount = 15 if OS.has_feature("web") else 30
+	magma_particles.lifetime = 1.5
+	magma_particles.one_shot = true
+	magma_particles.explosiveness = 0.8
+	magma_particles.randomness = 0.4
+	magma_particles.local_coords = false
+	var magma_mesh: QuadMesh = QuadMesh.new()
+	magma_mesh.size = Vector2(0.4, 0.4)
+	var magma_material: StandardMaterial3D = StandardMaterial3D.new()
+	magma_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	magma_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	magma_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	magma_material.vertex_color_use_as_albedo = true
+	magma_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	magma_material.disable_receive_shadows = true
+	magma_material.albedo_color = Color(1.0, 0.3, 0.0, 1.0)
+	magma_mesh.material = magma_material
+	magma_particles.mesh = magma_mesh
+	magma_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	magma_particles.emission_sphere_radius = 0.8
+	magma_particles.direction = Vector3(0, 0.3, 0)
+	magma_particles.spread = 180.0
+	magma_particles.gravity = Vector3(0, -20.0, 0)
+	magma_particles.initial_velocity_min = 6.0
+	magma_particles.initial_velocity_max = 12.0
+	magma_particles.scale_amount_min = 1.2
+	magma_particles.scale_amount_max = 2.0
+	magma_particles.scale_amount_curve = Curve.new()
+	magma_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
+	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.7))
+	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+	var magma_gradient: Gradient = Gradient.new()
+	magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))
+	magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))
+	magma_gradient.add_point(0.7, Color(0.8, 0.1, 0.0, 0.8))
+	magma_gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))
+	magma_particles.color_ramp = magma_gradient
 
 func create_radius_indicator() -> void:
 	"""Create a sphere indicator that shows the explosion hitbox while charging"""

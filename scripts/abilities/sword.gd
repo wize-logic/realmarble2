@@ -55,7 +55,7 @@ func _ready() -> void:
 	# Disable hitbox by default
 	slash_hitbox.monitoring = false
 
-	# Create slash particle effect
+	# Create slash particle effect (visible attack effect - keep for bots)
 	slash_particles = CPUParticles3D.new()
 	slash_particles.name = "SlashParticles"
 	add_child(slash_particles)
@@ -114,8 +114,9 @@ func _ready() -> void:
 	gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
 	slash_particles.color_ramp = gradient
 
-	# Create arc indicator for sword swing range
-	create_arc_indicator()
+	# Create arc indicator for sword swing range (human player only)
+	if not _is_bot_owner():
+		create_arc_indicator()
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -130,8 +131,8 @@ func _process(delta: float) -> void:
 	# Update arc indicator visibility and orientation based on charging state
 	# MULTIPLAYER FIX: Only show indicator to the local player using the ability
 	if arc_indicator and player and is_instance_valid(player) and player.is_inside_tree():
-		# Check if this player is the local player (has multiplayer authority)
-		var is_local_player: bool = player.is_multiplayer_authority()
+		# PERF: Only show indicator for local human player (not bots)
+		var is_local_player: bool = is_local_human_player()
 
 		if is_charging and is_local_player:
 			# Show indicator while charging (only to local player)

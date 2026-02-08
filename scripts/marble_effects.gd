@@ -32,6 +32,12 @@ func _ready() -> void:
 		push_warning("MarbleEffects: Parent is not a RigidBody3D")
 		return
 
+	# PERF: Skip all trail/impact effects for bots on HTML5
+	# GPUParticles3D are expensive in WebGL2 and bot trails aren't visible enough to matter
+	if OS.has_feature("web") and marble_body.has_method("is_bot") and marble_body.is_bot():
+		set_physics_process(false)
+		return
+
 	create_trail_particles()
 	create_speed_trail_particles()
 	create_impact_pool()

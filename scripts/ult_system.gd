@@ -35,18 +35,24 @@ var trail_particles: CPUParticles3D = null
 var hitbox: Area3D = null
 
 var ult_ready_flash: float = 0.0
+var _is_bot_owner: bool = false  # PERF: Cache whether owner is a bot
+var _is_web: bool = false  # PERF: Cache platform check
 
 signal ult_activated
 signal ult_charge_changed(new_charge: float)
 signal ult_ready
 
 func _ready() -> void:
+	_is_web = OS.has_feature("web")
 	create_hitbox()
-	create_visual_effects()
+	# NOTE: Visual effects are created in setup() after we know if this is a bot
 
 func setup(p_player: Node) -> void:
 	"""Initialize the ult system for a player"""
 	player = p_player
+	_is_bot_owner = player and player.has_method("is_bot") and player.is_bot()
+	# Create visual effects now that we know if this is a bot (skip for bots on HTML5)
+	create_visual_effects()
 
 func _process(delta: float) -> void:
 	if not player:
@@ -60,6 +66,10 @@ func _process(delta: float) -> void:
 		else:
 			# Continue ult dash
 			process_ult_dash(delta)
+	elif _is_bot_owner:
+		# PERF: Bots skip all remaining _process work when not ulting
+		# (no ready flash, no aura - purely visual effects the player can't see)
+		return
 
 	# Flash effect when ult is ready
 	if ult_charge >= MAX_ULT_CHARGE:
@@ -268,6 +278,10 @@ func force_full_charge() -> void:
 
 func create_visual_effects() -> void:
 	"""Create all the visual effect nodes"""
+	# PERF: Skip all visual effects for bots on HTML5 - saves 2 CPUParticles3D + 1 OmniLight3D per bot
+	if _is_web and _is_bot_owner:
+		return
+
 	# Power aura (shows when ult is ready)
 	power_aura = CPUParticles3D.new()
 	power_aura.name = "PowerAura"

@@ -278,7 +278,8 @@ func _ready() -> void:
 	physics_material_override.rough = false    # Smooth surface
 
 	# Enable continuous collision detection for fast movement
-	continuous_cd = true
+	# PERF: Skip for bots on HTML5 - CCD is expensive and bots don't need pixel-perfect collision
+	continuous_cd = not (_is_web and is_bot())
 
 	# Lock all rotation to prevent spinning (no torque-based movement)
 	lock_rotation = true
@@ -292,6 +293,20 @@ func _ready() -> void:
 		camera_arm.top_level = true
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Camera arm top_level set to true", false, get_entity_id())
 
+	var _is_bot_entity: bool = is_bot()
+
+	# PERF: Disable _process, _input, _unhandled_input for bots entirely
+	# Fall death is handled in _physics_process. Bots never receive keyboard/mouse input.
+	if _is_bot_entity:
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+
+	# PERF: Remove the scene Camera3D for bots on HTML5 - they never render through it
+	if _is_bot_entity and _is_web and camera:
+		camera.queue_free()
+		camera = null
+
 	# Set up ground detection raycast
 	if not ground_ray:
 		ground_ray = RayCast3D.new()
@@ -299,70 +314,75 @@ func _ready() -> void:
 		add_child(ground_ray)
 
 	ground_ray.enabled = true
-	ground_ray.target_position = Vector3.DOWN * 0.85  # Cast down 0.85 units to detect ground on slopes up to 45°
-	ground_ray.collision_mask = 0xFFFFFFFF  # Check all layers
+	ground_ray.target_position = Vector3.DOWN * 0.85
+	ground_ray.collision_mask = 0xFFFFFFFF
 	ground_ray.collide_with_areas = false
 	ground_ray.collide_with_bodies = true
 
-	# Set up sound effects (create nodes if they don't exist)
-	if not jump_sound:
+	# Set up sound effects
+	# PERF: On HTML5, bots get NO audio nodes at all. hit_sound/death_sound are also skipped.
+	var _skip_bot_audio: bool = _is_web and _is_bot_entity
+	if not jump_sound and not _skip_bot_audio:
 		jump_sound = AudioStreamPlayer3D.new()
 		jump_sound.name = "JumpSound"
 		add_child(jump_sound)
 		jump_sound.max_distance = 20.0
 		jump_sound.volume_db = -5.0
 
-	if not spin_sound:
+	if not spin_sound and not _skip_bot_audio:
 		spin_sound = AudioStreamPlayer3D.new()
 		spin_sound.name = "SpinSound"
 		add_child(spin_sound)
 		spin_sound.max_distance = 25.0
 		spin_sound.volume_db = 0.0
 
-	if not land_sound:
+	if not land_sound and not _skip_bot_audio:
 		land_sound = AudioStreamPlayer3D.new()
 		land_sound.name = "LandSound"
 		add_child(land_sound)
 		land_sound.max_distance = 15.0
 		land_sound.volume_db = -8.0
 
-	if not bounce_sound:
+	if not bounce_sound and not _skip_bot_audio:
 		bounce_sound = AudioStreamPlayer3D.new()
 		bounce_sound.name = "BounceSound"
 		add_child(bounce_sound)
 		bounce_sound.max_distance = 20.0
 		bounce_sound.volume_db = -2.0
 
-	if not charge_sound:
+	if not charge_sound and not _skip_bot_audio:
 		charge_sound = AudioStreamPlayer3D.new()
 		charge_sound.name = "ChargeSound"
 		add_child(charge_sound)
 		charge_sound.max_distance = 20.0
 		charge_sound.volume_db = -3.0
 
-	if not hit_sound:
+	if not hit_sound and not _skip_bot_audio:
 		hit_sound = AudioStreamPlayer3D.new()
 		hit_sound.name = "HitSound"
 		add_child(hit_sound)
 		hit_sound.max_distance = 25.0
 		hit_sound.volume_db = 0.0
 
-	if not death_sound:
+	if not death_sound and not _skip_bot_audio:
 		death_sound = AudioStreamPlayer3D.new()
 		death_sound.name = "DeathSound"
 		add_child(death_sound)
-		death_sound.max_distance = 50.0  # Louder and further reaching
-		death_sound.volume_db = 5.0  # Louder than other sounds
+		death_sound.max_distance = 50.0
+		death_sound.volume_db = 5.0
 
-	if not spawn_sound:
+	if not spawn_sound and not _skip_bot_audio:
 		spawn_sound = AudioStreamPlayer3D.new()
 		spawn_sound.name = "SpawnSound"
 		add_child(spawn_sound)
 		spawn_sound.max_distance = 30.0
 		spawn_sound.volume_db = 0.0
 
-	# Create death particle effect
-	if not death_particles:
+	# PERF: Skip most particle effects for bots on HTML5 - saves ~7 CPUParticles3D per bot
+	var _skip_bot_particles: bool = _is_web and is_bot()
+
+	# Create death particle effect (keep for all - it's one-shot and rarely fires)
+	if not death_particles and not _skip_bot_particles:
 		death_particles = CPUParticles3D.new()
 		death_particles.name = "DeathParticles"
 		add_child(death_particles)
@@ -419,7 +439,7 @@ func _ready() -> void:
 		death_particles.color_ramp = gradient
 
 	# Create collection particle effect (blue aura rising upward)
-	if not collection_particles:
+	if not collection_particles and not _skip_bot_particles:
 		collection_particles = CPUParticles3D.new()
 		collection_particles.name = "CollectionParticles"
 		add_child(collection_particles)
@@ -482,7 +502,7 @@ func _ready() -> void:
 		collection_particles.color_ramp = collection_gradient
 
 	# Create jump/bounce particle effect (Sonic Adventure 2 style blue circles)
-	if not jump_bounce_particles:
+	if not jump_bounce_particles and not _skip_bot_particles:
 		jump_bounce_particles = CPUParticles3D.new()
 		jump_bounce_particles.name = "JumpBounceParticles"
 		add_child(jump_bounce_particles)
@@ -557,7 +577,8 @@ func _ready() -> void:
 	apply_marble_material()
 
 	# Set up aura light effect for player visibility - makes marbles stand out
-	if not aura_light:
+	# PERF: Skip aura light for bots on HTML5 - dynamic OmniLight3D is extremely expensive in WebGL2
+	if not aura_light and not (_is_web and is_bot()):
 		aura_light = OmniLight3D.new()
 		aura_light.name = "AuraLight"
 		add_child(aura_light)
@@ -572,7 +593,8 @@ func _ready() -> void:
 		aura_light.shadow_enabled = false
 
 	# Create grind spark particles (Sonic series style)
-	if not grind_particles:
+	# PERF: Skip for bots on HTML5 - bots don't grind rails
+	if not grind_particles and not _skip_bot_particles:
 		grind_particles = CPUParticles3D.new()
 		grind_particles.name = "GrindParticles"
 		add_child(grind_particles)
@@ -637,12 +659,16 @@ func _ready() -> void:
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-	# Create ult system
+	# Create ult system (needed for both players and bots - bots can ult)
 	create_ult_system()
 
-	# Create rail reticle UI
+	# PERF: Skip human-only setup for bots
+	if is_bot():
+		return
+
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+	# Create rail reticle UI (human player only)
 	create_rail_reticle_ui()
 
 	# Spawn at fixed position based on player ID
@@ -722,26 +748,18 @@ func _find_all_cameras(node: Node, camera_list: Array[Camera3D]) -> void:
 		_find_all_cameras(child, camera_list)
 
 func _process(delta: float) -> void:
+	# PERF: Bots have set_process(false) in _ready, so this never runs for them.
+	# All bot fall-death logic is handled in _physics_process instead.
+
 	# CRITICAL HTML5 FIX: Position camera arm FIRST, before ANY other code
-	# This MUST run every frame for the camera to follow the player
 	if camera_arm and is_instance_valid(camera_arm):
 		camera_arm.global_position = global_position
-	else:
-		if not camera_arm:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera_arm is NULL in _process!" % name, false, get_entity_id())
 
-	# CRITICAL FIX: Only force camera for local player with authority (not bots!)
-	# Bots must NEVER activate their cameras or they'll hijack the player camera
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
-		# Skip camera activation for bots and non-authority players
-		pass
-	elif camera and is_instance_valid(camera):
-		if not camera.current:
+	# Force camera current
+	if camera and is_instance_valid(camera) and not camera.current:
+		# Skip if we're a remote player in multiplayer
+		if not (multiplayer.has_multiplayer_peer() and not is_multiplayer_authority()):
 			camera.current = true
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA FIX] Player %s: Forced camera.current = true in _process" % name, false, get_entity_id())
-	else:
-		if not camera:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA ERROR] Player %s: camera is NULL in _process!" % name, false, get_entity_id())
 
 	# Handle last attacker timeout
 	if last_attacker_id != -1:
@@ -750,30 +768,23 @@ func _process(delta: float) -> void:
 			last_attacker_id = -1
 			last_attacker_time = 0.0
 
-	# Handle falling death state - MUST run for ALL entities (players AND bots)
+	# Handle falling death state
 	if is_falling_to_death:
 		fall_death_timer += delta
-
-		# For players with cameras: keep camera watching the fall
-		if is_multiplayer_authority() and camera and camera_arm:
+		if camera and camera_arm:
 			if not fall_camera_detached:
 				fall_camera_position = camera_arm.global_position
 				fall_camera_detached = true
-
 			camera_arm.global_position = fall_camera_position
 			camera.look_at(global_position, Vector3.UP)
-
-		# Respawn after 2 seconds (works for both players and bots)
 		if fall_death_timer >= 2.0:
-			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Fall death timer reached 2.0s, respawning %s" % name, false, get_entity_id())
 			respawn()
 			is_falling_to_death = false
 			fall_camera_detached = false
 			fall_death_timer = 0.0
-		return  # Skip normal processing while falling to death
+		return
 
-	# Early return for non-authority (bots)
-	# In practice mode (no multiplayer peer), we're always the authority
+	# Early return for non-authority (remote players in multiplayer)
 	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
 		return
 
@@ -1016,41 +1027,80 @@ func _unhandled_input(event: InputEvent) -> void:
 			spin_charge = 0.0
 
 func _physics_process(delta: float) -> void:
-	# CRITICAL HTML5 FIX: Also position camera arm in physics_process as fallback
+	var _is_bot_entity: bool = is_bot()
+
+	# ---------------------------------------------------------------
+	# BOT FAST PATH: Minimal per-frame work for bots
+	# ---------------------------------------------------------------
+	if _is_bot_entity:
+		# Handle fall death (moved from _process which is disabled for bots)
+		if is_falling_to_death:
+			fall_death_timer += delta
+			if fall_death_timer >= 2.0:
+				respawn()
+				is_falling_to_death = false
+				fall_death_timer = 0.0
+			return
+
+		# Last attacker timeout
+		if last_attacker_id != -1:
+			var current_time: float = Time.get_ticks_msec() / 1000.0
+			if (current_time - last_attacker_time) > ATTACKER_TIMEOUT:
+				last_attacker_id = -1
+				last_attacker_time = 0.0
+
+		# Simple ground check for bots - just read the raycast, no sounds/particles/logging
+		if ground_ray:
+			var was_grounded: bool = is_grounded
+			is_grounded = ground_ray.is_colliding()
+			if is_grounded and not was_grounded:
+				jump_count = 0
+			if is_grounded and jump_count > 0:
+				jump_count = 0
+
+		# Minimal cooldown timers bots actually need
+		if bounce_cooldown > 0.0:
+			bounce_cooldown -= delta
+		if jump_pad_cooldown > 0.0:
+			jump_pad_cooldown -= delta
+		if teleporter_cooldown > 0.0:
+			teleporter_cooldown -= delta
+		if spin_cooldown > 0.0:
+			spin_cooldown -= delta
+		return  # Bot movement is handled by BotAI node
+
+	# ---------------------------------------------------------------
+	# HUMAN PLAYER PATH: Full processing
+	# ---------------------------------------------------------------
+
+	# Position camera arm in physics_process as fallback
 	if camera_arm and is_instance_valid(camera_arm):
 		camera_arm.global_position = global_position
 
-	# Update marble rolling for ALL marbles (players and bots)
 	_physics_process_marble_roll(delta)
 
 	# MULTIPLAYER POSITION SYNC FIX: Handle position synchronization
 	if multiplayer.multiplayer_peer != null:
 		if is_multiplayer_authority():
-			# Authority broadcasts position to all clients
 			_sync_position_to_clients(delta)
 		else:
-			# Non-authority applies interpolated position from sync
 			_apply_position_sync(delta)
-			return  # Non-authority doesn't process physics locally
+			return
 
 	# Check if marble is on ground using raycast
 	check_ground()
 
-	# Update bounce cooldown
+	# Update cooldowns
 	if bounce_cooldown > 0.0:
 		bounce_cooldown -= delta
+	if jump_pad_cooldown > 0.0:
+		jump_pad_cooldown -= delta
+	if teleporter_cooldown > 0.0:
+		teleporter_cooldown -= delta
 
 	# Update spin dash cooldown
 	if spin_cooldown > 0.0:
 		spin_cooldown -= delta
-
-	# Update jump pad cooldown
-	if jump_pad_cooldown > 0.0:
-		jump_pad_cooldown -= delta
-
-	# Update teleporter cooldown
-	if teleporter_cooldown > 0.0:
-		teleporter_cooldown -= delta
 
 	# Update spin dash timer (for visual spinning)
 	if spin_dash_timer > 0.0:

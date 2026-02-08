@@ -31,6 +31,11 @@ const TELEPORTER_CHECK_INTERVAL: float = 3.0
 const MAX_CACHED_TELEPORTERS: int = 10
 const TELEPORTER_USE_COOLDOWN: float = 2.0
 
+# PERF: Shared group caches for jump pads and teleporters (static map elements)
+static var _shared_jump_pads: Array = []
+static var _shared_teleporters: Array = []
+static var _shared_arena_cache_frame: int = -1
+
 # ============================================================================
 # OVERRIDES
 # ============================================================================
@@ -77,35 +82,32 @@ func handle_arena_specific_state_updates() -> void:
 # ============================================================================
 
 func refresh_jump_pad_cache() -> void:
-	"""Cache nearby jump pads for tactical mobility"""
+	"""Cache nearby jump pads for tactical mobility (uses shared group query)"""
 	cached_jump_pads.clear()
 
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
-		return
+	# PERF: Share the group query across all Type B bots
+	var frame: int = Engine.get_physics_frames()
+	if frame != _shared_arena_cache_frame:
+		_shared_arena_cache_frame = frame
+		_shared_jump_pads = get_tree().get_nodes_in_group("jump_pad")
+		_shared_teleporters = get_tree().get_nodes_in_group("teleporter")
 
-	# Find jump pads in scene
-	var all_jump_pads: Array = get_tree().get_nodes_in_group("jump_pad")
 	var bot_pos: Vector3 = bot.global_position
+	var max_dist_sq: float = MAX_JUMP_PAD_DISTANCE * MAX_JUMP_PAD_DISTANCE
 
-	# Filter by distance and validity
-	for jump_pad in all_jump_pads:
+	for jump_pad in _shared_jump_pads:
 		if not is_instance_valid(jump_pad) or not jump_pad.is_inside_tree():
 			continue
 
-		var distance: float = bot_pos.distance_to(jump_pad.global_position)
-		if distance <= MAX_JUMP_PAD_DISTANCE:
+		var diff: Vector3 = jump_pad.global_position - bot_pos
+		if diff.length_squared() <= max_dist_sq:
 			cached_jump_pads.append(jump_pad)
 
-	# Limit cache size
-	if cached_jump_pads.size() > MAX_CACHED_JUMP_PADS:
-		cached_jump_pads.sort_custom(func(a, b):
-			return bot_pos.distance_to(a.global_position) < bot_pos.distance_to(b.global_position)
-		)
-		cached_jump_pads = cached_jump_pads.slice(0, MAX_CACHED_JUMP_PADS)
+		if cached_jump_pads.size() >= MAX_CACHED_JUMP_PADS:
+			break
 
 # ============================================================================
 # JUMP PAD NAVIGATION
@@ -235,29 +237,21 @@ func evaluate_jump_pad_score(jump_pad: Node) -> float:
 # ============================================================================
 
 func refresh_teleporter_cache() -> void:
-	"""Cache nearby teleporters for tactical traversal"""
+	"""Cache nearby teleporters for tactical traversal (uses shared group query)"""
 	cached_teleporters.clear()
 
 	if not bot:
 		return
 
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if not world:
-		return
-
-	# Find teleporters in scene
-	var all_teleporters: Array = get_tree().get_nodes_in_group("teleporter")
-
-	# Filter by validity and add to cache
-	for teleporter in all_teleporters:
+	# Shared query already done in refresh_jump_pad_cache (same frame guard)
+	for teleporter in _shared_teleporters:
 		if not is_instance_valid(teleporter) or not teleporter.is_inside_tree():
 			continue
 
 		cached_teleporters.append(teleporter)
 
-	# Limit cache size
-	if cached_teleporters.size() > MAX_CACHED_TELEPORTERS:
-		cached_teleporters = cached_teleporters.slice(0, MAX_CACHED_TELEPORTERS)
+		if cached_teleporters.size() >= MAX_CACHED_TELEPORTERS:
+			break
 
 # ============================================================================
 # TELEPORTER NAVIGATION
