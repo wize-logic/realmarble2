@@ -196,6 +196,10 @@ func _precache_visual_resources() -> void:
 		marble_material_manager.precache_shader_materials()
 	AbilityBaseScript._ensure_shared_resources()
 	BeamSpawnEffectScript.precache_resources()
+	# PERF: Force WebGL2 to compile all shader variants NOW instead of on first ability use.
+	# Without this, the first ability activation freezes for ~1s as 5+ shader variants compile.
+	if MaterialPool:
+		MaterialPool.warm_web_shader_variants()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# HTML5: Resume AudioContext on first user interaction (browser policy)

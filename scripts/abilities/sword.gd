@@ -815,6 +815,15 @@ func create_arc_indicator() -> void:
 	# Initially hidden (will show when charging)
 	arc_indicator.visible = false
 
+func pickup(p_player: Node) -> void:
+	"""Override pickup to pre-initialize effect pools (avoids first-use hitch)"""
+	super.pickup(p_player)
+	# PERF: Pre-initialize pools now instead of on first activation.
+	# On WebGL2, deferred pool creation causes hitches from node allocation + material setup.
+	if player and player.get_parent() and not (_is_web and _is_bot_owner()):
+		_ensure_flash_pool(player.get_parent())
+		_ensure_spin_ring_pool(player.get_parent())
+
 func drop() -> void:
 	"""Override drop to clean up indicator"""
 	# Call parent drop first to handle ability drop logic
