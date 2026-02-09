@@ -144,7 +144,7 @@ func _ready() -> void:
 
 		# Configure charge particles - growing glow
 		charge_particles.emitting = false
-		charge_particles.amount = 25 if _is_web else 50  # PERF: Halved on web
+		charge_particles.amount = 12 if _is_web else 25  # PERF: Reduced for performance
 		charge_particles.lifetime = 0.8
 		charge_particles.explosiveness = 0.0  # Continuous emission
 		charge_particles.randomness = 0.3
@@ -309,19 +309,19 @@ func update_charge_visuals() -> void:
 	var web_mult: int = 1 if not _is_web else 2
 	match charge_level:
 		1:  # Weak - dim glow
-			charge_particles.amount = 30 / web_mult
+			charge_particles.amount = 15 / web_mult
 			charge_particles.scale_amount_min = 1.0
 			charge_particles.scale_amount_max = 1.5
 			charge_particles.initial_velocity_min = 1.0
 			charge_particles.initial_velocity_max = 2.0
 		2:  # Medium - bright pulse
-			charge_particles.amount = 60 / web_mult
+			charge_particles.amount = 30 / web_mult
 			charge_particles.scale_amount_min = 1.5
 			charge_particles.scale_amount_max = 2.5
 			charge_particles.initial_velocity_min = 2.0
 			charge_particles.initial_velocity_max = 4.0
 		3:  # Max - explosion aura
-			charge_particles.amount = 100 / web_mult
+			charge_particles.amount = 50 / web_mult
 			charge_particles.scale_amount_min = 2.0
 			charge_particles.scale_amount_max = 4.0
 			charge_particles.initial_velocity_min = 3.0

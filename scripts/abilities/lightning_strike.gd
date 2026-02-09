@@ -362,7 +362,7 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	indicator.add_child(warning_particles)
 
 	warning_particles.emitting = true
-	warning_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	warning_particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	warning_particles.lifetime = 0.5
 	warning_particles.explosiveness = 0.5
 	warning_particles.randomness = 0.3
@@ -491,7 +491,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	bolt_container.add_child(impact_particles)
 
 	impact_particles.emitting = true
-	impact_particles.amount = 12 if _is_web else 25  # PERF: Halved on web
+	impact_particles.amount = 6 if _is_web else 12  # PERF: Reduced for performance
 	impact_particles.lifetime = 0.4
 	impact_particles.one_shot = true
 	impact_particles.explosiveness = 1.0
@@ -692,7 +692,7 @@ func create_reticle() -> void:
 	reticle.add_child(particles)
 
 	particles.emitting = true
-	particles.amount = 8 if _is_web else 15  # PERF: Halved on web
+	particles.amount = 4 if _is_web else 8  # PERF: Reduced for performance
 	particles.lifetime = 0.5
 	particles.explosiveness = 0.0
 	particles.randomness = 0.3

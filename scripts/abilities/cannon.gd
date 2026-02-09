@@ -394,7 +394,7 @@ func add_projectile_trail(projectile: Node3D) -> void:
 
 	# Configure trail particles - thicker, more dramatic than gun
 	trail.emitting = true
-	trail.amount = 20 if _is_web else 50  # PERF: Reduced on web
+	trail.amount = 10 if _is_web else 25  # PERF: Reduced for performance
 	trail.lifetime = 0.6  # Longer lifetime than gun (was 0.4)
 	trail.explosiveness = 0.0  # Continuous emission
 	trail.randomness = 0.3
@@ -447,7 +447,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Configure muzzle flash - bigger burst than gun
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 15 if _is_web else 30  # PERF: Halved on web
+	muzzle_flash.amount = 8 if _is_web else 15  # PERF: Reduced for performance
 	muzzle_flash.lifetime = 0.25  # Longer than gun (was 0.15)
 	muzzle_flash.one_shot = true
 	muzzle_flash.explosiveness = 1.0
@@ -500,7 +500,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Configure explosion - dramatic burst
 	explosion.emitting = true
-	explosion.amount = 20 if _is_web else 40  # PERF: Halved on web
+	explosion.amount = 10 if _is_web else 20  # PERF: Reduced for performance
 	explosion.lifetime = 0.5
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
@@ -576,7 +576,7 @@ func create_reticle() -> void:
 
 	# Configure particles - subtle rotating glow
 	particles.emitting = true
-	particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	particles.lifetime = 0.8
 	particles.explosiveness = 0.0
 	particles.randomness = 0.2

@@ -156,7 +156,7 @@ func activate() -> void:
 		var level_multiplier: int = 0
 		if player and "level" in player:
 			level_multiplier = player.level
-		magma_particles.amount = 30 + (level_multiplier * 20)  # Level 0: 30, Level 3: 90
+		magma_particles.amount = 15 + (level_multiplier * 8)  # Level 0: 15, Level 3: 39
 
 		# Also scale velocity slightly with level
 		magma_particles.initial_velocity_min = 6.0 + (level_multiplier * 1.5)
@@ -286,8 +286,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 
 	var flash_size: float = 3.0 + (level * 0.5)
 	# PERF: Fewer segments on web
-	var radial_segs: int = 8 if _is_web else 16
-	var ring_count: int = 4 if _is_web else 8
+	var radial_segs: int = 6 if _is_web else 8
+	var ring_count: int = 3 if _is_web else 4
 
 	# Layer 1: Outer orange glow
 	var outer_flash: MeshInstance3D = MeshInstance3D.new()
@@ -331,8 +331,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	var core_sphere: SphereMesh = SphereMesh.new()
 	core_sphere.radius = flash_size * 0.5
 	core_sphere.height = flash_size * 1.0
-	core_sphere.radial_segments = 8 if _is_web else 12
-	core_sphere.rings = 4 if _is_web else 6
+	core_sphere.radial_segments = 6 if _is_web else 8
+	core_sphere.rings = 3 if _is_web else 4
 	core_flash.mesh = core_sphere
 
 	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -348,8 +348,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	var torus: TorusMesh = TorusMesh.new()
 	torus.inner_radius = flash_size * 0.8
 	torus.outer_radius = flash_size * 1.2
-	torus.rings = 8 if _is_web else 16  # PERF: Fewer segments on web
-	torus.ring_segments = 12 if _is_web else 24
+	torus.rings = 6 if _is_web else 8  # PERF: Reduced mesh complexity
+	torus.ring_segments = 6 if _is_web else 12
 	shockwave.mesh = torus
 	shockwave.rotation.x = PI / 2  # Lay flat
 
@@ -420,7 +420,7 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 
 		# Configure lingering fire
 		fire.emitting = true
-		fire.amount = 8 if _is_web else 20  # PERF: Reduced on web
+		fire.amount = 4 if _is_web else 10  # PERF: Reduced for performance
 		fire.lifetime = 1.5
 		fire.explosiveness = 0.0
 		fire.randomness = 0.3
@@ -497,7 +497,7 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	explosion.global_position = position
 
 	explosion.emitting = true
-	explosion.amount = 12 if _is_web else 50  # PERF: Further reduced on web
+	explosion.amount = 8 if _is_web else 20  # PERF: Reduced for performance
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
@@ -538,7 +538,7 @@ func _create_explosion_particles() -> void:
 	explosion_particles.name = "ExplosionParticles"
 	add_child(explosion_particles)
 	explosion_particles.emitting = false
-	explosion_particles.amount = 25 if _is_web else 100  # PERF: Further reduced on web
+	explosion_particles.amount = 12 if _is_web else 40  # PERF: Reduced for performance
 	explosion_particles.lifetime = 0.5
 	explosion_particles.one_shot = true
 	explosion_particles.explosiveness = 1.0
@@ -571,7 +571,7 @@ func _create_magma_particles() -> void:
 	magma_particles.name = "MagmaParticles"
 	add_child(magma_particles)
 	magma_particles.emitting = false
-	magma_particles.amount = 10 if _is_web else 30  # PERF: Reduced on web
+	magma_particles.amount = 6 if _is_web else 15  # PERF: Reduced for performance
 	magma_particles.lifetime = 1.5
 	magma_particles.one_shot = true
 	magma_particles.explosiveness = 0.8
@@ -608,8 +608,8 @@ func create_radius_indicator() -> void:
 	var sphere: SphereMesh = SphereMesh.new()
 	sphere.radius = explosion_radius  # Match hitbox radius
 	sphere.height = explosion_radius * 2  # Diameter
-	sphere.radial_segments = 16 if _is_web else 32  # PERF: Reduced on web
-	sphere.rings = 8 if _is_web else 16
+	sphere.radial_segments = 8 if _is_web else 16  # PERF: Reduced mesh complexity
+	sphere.rings = 4 if _is_web else 8
 	radius_indicator.mesh = sphere
 
 	# Create material - very subtle, transparent, non-distracting
@@ -630,7 +630,7 @@ func create_radius_indicator() -> void:
 
 	# Configure particles - on the sphere surface
 	sphere_particles.emitting = true
-	sphere_particles.amount = 12 if _is_web else 24  # PERF: Halved on web
+	sphere_particles.amount = 6 if _is_web else 12  # PERF: Reduced for performance
 	sphere_particles.lifetime = 1.0
 	sphere_particles.explosiveness = 0.0
 	sphere_particles.randomness = 0.1

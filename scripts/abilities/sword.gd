@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure slash particles - horizontal arc (enhanced for visual impact)
 	slash_particles.emitting = false
-	slash_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
+	slash_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
 	slash_particles.lifetime = 0.4  # Slightly longer for visibility
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 1.0
@@ -285,8 +285,8 @@ func activate() -> void:
 	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
 		# Level 1+: More particles (PERF: halved on web)
-		var base_amount: int = 40 if _is_web else 80
-		var level_bonus: int = 12 if _is_web else 25
+		var base_amount: int = 15 if _is_web else 30
+		var level_bonus: int = 5 if _is_web else 10
 		slash_particles.amount = base_amount + ((player_level - 1) * level_bonus)
 
 		if is_spin_attack:
@@ -432,7 +432,7 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	shockwave.add_child(trail)
 
 	trail.emitting = true
-	trail.amount = 15 if _is_web else 30  # PERF: Halved on web
+	trail.amount = 8 if _is_web else 15  # PERF: Reduced for performance
 	trail.lifetime = 0.4
 	trail.explosiveness = 0.0
 	trail.randomness = 0.2
@@ -529,7 +529,7 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	ring_particles.global_position = position
 
 	ring_particles.emitting = true
-	ring_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
+	ring_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
 	ring_particles.lifetime = 0.4
 	ring_particles.one_shot = true
 	ring_particles.explosiveness = 1.0
@@ -653,7 +653,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	flash_container.add_child(burst_particles)
 
 	burst_particles.emitting = true
-	burst_particles.amount = (15 + (level * 5)) if _is_web else (30 + (level * 10))  # PERF: Halved on web
+	burst_particles.amount = (8 + (level * 2)) if _is_web else (15 + (level * 5))  # PERF: Reduced for performance
 	burst_particles.lifetime = 0.25
 	burst_particles.one_shot = true
 	burst_particles.explosiveness = 1.0
@@ -725,7 +725,7 @@ func create_arc_indicator() -> void:
 
 	# Configure particles - along the front edge of the hitbox
 	edge_particles.emitting = true
-	edge_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	edge_particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	edge_particles.lifetime = 0.8
 	edge_particles.explosiveness = 0.0
 	edge_particles.randomness = 0.15

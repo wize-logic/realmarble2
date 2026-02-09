@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure fire particles - Trail effect (enhanced for more powerful dash)
 	fire_trail.emitting = false
-	fire_trail.amount = 60 if OS.has_feature("web") else 180  # Reduced on web for performance
+	fire_trail.amount = 25 if OS.has_feature("web") else 60  # PERF: Significantly reduced for performance
 	fire_trail.lifetime = 1.4  # Increased from 1.2s for longer lasting trail
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.3
@@ -412,7 +412,7 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 
 	# Configure explosion particles
 	explosion.emitting = true
-	var base_amount: int = 20 if _is_web else 40  # PERF: Halved on web
+	var base_amount: int = 10 if _is_web else 20  # PERF: Reduced for performance
 	explosion.amount = int(base_amount * scale_mult)
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
@@ -521,7 +521,7 @@ func create_direction_indicator() -> void:
 
 	# Configure particles - orbiting around the sphere
 	sphere_particles.emitting = true
-	sphere_particles.amount = 8 if _is_web else 16  # PERF: Halved on web
+	sphere_particles.amount = 4 if _is_web else 8  # PERF: Reduced for performance
 	sphere_particles.lifetime = 0.8
 	sphere_particles.explosiveness = 0.0
 	sphere_particles.randomness = 0.2

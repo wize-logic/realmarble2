@@ -68,7 +68,7 @@ func create_trail_particles() -> void:
 	trail_particles = GPUParticles3D.new()
 	trail_particles.name = "TrailParticles"
 	trail_particles.emitting = false
-	trail_particles.amount = 20  # Light for HTML5
+	trail_particles.amount = 10  # PERF: Reduced for performance
 	trail_particles.lifetime = 0.4
 	trail_particles.explosiveness = 0.0
 	trail_particles.randomness = 0.2
@@ -113,7 +113,7 @@ func create_speed_trail_particles() -> void:
 	speed_trail_particles = GPUParticles3D.new()
 	speed_trail_particles.name = "SpeedTrailParticles"
 	speed_trail_particles.emitting = false
-	speed_trail_particles.amount = 30  # Light for HTML5
+	speed_trail_particles.amount = 15  # PERF: Reduced for performance
 	speed_trail_particles.lifetime = 0.3
 	speed_trail_particles.explosiveness = 0.0
 	speed_trail_particles.randomness = 0.15
@@ -156,7 +156,7 @@ func create_impact_pool() -> void:
 		impact.name = "ImpactParticles_%d" % i
 		impact.emitting = false
 		impact.one_shot = true
-		impact.amount = 15  # Light for HTML5
+		impact.amount = 8  # PERF: Reduced for performance
 		impact.lifetime = 0.35
 		impact.explosiveness = 1.0
 		impact.randomness = 0.4
