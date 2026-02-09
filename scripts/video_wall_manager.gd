@@ -32,7 +32,7 @@ var is_initialized: bool = false
 
 func initialize(video_path: String, viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
 	## Initialize the video system
-	print("[VideoWallManager] Initializing with video: %s" % video_path)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Initializing with video: %s" % video_path)
 
 	if video_path.is_empty():
 		push_warning("VideoWallManager: No video path provided")
@@ -97,7 +97,7 @@ func initialize(video_path: String, viewport_size: Vector2i = Vector2i(1920, 108
 	viewport_texture = sub_viewport.get_texture()
 
 	is_initialized = true
-	print("[VideoWallManager] Initialized successfully")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Initialized successfully")
 
 	# Start playback
 	video_player.play()
@@ -112,7 +112,7 @@ func create_video_panels(wall_configs: Array) -> Array[MeshInstance3D]:
 		push_warning("VideoWallManager: Not initialized")
 		return []
 
-	print("[VideoWallManager] Creating %d video panels" % wall_configs.size())
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Creating %d video panels" % wall_configs.size())
 
 	for i in range(wall_configs.size()):
 		var config = wall_configs[i]
@@ -155,7 +155,7 @@ func _create_video_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_name: 
 	material.roughness = 1.0
 	mesh_instance.material_override = material
 
-	print("[VideoWallManager] Created panel: %s with viewport texture" % panel_name)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Created panel: %s with viewport texture" % panel_name)
 
 	# Add collision for gameplay
 	var static_body = StaticBody3D.new()
@@ -235,7 +235,7 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 		video_panels.append(wall_mesh)
 
 	video_cylinder = container
-	print("[VideoWallManager] Created %d rotating video wall segments: radius=%.1f, height=%.1f" % [num_walls, radius, height])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Created %d rotating video wall segments: radius=%.1f, height=%.1f" % [num_walls, radius, height])
 
 	return container
 
@@ -320,7 +320,7 @@ func cleanup() -> void:
 	if not is_initialized:
 		return
 
-	print("[VideoWallManager] Cleaning up")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[VideoWallManager] Cleaning up")
 	is_initialized = false
 
 	if video_player and is_instance_valid(video_player):

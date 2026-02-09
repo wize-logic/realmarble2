@@ -169,7 +169,7 @@ func _on_create_game_pressed() -> void:
 		if code.is_empty():
 			status_label.text = "Failed to create game!"
 		else:
-			print("Game created with code: ", code)
+			DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Game created with code: %s" % code)
 
 func _on_join_game_pressed() -> void:
 	"""Join a game by room code"""

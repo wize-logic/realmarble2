@@ -156,7 +156,7 @@ func _ready() -> void:
 
 func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
 	## Initialize the visualizer system (viewport_size kept for API compat but unused)
-	print("[VisualizerWallManager] Initializing with audio bus: %s" % audio_bus_name)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Initializing with audio bus: %s" % audio_bus_name)
 
 	# Load the visualizer shader (spatial shader applied directly to 3D panels)
 	_visualizer_shader = load("res://scripts/shaders/visualizer_wmp9.gdshader")
@@ -196,7 +196,7 @@ func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vec
 	_shader_material.set_shader_parameter("beat_intensity", 0.0)
 
 	is_initialized = true
-	print("[VisualizerWallManager] Initialized successfully")
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Initialized successfully")
 	return true
 
 
@@ -212,7 +212,7 @@ func _setup_spectrum_analyzer(bus_name: String) -> bool:
 		var effect = AudioServer.get_bus_effect(bus_idx, i)
 		if effect is AudioEffectSpectrumAnalyzer:
 			spectrum_analyzer = AudioServer.get_bus_effect_instance(bus_idx, i)
-			print("[VisualizerWallManager] Found existing spectrum analyzer on bus %s" % bus_name)
+			DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Found existing spectrum analyzer on bus %s" % bus_name)
 			return true
 
 	# Add a new spectrum analyzer effect
@@ -224,7 +224,7 @@ func _setup_spectrum_analyzer(bus_name: String) -> bool:
 	var effect_idx = AudioServer.get_bus_effect_count(bus_idx) - 1
 	spectrum_analyzer = AudioServer.get_bus_effect_instance(bus_idx, effect_idx)
 
-	print("[VisualizerWallManager] Added spectrum analyzer to bus %s" % bus_name)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Added spectrum analyzer to bus %s" % bus_name)
 	return spectrum_analyzer != null
 
 
@@ -403,7 +403,7 @@ func create_visualizer_panels(wall_configs: Array) -> Array[MeshInstance3D]:
 		push_warning("VisualizerWallManager: Not initialized")
 		return []
 
-	print("[VisualizerWallManager] Creating %d visualizer panels" % wall_configs.size())
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Creating %d visualizer panels" % wall_configs.size())
 
 	for i in range(wall_configs.size()):
 		var config = wall_configs[i]
@@ -431,7 +431,7 @@ func _create_visualizer_panel(pos: Vector3, size: Vector3, rot: Vector3, panel_n
 
 	mesh_instance.material_override = _shader_material
 
-	print("[VisualizerWallManager] Created panel: %s with direct shader" % panel_name)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Created panel: %s with direct shader" % panel_name)
 
 	var static_body = StaticBody3D.new()
 	var collision = CollisionShape3D.new()
@@ -530,7 +530,7 @@ func create_visualizer_dome(dome_radius: float, center: Vector3 = Vector3.ZERO, 
 	visualizer_panels.append(mesh_instance)
 	add_child(mesh_instance)
 
-	print("[VisualizerWallManager] Created complete sphere dome: radius=%.1f" % dome_radius)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Created complete sphere dome: radius=%.1f" % dome_radius)
 
 	return mesh_instance
 
@@ -544,7 +544,7 @@ func set_mode(mode: VisualizerMode) -> void:
 	current_mode = mode
 	if _shader_material:
 		_shader_material.set_shader_parameter("viz_mode", int(mode))
-	print("[VisualizerWallManager] Mode changed to: %s" % VisualizerMode.keys()[mode])
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Mode changed to: %s" % VisualizerMode.keys()[mode])
 
 
 func next_mode() -> void:
@@ -588,7 +588,7 @@ func set_color_preset(preset_name: String) -> void:
 		_color_preset_index = idx
 
 	_update_shader_colors()
-	print("[VisualizerWallManager] Applied color preset: %s" % preset_name)
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Applied color preset: %s" % preset_name)
 
 
 func set_colors(primary: Color, secondary: Color, accent: Color, background: Color) -> void:
@@ -631,7 +631,7 @@ func cleanup() -> void:
 	if not is_initialized:
 		return
 
-	print("[VisualizerWallManager] Cleaning up")
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "[VisualizerWallManager] Cleaning up")
 	is_initialized = false
 
 	for panel in visualizer_panels:

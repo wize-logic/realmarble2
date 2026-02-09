@@ -40,11 +40,11 @@ func _ready() -> void:
 
 func _on_sdk_initialized(success: bool) -> void:
 	if success:
-		print("ProfileManager: SDK initialized, loading user info...")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: SDK initialized, loading user info...")
 		CrazyGamesSDK.get_user_info()
 
 func _on_user_info_loaded(user_info: Dictionary) -> void:
-	print("ProfileManager: User info loaded from SDK")
+	DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: User info loaded from SDK")
 	current_profile["id"] = user_info.get("id", "")
 	current_profile["username"] = user_info.get("username", "Guest")
 	current_profile["profilePictureUrl"] = user_info.get("profilePictureUrl", "")
@@ -58,7 +58,7 @@ func _on_user_info_loaded(user_info: Dictionary) -> void:
 
 func _on_auth_completed(success: bool) -> void:
 	if success:
-		print("ProfileManager: Auth completed successfully")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: Auth completed successfully")
 		CrazyGamesSDK.get_user_info()
 
 # Get current profile
@@ -78,14 +78,14 @@ func show_login() -> void:
 	if CrazyGamesSDK:
 		CrazyGamesSDK.show_auth_prompt()
 	else:
-		print("ProfileManager: CrazyGames SDK not available")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: CrazyGames SDK not available")
 
 # Show account linking prompt
 func show_account_link() -> void:
 	if CrazyGamesSDK:
 		CrazyGamesSDK.show_account_link_prompt()
 	else:
-		print("ProfileManager: CrazyGames SDK not available")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: CrazyGames SDK not available")
 
 # Update stats
 func update_stats(stat_name: String, value: int) -> void:
@@ -140,7 +140,7 @@ func _save_local_profile() -> void:
 
 	var err = config.save("user://profile.cfg")
 	if err != OK:
-		print("ProfileManager: Failed to save profile: ", err)
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: Failed to save profile: %s" % err)
 
 # Load profile from local storage
 func _load_local_profile() -> void:
@@ -148,7 +148,7 @@ func _load_local_profile() -> void:
 	var err = config.load("user://profile.cfg")
 
 	if err != OK:
-		print("ProfileManager: No local profile found, using defaults")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: No local profile found, using defaults")
 		return
 
 	# Load stats
@@ -167,7 +167,7 @@ func _load_local_profile() -> void:
 		Global.controller_sensitivity = current_profile["preferences"]["controller_sensitivity"]
 		Global.music_directory = current_profile["preferences"]["music_directory"]
 
-	print("ProfileManager: Local profile loaded")
+	DebugLogger.dlog(DebugLogger.Category.PROFILE, "ProfileManager: Local profile loaded")
 	profile_loaded.emit(current_profile)
 
 # Reset stats (for testing or player request)

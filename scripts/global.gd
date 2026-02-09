@@ -60,7 +60,7 @@ func save_settings() -> void:
 
 	var error: Error = config.save("user://settings.cfg")
 	if error != OK:
-		print("Failed to save settings: ", error)
+		DebugLogger.dlog(DebugLogger.Category.OTHER, "Failed to save settings: %s" % error)
 
 func load_settings() -> void:
 	"""Load settings from file"""
@@ -68,7 +68,7 @@ func load_settings() -> void:
 	var error: Error = config.load("user://settings.cfg")
 
 	if error != OK:
-		print("No settings file found, using defaults")
+		DebugLogger.dlog(DebugLogger.Category.OTHER, "No settings file found, using defaults")
 		return
 
 	player_name = config.get_value("player", "name", "Player")

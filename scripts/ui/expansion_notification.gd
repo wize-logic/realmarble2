@@ -86,10 +86,10 @@ func show_notification() -> void:
 	visible = true
 	is_flashing = true
 	flash_timer = flash_duration
-	print("Showing expansion notification: NEW AREA AVAILABLE")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Showing expansion notification: NEW AREA AVAILABLE")
 
 func stop_flashing() -> void:
 	"""Stop the flashing effect and hide the notification"""
 	is_flashing = false
 	visible = false
-	print("Expansion notification hidden")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Expansion notification hidden")

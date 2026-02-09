@@ -396,7 +396,7 @@ func build_page_3() -> void:
 
 	# Master toggle
 	var master_toggle = Button.new()
-	master_toggle.text = "Master Debug: " + ("ON" if DebugLogger.debug_enabled else "OFF")
+	master_toggle.text = "Master Debug: " + ("ON" if DebugLogger.logging_enabled else "OFF")
 	master_toggle.pressed.connect(_on_master_debug_toggle)
 	page_content.add_child(master_toggle)
 
@@ -689,10 +689,10 @@ func _on_spawn_bot_pressed() -> void:
 	# Check if we're already at max capacity (8 total: 1 player + 7 bots)
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
 	if players.size() >= 8:
-		print("Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Cannot spawn bot - max 8 total (1 player + 7 bots) reached!")
 		return
 
-	print("Spawning bot...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Spawning bot...")
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("spawn_bot"):
 		world.spawn_bot()
@@ -722,7 +722,7 @@ func _on_spawn_bot_pressed() -> void:
 					arrow.setup(new_bot)
 					new_bot.add_child(arrow)
 	else:
-		print("Error: Could not spawn bot - World node not found or missing spawn_bot method")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: Could not spawn bot - World node not found or missing spawn_bot method")
 
 func _on_add_bot_pressed() -> void:
 	"""Add a bot"""
@@ -738,7 +738,7 @@ func _on_remove_bot_pressed() -> void:
 		var player: Node = players[i]
 		var player_id: int = player.name.to_int()
 		if player_id >= 9000:  # Bot IDs start at 9000
-			print("Removing bot: ", player_id)
+			DebugLogger.dlog(DebugLogger.Category.UI, "Removing bot: %s" % player_id)
 			player.queue_free()
 			bot_removed = true
 			break
@@ -746,7 +746,7 @@ func _on_remove_bot_pressed() -> void:
 	if bot_removed:
 		update_bot_count()
 	else:
-		print("No bots to remove")
+		DebugLogger.dlog(DebugLogger.Category.UI, "No bots to remove")
 
 func update_bot_count() -> void:
 	"""Update the bot count label"""
@@ -770,11 +770,11 @@ func _on_god_mode_pressed() -> void:
 		if god_mode_enabled:
 			player.set("god_mode", true)
 			god_mode_button.text = "God Mode: ON"
-			print("God mode enabled")
+			DebugLogger.dlog(DebugLogger.Category.UI, "God mode enabled")
 		else:
 			player.set("god_mode", false)
 			god_mode_button.text = "God Mode: OFF"
-			print("God mode disabled")
+			DebugLogger.dlog(DebugLogger.Category.UI, "God mode disabled")
 
 func _on_max_level_pressed() -> void:
 	"""Set player to max level"""
@@ -782,7 +782,7 @@ func _on_max_level_pressed() -> void:
 	if player and player.has_method("collect_orb"):
 		while player.level < player.MAX_LEVEL:
 			player.collect_orb()
-		print("Set player to max level")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Set player to max level")
 
 func _on_teleport_pressed() -> void:
 	"""Teleport player to random spawn"""
@@ -791,14 +791,14 @@ func _on_teleport_pressed() -> void:
 		var spawn_pos: Vector3 = player.spawns[randi() % player.spawns.size()]
 		player.global_position = spawn_pos
 		player.linear_velocity = Vector3.ZERO
-		print("Teleported to: ", spawn_pos)
+		DebugLogger.dlog(DebugLogger.Category.UI, "Teleported to: %s" % spawn_pos)
 
 func _on_clear_abilities_pressed() -> void:
 	"""Remove all abilities from map"""
 	var pickups: Array[Node] = get_tree().get_nodes_in_group("ability_pickups")
 	for pickup in pickups:
 		pickup.queue_free()
-	print("Cleared all ability pickups")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Cleared all ability pickups")
 
 func _on_speed_changed(value: float) -> void:
 	"""Change game speed multiplier"""
@@ -806,29 +806,29 @@ func _on_speed_changed(value: float) -> void:
 	Engine.time_scale = value
 	if speed_label:
 		speed_label.text = "Speed: %.1fx" % value
-	print("Game speed set to: %.1fx" % value)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Game speed set to: %.1fx" % value)
 
 func _on_spawn_ability_pressed() -> void:
 	"""Spawn a random ability pickup at player location"""
 	var player: Node = get_local_player()
 	if not player:
-		print("Error: No local player found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: No local player found")
 		return
 
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if not world:
-		print("Error: World node not found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: World node not found")
 		return
 
 	var ability_spawner: Node = world.get_node_or_null("AbilitySpawner")
 	if not ability_spawner or not ability_spawner.has_method("spawn_random_ability"):
-		print("Error: AbilitySpawner not found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: AbilitySpawner not found")
 		return
 
 	# Spawn at player position with slight offset
 	var spawn_pos: Vector3 = player.global_position + Vector3(randf_range(-2, 2), 2, randf_range(-2, 2))
 	ability_spawner.spawn_random_ability(spawn_pos)
-	print("Spawned random ability at: ", spawn_pos)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Spawned random ability at: %s" % spawn_pos)
 
 func _on_kill_player_pressed() -> void:
 	"""Kill and respawn the local player"""
@@ -847,7 +847,7 @@ func _on_kill_all_pressed() -> void:
 			# Deal massive damage to kill them instantly
 			player.receive_damage(999)
 
-	print("Killed all other players/bots")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Killed all other players/bots")
 
 func _on_add_score_pressed() -> void:
 	"""Add score to local player"""
@@ -857,7 +857,7 @@ func _on_add_score_pressed() -> void:
 		var world: Node = get_tree().get_root().get_node_or_null("World")
 		if world and world.has_method("add_score"):
 			world.add_score(player_id, 5)
-			print("Added 5 score to player")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Added 5 score to player")
 
 func _on_charge_ult_pressed() -> void:
 	"""Instantly charge the player's ultimate"""
@@ -865,25 +865,25 @@ func _on_charge_ult_pressed() -> void:
 	if player and "ult_system" in player and player.ult_system:
 		if player.ult_system.has_method("force_full_charge"):
 			player.ult_system.force_full_charge()
-			print("Ult fully charged!")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Ult fully charged!")
 		else:
-			print("Error: ult_system doesn't have force_full_charge method")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Error: ult_system doesn't have force_full_charge method")
 	else:
-		print("Error: Player or ult_system not found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: Player or ult_system not found")
 
 func _on_reset_timer_pressed() -> void:
 	"""Reset the match timer"""
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world:
 		world.game_time_remaining = 300.0
-		print("Match timer reset to 5 minutes")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Match timer reset to 5 minutes")
 
 func _on_end_match_pressed() -> void:
 	"""End the match immediately"""
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("end_deathmatch"):
 		world.end_deathmatch()
-		print("Match ended manually via debug menu")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Match ended manually via debug menu")
 
 func _on_collision_shapes_pressed() -> void:
 	"""Toggle collision shape visualization"""
@@ -895,10 +895,10 @@ func _on_collision_shapes_pressed() -> void:
 
 	if collision_shapes_visible:
 		collision_shapes_button.text = "Show Collision: ON"
-		print("Collision shapes visible")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Collision shapes visible")
 	else:
 		collision_shapes_button.text = "Show Collision: OFF"
-		print("Collision shapes hidden")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Collision shapes hidden")
 
 func _on_nametags_pressed() -> void:
 	"""Toggle debug nametags above players/bots"""
@@ -913,7 +913,7 @@ func _on_nametags_pressed() -> void:
 				nametag.name = "DebugNametag"
 				nametag.setup(player)
 				player.add_child(nametag)
-		print("Debug nametags enabled - showing names above all players/bots")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Debug nametags enabled - showing names above all players/bots")
 	else:
 		# Remove all nametags
 		var players: Array[Node] = get_tree().get_nodes_in_group("players")
@@ -921,7 +921,7 @@ func _on_nametags_pressed() -> void:
 			var nametag = player.get_node_or_null("DebugNametag")
 			if nametag:
 				nametag.queue_free()
-		print("Debug nametags disabled")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Debug nametags disabled")
 
 	# Update button text
 	if nametags_button:
@@ -943,7 +943,7 @@ func _on_direction_arrows_pressed() -> void:
 					arrow.name = "DebugDirectionArrow"
 					arrow.setup(player)
 					player.add_child(arrow)
-		print("Debug direction arrows enabled - showing arrows in front of bots")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Debug direction arrows enabled - showing arrows in front of bots")
 	else:
 		# Remove all direction arrows
 		var players: Array[Node] = get_tree().get_nodes_in_group("players")
@@ -951,7 +951,7 @@ func _on_direction_arrows_pressed() -> void:
 			var arrow = player.get_node_or_null("DebugDirectionArrow")
 			if arrow:
 				arrow.queue_free()
-		print("Debug direction arrows disabled")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Debug direction arrows disabled")
 
 	# Update button text
 	if direction_arrows_button:
@@ -962,7 +962,7 @@ func _on_regenerate_level_pressed() -> void:
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if world and world.has_method("generate_procedural_level"):
 		var level_size: int = world.get("current_level_size") if "current_level_size" in world else 2
-		print("Regenerating level (Size: %d)..." % level_size)
+		DebugLogger.dlog(DebugLogger.Category.UI, "Regenerating level (Size: %d)..." % level_size)
 		world.generate_procedural_level(true, level_size)
 
 func _on_change_skybox_pressed() -> void:
@@ -972,31 +972,31 @@ func _on_change_skybox_pressed() -> void:
 		var skybox: Node = world.skybox_generator
 		if skybox and skybox.has_method("randomize_colors"):
 			skybox.randomize_colors()
-			print("Skybox colors randomized!")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Skybox colors randomized!")
 
 func _on_trigger_expansion_pressed() -> void:
 	"""Trigger mid-round expansion immediately"""
 	var world: Node = get_tree().get_root().get_node_or_null("World")
 	if not world:
-		print("Error: World node not found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: World node not found")
 		return
 
 	# Check if game is active
 	if not world.game_active:
-		print("Error: Cannot trigger expansion - match is not active!")
-		print("Start a match first, then trigger the expansion.")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: Cannot trigger expansion - match is not active!")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Start a match first, then trigger the expansion.")
 		return
 
 	# Check if already triggered
 	if world.expansion_triggered:
-		print("Error: Expansion already triggered for this match!")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: Expansion already triggered for this match!")
 		return
 
-	print("Debug: Triggering mid-round expansion immediately...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Debug: Triggering mid-round expansion immediately...")
 	if world.has_method("trigger_mid_round_expansion"):
 		world.trigger_mid_round_expansion()
 	else:
-		print("Error: trigger_mid_round_expansion method not found on World")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: trigger_mid_round_expansion method not found on World")
 
 func get_local_player() -> Node:
 	"""Get the local player"""
@@ -1012,34 +1012,35 @@ func get_local_player() -> Node:
 
 func _on_master_debug_toggle() -> void:
 	"""Toggle master debug setting"""
-	DebugLogger.debug_enabled = not DebugLogger.debug_enabled
+	DebugLogger.logging_enabled = not DebugLogger.logging_enabled
+	DebugLogger.debug_enabled = DebugLogger.logging_enabled
 	DebugLogger.save_preferences()
 	# Rebuild page to update button text
 	show_page(current_page)
-	print("Master debug logging: ", "ENABLED" if DebugLogger.debug_enabled else "DISABLED")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Master debug logging: %s" % ("ENABLED" if DebugLogger.logging_enabled else "DISABLED"))
 
 func _on_enable_all_categories() -> void:
 	"""Enable all debug categories"""
 	DebugLogger.enable_all()
 	# Rebuild page to update checkboxes
 	show_page(current_page)
-	print("All debug categories enabled")
+	DebugLogger.dlog(DebugLogger.Category.UI, "All debug categories enabled")
 
 func _on_disable_all_categories() -> void:
 	"""Disable all debug categories"""
 	DebugLogger.disable_all()
 	# Rebuild page to update checkboxes
 	show_page(current_page)
-	print("All debug categories disabled")
+	DebugLogger.dlog(DebugLogger.Category.UI, "All debug categories disabled")
 
 func _on_category_toggled(enabled: bool, category: int) -> void:
 	"""Toggle a specific debug category"""
 	if enabled:
 		DebugLogger.enable_category(category)
-		print("Enabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+		DebugLogger.dlog(DebugLogger.Category.UI, "Enabled debug category: %s" % DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
 	else:
 		DebugLogger.disable_category(category)
-		print("Disabled debug category: ", DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
+		DebugLogger.dlog(DebugLogger.Category.UI, "Disabled debug category: %s" % DebugLogger.CATEGORY_NAMES.get(category, "Unknown"))
 
 func _on_watch_entity(entity_id: Variant) -> void:
 	"""Set which entity to watch (null = all)"""
@@ -1059,4 +1060,4 @@ func _on_watch_player() -> void:
 		# Rebuild page to update the "Watching:" label
 		show_page(current_page)
 	else:
-		print("Error: No local player found")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Error: No local player found")

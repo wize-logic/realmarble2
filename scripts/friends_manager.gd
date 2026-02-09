@@ -19,16 +19,16 @@ func _ready() -> void:
 
 func _on_sdk_initialized(success: bool) -> void:
 	if success:
-		print("FriendsManager: SDK initialized, loading friends...")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "FriendsManager: SDK initialized, loading friends...")
 		refresh_friends_list()
 
 func _on_friends_loaded(friends: Array) -> void:
-	print("FriendsManager: Friends list loaded (", friends.size(), " friends)")
+	DebugLogger.dlog(DebugLogger.Category.PROFILE, "FriendsManager: Friends list loaded (%d friends)" % friends.size())
 	friends_list = friends
 	friends_list_updated.emit(friends_list)
 
 func _on_friend_invited(friend_id: String, success: bool) -> void:
-	print("FriendsManager: Friend invite result - ", friend_id, " success: ", success)
+	DebugLogger.dlog(DebugLogger.Category.PROFILE, "FriendsManager: Friend invite result - %s success: %s" % [friend_id, success])
 	friend_invited.emit(friend_id, success)
 
 	if success:
@@ -60,7 +60,7 @@ func refresh_friends_list() -> void:
 	if CrazyGamesSDK:
 		CrazyGamesSDK.get_friends()
 	else:
-		print("FriendsManager: CrazyGames SDK not available")
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "FriendsManager: CrazyGames SDK not available")
 		# Load mock data for testing
 		_load_mock_friends()
 
@@ -71,7 +71,7 @@ func invite_to_game(friend_id: String) -> void:
 			pending_invites.append(friend_id)
 		CrazyGamesSDK.invite_friend(friend_id)
 	else:
-		print("FriendsManager: Mock invite sent to ", friend_id)
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "FriendsManager: Mock invite sent to %s" % friend_id)
 		friend_invited.emit(friend_id, true)
 
 # Check if friend is online

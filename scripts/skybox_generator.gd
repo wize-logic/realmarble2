@@ -55,7 +55,7 @@ func generate_skybox() -> void:
 	"""Generate a clean procedural sky using built-in ProceduralSkyMaterial"""
 	var world_env: WorldEnvironment = get_node_or_null("/root/World/WorldEnvironment")
 	if not world_env:
-		print("ERROR: WorldEnvironment not found!")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "ERROR: WorldEnvironment not found!")
 		return
 
 	var environment: Environment = world_env.environment
@@ -74,7 +74,7 @@ func generate_skybox() -> void:
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
 
-	print("Simple skybox generated!")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Simple skybox generated!")
 
 func randomize_colors() -> void:
 	"""Change to a new random sky color scheme"""
@@ -89,7 +89,7 @@ func randomize_colors() -> void:
 	var palette: Array = _palettes[_current_palette_index]
 	_apply_palette(palette[0], palette[1])
 
-	print("Skybox colors randomized!")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skybox colors randomized!")
 
 func _setup_color_cycle() -> void:
 	_palettes = [

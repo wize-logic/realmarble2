@@ -233,7 +233,7 @@ func use() -> void:
 
 ## Override this in specific abilities
 func activate() -> void:
-	print("Ability activated: ", ability_name)
+	DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Ability activated: %s" % ability_name)
 
 ## Check if the ability is ready to use
 func is_ready() -> bool:
