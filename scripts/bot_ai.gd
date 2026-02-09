@@ -427,9 +427,10 @@ func _physics_process(delta: float) -> void:
 		refresh_cached_groups()
 		cache_refresh_timer = cache_refresh_interval
 
-	# Stuck detection
+	# Stuck detection + target timeout (both low-frequency checks)
 	if stuck_timer >= stuck_check_interval:
 		check_if_stuck()
+		check_target_timeout(delta)
 		stuck_timer = 0.0
 
 	if terrain_stuck_check_timer <= 0.0:
@@ -440,9 +441,6 @@ func _physics_process(delta: float) -> void:
 	if is_stuck and unstuck_timer > 0.0:
 		handle_unstuck_movement(delta)
 		return
-
-	# Check target timeout
-	check_target_timeout(delta)
 
 	# Bot-bot repulsion
 	if bot_repulsion_timer <= 0.0:
@@ -611,8 +609,8 @@ func refresh_cached_groups() -> void:
 		_shared_raw_abilities = get_tree().get_nodes_in_group("ability_pickups")
 		_shared_bot_count = 0
 		for node in _shared_raw_players:
-			var n: String = str(node.name)
-			if n.is_valid_int() and n.to_int() >= 9000:
+			# PERF: Check entity_id via has_meta or name pattern without str() allocation
+			if node.has_method("is_bot") and node.is_bot():
 				_shared_bot_count += 1
 
 	# Per-bot filtering (fast - just validity checks on shared data)
@@ -636,7 +634,8 @@ func refresh_cached_groups() -> void:
 				cached_abilities.append(node)
 
 	# Clean up stale visibility cache
-	for target in _vision_cache_time.keys():
+	# PERF: Iterate dictionary directly instead of .keys() (avoids Array allocation)
+	for target in _vision_cache_time:
 		if not is_instance_valid(target):
 			_vision_cache_time.erase(target)
 			_vision_cache_visible.erase(target)
@@ -1214,13 +1213,16 @@ func evaluate_platform_score(platform_data: Dictionary) -> float:
 	var distance: float = bot.global_position.distance_to(platform_pos)
 
 	# Don't target platform we're already on
-	var horizontal_dist: float = Vector2(platform_pos.x - bot.global_position.x, platform_pos.z - bot.global_position.z).length()
+	# PERF: Use squared distance to avoid sqrt for threshold checks
+	var dx: float = platform_pos.x - bot.global_position.x
+	var dz: float = platform_pos.z - bot.global_position.z
+	var horizontal_dist_sq: float = dx * dx + dz * dz
 	var vertical_diff: float = abs(platform_height - bot.global_position.y)
 
-	if horizontal_dist < 4.0 and vertical_diff < 2.0:
+	if horizontal_dist_sq < 16.0 and vertical_diff < 2.0:  # 4.0^2
 		return -INF
 
-	# Base accessibility score
+	# Base accessibility score (need linear distance for score math)
 	if distance < 15.0:
 		score += 50.0 - (distance * 2.0)
 	elif distance < 30.0:
@@ -1296,7 +1298,10 @@ func can_reach_platform(platform_data: Dictionary) -> bool:
 
 	var platform_pos: Vector3 = platform_data.position
 	var height_diff: float = platform_pos.y - bot.global_position.y
-	var horizontal_dist: float = Vector2(platform_pos.x - bot.global_position.x, platform_pos.z - bot.global_position.z).length()
+	# PERF: Use squared distance to avoid sqrt + Vector2 allocation
+	var dx: float = platform_pos.x - bot.global_position.x
+	var dz: float = platform_pos.z - bot.global_position.z
+	var horizontal_dist_sq: float = dx * dx + dz * dz
 
 	# Check vertical reachability
 	var max_bounce_height: float = 15.0
@@ -1305,7 +1310,7 @@ func can_reach_platform(platform_data: Dictionary) -> bool:
 		return false
 
 	# Check horizontal distance
-	if horizontal_dist > 20.0:
+	if horizontal_dist_sq > 400.0:  # 20.0^2
 		return false
 
 	return true
@@ -1327,15 +1332,15 @@ func count_bots_on_platform(platform_data: Dictionary) -> int:
 
 		var player_pos: Vector3 = player.global_position
 
-		var horizontal_dist: float = Vector2(
-			player_pos.x - platform_pos.x,
-			player_pos.z - platform_pos.z
-		).length()
+		# PERF: Use squared distance to avoid sqrt + Vector2 allocation
+		var dx: float = player_pos.x - platform_pos.x
+		var dz: float = player_pos.z - platform_pos.z
+		var dist_sq: float = dx * dx + dz * dz
 
 		var height_diff: float = abs(player_pos.y - platform_height)
 
 		var half_size: float = max(platform_size.x, platform_size.z) * 0.5
-		if horizontal_dist <= half_size and height_diff <= 3.0:
+		if dist_sq <= half_size * half_size and height_diff <= 3.0:
 			bot_count += 1
 
 	return bot_count

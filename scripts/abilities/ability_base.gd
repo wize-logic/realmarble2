@@ -111,6 +111,7 @@ func _process(delta: float) -> void:
 		charge_time += delta
 		charge_time = min(charge_time, max_charge_time)
 
+		var prev_charge_level: int = charge_level
 		if charge_time >= 2.0:
 			charge_level = 3
 		elif charge_time >= 1.0:
@@ -118,7 +119,12 @@ func _process(delta: float) -> void:
 		else:
 			charge_level = 1
 
-		update_charge_visuals()
+		# PERF: Only update particle properties when charge level changes (not every frame)
+		if charge_level != prev_charge_level:
+			update_charge_visuals()
+		elif charge_particles and player:
+			# Just update position every frame (cheap)
+			charge_particles.global_position = player.global_position
 
 ## Called when the ability is picked up by a player
 func pickup(p_player: Node) -> void:

@@ -38,6 +38,10 @@ var _cached_ult_ready: bool = false
 # Cached multiplayer peer_id
 var _cached_peer_id: int = 1
 
+# PERF: Cache has_method results (checked every frame otherwise)
+var _world_has_get_time: bool = false
+var _world_has_get_score: bool = false
+
 # Fonts
 var font_bold: Font = null
 var font_semibold: Font = null
@@ -73,6 +77,9 @@ func _ready() -> void:
 
 	# Find world and player references
 	world = get_tree().root.get_node_or_null("World")
+	if world:
+		_world_has_get_time = world.has_method("get_time_remaining_formatted")
+		_world_has_get_score = world.has_method("get_score")
 
 	# Create notification overlays
 	create_expansion_notification()
@@ -100,6 +107,9 @@ func find_local_player() -> void:
 func reset_hud() -> void:
 	player = null
 	world = get_tree().root.get_node_or_null("World")
+	if world:
+		_world_has_get_time = world.has_method("get_time_remaining_formatted")
+		_world_has_get_score = world.has_method("get_score")
 	call_deferred("find_local_player")
 
 func _process(delta: float) -> void:
@@ -112,7 +122,7 @@ func _process(delta: float) -> void:
 func update_hud() -> void:
 	# Timer - clean time display, no prefix
 	var new_timer: String = "--:--"
-	if world and world.has_method("get_time_remaining_formatted"):
+	if world and _world_has_get_time:
 		if world.game_active:
 			new_timer = world.get_time_remaining_formatted()
 	if new_timer != _cached_timer_text:
@@ -121,7 +131,7 @@ func update_hud() -> void:
 
 	# Score
 	var new_score: int = 0
-	if world and world.has_method("get_score"):
+	if world and _world_has_get_score:
 		new_score = world.get_score(_cached_peer_id)
 	if new_score != _cached_score:
 		_cached_score = new_score
@@ -459,10 +469,13 @@ func update_ult_bar(delta: float) -> void:
 	var charge: float = ult_system.ult_charge
 	var max_charge: float = ult_system.MAX_ULT_CHARGE
 	var percent: float = (charge / max_charge) * 100.0
-	ult_bar.value = percent
 
 	var is_ready: bool = charge >= max_charge
 	var new_ult_percent: int = int(percent)
+
+	# PERF: Only update progress bar value when integer percent changes (avoids redraw)
+	if new_ult_percent != _cached_ult_percent:
+		ult_bar.value = percent
 
 	if is_ready:
 		# Pulsing accent blue when ready - must update every frame for animation

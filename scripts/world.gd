@@ -42,6 +42,12 @@ var _music_has_resume: bool = false
 var _music_has_start: bool = false
 var _music_has_stop: bool = false
 
+# PERF: Cached pause state for transition detection
+var _was_paused: bool = false
+# PERF: Cached multiplayer state (never changes mid-match)
+var _is_multiplayer: bool = false
+var _is_host: bool = false
+
 # Game Settings
 var sensitivity: float = 0.005
 var controller_sensitivity: float = 0.010
@@ -202,17 +208,24 @@ func _process(delta: float) -> void:
 	if not paused and not countdown_active and not game_active:
 		return
 
-	# Handle pause menu
-	if paused and pause_menu:
-		if _blur_node:
-			_blur_node.show()
-		pause_menu.show()
-		if !controller:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Handle pause menu - only apply on state transition (not every frame)
+	if paused:
+		if not _was_paused:
+			_was_paused = true
+			if pause_menu:
+				if _blur_node:
+					_blur_node.show()
+				pause_menu.show()
+				if !controller:
+					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			# Pause gameplay music
+			if gameplay_music and _music_has_pause:
+				gameplay_music.pause_playlist()
+		return  # PERF: Nothing else to do while paused
 
-		# Pause gameplay music
-		if gameplay_music and _music_has_pause:
-			gameplay_music.pause_playlist()
+	# Track unpause transition
+	if _was_paused:
+		_was_paused = false
 
 	# Handle countdown
 	if countdown_active:
@@ -257,7 +270,7 @@ func _process(delta: float) -> void:
 			last_time_print = current_interval
 
 		# MULTIPLAYER SYNC: Host periodically syncs game timer to prevent client drift
-		if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		if _is_multiplayer and _is_host:
 			timer_sync_accumulator += delta
 			if timer_sync_accumulator >= timer_sync_interval:
 				timer_sync_accumulator = 0.0
@@ -267,11 +280,11 @@ func _process(delta: float) -> void:
 			game_time_remaining = max(0.0, game_time_remaining)  # Clamp to 0 to prevent negative display
 			# MULTIPLAYER SYNC FIX: Only host triggers match end in multiplayer
 			# Clients receive match end via RPC to prevent desync
-			if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+			if _is_multiplayer and not _is_host:
 				pass  # Wait for host to send end_deathmatch RPC
 			else:
 				DebugLogger.dlog(DebugLogger.Category.WORLD, "Time's up! Ending deathmatch...")
-				if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+				if _is_multiplayer and _is_host:
 					_sync_end_deathmatch.rpc()
 				end_deathmatch()
 
@@ -1348,6 +1361,10 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	# Notify CrazyGames SDK that gameplay is about to start
 	if CrazyGamesSDK:
 		CrazyGamesSDK.gameplay_stop()  # Ensure clean state
+
+	# PERF: Cache multiplayer state (never changes mid-match)
+	_is_multiplayer = multiplayer.has_multiplayer_peer()
+	_is_host = _is_multiplayer and multiplayer.is_server()
 
 	# Start countdown
 	countdown_active = true
