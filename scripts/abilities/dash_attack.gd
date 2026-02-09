@@ -68,23 +68,8 @@ func _ready() -> void:
 	fire_trail.randomness = 0.3
 	fire_trail.local_coords = false  # World space - particles stay where emitted
 
-	# Set up particle mesh and material for visibility
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.5, 0.5)
-
-	# Create material for additive blending (fire effect)
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_material.albedo_color = Color(1.0, 0.8, 0.3, 1.0)
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
-	fire_trail.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	fire_trail.mesh = _shared_particle_quad_large
 
 	fire_trail.draw_order = CPUParticles3D.DRAW_ORDER_VIEW_DEPTH
 
@@ -338,10 +323,12 @@ func _physics_process(delta: float) -> void:
 			fire_trail.global_position = player.global_position
 
 		# Level 3: Spawn afterimages during dash
+		# PERF: Skip afterimages for bots on web, and use longer interval on web
 		var player_level: int = player.level if "level" in player else 0
-		if player_level >= 3:
+		if player_level >= 3 and not (_is_web and _is_bot_owner()):
 			afterimage_timer += delta
-			if afterimage_timer >= AFTERIMAGE_INTERVAL:
+			var interval: float = 0.1 if _is_web else AFTERIMAGE_INTERVAL  # PERF: 2x longer interval on web
+			if afterimage_timer >= interval:
 				afterimage_timer = 0.0
 				spawn_afterimage(player.global_position)
 
@@ -372,6 +359,10 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	if not player or not player.get_parent():
 		return
 
+	# PERF: Skip flash for bots on web - visual only, not gameplay-critical
+	if _is_web and _is_bot_owner():
+		return
+
 	# Scale effect with level
 	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
 
@@ -382,14 +373,17 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	flash_container.global_position = position
 
 	var flash_size: float = 1.5 * scale_mult
+	# PERF: Fewer segments on web
+	var radial_segs: int = 6 if _is_web else 12
+	var ring_count: int = 3 if _is_web else 6
 
 	# Layer 1: Outer magenta glow
 	var outer_flash: MeshInstance3D = MeshInstance3D.new()
 	var outer_sphere: SphereMesh = SphereMesh.new()
 	outer_sphere.radius = flash_size * 2.0
 	outer_sphere.height = flash_size * 4.0
-	outer_sphere.radial_segments = 12
-	outer_sphere.rings = 6
+	outer_sphere.radial_segments = radial_segs
+	outer_sphere.rings = ring_count
 	outer_flash.mesh = outer_sphere
 
 	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -405,8 +399,8 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	var core_sphere: SphereMesh = SphereMesh.new()
 	core_sphere.radius = flash_size * 0.8
 	core_sphere.height = flash_size * 1.6
-	core_sphere.radial_segments = 12
-	core_sphere.rings = 6
+	core_sphere.radial_segments = radial_segs
+	core_sphere.rings = ring_count
 	core_flash.mesh = core_sphere
 
 	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -434,29 +428,16 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 
 	# Configure explosion particles
 	explosion.emitting = true
-	explosion.amount = int(40 * scale_mult)
+	var base_amount: int = 20 if _is_web else 40  # PERF: Halved on web
+	explosion.amount = int(base_amount * scale_mult)
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
 	explosion.randomness = 0.4
 	explosion.local_coords = false
 
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.5, 0.5)
-
-	# Create material for explosion
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
-	explosion.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	explosion.mesh = _shared_particle_quad_large
 
 	# Emission shape - sphere burst
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -501,6 +482,8 @@ func spawn_afterimage(position: Vector3) -> void:
 	var sphere: SphereMesh = SphereMesh.new()
 	sphere.radius = 0.5
 	sphere.height = 1.0
+	sphere.radial_segments = 8 if _is_web else 16  # PERF: Reduced on web
+	sphere.rings = 4 if _is_web else 8
 	afterimage.mesh = sphere
 
 	# Create ghostly magenta material
@@ -532,8 +515,8 @@ func create_direction_indicator() -> void:
 	var sphere: SphereMesh = SphereMesh.new()
 	sphere.radius = 1.5  # Match hitbox radius
 	sphere.height = 3.0  # Diameter = 2 * radius
-	sphere.radial_segments = 24
-	sphere.rings = 12
+	sphere.radial_segments = 12 if _is_web else 24  # PERF: Reduced on web
+	sphere.rings = 6 if _is_web else 12
 	direction_indicator.mesh = sphere
 
 	# Create material - very subtle, transparent, non-distracting
@@ -554,25 +537,14 @@ func create_direction_indicator() -> void:
 
 	# Configure particles - orbiting around the sphere
 	sphere_particles.emitting = true
-	sphere_particles.amount = 16
+	sphere_particles.amount = 8 if _is_web else 16  # PERF: Halved on web
 	sphere_particles.lifetime = 0.8
 	sphere_particles.explosiveness = 0.0
 	sphere_particles.randomness = 0.2
 	sphere_particles.local_coords = true
 
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.15, 0.15)
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	sphere_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	sphere_particles.mesh = _shared_particle_quad_small
 
 	# Emission shape - sphere surface matching hitbox
 	sphere_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE_SURFACE
