@@ -4,6 +4,7 @@ extends Node3D
 ## Lightweight spawn indicator with minimal particles
 
 var beam_particles: CPUParticles3D = null
+static var _shared_beam_material: StandardMaterial3D = null
 
 func _ready() -> void:
 	create_beam_effect()
@@ -35,15 +36,17 @@ func create_beam_effect() -> void:
 	beam_particles.scale_amount_max = 0.5
 	beam_particles.color = Color(0.4, 0.7, 0.95, 0.8)
 
-	# Simple mesh
+	# PERF: Share beam material across all instances
+	if _shared_beam_material == null:
+		_shared_beam_material = StandardMaterial3D.new()
+		_shared_beam_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_shared_beam_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shared_beam_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		_shared_beam_material.vertex_color_use_as_albedo = true
+
 	var quad_mesh = QuadMesh.new()
 	quad_mesh.size = Vector2(0.5, 0.5)
-	var mat = StandardMaterial3D.new()
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mat.vertex_color_use_as_albedo = true
-	quad_mesh.material = mat
+	quad_mesh.material = _shared_beam_material
 	beam_particles.mesh = quad_mesh
 
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Beam spawn effect created")

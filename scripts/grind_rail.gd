@@ -20,12 +20,21 @@ class_name GrindRail
 
 var active_grinders: Dictionary = {}  # grinder -> state dict
 var rope_visuals: Dictionary = {}  # grinder -> MeshInstance3D
+var _to_remove: Array = []  # PERF: Reused array to avoid per-frame allocation
+var _cached_start_pos: Vector3  # PERF: Cached rail start position
+var _cached_end_pos: Vector3  # PERF: Cached rail end position
+static var _shared_rope_material: StandardMaterial3D = null  # PERF: Shared rope material
 
 
 func _ready() -> void:
 	add_to_group("grind_rails")
 	if not curve:
 		curve = Curve3D.new()
+	# PERF: Cache rail endpoints
+	var length: float = get_rail_length()
+	if length > 0:
+		_cached_start_pos = get_point_at_offset(0.0)
+		_cached_end_pos = get_point_at_offset(length)
 
 
 func get_rail_length() -> float:
@@ -69,13 +78,14 @@ func _create_rope_visual() -> MeshInstance3D:
 	cylinder.rings = 1
 	mesh_instance.mesh = cylinder
 
-	# Create thin wire/cable material
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.3, 0.3, 0.35)  # Dark metallic gray (wire/cable look)
-	mat.metallic = 0.7  # Metallic sheen
-	mat.roughness = 0.4  # Slightly shiny
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-	mesh_instance.material_override = mat
+	# PERF: Share rope material across all rope visuals
+	if _shared_rope_material == null:
+		_shared_rope_material = StandardMaterial3D.new()
+		_shared_rope_material.albedo_color = Color(0.3, 0.3, 0.35)  # Dark metallic gray (wire/cable look)
+		_shared_rope_material.metallic = 0.7  # Metallic sheen
+		_shared_rope_material.roughness = 0.4  # Slightly shiny
+		_shared_rope_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mesh_instance.material_override = _shared_rope_material
 
 	get_tree().root.add_child(mesh_instance)
 	return mesh_instance
@@ -248,19 +258,23 @@ func _calculate_velocity(grinder: RigidBody3D, state: Dictionary) -> Vector3:
 
 
 func _physics_process(delta: float) -> void:
-	var to_remove: Array = []
+	# PERF: Early return when no active grinders
+	if active_grinders.is_empty():
+		return
 
-	for grinder in active_grinders.keys():
+	_to_remove.clear()
+
+	for grinder in active_grinders:
 		if not is_instance_valid(grinder):
-			to_remove.append(grinder)
+			_to_remove.append(grinder)
 			continue
 		if grinder.get("current_rail") != self:
-			to_remove.append(grinder)
+			_to_remove.append(grinder)
 			continue
 
 		_update_grinder(grinder, delta)
 
-	for grinder in to_remove:
+	for grinder in _to_remove:
 		# Clean up rope visual
 		if rope_visuals.has(grinder):
 			var rope: MeshInstance3D = rope_visuals[grinder]
@@ -283,10 +297,10 @@ func _update_grinder(grinder: RigidBody3D, delta: float) -> void:
 	if right.length_squared() < 0.1:
 		right = tangent.cross(Vector3.FORWARD).normalized()
 
-	# Get rail end positions for direction control
+	# Get rail end positions for direction control (using cached endpoints)
 	var attach_point: Vector3 = get_point_at_offset(state.offset)
-	var start_pos: Vector3 = get_point_at_offset(0.0)
-	var end_pos: Vector3 = get_point_at_offset(length)
+	var start_pos: Vector3 = _cached_start_pos
+	var end_pos: Vector3 = _cached_end_pos
 
 	# Handle smooth transition when first attaching
 	var is_transitioning: bool = state.get("transitioning", false)

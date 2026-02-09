@@ -150,6 +150,9 @@ func _ready() -> void:
 	peak_decay.resize(32)
 	peak_decay.fill(0.0)
 
+	if OS.has_feature("web") and update_interval < 0.033:
+		update_interval = 0.05
+
 
 func initialize(audio_bus_name: String = "Music", _viewport_size: Vector2i = Vector2i(1920, 1080)) -> bool:
 	## Initialize the visualizer system (viewport_size kept for API compat but unused)

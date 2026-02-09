@@ -52,6 +52,8 @@ func initialize(video_path: String, viewport_size: Vector2i = Vector2i(1920, 108
 	sub_viewport = SubViewport.new()
 	sub_viewport.name = "VideoViewport"
 	sub_viewport.size = viewport_size
+	if OS.has_feature("web"):
+		sub_viewport.size = Vector2i(960, 540)
 	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	sub_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	sub_viewport.transparent_bg = false
@@ -211,12 +213,23 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 	var angle_per_wall := TAU / float(num_walls)
 	var segments_per_wall := h_segments / num_walls
 
+	# Create shared material once for all segments
+	var shared_material := StandardMaterial3D.new()
+	shared_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shared_material.albedo_texture = viewport_texture
+	shared_material.albedo_color = Color(1.0, 1.0, 1.0)
+	shared_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+	shared_material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	shared_material.cull_mode = BaseMaterial3D.CULL_BACK
+	shared_material.metallic = 0.0
+	shared_material.roughness = 1.0
+
 	# Create each wall segment
 	for wall_idx in range(num_walls):
 		var start_angle := wall_idx * angle_per_wall
 		var end_angle := (wall_idx + 1) * angle_per_wall
 
-		var wall_mesh := _create_curved_wall_segment(radius, height, start_angle, end_angle, segments_per_wall, v_segments)
+		var wall_mesh := _create_curved_wall_segment(radius, height, start_angle, end_angle, segments_per_wall, v_segments, shared_material)
 		wall_mesh.name = "VideoWall%d" % wall_idx
 		container.add_child(wall_mesh)
 		video_panels.append(wall_mesh)
@@ -227,7 +240,7 @@ func create_video_cylinder(radius: float, height: float, center: Vector3 = Vecto
 	return container
 
 
-func _create_curved_wall_segment(radius: float, height: float, start_angle: float, end_angle: float, h_segments: int, v_segments: int) -> MeshInstance3D:
+func _create_curved_wall_segment(radius: float, height: float, start_angle: float, end_angle: float, h_segments: int, v_segments: int, shared_material: StandardMaterial3D = null) -> MeshInstance3D:
 	## Create a single curved wall segment mesh
 
 	var arrays: Array = []
@@ -284,17 +297,20 @@ func _create_curved_wall_segment(radius: float, height: float, start_angle: floa
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.mesh = segment_mesh
 
-	# Create material with video texture
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_texture = viewport_texture
-	material.albedo_color = Color(1.0, 1.0, 1.0)
-	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
-	material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-	material.cull_mode = BaseMaterial3D.CULL_BACK
-	material.metallic = 0.0
-	material.roughness = 1.0
-	mesh_instance.material_override = material
+	# Use shared material if provided, otherwise create one
+	if shared_material:
+		mesh_instance.material_override = shared_material
+	else:
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.albedo_texture = viewport_texture
+		material.albedo_color = Color(1.0, 1.0, 1.0)
+		material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR
+		material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+		material.cull_mode = BaseMaterial3D.CULL_BACK
+		material.metallic = 0.0
+		material.roughness = 1.0
+		mesh_instance.material_override = material
 
 	return mesh_instance
 

@@ -141,6 +141,4 @@ void fragment() {
 	METALLIC = metallic_amount;
 	SPECULAR = 0.3;
 
-	// Set to fully opaque for proper shadow casting and receiving
-	ALPHA = 1.0;
 }

@@ -31,6 +31,9 @@ var spawned_pickups: Array[Area3D] = []
 var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _respawn_queue: Array[Area3D] = []  # PERF: Queue respawns to spread raycasts across frames
+var _world: Node = null  # PERF: Cached parent/world reference
+var _world_has_game_active: bool = false  # PERF: Cached has_method check
+var _orb_spawner: Node = null  # PERF: Cached OrbSpawner reference
 
 func _ready() -> void:
 	# MULTIPLAYER SYNC FIX: Use level_seed for deterministic spawning across all clients
@@ -42,6 +45,11 @@ func _ready() -> void:
 		rng.seed = level_seed ^ 0x41424C53  # XOR with "ABLS" for unique but deterministic seed
 	else:
 		rng.randomize()
+	# PERF: Cache parent/world reference and has_method check
+	_world = get_parent()
+	_world_has_game_active = _world != null and _world.has_method("is_game_active")
+	if _world:
+		_orb_spawner = _world.get_node_or_null("OrbSpawner")
 	# Don't spawn automatically - wait for world to call spawn_abilities() when match starts
 
 func _process(delta: float) -> void:
@@ -49,9 +57,8 @@ func _process(delta: float) -> void:
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
-	# Check if game is active
-	var world: Node = get_parent()
-	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+	# Check if game is active (using cached references)
+	if not (_world_has_game_active and _world.is_game_active()):
 		return
 
 	# PERF: Process respawn queue 1 item per frame to spread raycasts across frames
@@ -211,15 +218,12 @@ func is_position_too_close_to_existing(pos: Vector3) -> bool:
 		if pickup and pickup.global_position.distance_to(pos) < MIN_SPAWN_SEPARATION:
 			return true
 
-	# Check against existing orbs from OrbSpawner
-	var world: Node = get_parent()
-	if world:
-		var orb_spawner: Node = world.get_node_or_null("OrbSpawner")
-		if orb_spawner and orb_spawner.has_method("get_all_orb_positions"):
-			var orb_positions: Array = orb_spawner.get_all_orb_positions()
-			for orb_pos in orb_positions:
-				if orb_pos.distance_to(pos) < MIN_SPAWN_SEPARATION:
-					return true
+	# Check against existing orbs from OrbSpawner (using cached reference)
+	if _orb_spawner and _orb_spawner.has_method("get_all_orb_positions"):
+		var orb_positions: Array = _orb_spawner.get_all_orb_positions()
+		for orb_pos in orb_positions:
+			if orb_pos.distance_to(pos) < MIN_SPAWN_SEPARATION:
+				return true
 
 	return false
 

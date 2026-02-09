@@ -30,6 +30,8 @@ func _ready() -> void:
 	pass
 
 func _process(delta: float) -> void:
+	if not visible:
+		return
 	# Rotate the preview marble
 	if preview_marble_mesh and is_instance_valid(preview_marble_mesh):
 		preview_marble_mesh.rotate_y(preview_rotation_speed * delta)
@@ -143,6 +145,7 @@ func get_selected_color() -> int:
 func show_panel() -> void:
 	"""Show the customize panel"""
 	show()
+	set_process(true)
 
 	# Apply material to preview marble with current selection
 	if preview_marble_mesh and is_instance_valid(preview_marble_mesh):
@@ -159,3 +162,4 @@ func show_panel() -> void:
 func _on_close_pressed() -> void:
 	closed.emit()
 	hide()
+	set_process(false)

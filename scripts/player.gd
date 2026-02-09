@@ -184,6 +184,11 @@ var god_mode: bool = false
 # Platform detection for particle scaling
 var _is_web: bool = false
 
+# Cached values for performance (set in _ready)
+var _cached_entity_id: int = -1
+var _cached_is_bot: bool = false
+var _cached_world: Node = null
+
 # ============================================================================
 # MULTIPLAYER POSITION SYNC
 # ============================================================================
@@ -202,11 +207,11 @@ var has_received_sync: bool = false  # True after first sync received
 
 func get_entity_id() -> int:
 	"""Get the player/bot's entity ID for debug logging"""
-	return name.to_int()
+	return _cached_entity_id
 
 func is_bot() -> bool:
 	"""Check if this entity is a bot"""
-	return get_entity_id() >= 9000
+	return _cached_is_bot
 
 # ============================================================================
 # MULTIPLAYER POSITION SYNC METHODS
@@ -264,6 +269,9 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	_is_web = OS.has_feature("web")
+	_cached_entity_id = name.to_int()
+	_cached_is_bot = _cached_entity_id >= 9000
+	_cached_world = get_tree().get_root().get_node_or_null("World")
 
 	# Set up RigidBody3D physics properties - shooter style
 	mass = marble_mass  # Marbles are dense (glass/steel)
@@ -800,7 +808,7 @@ func _process(delta: float) -> void:
 	axis_vector = Input.get_vector("look_left", "look_right", "look_up", "look_down")
 
 	# 3rd person shooter camera - Update from controller input
-	if axis_vector.length() > 0.0:
+	if axis_vector.length_squared() > 0.0:
 		camera_yaw -= axis_vector.x * controller_sensitivity * delta * 60.0
 		camera_pitch -= axis_vector.y * controller_sensitivity * delta * 60.0
 		camera_pitch = clamp(camera_pitch, camera_min_pitch, camera_max_pitch)
@@ -843,11 +851,12 @@ func _physics_process_marble_roll(delta: float) -> void:
 	if not is_charging_spin:
 		# Normal rolling based on movement
 		var horizontal_vel: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		var speed: float = horizontal_vel.length()
+		var speed_sq: float = horizontal_vel.length_squared()
 
-		if speed > 0.1:  # Only roll if moving
+		if speed_sq > 0.01:  # Only roll if moving
 			# Calculate roll axis (perpendicular to movement direction)
-			var move_dir: Vector3 = horizontal_vel.normalized()
+			var speed: float = sqrt(speed_sq)
+			var move_dir: Vector3 = horizontal_vel / speed
 			var roll_axis: Vector3 = Vector3(move_dir.z, 0, -move_dir.x)  # 90 degree rotation (inverted for correct direction)
 
 			# Roll speed based on velocity (marble radius is 0.5)
@@ -857,7 +866,7 @@ func _physics_process_marble_roll(delta: float) -> void:
 				roll_speed *= 3.0
 
 			# Apply rotation
-			marble_mesh.rotate(roll_axis.normalized(), roll_speed * delta)
+			marble_mesh.rotate(roll_axis, roll_speed * delta)
 
 func _input(event: InputEvent) -> void:
 	# In practice mode (no multiplayer peer), we're always the authority
@@ -980,8 +989,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.pressed and not event.echo:
 			if ult_system and ult_system.has_method("try_activate"):
 				# Check if game is active
-				var world: Node = get_tree().get_root().get_node_or_null("World")
-				var game_is_active: bool = world and world.get("game_active")
+				var game_is_active: bool = _cached_world and _cached_world.get("game_active")
 				if game_is_active:
 					if ult_system.try_activate():
 						DebugLogger.dlog(DebugLogger.Category.ABILITIES, "ULTIMATE ACTIVATED!", false, get_entity_id())
@@ -993,8 +1001,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift key detected! Pressed: %s | Grounded: %s | Cooldown: %s" % [event.pressed, is_grounded, spin_cooldown], false, get_entity_id())
 		if event.pressed and not event.echo:
 			# Check if game is active
-			var world: Node = get_tree().get_root().get_node_or_null("World")
-			var game_is_active: bool = world and world.get("game_active")
+			var game_is_active: bool = _cached_world and _cached_world.get("game_active")
 
 			if not game_is_active:
 				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Can't spin dash - game not started yet", false, get_entity_id())
@@ -1012,8 +1019,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not event.pressed:
 			DebugLogger.dlog(DebugLogger.Category.PLAYER, "Shift released! Charging: %s | Charge amount: %s" % [is_charging_spin, spin_charge], false, get_entity_id())
 			# Check if game is active
-			var world: Node = get_tree().get_root().get_node_or_null("World")
-			var game_is_active: bool = world and world.get("game_active")
+			var game_is_active: bool = _cached_world and _cached_world.get("game_active")
 
 			if is_charging_spin and spin_charge > 0.1 and game_is_active:  # Minimum charge threshold
 				DebugLogger.dlog(DebugLogger.Category.PLAYER, "Executing spin dash!", false, get_entity_id())
@@ -1072,10 +1078,6 @@ func _physics_process(delta: float) -> void:
 	# ---------------------------------------------------------------
 	# HUMAN PLAYER PATH: Full processing
 	# ---------------------------------------------------------------
-
-	# Position camera arm in physics_process as fallback
-	if camera_arm and is_instance_valid(camera_arm):
-		camera_arm.global_position = global_position
 
 	_physics_process_marble_roll(delta)
 
@@ -1146,8 +1148,7 @@ func _physics_process(delta: float) -> void:
 		charge_spin_rotation = 0.0
 
 	# Freeze movement until game starts (but allow charging and other systems above)
-	var world: Node = get_tree().get_root().get_node_or_null("World")
-	if world and not world.get("game_active"):
+	if _cached_world and not _cached_world.get("game_active"):
 		return  # Don't process movement until game is active
 
 	# Get input direction relative to camera (calculate even while grinding for rail control)
@@ -1158,14 +1159,13 @@ func _physics_process(delta: float) -> void:
 			# Get camera's forward direction (ignore Y to keep movement horizontal)
 			var cam_forward: Vector3 = -camera_arm.global_transform.basis.z
 			cam_forward.y = 0
-			cam_forward = cam_forward.normalized()
 
 			var cam_right: Vector3 = camera_arm.global_transform.basis.x
 			cam_right.y = 0
-			cam_right = cam_right.normalized()
 
 			# Calculate movement direction relative to camera
 			# Negate input_dir.y because Input.get_vector returns negative when pressing "up"
+			# Final .normalized() handles all direction normalization in one pass
 			movement_input_direction = (cam_forward * -input_dir.y + cam_right * input_dir.x).normalized()
 		else:
 			# Fallback: use global directions if no camera
@@ -1195,14 +1195,14 @@ func _physics_process(delta: float) -> void:
 	if input_dir != Vector2.ZERO:
 		# Get current horizontal speed
 		var horizontal_velocity: Vector3 = Vector3(linear_velocity.x, 0, linear_velocity.z)
-		var current_speed: float = horizontal_velocity.length()
+		var current_speed_sq: float = horizontal_velocity.length_squared()
 
 		# Apply movement force with reduced control in air
 		var control_multiplier: float = 1.0 if is_grounded else air_control
 		var force_to_apply: float = current_roll_force * control_multiplier
 
 		# Only apply force if below max speed (or allow air control regardless)
-		if current_speed < max_speed or not is_grounded:
+		if current_speed_sq < max_speed * max_speed or not is_grounded:
 			# Apply central force for movement (no torque to prevent spinning)
 			apply_central_force(movement_input_direction * force_to_apply)
 
@@ -1882,7 +1882,7 @@ func spawn_jump_bounce_effect(intensity_multiplier: float = 1.0) -> void:
 
 	# Trail in the opposite direction of player's velocity to show motion through air
 	var trail_direction: Vector3
-	if linear_velocity.length() > 0.5:
+	if linear_velocity.length_squared() > 0.25:
 		# Player is moving - trail in opposite direction of movement
 		trail_direction = -linear_velocity.normalized()
 	else:

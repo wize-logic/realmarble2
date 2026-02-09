@@ -20,6 +20,9 @@ var spawned_orbs: Array[Area3D] = []
 var respawn_timer: float = 0.0
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _respawn_queue: Array[Area3D] = []  # PERF: Queue respawns to spread raycasts across frames
+var _world: Node = null  # PERF: Cached parent/world reference
+var _world_has_game_active: bool = false  # PERF: Cached has_method check
+var _ability_spawner: Node = null  # PERF: Cached AbilitySpawner reference
 
 func _ready() -> void:
 	# MULTIPLAYER SYNC FIX: Use level_seed for deterministic spawning across all clients
@@ -31,6 +34,11 @@ func _ready() -> void:
 		rng.seed = level_seed ^ 0x4F524253  # XOR with "ORBS" for unique but deterministic seed
 	else:
 		rng.randomize()
+	# PERF: Cache parent/world reference and has_method check
+	_world = get_parent()
+	_world_has_game_active = _world != null and _world.has_method("is_game_active")
+	if _world:
+		_ability_spawner = _world.get_node_or_null("AbilitySpawner")
 	# Don't spawn automatically - wait for world to call spawn_orbs() when match starts
 
 func _process(delta: float) -> void:
@@ -38,9 +46,8 @@ func _process(delta: float) -> void:
 	if not (multiplayer.is_server() or multiplayer.multiplayer_peer == null):
 		return
 
-	# Check if game is active
-	var world: Node = get_parent()
-	if not (world and world.has_method("is_game_active") and world.is_game_active()):
+	# Check if game is active (using cached references)
+	if not (_world_has_game_active and _world.is_game_active()):
 		return
 
 	# PERF: Process respawn queue 1 item per frame to spread raycasts across frames
@@ -167,15 +174,12 @@ func is_position_too_close_to_existing(pos: Vector3) -> bool:
 		if orb and orb.global_position.distance_to(pos) < MIN_SPAWN_SEPARATION:
 			return true
 
-	# Check against existing abilities from AbilitySpawner
-	var world: Node = get_parent()
-	if world:
-		var ability_spawner: Node = world.get_node_or_null("AbilitySpawner")
-		if ability_spawner and ability_spawner.has_method("get_all_ability_positions"):
-			var ability_positions: Array = ability_spawner.get_all_ability_positions()
-			for ability_pos in ability_positions:
-				if ability_pos.distance_to(pos) < MIN_SPAWN_SEPARATION:
-					return true
+	# Check against existing abilities from AbilitySpawner (using cached reference)
+	if _ability_spawner and _ability_spawner.has_method("get_all_ability_positions"):
+		var ability_positions: Array = _ability_spawner.get_all_ability_positions()
+		for ability_pos in ability_positions:
+			if ability_pos.distance_to(pos) < MIN_SPAWN_SEPARATION:
+				return true
 
 	return false
 

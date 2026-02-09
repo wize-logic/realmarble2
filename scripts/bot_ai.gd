@@ -68,6 +68,7 @@ var death_pause_timer: float = 0.0  # NEW: Pause after death before resuming AI
 var bot_repulsion_timer: float = 0.0  # NEW: Timer for bot-bot repulsion
 var ult_check_timer: float = 0.0  # Timer for checking ult availability
 var terrain_stuck_check_timer: float = 0.0  # Timer for throttling terrain stuck checks
+var _state_update_timer: float = 0.0
 
 # ============================================================================
 # HTML5 PERFORMANCE SCALING
@@ -121,6 +122,7 @@ const BASE_PLAYER_SEARCH_INTERVAL: float = 0.8
 const BASE_ORB_CHECK_INTERVAL: float = 1.0
 const BASE_ABILITY_CHECK_INTERVAL: float = 0.5
 const BASE_STUCK_CHECK_INTERVAL: float = 0.3
+const STATE_UPDATE_INTERVAL: float = 0.1
 
 # PERF: Shared group cache - all bots reuse one get_nodes_in_group() call per physics frame
 # instead of 7 bots each doing 3 expensive tree traversals independently
@@ -192,12 +194,13 @@ var target_stuck_position: Vector3 = Vector3.ZERO
 var cached_players: Array[Node] = []
 var cached_orbs: Array[Node] = []
 var cached_abilities: Array[Node] = []  # NEW: Cache abilities
-var cached_orb_positions: Dictionary = {}
-var cached_ability_positions: Dictionary = {}  # NEW: Cache ability positions
 var cached_platforms: Array[Dictionary] = []
 var cached_space_state: PhysicsDirectSpaceState3D = null
-var last_seen_targets: Dictionary = {}
+var _vision_cache_time: Dictionary = {}
+var _vision_cache_visible: Dictionary = {}
 var _cached_vision_query: PhysicsRayQueryParameters3D = null  # PERF: Reuse instead of allocating per raycast
+var _cached_entity_id: int = -1
+var _frame_time: float = 0.0
 
 # ============================================================================
 # SEEDED RNG FOR MULTIPLAYER SYNC
@@ -234,6 +237,9 @@ func _ready() -> void:
 	if not bot:
 		push_error("ERROR: BotAI could not find parent bot!")
 		return
+
+	# Cache entity ID early (used by _initialize_seeded_rng and get_entity_id)
+	_cached_entity_id = bot.name.to_int() if bot else -1
 
 	# HTML5 performance scaling (reduce expensive checks/raycasts)
 	_update_interval_scale(0)
@@ -342,21 +348,20 @@ func create_bot_camera() -> void:
 
 func get_entity_id() -> int:
 	"""Get the bot's entity ID for debug logging"""
-	if bot:
-		return bot.name.to_int()
-	return -1
+	return _cached_entity_id
 
 func change_state(new_state: String, reason: String = "") -> void:
 	"""Change state with debug logging"""
 	if new_state != state:
-		var ability_info: String = ""
-		if bot and bot.current_ability and "ability_name" in bot.current_ability:
-			ability_info = " [%s]" % bot.current_ability.ability_name
-		var target_info: String = ""
-		if target_player and is_instance_valid(target_player):
-			var dist: float = bot.global_position.distance_to(target_player.global_position)
-			target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
-		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] %s → %s%s%s | %s" % [get_ai_type(), state, new_state, ability_info, target_info, reason], false, get_entity_id())
+		if DebugLogger.debug_enabled and DebugLogger.enabled_categories.get(DebugLogger.Category.BOT_AI, false):
+			var ability_info: String = ""
+			if bot and bot.current_ability and "ability_name" in bot.current_ability:
+				ability_info = " [%s]" % bot.current_ability.ability_name
+			var target_info: String = ""
+			if target_player and is_instance_valid(target_player):
+				var dist: float = bot.global_position.distance_to(target_player.global_position)
+				target_info = " | Target: %.1fu, HP:%d" % [dist, target_player.health]
+			DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] %s → %s%s%s | %s" % [get_ai_type(), state, new_state, ability_info, target_info, reason], false, get_entity_id())
 		previous_state = state
 		state = new_state
 
@@ -365,7 +370,7 @@ func change_state(new_state: String, reason: String = "") -> void:
 			target_stuck_timer = 0.0
 		elif new_state == "COLLECT_ABILITY":
 			target_stuck_timer = 0.0
-			ability_collection_start_time = Time.get_ticks_msec() / 1000.0
+			ability_collection_start_time = _frame_time
 
 func debug_log_periodic() -> void:
 	"""Periodic debug logging of bot state"""
@@ -393,6 +398,9 @@ func debug_log_periodic() -> void:
 func _physics_process(delta: float) -> void:
 	if not bot or not is_instance_valid(bot):
 		return
+
+	# Cache frame time
+	_frame_time = Time.get_ticks_msec() / 1000.0
 
 	# Only run AI when game is active
 	if not cached_world or not is_instance_valid(cached_world):
@@ -489,8 +497,11 @@ func _physics_process(delta: float) -> void:
 		"COLLECT_ABILITY":
 			do_collect_ability(delta)
 
-	# Update state transitions
-	update_state()
+	# Update state transitions (throttled)
+	_state_update_timer -= delta
+	if _state_update_timer <= 0.0:
+		update_state()
+		_state_update_timer = STATE_UPDATE_INTERVAL
 
 func update_timers(delta: float) -> void:
 	"""Update all timers in one place"""
@@ -556,16 +567,6 @@ func _update_interval_scale(active_bot_count: int) -> void:
 	ability_check_interval = BASE_ABILITY_CHECK_INTERVAL * interval_scale
 	stuck_check_interval = BASE_STUCK_CHECK_INTERVAL * interval_scale
 
-func _count_active_bots(players: Array[Node]) -> int:
-	var bot_count: int = 0
-	for player in players:
-		if not is_instance_valid(player):
-			continue
-		var name_str := str(player.name)
-		if name_str.is_valid_int() and name_str.to_int() >= 9000:
-			bot_count += 1
-	return bot_count
-
 # ============================================================================
 # PERSONALITY INITIALIZATION
 # ============================================================================
@@ -623,25 +624,22 @@ func refresh_cached_groups() -> void:
 
 	# Orbs
 	cached_orbs.clear()
-	cached_orb_positions.clear()
 	for node in _shared_raw_orbs:
 		if is_instance_valid(node) and node.is_inside_tree() and not ("is_collected" in node and node.is_collected):
 			cached_orbs.append(node)
-			cached_orb_positions[node] = node.global_position
 
 	# Abilities (skip if we already have one)
 	cached_abilities.clear()
-	cached_ability_positions.clear()
 	if not bot.current_ability:
 		for node in _shared_raw_abilities:
 			if is_instance_valid(node) and node.is_inside_tree() and ability_blacklist.find(node) == -1:
 				cached_abilities.append(node)
-				cached_ability_positions[node] = node.global_position
 
 	# Clean up stale visibility cache
-	for target in last_seen_targets.keys():
+	for target in _vision_cache_time.keys():
 		if not is_instance_valid(target):
-			last_seen_targets.erase(target)
+			_vision_cache_time.erase(target)
+			_vision_cache_visible.erase(target)
 
 	# Cache platforms
 	refresh_platform_cache()
@@ -735,12 +733,14 @@ func evaluate_target_priority(player: Node) -> float:
 		return -INF
 
 	var score: float = 0.0
-	var distance: float = bot.global_position.distance_to(player.global_position)
+	var dist_sq: float = bot.global_position.distance_squared_to(player.global_position)
 
-	# Distance scoring (closer = better)
-	if distance < 20.0:
+	# Distance scoring (closer = better) - use squared thresholds
+	if dist_sq < 400.0:  # 20.0^2
+		var distance: float = sqrt(dist_sq)
 		score += 100.0 - (distance * 3.0)
 	else:
+		var distance: float = sqrt(dist_sq)
 		score += 40.0 - (distance * 1.0)
 
 	# Health-based threat assessment
@@ -771,18 +771,18 @@ func find_nearest_orb() -> void:
 		return
 
 	var nearest_orb: Node = null
-	var nearest_dist: float = INF
+	var nearest_dist_sq: float = INF
 
 	for orb in cached_orbs:
 		if not is_instance_valid(orb):
 			continue
 
-		var distance: float = bot.global_position.distance_to(orb.global_position)
+		var dist_sq: float = bot.global_position.distance_squared_to(orb.global_position)
 
-		# Prefer visible or nearby orbs
-		if distance < 15.0 or can_see_target(orb):
-			if distance < nearest_dist:
-				nearest_dist = distance
+		# Prefer visible or nearby orbs (15.0^2 = 225.0)
+		if dist_sq < 225.0 or can_see_target(orb):
+			if dist_sq < nearest_dist_sq:
+				nearest_dist_sq = dist_sq
 				nearest_orb = orb
 
 	target_orb = nearest_orb
@@ -799,18 +799,18 @@ func find_nearest_ability() -> void:
 		return
 
 	var nearest_ability: Node = null
-	var nearest_dist: float = INF
+	var nearest_dist_sq: float = INF
 
 	for ability in cached_abilities:
 		if not is_instance_valid(ability):
 			continue
 
-		var distance: float = bot.global_position.distance_to(ability.global_position)
+		var dist_sq: float = bot.global_position.distance_squared_to(ability.global_position)
 
-		# Prioritize visible or nearby abilities
-		if distance < 15.0 or can_see_target(ability):
-			if distance < nearest_dist:
-				nearest_dist = distance
+		# Prioritize visible or nearby abilities (15.0^2 = 225.0)
+		if dist_sq < 225.0 or can_see_target(ability):
+			if dist_sq < nearest_dist_sq:
+				nearest_dist_sq = dist_sq
 				nearest_ability = ability
 
 	target_ability = nearest_ability
@@ -1113,13 +1113,11 @@ func can_see_target(target: Node) -> bool:
 	if not bot or not target or not is_instance_valid(target) or not cached_space_state:
 		return false
 
-	var now: float = Time.get_ticks_msec() / 1000.0
-	if last_seen_targets.has(target):
-		var cached: Dictionary = last_seen_targets[target]
-		if cached.has("time") and cached.has("visible"):
-			var elapsed: float = now - cached.time
-			if elapsed < vision_update_interval:
-				return cached.visible
+	var now: float = _frame_time
+	if _vision_cache_time.has(target):
+		var elapsed: float = now - _vision_cache_time[target]
+		if elapsed < vision_update_interval:
+			return _vision_cache_visible[target]
 
 	var bot_eye: Vector3 = bot.global_position + Vector3(0, BOT_EYE_HEIGHT, 0)
 	var target_pos: Vector3 = target.global_position
@@ -1138,10 +1136,8 @@ func can_see_target(target: Node) -> bool:
 
 	var result: Dictionary = cached_space_state.intersect_ray(_cached_vision_query)
 	var visible: bool = result.is_empty()
-	last_seen_targets[target] = {
-		"time": now,
-		"visible": visible
-	}
+	_vision_cache_time[target] = now
+	_vision_cache_visible[target] = visible
 	return visible  # No obstruction = can see
 
 # ============================================================================
@@ -1538,8 +1534,7 @@ func do_collect_ability(delta: float) -> void:
 		return
 
 	# Check timeout (15 seconds max)
-	var current_time: float = Time.get_ticks_msec() / 1000.0
-	var collection_duration: float = current_time - ability_collection_start_time
+	var collection_duration: float = _frame_time - ability_collection_start_time
 
 	if collection_duration >= ABILITY_COLLECTION_TIMEOUT:
 		DebugLogger.dlog(DebugLogger.Category.BOT_AI, "[%s] Ability collection timeout (%.1fs)" % [get_ai_type(), collection_duration], false, get_entity_id())
@@ -1669,7 +1664,7 @@ func should_chase() -> bool:
 		return false
 
 	# Don't chase without an ability
-	if not has_property(bot, "current_ability") or not bot.current_ability:
+	if not bot.current_ability:
 		return false
 
 	var distance_to_target: float = bot.global_position.distance_to(target_player.global_position)

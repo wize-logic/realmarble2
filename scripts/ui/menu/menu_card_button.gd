@@ -13,6 +13,7 @@ var is_hovered: bool = false
 var is_focused: bool = false
 var original_scale: Vector2 = Vector2.ONE
 var target_scale: Vector2 = Vector2.ONE
+var _cached_hover_state: bool = false
 
 @onready var label: Label = $MarginContainer/Label
 @onready var panel_material: ShaderMaterial = material as ShaderMaterial
@@ -46,23 +47,35 @@ func _ready() -> void:
 	# Set size based on is_large
 	custom_minimum_size = Vector2(400, 80) if is_large else Vector2(350, 60)
 
+	# Start with processing disabled - enabled on hover/focus
+	set_process(false)
+
 func _process(delta: float) -> void:
 	# Smooth scale animation
 	scale = lerp(scale, target_scale, delta * 10.0)
 
-	# Update shader hover state
-	if panel_material:
-		panel_material.set_shader_parameter("is_hovered", is_hovered or is_focused)
+	# Update shader hover state only when changed
+	var current_hover_state: bool = is_hovered or is_focused
+	if current_hover_state != _cached_hover_state:
+		_cached_hover_state = current_hover_state
+		if panel_material:
+			panel_material.set_shader_parameter("is_hovered", current_hover_state)
+
+	# Disable processing when animation is done and not hovered/focused
+	if not is_hovered and not is_focused and scale.is_equal_approx(target_scale):
+		set_process(false)
 
 func _on_mouse_entered() -> void:
 	is_hovered = true
 	target_scale = original_scale * 1.05
+	set_process(true)
 	if hover_sound:
 		hover_sound.play()
 
 func _on_mouse_exited() -> void:
 	is_hovered = false
 	target_scale = original_scale
+	set_process(true)
 
 func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
@@ -72,12 +85,14 @@ func _on_gui_input(event: InputEvent) -> void:
 func focus_entered() -> void:
 	is_focused = true
 	target_scale = original_scale * 1.05
+	set_process(true)
 	if hover_sound:
 		hover_sound.play()
 
 func focus_exited() -> void:
 	is_focused = false
 	target_scale = original_scale
+	set_process(true)
 
 func _activate() -> void:
 	if select_sound:
