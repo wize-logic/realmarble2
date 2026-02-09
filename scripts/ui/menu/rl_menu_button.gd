@@ -38,6 +38,8 @@ func _ready() -> void:
 	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
 
+	set_process(false)
+
 func _process(delta: float) -> void:
 	var active: bool = is_hovered or is_focused or is_highlighted
 
@@ -54,9 +56,11 @@ func _process(delta: float) -> void:
 			edge_glow.modulate = Color(1.0, 0.6, 0.2, 0.4 + pulse * 0.3)
 		else:
 			pulse_time = 0.0
+			set_process(false)
 
 func _on_mouse_entered() -> void:
 	is_hovered = true
+	set_process(true)
 	if hover_sound:
 		hover_sound.play()
 
@@ -70,6 +74,7 @@ func _on_gui_input(event: InputEvent) -> void:
 
 func focus_entered() -> void:
 	is_focused = true
+	set_process(true)
 	if hover_sound:
 		hover_sound.play()
 

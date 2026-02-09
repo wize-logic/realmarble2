@@ -8,6 +8,7 @@ extends Node
 @onready var gameplay_music: Node = get_node_or_null("GameplayMusic")
 @onready var music_notification: Control = get_node_or_null("MusicNotification/NotificationUI")
 @onready var game_hud: Control = get_node_or_null("GameHUD/HUD")
+@onready var _blur_node: Node = $Menu/Blur if has_node("Menu/Blur") else null
 
 # Multiplayer UI
 var lobby_ui: Control = null
@@ -34,6 +35,12 @@ var preview_light: DirectionalLight3D = null
 
 # Audio context state (HTML5)
 var audio_context_resumed: bool = false
+
+# Cached has_method results for gameplay_music
+var _music_has_pause: bool = false
+var _music_has_resume: bool = false
+var _music_has_start: bool = false
+var _music_has_stop: bool = false
 
 # Game Settings
 var sensitivity: float = 0.005
@@ -85,6 +92,10 @@ var level_config_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var selected_marble_color_index: int = 0  # Default to first color (Ruby Red)
 var level_config_time: float = 300.0  # Match duration in seconds (default 5 minutes)
 
+# Time slider constants
+const TIME_SLIDER_VALUES: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
+const TIME_SLIDER_LABELS: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
+
 # Debug menu
 const DebugMenu = preload("res://debug_menu.tscn")
 
@@ -102,6 +113,13 @@ var current_level_size: int = 2  # 1=Small, 2=Medium, 3=Large, 4=Huge
 var current_arena_multiplier: float = 1.0  # Arena size multiplier for player speed scaling
 
 func _ready() -> void:
+	# Cache has_method results for gameplay_music
+	if gameplay_music:
+		_music_has_pause = gameplay_music.has_method("pause_playlist")
+		_music_has_resume = gameplay_music.has_method("resume_playlist")
+		_music_has_start = gameplay_music.has_method("start_playlist")
+		_music_has_stop = gameplay_music.has_method("stop_playlist")
+
 	# Load saved marble color preference from Global settings
 	selected_marble_color_index = Global.marble_color_index
 
@@ -181,16 +199,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		controller = false
 
 func _process(delta: float) -> void:
+	if not paused and not countdown_active and not game_active:
+		return
+
 	# Handle pause menu
 	if paused and pause_menu:
-		if has_node("Menu/Blur"):
-			$Menu/Blur.show()
+		if _blur_node:
+			_blur_node.show()
 		pause_menu.show()
 		if !controller:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 		# Pause gameplay music
-		if gameplay_music and gameplay_music.has_method("pause_playlist"):
+		if gameplay_music and _music_has_pause:
 			gameplay_music.pause_playlist()
 
 	# Handle countdown
@@ -276,8 +297,8 @@ func is_type_b_arena() -> bool:
 
 func _on_resume_pressed() -> void:
 	if !options:
-		if has_node("Menu/Blur"):
-			$Menu/Blur.hide()
+		if _blur_node:
+			_blur_node.hide()
 	if pause_menu:
 		pause_menu.hide()
 	if !controller:
@@ -285,15 +306,15 @@ func _on_resume_pressed() -> void:
 	paused = false
 
 	# Resume gameplay music if paused
-	if gameplay_music and gameplay_music.has_method("resume_playlist"):
+	if gameplay_music and _music_has_resume:
 		gameplay_music.resume_playlist()
 
 func _on_options_pressed() -> void:
 	_on_resume_pressed()
 	if options_menu:
 		options_menu.show()
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 	var fullscreen_button: Button = get_node_or_null("%Fullscreen")
 	if fullscreen_button:
 		fullscreen_button.grab_focus()
@@ -307,8 +328,8 @@ func _on_back_pressed() -> void:
 		if options_menu:
 			options_menu.hide()
 		# Always hide blur when closing options
-		if has_node("Menu/Blur"):
-			$Menu/Blur.hide()
+		if _blur_node:
+			_blur_node.hide()
 		if !controller:
 			# Only capture mouse if we're in-game (paused), not if we're in main menu
 			if paused or game_active:
@@ -327,11 +348,11 @@ func _on_return_to_title_pressed() -> void:
 		pause_menu.hide()
 
 	# Hide blur immediately when leaving menu
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 	# Stop gameplay music
-	if gameplay_music and gameplay_music.has_method("stop_playlist"):
+	if gameplay_music and _music_has_stop:
 		gameplay_music.stop_playlist()
 
 	# Hide scoreboard if it's visible
@@ -534,8 +555,8 @@ func ask_bot_count() -> int:
 		add_child(dialog)
 
 	# Show blur to focus attention on dialog
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 
 	# Connect close signals to handle cancellation
 	dialog.close_requested.connect(func():
@@ -560,8 +581,8 @@ func ask_bot_count() -> int:
 	dialog.queue_free()
 
 	# Hide blur after dialog is closed
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 	# Keep mouse visible (we're still in main menu)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -810,8 +831,8 @@ func ask_level_config() -> Dictionary:
 		add_child(dialog)
 
 	# Show blur to focus attention on dialog
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 
 	# Connect close signals to handle cancellation
 	dialog.close_requested.connect(func():
@@ -834,8 +855,8 @@ func ask_level_config() -> Dictionary:
 	dialog.queue_free()
 
 	# Hide blur after dialog is closed
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 	# Keep mouse visible (we're still in main menu)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -860,12 +881,10 @@ func _on_size_slider_changed(value: float, label: Label) -> void:
 
 func _on_time_slider_changed(value: float, label: Label) -> void:
 	"""Callback for time slider - properly sets instance variable"""
-	var time_values: Array[float] = [60.0, 180.0, 300.0, 600.0, 900.0]  # 1, 3, 5, 10, 15 minutes
-	var time_labels: Array[String] = ["1 Minute", "3 Minutes", "5 Minutes", "10 Minutes", "15 Minutes"]
 	var index: int = int(value) - 1
-	level_config_time = time_values[index]
-	label.text = time_labels[index]
-	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, time_labels[index]])
+	level_config_time = TIME_SLIDER_VALUES[index]
+	label.text = TIME_SLIDER_LABELS[index]
+	DebugLogger.dlog(DebugLogger.Category.UI, "Time slider changed to: %.0f seconds (%s)" % [level_config_time, TIME_SLIDER_LABELS[index]])
 
 func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float = 300.0) -> void:
 	"""Start practice mode with specified settings.
@@ -880,8 +899,8 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 		main_menu.hide()
 		# Disable practice button to prevent spam during gameplay
 		_set_practice_button_disabled(true)
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 	# CRITICAL HTML5 FIX: Destroy preview camera and marble preview completely
 	if preview_camera and is_instance_valid(preview_camera):
 		DebugLogger.dlog(DebugLogger.Category.WORLD, "[CAMERA] Destroying preview camera for practice mode")
@@ -911,7 +930,7 @@ func start_practice_mode(bot_count: int, level_size: int = 2, match_time: float 
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 	# Start gameplay music
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
+	if gameplay_music and _music_has_start:
 		gameplay_music.start_playlist()
 
 	# Add local player without multiplayer
@@ -997,11 +1016,13 @@ func _on_garage_pressed() -> void:
 	"""Show customize panel"""
 	if customize_panel:
 		customize_panel.show_panel()
+		if customize_panel.preview_viewport:
+			customize_panel.preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	if main_menu:
 		main_menu.hide()
 	# Show blur to focus attention on the panel
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 
 func _on_profile_pressed() -> void:
 	"""Show profile panel"""
@@ -1010,8 +1031,8 @@ func _on_profile_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
 	# Show blur to focus attention on the panel
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 
 func _on_friends_pressed() -> void:
 	"""Show friends panel"""
@@ -1020,8 +1041,8 @@ func _on_friends_pressed() -> void:
 	if main_menu:
 		main_menu.hide()
 	# Show blur to focus attention on the panel
-	if has_node("Menu/Blur"):
-		$Menu/Blur.show()
+	if _blur_node:
+		_blur_node.show()
 
 func _on_options_button_toggled(toggled_on: bool) -> void:
 	if options_menu:
@@ -1029,16 +1050,16 @@ func _on_options_button_toggled(toggled_on: bool) -> void:
 			options_menu.show()
 			options = true  # Set options flag so back button works correctly
 			# Show blur when options menu opens from main menu
-			if has_node("Menu/Blur"):
-				$Menu/Blur.show()
+			if _blur_node:
+				_blur_node.show()
 			# Ensure mouse is visible when opening options from main menu
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		else:
 			options_menu.hide()
 			options = false
 			# Hide blur when options menu closes
-			if has_node("Menu/Blur"):
-				$Menu/Blur.hide()
+			if _blur_node:
+				_blur_node.hide()
 			# Keep mouse visible when closing (still in main menu)
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -1132,8 +1153,8 @@ func show_multiplayer_lobby(show_game_lobby: bool = false) -> void:
 		if main_menu:
 			main_menu.visible = false
 		# Show blur to focus attention on lobby
-		if has_node("Menu/Blur"):
-			$Menu/Blur.show()
+		if _blur_node:
+			_blur_node.show()
 		# Hide marble preview when showing lobby and disable its processing to prevent camera errors
 		if has_node("MarblePreview"):
 			var marble_preview_container = get_node("MarblePreview")
@@ -1151,8 +1172,8 @@ func hide_multiplayer_lobby() -> void:
 	if lobby_ui:
 		lobby_ui.visible = false
 	# Hide blur when hiding lobby
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 func show_main_menu() -> void:
 	"""Show the main menu (without regenerating map - just shows existing preview)"""
@@ -1160,8 +1181,8 @@ func show_main_menu() -> void:
 		main_menu.visible = true
 
 	# Hide blur when returning to main menu
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 	# Show marble preview again (it was hidden when entering lobby) and re-enable if needed
 	if has_node("MarblePreview"):
@@ -1222,7 +1243,7 @@ func start_multiplayer_match(settings: Dictionary) -> void:
 	# Stop menu music, start gameplay music
 	if menu_music:
 		menu_music.stop()
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
+	if gameplay_music and _music_has_start:
 		gameplay_music.start_playlist()
 
 	# Regenerate level with multiplayer settings (using shared seed for sync)
@@ -1291,7 +1312,7 @@ func start_deathmatch(skip_level_regen: bool = false) -> void:
 	# Stop menu music, start gameplay music
 	if menu_music:
 		menu_music.stop()
-	if gameplay_music and gameplay_music.has_method("start_playlist"):
+	if gameplay_music and _music_has_start:
 		gameplay_music.start_playlist()
 
 	# Regenerate level ONLY for multiplayer matches (practice mode already generated it)
@@ -1387,7 +1408,7 @@ func end_deathmatch() -> void:
 		CrazyGamesSDK.gameplay_stop()
 
 	# Stop gameplay music
-	if gameplay_music and gameplay_music.has_method("stop_playlist"):
+	if gameplay_music and _music_has_stop:
 		gameplay_music.stop_playlist()
 
 	# Find winner
@@ -1584,8 +1605,8 @@ func return_to_main_menu() -> void:
 		_set_practice_button_disabled(false)
 
 	# Hide blur effect
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 	# Wait a frame for all queue_free() calls to complete
 	await get_tree().process_frame
@@ -2403,7 +2424,7 @@ func _create_customize_panel() -> void:
 	var sub_viewport = SubViewport.new()
 	sub_viewport.size = Vector2i(280, 280)
 	sub_viewport.transparent_bg = false
-	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	sub_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 	sub_viewport.own_world_3d = true
 	viewport_container.add_child(sub_viewport)
 
@@ -2538,11 +2559,13 @@ func _on_customize_panel_close_pressed() -> void:
 	"""Handle customize panel close"""
 	if customize_panel:
 		customize_panel.hide()
+		if customize_panel.preview_viewport:
+			customize_panel.preview_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if main_menu:
 		main_menu.show()
 	# Hide blur
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 
 func _on_marble_color_selected(color_index: int) -> void:
 	"""Handle marble color selection - store player preference"""
@@ -2666,8 +2689,8 @@ func _on_profile_panel_close_pressed() -> void:
 	if profile_panel:
 		profile_panel.hide()
 	# Hide blur when closing panel
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -2676,8 +2699,8 @@ func _on_friends_panel_close_pressed() -> void:
 	if friends_panel:
 		friends_panel.hide()
 	# Hide blur when closing panel
-	if has_node("Menu/Blur"):
-		$Menu/Blur.hide()
+	if _blur_node:
+		_blur_node.hide()
 	if main_menu:
 		main_menu.show()
 
@@ -2725,23 +2748,21 @@ func create_countdown_ui() -> void:
 	DebugLogger.dlog(DebugLogger.Category.UI, "Countdown UI created")
 
 func update_countdown_display() -> void:
-	"""Update countdown display based on remaining time"""
 	if not countdown_label:
 		return
-
+	var new_text: String = "READY" if countdown_time > 1.0 else "GO!"
+	if countdown_label.text == new_text:
+		return
 	var prev_text: String = countdown_label.text
-
-	# Update text based on time remaining (removed SET - now just READY and GO)
+	countdown_label.text = new_text
 	if countdown_time > 1.0:
-		countdown_label.text = "READY"
 		countdown_label.add_theme_color_override("font_color", Color.YELLOW)
 	else:
-		countdown_label.text = "GO!"
 		countdown_label.add_theme_color_override("font_color", Color.GREEN)
 
 	# Play sound when text changes
-	if prev_text != countdown_label.text and countdown_sound:
-		play_countdown_beep(countdown_label.text)
+	if prev_text != new_text and countdown_sound:
+		play_countdown_beep(new_text)
 
 func play_countdown_beep(text: String) -> void:
 	"""Play a procedural beep sound for countdown"""

@@ -7,7 +7,7 @@ uniform sampler2D SCREEN_TEXTURE: hint_screen_texture, filter_linear_mipmap;
 
 void fragment() {
 	vec4 blur = textureLod(SCREEN_TEXTURE, SCREEN_UV, blur_amount);
-	blur.a = 255.0;
+	blur.a = 1.0;
 	vec4 final = mix(blur, color_over, mix_amount);
 	COLOR = final;
 }

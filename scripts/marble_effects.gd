@@ -16,6 +16,11 @@ const IMPACT_POOL_SIZE: int = 3
 var marble_body: RigidBody3D = null
 var marble_color: Color = Color(0.6, 0.8, 1.0)  # Default cyan
 
+# PERF: Shared resources across all marble effects instances
+static var _shared_particle_material: StandardMaterial3D = null
+static var _shared_particle_quad: QuadMesh = null
+static var _shared_fade_curve: Curve = null
+
 # Speed thresholds
 const TRAIL_SPEED_MIN: float = 5.0  # Minimum speed to show trail
 const SPEED_TRAIL_MIN: float = 15.0  # Speed for enhanced trail
@@ -99,17 +104,9 @@ func create_trail_particles() -> void:
 
 	trail_particles.process_material = mat
 
-	# Create mesh
-	var mesh_mat = StandardMaterial3D.new()
-	mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
-	var quad = QuadMesh.new()
-	quad.size = Vector2(1.0, 1.0)
-	quad.material = mesh_mat
-	trail_particles.draw_pass_1 = quad
+	# PERF: Share particle material and quad mesh across all instances
+	_ensure_shared_particle_resources()
+	trail_particles.draw_pass_1 = _shared_particle_quad
 
 func create_speed_trail_particles() -> void:
 	"""Create enhanced speed trail for fast movement"""
@@ -148,17 +145,9 @@ func create_speed_trail_particles() -> void:
 
 	speed_trail_particles.process_material = mat
 
-	# Create mesh
-	var mesh_mat = StandardMaterial3D.new()
-	mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
-	var quad = QuadMesh.new()
-	quad.size = Vector2(1.0, 1.0)
-	quad.material = mesh_mat
-	speed_trail_particles.draw_pass_1 = quad
+	# PERF: Share particle material and quad mesh across all instances
+	_ensure_shared_particle_resources()
+	speed_trail_particles.draw_pass_1 = _shared_particle_quad
 
 func create_impact_pool() -> void:
 	"""Create a pool of impact particle effects"""
@@ -198,27 +187,33 @@ func create_impact_pool() -> void:
 
 		impact.process_material = mat
 
-		# Create mesh
-		var mesh_mat = StandardMaterial3D.new()
-		mesh_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mesh_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mesh_mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		mesh_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
-		var quad = QuadMesh.new()
-		quad.size = Vector2(1.0, 1.0)
-		quad.material = mesh_mat
-		impact.draw_pass_1 = quad
+		# PERF: Share particle material and quad mesh across all instances
+		_ensure_shared_particle_resources()
+		impact.draw_pass_1 = _shared_particle_quad
 
 		impact_pool.append(impact)
 
+func _ensure_shared_particle_resources() -> void:
+	"""PERF: Create shared particle material and quad mesh once, reuse across all instances"""
+	if _shared_particle_material == null:
+		_shared_particle_material = StandardMaterial3D.new()
+		_shared_particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_shared_particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shared_particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		_shared_particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	if _shared_particle_quad == null:
+		_shared_particle_quad = QuadMesh.new()
+		_shared_particle_quad.size = Vector2(1.0, 1.0)
+		_shared_particle_quad.material = _shared_particle_material
+
 func create_fade_curve() -> Curve:
-	"""Create a fade-out scale curve"""
-	var curve = Curve.new()
-	curve.add_point(Vector2(0.0, 0.8))
-	curve.add_point(Vector2(0.3, 1.0))
-	curve.add_point(Vector2(1.0, 0.0))
-	return curve
+	"""Create a fade-out scale curve (shared across all instances)"""
+	if _shared_fade_curve == null:
+		_shared_fade_curve = Curve.new()
+		_shared_fade_curve.add_point(Vector2(0.0, 0.8))
+		_shared_fade_curve.add_point(Vector2(0.3, 1.0))
+		_shared_fade_curve.add_point(Vector2(1.0, 0.0))
+	return _shared_fade_curve
 
 func create_trail_gradient() -> Gradient:
 	"""Create trail color gradient (no white)"""

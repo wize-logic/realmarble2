@@ -14,13 +14,9 @@ uniform vec3 slime_base_color : source_color = vec3(0.15, 0.6, 0.15);
 uniform vec3 slime_bright_color : source_color = vec3(0.3, 0.9, 0.25);
 uniform vec3 slime_glow_color : source_color = vec3(0.1, 0.5, 0.1);
 
-// Kept for compatibility
-uniform int quality_level : hint_range(0, 2) = 1;
 uniform float flow_speed : hint_range(0.0, 2.0) = 0.4;
 uniform float turbulence : hint_range(0.0, 2.0) = 1.0;
 uniform float glow_intensity : hint_range(0.5, 5.0) = 2.5;
-uniform float bubble_amount : hint_range(0.0, 1.0) = 0.5;
-uniform float surface_distortion : hint_range(0.0, 1.0) = 0.3;
 
 // Simple noise
 float hash(vec2 p) {
@@ -40,8 +36,13 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 void fragment() {
-	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 uv = world_pos.xz * 0.15;
 	float time = TIME * flow_speed;
 

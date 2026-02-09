@@ -2,8 +2,16 @@ extends Label
 
 var fps_bool := false
 var ping_bool := false
+var _update_timer: float = 0.0
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if not fps_bool and not ping_bool:
+		text = ""
+		return
+	_update_timer += delta
+	if _update_timer < 0.5:
+		return
+	_update_timer = 0.0
 	var fps: String = "FPS " + str(Engine.get_frames_per_second()) + "\n" if fps_bool else ""
 	var ping: String = ""
 	if ping_bool:

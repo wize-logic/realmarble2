@@ -22,6 +22,7 @@ var _is_transitioning: bool = false
 func _ready() -> void:
 	generate_skybox()
 	_setup_color_cycle()
+	set_process(false)
 
 func _process(delta: float) -> void:
 	if not sky_material or _palettes.is_empty():
@@ -42,10 +43,13 @@ func _process(delta: float) -> void:
 			_transition_timer = 0.0
 			_is_transitioning = false
 			_hold_timer = 0.0
+			set_process(false)
+			# Schedule next transition after hold duration
+			if is_inside_tree():
+				get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
 	else:
-		_hold_timer += scaled_delta
-		if _hold_timer >= color_hold_duration:
-			_start_next_transition()
+		# Hold phase is handled by a timer; _process only runs during transitions
+		pass
 
 func generate_skybox() -> void:
 	"""Generate a clean procedural sky using built-in ProceduralSkyMaterial"""
@@ -103,6 +107,9 @@ func _setup_color_cycle() -> void:
 	_is_transitioning = false
 	var palette: Array = _palettes[_current_palette_index]
 	_apply_palette(palette[0], palette[1])
+	# Schedule first transition after initial hold duration
+	if is_inside_tree() and _palettes.size() >= 2:
+		get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
 
 func _start_next_transition() -> void:
 	if _palettes.size() < 2:
@@ -112,6 +119,7 @@ func _start_next_transition() -> void:
 		_next_palette_index = (_current_palette_index + 1) % _palettes.size()
 	_transition_timer = 0.0
 	_is_transitioning = true
+	set_process(true)
 
 func _apply_palette(top_color: Color, horizon_color: Color) -> void:
 	if not sky_material:

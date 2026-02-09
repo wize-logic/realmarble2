@@ -11,17 +11,6 @@ uniform float pattern_mix : hint_range(0.0, 1.0) = 0.5;
 uniform float detail_strength : hint_range(0.0, 1.0) = 0.3;
 uniform float wear_amount : hint_range(0.0, 1.0) = 0.2;
 
-// Kept for compatibility
-uniform float edge_wear_strength : hint_range(0.0, 1.0) = 0.0;
-uniform float ao_strength : hint_range(0.0, 1.0) = 0.0;
-uniform float wet_area_amount : hint_range(0.0, 1.0) = 0.0;
-uniform float color_variation : hint_range(0.0, 0.3) = 0.0;
-uniform float emission_strength : hint_range(0.0, 0.5) = 0.0;
-uniform vec3 emission_tint : source_color = vec3(0.7, 0.75, 0.8);
-uniform int quality_level : hint_range(0, 2) = 0;
-uniform float min_brightness : hint_range(0.0, 0.5) = 0.03;
-uniform float ambient_boost : hint_range(0.0, 0.5) = 0.01;
-
 // Cheap hash noise (single sample, no octaves)
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -38,9 +27,14 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
 void fragment() {
 	// World-space UVs for consistent tiling
-	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec2 uv = world_pos.xz * 0.1 * scale;
 
 	// Simple tile grid pattern

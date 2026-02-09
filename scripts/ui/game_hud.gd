@@ -22,6 +22,22 @@ const COLOR_SHADOW := Color(0, 0, 0, 0.4)
 var world: Node = null
 var player: Node = null
 
+# Cached HUD values - only update labels when changed
+var _cached_timer_text: String = ""
+var _cached_score: int = -1
+var _cached_level: int = -1
+var _cached_hp: int = -1
+var _cached_ability_text: String = ""
+var _cached_health_color_idx: int = -1
+var _cached_ability_color_idx: int = -1
+
+# Cached ult bar state
+var _cached_ult_percent: int = -1
+var _cached_ult_ready: bool = false
+
+# Cached multiplayer peer_id
+var _cached_peer_id: int = 1
+
 # Fonts
 var font_bold: Font = null
 var font_semibold: Font = null
@@ -72,11 +88,10 @@ func find_local_player() -> void:
 	if not world:
 		return
 
-	var peer_id: int = 1
 	if multiplayer.has_multiplayer_peer():
-		peer_id = multiplayer.get_unique_id()
+		_cached_peer_id = multiplayer.get_unique_id()
 
-	player = world.get_node_or_null(str(peer_id))
+	player = world.get_node_or_null(str(_cached_peer_id))
 
 	if not player:
 		await get_tree().create_timer(0.5).timeout
@@ -96,65 +111,84 @@ func _process(delta: float) -> void:
 
 func update_hud() -> void:
 	# Timer - clean time display, no prefix
+	var new_timer: String = "--:--"
 	if world and world.has_method("get_time_remaining_formatted"):
 		if world.game_active:
-			timer_label.text = world.get_time_remaining_formatted()
-		else:
-			timer_label.text = "--:--"
-	else:
-		timer_label.text = "--:--"
+			new_timer = world.get_time_remaining_formatted()
+	if new_timer != _cached_timer_text:
+		_cached_timer_text = new_timer
+		timer_label.text = new_timer
 
 	# Score
+	var new_score: int = 0
 	if world and world.has_method("get_score"):
-		var peer_id: int = 1
-		if multiplayer.has_multiplayer_peer():
-			peer_id = multiplayer.get_unique_id()
-		var score: int = world.get_score(peer_id)
-		score_label.text = "KILLS  %d" % score
-	else:
-		score_label.text = "KILLS  0"
+		new_score = world.get_score(_cached_peer_id)
+	if new_score != _cached_score:
+		_cached_score = new_score
+		score_label.text = "KILLS  %d" % new_score
 
 	# Level - accent blue, shows progression
+	var new_level: int = 0
+	var max_level: int = 3
 	if player and "level" in player:
-		level_label.text = "LVL  %d/%d" % [player.level, player.MAX_LEVEL]
-	else:
-		level_label.text = "LVL  0/3"
+		new_level = player.level
+		max_level = player.MAX_LEVEL
+	if new_level != _cached_level:
+		_cached_level = new_level
+		level_label.text = "LVL  %d/%d" % [new_level, max_level]
 
 	# Ability
+	var new_ability_text: String = "NO ABILITY"
+	var new_ability_color_idx: int = 1  # 0=ready, 1=secondary
 	if player and "current_ability" in player and player.current_ability:
 		if "ability_name" in player.current_ability:
 			var name_upper: String = player.current_ability.ability_name.to_upper()
 			if player.current_ability.has_method("is_ready"):
 				if player.current_ability.is_ready():
-					ability_label.text = "%s  READY" % name_upper
-					ability_label.add_theme_color_override("font_color", COLOR_ABILITY_READY)
+					new_ability_text = "%s  READY" % name_upper
+					new_ability_color_idx = 0
 				else:
 					var cooldown: float = player.current_ability.cooldown_timer if "cooldown_timer" in player.current_ability else 0.0
-					ability_label.text = "%s  %.1fS" % [name_upper, cooldown]
-					ability_label.add_theme_color_override("font_color", COLOR_SECONDARY)
+					new_ability_text = "%s  %.1fS" % [name_upper, cooldown]
+					new_ability_color_idx = 1
 			else:
-				ability_label.text = name_upper
-				ability_label.add_theme_color_override("font_color", COLOR_SECONDARY)
+				new_ability_text = name_upper
+				new_ability_color_idx = 1
 		else:
-			ability_label.text = "UNKNOWN"
+			new_ability_text = "UNKNOWN"
+			new_ability_color_idx = 1
+	if new_ability_text != _cached_ability_text:
+		_cached_ability_text = new_ability_text
+		ability_label.text = new_ability_text
+	if new_ability_color_idx != _cached_ability_color_idx:
+		_cached_ability_color_idx = new_ability_color_idx
+		if new_ability_color_idx == 0:
+			ability_label.add_theme_color_override("font_color", COLOR_ABILITY_READY)
+		else:
 			ability_label.add_theme_color_override("font_color", COLOR_SECONDARY)
-	else:
-		ability_label.text = "NO ABILITY"
-		ability_label.add_theme_color_override("font_color", COLOR_SECONDARY)
 
 	# Health - color transitions based on HP
+	var new_hp: int = 3
 	if player and "health" in player:
-		var hp: int = player.health
-		health_label.text = "HP  %d" % hp
-		if hp >= 3:
+		new_hp = player.health
+	if new_hp != _cached_hp:
+		_cached_hp = new_hp
+		health_label.text = "HP  %d" % new_hp
+	var new_health_color_idx: int = 0  # 0=full, 1=mid, 2=low
+	if new_hp >= 3:
+		new_health_color_idx = 0
+	elif new_hp == 2:
+		new_health_color_idx = 1
+	else:
+		new_health_color_idx = 2
+	if new_health_color_idx != _cached_health_color_idx:
+		_cached_health_color_idx = new_health_color_idx
+		if new_health_color_idx == 0:
 			health_label.add_theme_color_override("font_color", COLOR_HEALTH_FULL)
-		elif hp == 2:
+		elif new_health_color_idx == 1:
 			health_label.add_theme_color_override("font_color", COLOR_HEALTH_MID)
 		else:
 			health_label.add_theme_color_override("font_color", COLOR_HEALTH_LOW)
-	else:
-		health_label.text = "HP  3"
-		health_label.add_theme_color_override("font_color", COLOR_HEALTH_FULL)
 
 
 # --- Notification helpers ---
@@ -412,11 +446,14 @@ func update_ult_bar(delta: float) -> void:
 		ult_system = player.ult_system
 
 	if not ult_system or not "ult_charge" in ult_system:
-		ult_bar.value = 0.0
-		ult_label.text = "ULT  0%"
-		ult_label.add_theme_color_override("font_color", COLOR_SECONDARY)
-		if ult_bar_fill_style:
-			ult_bar_fill_style.bg_color = Color(0.2, 0.35, 0.5, 0.8)
+		if _cached_ult_percent != 0 or _cached_ult_ready:
+			ult_bar.value = 0.0
+			ult_label.text = "ULT  0%"
+			ult_label.add_theme_color_override("font_color", COLOR_SECONDARY)
+			if ult_bar_fill_style:
+				ult_bar_fill_style.bg_color = Color(0.2, 0.35, 0.5, 0.8)
+			_cached_ult_percent = 0
+			_cached_ult_ready = false
 		return
 
 	var charge: float = ult_system.ult_charge
@@ -425,26 +462,36 @@ func update_ult_bar(delta: float) -> void:
 	ult_bar.value = percent
 
 	var is_ready: bool = charge >= max_charge
+	var new_ult_percent: int = int(percent)
 
 	if is_ready:
-		# Pulsing accent blue when ready
+		# Pulsing accent blue when ready - must update every frame for animation
 		ult_pulse_time += delta * 3.0
 		var pulse: float = 0.8 + 0.2 * sin(ult_pulse_time * TAU)
 		var ready_color := Color(0.3 * pulse, 0.7 * pulse, 1.0 * pulse, 1.0)
 
-		ult_label.text = "ULTIMATE  READY"
-		ult_label.add_theme_color_override("font_color", COLOR_ACCENT_BLUE)
-		if font_bold:
-			ult_label.add_theme_font_override("font", font_bold)
+		if not _cached_ult_ready:
+			_cached_ult_ready = true
+			_cached_ult_percent = new_ult_percent
+			ult_label.text = "ULTIMATE  READY"
+			ult_label.add_theme_color_override("font_color", COLOR_ACCENT_BLUE)
+			if font_bold:
+				ult_label.add_theme_font_override("font", font_bold)
 
 		if ult_bar_fill_style:
 			ult_bar_fill_style.bg_color = ready_color
 	else:
 		ult_pulse_time = 0.0
-		ult_label.text = "ULT  %d%%" % int(percent)
-		ult_label.add_theme_color_override("font_color", COLOR_WHITE)
-		if font_semibold:
-			ult_label.add_theme_font_override("font", font_semibold)
+
+		if _cached_ult_ready:
+			_cached_ult_ready = false
+			ult_label.add_theme_color_override("font_color", COLOR_WHITE)
+			if font_semibold:
+				ult_label.add_theme_font_override("font", font_semibold)
+
+		if new_ult_percent != _cached_ult_percent:
+			_cached_ult_percent = new_ult_percent
+			ult_label.text = "ULT  %d%%" % new_ult_percent
 
 		# Fill color ramps from muted to brighter blue as charge increases
 		if ult_bar_fill_style:

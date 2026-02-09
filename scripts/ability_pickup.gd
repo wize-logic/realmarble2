@@ -25,6 +25,7 @@ var respawn_timer: float = 0.0
 
 # Visual effects
 var glow_material: StandardMaterial3D
+static var _shared_color_materials: Dictionary = {}  # PERF: Shared materials keyed by color
 
 # Spawn animation
 var spawn_animation_time: float = 0.5  # Duration of spawn animation
@@ -46,11 +47,14 @@ func _ready() -> void:
 
 	# Set up visual appearance
 	if mesh_instance and mesh_instance.mesh:
-		# Create material based on ability color (no emission/glow)
-		glow_material = StandardMaterial3D.new()
-		glow_material.albedo_color = ability_color
-		glow_material.metallic = 0.3
-		glow_material.roughness = 0.3
+		# PERF: Share material by color - create only if not cached
+		if not _shared_color_materials.has(ability_color):
+			var mat = StandardMaterial3D.new()
+			mat.albedo_color = ability_color
+			mat.metallic = 0.3
+			mat.roughness = 0.3
+			_shared_color_materials[ability_color] = mat
+		glow_material = _shared_color_materials[ability_color]
 		mesh_instance.material_override = glow_material
 
 	# Customize animation based on ability type for variety

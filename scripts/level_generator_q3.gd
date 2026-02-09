@@ -199,6 +199,15 @@ var video_wall_manager = null
 var visualizer_wall_manager = null
 var perimeter_walls: Array[MeshInstance3D] = []
 
+# Cached materials for shared instances (avoid per-instance allocations)
+var _jump_pad_material: StandardMaterial3D = null
+var _teleporter_material: StandardMaterial3D = null
+var _rail_material: StandardMaterial3D = null
+
+# Cached meshes for shared instances
+var _jump_pad_mesh: SphereMesh = null
+var _teleporter_mesh: SphereMesh = null
+
 # Grind rail system
 var GrindRailScript = preload("res://scripts/grind_rail.gd")
 var rail_positions: Array[Vector3] = []  # Track rail start positions to avoid overlap
@@ -210,6 +219,7 @@ const RAIL_RADIUS: float = 0.3  # Visual radius for rail tubes
 
 func _ready() -> void:
 	if not Engine.is_editor_hint():
+		set_process(false)
 		await generate_level()
 
 func generate_level() -> void:
@@ -1044,13 +1054,14 @@ func _can_add_light() -> bool:
 	## Check if we're under the global light cap (forward renderer perf guard)
 	return lights.size() < max_light_count
 
-func _register_light(light: OmniLight3D) -> void:
+func _register_light(light: OmniLight3D) -> OmniLight3D:
 	## Add a light to the scene and tracking array (respecting the cap)
-	if lights.size() >= max_light_count:
+	if not _can_add_light():
 		light.queue_free()
-		return
+		return null
 	add_child(light)
 	lights.append(light)
+	return light
 
 func add_interior_light(position: Vector3, index: int, suffix: String = "") -> void:
 	## Add a warm interior light for enclosed spaces (like torches in a cave)
@@ -1564,27 +1575,29 @@ func generate_jump_pads() -> void:
 func create_jump_pad(pos: Vector3, index: int, scale: float) -> void:
 	var pad_radius: float = 1.4 * scale  # Smaller than before
 
-	# Create a rounded dome shape using a squashed sphere
-	var pad_mesh: SphereMesh = SphereMesh.new()
-	pad_mesh.radius = pad_radius
-	pad_mesh.height = pad_radius * 0.6  # Squashed for dome look
-	pad_mesh.radial_segments = 24
-	pad_mesh.rings = 12
+	# Create shared mesh on first use (reduced tessellation for performance)
+	if _jump_pad_mesh == null:
+		_jump_pad_mesh = SphereMesh.new()
+		_jump_pad_mesh.radius = pad_radius
+		_jump_pad_mesh.height = pad_radius * 0.6  # Squashed for dome look
+		_jump_pad_mesh.radial_segments = 12
+		_jump_pad_mesh.rings = 6
 
 	var pad_instance: MeshInstance3D = MeshInstance3D.new()
-	pad_instance.mesh = pad_mesh
+	pad_instance.mesh = _jump_pad_mesh
 	pad_instance.name = "JumpPad%d" % index
 	pad_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)  # Slightly above ground
 	add_child(pad_instance)
 
-	# High quality glowing green material (Compatibility renderer safe)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
-	material.emission_enabled = true
-	material.emission = Color(0.3, 1.0, 0.4)  # Match albedo for solid color
-	material.emission_energy_multiplier = 2.0  # Glow intensity
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
-	pad_instance.set_surface_override_material(0, material)
+	# Shared glowing green material (Compatibility renderer safe)
+	if _jump_pad_material == null:
+		_jump_pad_material = StandardMaterial3D.new()
+		_jump_pad_material.albedo_color = Color(0.3, 1.0, 0.4)  # Bright vibrant green
+		_jump_pad_material.emission_enabled = true
+		_jump_pad_material.emission = Color(0.3, 1.0, 0.4)  # Match albedo for solid color
+		_jump_pad_material.emission_energy_multiplier = 2.0  # Glow intensity
+		_jump_pad_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
+	pad_instance.set_surface_override_material(0, _jump_pad_material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -1679,27 +1692,29 @@ func generate_teleporters() -> void:
 func create_teleporter(pos: Vector3, destination: Vector3, index: int, scale: float) -> void:
 	var pad_radius: float = 1.4 * scale  # Same size as jump pads
 
-	# Create a rounded dome shape using a squashed sphere (same as jump pads)
-	var teleporter_mesh: SphereMesh = SphereMesh.new()
-	teleporter_mesh.radius = pad_radius
-	teleporter_mesh.height = pad_radius * 0.6  # Squashed for dome look
-	teleporter_mesh.radial_segments = 24
-	teleporter_mesh.rings = 12
+	# Create shared mesh on first use (reduced tessellation for performance)
+	if _teleporter_mesh == null:
+		_teleporter_mesh = SphereMesh.new()
+		_teleporter_mesh.radius = pad_radius
+		_teleporter_mesh.height = pad_radius * 0.6  # Squashed for dome look
+		_teleporter_mesh.radial_segments = 12
+		_teleporter_mesh.rings = 6
 
 	var teleporter_instance: MeshInstance3D = MeshInstance3D.new()
-	teleporter_instance.mesh = teleporter_mesh
+	teleporter_instance.mesh = _teleporter_mesh
 	teleporter_instance.name = "Teleporter%d" % index
 	teleporter_instance.position = Vector3(pos.x, pad_radius * 0.15, pos.z)
 	add_child(teleporter_instance)
 
-	# High quality glowing purple material (Compatibility renderer safe)
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
-	material.emission_enabled = true
-	material.emission = Color(0.7, 0.3, 1.0)  # Match albedo for solid color
-	material.emission_energy_multiplier = 2.0  # Glow intensity
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
-	teleporter_instance.set_surface_override_material(0, material)
+	# Shared glowing purple material (Compatibility renderer safe)
+	if _teleporter_material == null:
+		_teleporter_material = StandardMaterial3D.new()
+		_teleporter_material.albedo_color = Color(0.7, 0.3, 1.0)  # Bright purple/magenta
+		_teleporter_material.emission_enabled = true
+		_teleporter_material.emission = Color(0.7, 0.3, 1.0)  # Match albedo for solid color
+		_teleporter_material.emission_energy_multiplier = 2.0  # Glow intensity
+		_teleporter_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Shows color directly
+	teleporter_instance.set_surface_override_material(0, _teleporter_material)
 
 	var static_body: StaticBody3D = StaticBody3D.new()
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -1911,14 +1926,15 @@ func _create_rail_visual(rail: Path3D) -> void:
 
 	rail_visual.mesh = surface_tool.commit()
 
-	# Compatibility renderer safe material - dark grey with subtle sheen
-	var material: StandardMaterial3D = StandardMaterial3D.new()
-	material.albedo_color = Color(0.25, 0.25, 0.28)  # Dark grey
-	material.emission_enabled = true
-	material.emission = Color(0.15, 0.15, 0.18)  # Subtle grey glow for visibility
-	material.emission_energy_multiplier = 0.8
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rail_visual.set_surface_override_material(0, material)
+	# Shared rail material - dark grey with subtle sheen (Compatibility renderer safe)
+	if _rail_material == null:
+		_rail_material = StandardMaterial3D.new()
+		_rail_material.albedo_color = Color(0.25, 0.25, 0.28)  # Dark grey
+		_rail_material.emission_enabled = true
+		_rail_material.emission = Color(0.15, 0.15, 0.18)  # Subtle grey glow for visibility
+		_rail_material.emission_energy_multiplier = 0.8
+		_rail_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rail_visual.set_surface_override_material(0, _rail_material)
 
 	rail.add_child(rail_visual)
 

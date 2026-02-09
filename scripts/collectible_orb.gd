@@ -24,6 +24,7 @@ var collection_pending: bool = false  # True while waiting for server response
 
 # Visual effects
 var glow_material: StandardMaterial3D
+static var _shared_material: StandardMaterial3D = null
 
 # MULTIPLAYER SYNC FIX: Seeded RNG for deterministic animation across clients
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -44,13 +45,14 @@ func _ready() -> void:
 
 	# Set up visual appearance if mesh exists
 	if mesh_instance and mesh_instance.mesh:
-		# Create material for orb - NO emission, rely on light for glow
-		glow_material = StandardMaterial3D.new()
-		glow_material.albedo_color = Color(0.3, 0.7, 1.0, 1.0)  # Cyan/blue color
-		glow_material.emission_enabled = false  # Disabled - use light instead
-		glow_material.metallic = 0.2
-		glow_material.roughness = 0.3
-		mesh_instance.material_override = glow_material
+		# Share material across all orbs - create once, reuse
+		if _shared_material == null:
+			_shared_material = StandardMaterial3D.new()
+			_shared_material.albedo_color = Color(0.3, 0.7, 1.0, 1.0)
+			_shared_material.emission_enabled = false
+			_shared_material.metallic = 0.2
+			_shared_material.roughness = 0.3
+		mesh_instance.material_override = _shared_material
 
 	# Use seeded RNG for starting animation phase (deterministic across clients)
 	time = rng.randf() * TAU
