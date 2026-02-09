@@ -113,20 +113,22 @@ func _ensure_hit_sound_pool() -> void:
 
 func play_pooled_hit_sound(position: Vector3) -> void:
 	"""Play a hit sound from the pool instead of creating a new AudioStreamPlayer3D"""
-	if not ability_sound or not ability_sound.stream:
+	# ability_sound is declared in subclasses via @onready, access dynamically
+	var snd_source: AudioStreamPlayer3D = get("ability_sound") as AudioStreamPlayer3D
+	if not snd_source or not snd_source.stream:
 		return
 	_ensure_hit_sound_pool()
 	# Find a non-playing sound in the pool
 	for snd in _hit_sound_pool:
 		if not snd.playing:
-			snd.stream = ability_sound.stream
+			snd.stream = snd_source.stream
 			snd.global_position = position
 			snd.pitch_scale = randf_range(1.2, 1.4)
 			snd.play()
 			return
 	# All busy - reuse the first one (oldest sound)
 	var snd: AudioStreamPlayer3D = _hit_sound_pool[0]
-	snd.stream = ability_sound.stream
+	snd.stream = snd_source.stream
 	snd.global_position = position
 	snd.pitch_scale = randf_range(1.2, 1.4)
 	snd.play()
