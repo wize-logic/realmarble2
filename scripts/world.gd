@@ -22,6 +22,8 @@ const ProfilePanelScript = preload("res://scripts/ui/profile_panel.gd")
 const FriendsPanelScript = preload("res://scripts/ui/friends_panel.gd")
 const CustomizePanelScript = preload("res://scripts/ui/customize_panel.gd")
 const MarbleMaterialManagerScript = preload("res://scripts/marble_material_manager.gd")
+const BeamSpawnEffectScript = preload("res://scripts/beam_spawn_effect.gd")
+const AbilityBaseScript = preload("res://scripts/abilities/ability_base.gd")
 var marble_material_manager = MarbleMaterialManagerScript.new()
 
 # Countdown UI (created dynamically)
@@ -128,6 +130,7 @@ func _ready() -> void:
 
 	# Load saved marble color preference from Global settings
 	selected_marble_color_index = Global.marble_color_index
+	_precache_visual_resources()
 
 	# Generate menu preview level (floor + video walls only)
 	generate_procedural_level(false, 2, false, true)
@@ -184,6 +187,15 @@ func _ready() -> void:
 	# Hide HUD initially (only shown during active gameplay)
 	if game_hud:
 		game_hud.visible = false
+
+func _precache_visual_resources() -> void:
+	"""Warm up shaders/materials/effects to avoid first-use hitching."""
+	if MaterialPool:
+		MaterialPool.precache_visual_resources()
+	if marble_material_manager:
+		marble_material_manager.precache_shader_materials()
+	AbilityBaseScript._ensure_shared_resources()
+	BeamSpawnEffectScript.precache_resources()
 
 func _unhandled_input(event: InputEvent) -> void:
 	# HTML5: Resume AudioContext on first user interaction (browser policy)
