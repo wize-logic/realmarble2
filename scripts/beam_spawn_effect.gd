@@ -15,7 +15,7 @@ func create_beam_effect() -> void:
 	beam_particles.name = "BeamParticles"
 	beam_particles.emitting = false
 	beam_particles.one_shot = true
-	beam_particles.amount = 12
+	beam_particles.amount = 6
 	beam_particles.lifetime = 0.8
 	beam_particles.explosiveness = 0.8
 	beam_particles.randomness = 0.3

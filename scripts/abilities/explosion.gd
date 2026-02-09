@@ -156,7 +156,7 @@ func activate() -> void:
 		var level_multiplier: int = 0
 		if player and "level" in player:
 			level_multiplier = player.level
-		magma_particles.amount = 30 + (level_multiplier * 20)  # Level 0: 30, Level 3: 90
+		magma_particles.amount = 15 + (level_multiplier * 8)  # Level 0: 15, Level 3: 39
 
 		# Also scale velocity slightly with level
 		magma_particles.initial_velocity_min = 6.0 + (level_multiplier * 1.5)
@@ -177,8 +177,8 @@ func activate() -> void:
 		explosion_area.monitoring = true
 
 		# Check for nearby players and damage them
-		await get_tree().create_timer(0.05).timeout  # Small delay for effect
-		damage_nearby_players()
+		# PERF: Use deferred call instead of blocking await for damage check
+		get_tree().create_timer(0.05).timeout.connect(damage_nearby_players)
 
 	# Launch player upward (rocket jump effect) - scaled by charge
 	if player is RigidBody3D:
@@ -266,25 +266,9 @@ func end_explosion() -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	"""Spawn a bright flash effect at the explosion center (GL Compatibility friendly)"""
@@ -302,8 +286,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 
 	var flash_size: float = 3.0 + (level * 0.5)
 	# PERF: Fewer segments on web
-	var radial_segs: int = 8 if _is_web else 16
-	var ring_count: int = 4 if _is_web else 8
+	var radial_segs: int = 6 if _is_web else 8
+	var ring_count: int = 3 if _is_web else 4
 
 	# Layer 1: Outer orange glow
 	var outer_flash: MeshInstance3D = MeshInstance3D.new()
@@ -347,8 +331,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	var core_sphere: SphereMesh = SphereMesh.new()
 	core_sphere.radius = flash_size * 0.5
 	core_sphere.height = flash_size * 1.0
-	core_sphere.radial_segments = 8 if _is_web else 12
-	core_sphere.rings = 4 if _is_web else 6
+	core_sphere.radial_segments = 6 if _is_web else 8
+	core_sphere.rings = 3 if _is_web else 4
 	core_flash.mesh = core_sphere
 
 	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -364,8 +348,8 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	var torus: TorusMesh = TorusMesh.new()
 	torus.inner_radius = flash_size * 0.8
 	torus.outer_radius = flash_size * 1.2
-	torus.rings = 8 if _is_web else 16  # PERF: Fewer segments on web
-	torus.ring_segments = 12 if _is_web else 24
+	torus.rings = 6 if _is_web else 8  # PERF: Reduced mesh complexity
+	torus.ring_segments = 6 if _is_web else 12
 	shockwave.mesh = torus
 	shockwave.rotation.x = PI / 2  # Lay flat
 
@@ -407,6 +391,11 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 	if _is_web:
 		num_patches = mini(num_patches, 2)  # PERF: Max 2 patches on web
 
+	# PERF: Reuse raycast query and space_state across all fire patches
+	var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
+	query.collision_mask = 1  # World only
+
 	for i in range(num_patches):
 		# Random position around explosion center
 		var offset: Vector3 = Vector3(
@@ -416,13 +405,9 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		)
 		var fire_pos: Vector3 = position + offset
 
-		# Raycast to find ground
-		var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-			fire_pos + Vector3.UP * 10.0,
-			fire_pos + Vector3.DOWN * 20.0
-		)
-		query.collision_mask = 1  # World only
+		# Raycast to find ground (reuse query object)
+		query.from = fire_pos + Vector3.UP * 10.0
+		query.to = fire_pos + Vector3.DOWN * 20.0
 		var result: Dictionary = space_state.intersect_ray(query)
 		if result:
 			fire_pos = result.position + Vector3.UP * 0.1
@@ -435,7 +420,7 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 
 		# Configure lingering fire
 		fire.emitting = true
-		fire.amount = 8 if _is_web else 20  # PERF: Reduced on web
+		fire.amount = 4 if _is_web else 10  # PERF: Reduced for performance
 		fire.lifetime = 1.5
 		fire.explosiveness = 0.0
 		fire.randomness = 0.3
@@ -512,7 +497,7 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	explosion.global_position = position
 
 	explosion.emitting = true
-	explosion.amount = 12 if _is_web else 50  # PERF: Further reduced on web
+	explosion.amount = 8 if _is_web else 20  # PERF: Reduced for performance
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
@@ -553,7 +538,7 @@ func _create_explosion_particles() -> void:
 	explosion_particles.name = "ExplosionParticles"
 	add_child(explosion_particles)
 	explosion_particles.emitting = false
-	explosion_particles.amount = 25 if _is_web else 100  # PERF: Further reduced on web
+	explosion_particles.amount = 12 if _is_web else 40  # PERF: Reduced for performance
 	explosion_particles.lifetime = 0.5
 	explosion_particles.one_shot = true
 	explosion_particles.explosiveness = 1.0
@@ -586,7 +571,7 @@ func _create_magma_particles() -> void:
 	magma_particles.name = "MagmaParticles"
 	add_child(magma_particles)
 	magma_particles.emitting = false
-	magma_particles.amount = 10 if _is_web else 30  # PERF: Reduced on web
+	magma_particles.amount = 6 if _is_web else 15  # PERF: Reduced for performance
 	magma_particles.lifetime = 1.5
 	magma_particles.one_shot = true
 	magma_particles.explosiveness = 0.8
@@ -623,8 +608,8 @@ func create_radius_indicator() -> void:
 	var sphere: SphereMesh = SphereMesh.new()
 	sphere.radius = explosion_radius  # Match hitbox radius
 	sphere.height = explosion_radius * 2  # Diameter
-	sphere.radial_segments = 16 if _is_web else 32  # PERF: Reduced on web
-	sphere.rings = 8 if _is_web else 16
+	sphere.radial_segments = 8 if _is_web else 16  # PERF: Reduced mesh complexity
+	sphere.rings = 4 if _is_web else 8
 	radius_indicator.mesh = sphere
 
 	# Create material - very subtle, transparent, non-distracting
@@ -645,7 +630,7 @@ func create_radius_indicator() -> void:
 
 	# Configure particles - on the sphere surface
 	sphere_particles.emitting = true
-	sphere_particles.amount = 12 if _is_web else 24  # PERF: Halved on web
+	sphere_particles.amount = 6 if _is_web else 12  # PERF: Reduced for performance
 	sphere_particles.lifetime = 1.0
 	sphere_particles.explosiveness = 0.0
 	sphere_particles.randomness = 0.1

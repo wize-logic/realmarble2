@@ -62,6 +62,8 @@ func find_nearest_player() -> Node3D:
 	var nearest_distance: float = INF
 	var max_lock_range: float = 100.0  # Long range targeting (doubled from 50.0)
 	var max_angle_degrees: float = 50.0  # Only target within 50 degrees of forward (100 degree cone total) - tighter accuracy
+	# PERF: Precompute cosine threshold to avoid acos() per target
+	var cos_max_angle: float = cos(deg_to_rad(max_angle_degrees))
 
 	# Get player's forward direction (based on camera or rotation) - full 3D
 	var forward_direction: Vector3
@@ -95,12 +97,12 @@ func find_nearest_player() -> Node3D:
 		var to_target: Vector3 = (potential_target.global_position - player.global_position).normalized()
 
 		# Calculate angle between forward direction and target direction
+		# PERF: Use dot product directly instead of expensive acos() + rad_to_deg()
+		# cos(50 degrees) ≈ 0.6427876097
 		var dot_product: float = forward_direction.dot(to_target)
-		var angle_radians: float = acos(clamp(dot_product, -1.0, 1.0))
-		var angle_degrees: float = rad_to_deg(angle_radians)
 
-		# Skip targets outside the forward cone
-		if angle_degrees > max_angle_degrees:
+		# Skip targets outside the forward cone (dot < cos(max_angle) means angle > max_angle)
+		if dot_product < cos_max_angle:
 			continue
 
 		# Calculate distance
@@ -304,18 +306,8 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 		knockback_dir.y = 0.2  # Slightly stronger upward knockback than gun
 		body.apply_central_impulse(knockback_dir * total_knockback)
 
-		# Play attack hit sound (deeper, more satisfying than gun)
-		# Use cached position to avoid accessing freed projectile
-		var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-		hit_sound.max_distance = 30.0  # Louder than gun (was 20.0)
-		hit_sound.volume_db = 6.0  # Louder than gun (was 3.0)
-		hit_sound.pitch_scale = randf_range(0.8, 1.0)  # Deeper than gun (was 1.2-1.4)
-		if player and player.get_parent():
-			player.get_parent().add_child(hit_sound)
-			hit_sound.global_position = projectile_position  # Set position after adding to tree
-			hit_sound.play()
-			# Cleanup after sound finishes
-			hit_sound.finished.connect(hit_sound.queue_free)
+		# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+		play_pooled_hit_sound(projectile_position)
 
 	# Destroy projectile on hit
 	if projectile and is_instance_valid(projectile):
@@ -402,7 +394,7 @@ func add_projectile_trail(projectile: Node3D) -> void:
 
 	# Configure trail particles - thicker, more dramatic than gun
 	trail.emitting = true
-	trail.amount = 20 if _is_web else 50  # PERF: Reduced on web
+	trail.amount = 10 if _is_web else 25  # PERF: Reduced for performance
 	trail.lifetime = 0.6  # Longer lifetime than gun (was 0.4)
 	trail.explosiveness = 0.0  # Continuous emission
 	trail.randomness = 0.3
@@ -455,7 +447,7 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Configure muzzle flash - bigger burst than gun
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 15 if _is_web else 30  # PERF: Halved on web
+	muzzle_flash.amount = 8 if _is_web else 15  # PERF: Reduced for performance
 	muzzle_flash.lifetime = 0.25  # Longer than gun (was 0.15)
 	muzzle_flash.one_shot = true
 	muzzle_flash.explosiveness = 1.0
@@ -508,7 +500,7 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Configure explosion - dramatic burst
 	explosion.emitting = true
-	explosion.amount = 20 if _is_web else 40  # PERF: Halved on web
+	explosion.amount = 10 if _is_web else 20  # PERF: Reduced for performance
 	explosion.lifetime = 0.5
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
@@ -584,7 +576,7 @@ func create_reticle() -> void:
 
 	# Configure particles - subtle rotating glow
 	particles.emitting = true
-	particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	particles.lifetime = 0.8
 	particles.explosiveness = 0.0
 	particles.randomness = 0.2

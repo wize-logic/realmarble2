@@ -288,7 +288,7 @@ func create_visual_effects() -> void:
 	add_child(power_aura)
 
 	power_aura.emitting = false
-	power_aura.amount = 40
+	power_aura.amount = 10 if _is_web else 20
 	power_aura.lifetime = 1.0
 	power_aura.explosiveness = 0.0
 	power_aura.randomness = 0.3
@@ -329,7 +329,7 @@ func create_visual_effects() -> void:
 	add_child(trail_particles)
 
 	trail_particles.emitting = false
-	trail_particles.amount = 100
+	trail_particles.amount = 20 if _is_web else 40
 	trail_particles.lifetime = 0.8
 	trail_particles.explosiveness = 0.0
 	trail_particles.randomness = 0.2
@@ -433,8 +433,8 @@ func spawn_activation_explosion() -> void:
 	var torus: TorusMesh = TorusMesh.new()
 	torus.inner_radius = 0.5
 	torus.outer_radius = 1.0
-	torus.rings = 32
-	torus.ring_segments = 16
+	torus.rings = 8 if _is_web else 16
+	torus.ring_segments = 6 if _is_web else 12
 	ring.mesh = torus
 
 	var ring_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -450,7 +450,7 @@ func spawn_activation_explosion() -> void:
 	# Burst particles
 	var burst: CPUParticles3D = CPUParticles3D.new()
 	burst.emitting = true
-	burst.amount = 80
+	burst.amount = 20 if _is_web else 40
 	burst.lifetime = 0.6
 	burst.one_shot = true
 	burst.explosiveness = 1.0
@@ -547,7 +547,7 @@ func spawn_hit_impact(position: Vector3) -> void:
 	impact.global_position = position
 
 	impact.emitting = true
-	impact.amount = 40
+	impact.amount = 10 if _is_web else 20
 	impact.lifetime = 0.4
 	impact.one_shot = true
 	impact.explosiveness = 1.0

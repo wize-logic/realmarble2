@@ -399,7 +399,7 @@ func _ready() -> void:
 
 		# Configure death particles - explosive burst
 		death_particles.emitting = false
-		death_particles.amount = 20 if _is_web else 40
+		death_particles.amount = 10 if _is_web else 20
 		death_particles.lifetime = 1.5
 		death_particles.one_shot = true
 		death_particles.explosiveness = 1.0
@@ -456,7 +456,7 @@ func _ready() -> void:
 
 		# Configure collection particles - upward blue aura
 		collection_particles.emitting = false
-		collection_particles.amount = 15
+		collection_particles.amount = 8
 		collection_particles.lifetime = 1.0
 		collection_particles.one_shot = true
 		collection_particles.explosiveness = 0.2  # Slightly delayed emission for flowing effect
@@ -2388,7 +2388,7 @@ func spawn_jump_pad_effect() -> void:
 	death_particles.color_ramp = jump_pad_gradient
 	death_particles.initial_velocity_min = 15.0  # Faster burst
 	death_particles.initial_velocity_max = 25.0
-	death_particles.amount = 15 if _is_web else 30
+	death_particles.amount = 8 if _is_web else 15
 
 	# Trigger particle burst at current position
 	death_particles.global_position = global_position
@@ -2412,7 +2412,7 @@ func spawn_teleporter_effect() -> void:
 	death_particles.color_ramp = teleporter_gradient
 	death_particles.initial_velocity_min = 12.0  # Swirling motion
 	death_particles.initial_velocity_max = 20.0
-	death_particles.amount = 15 if _is_web else 30
+	death_particles.amount = 8 if _is_web else 15
 
 	# Trigger particle burst at destination position
 	death_particles.global_position = global_position

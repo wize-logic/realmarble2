@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure slash particles - horizontal arc (enhanced for visual impact)
 	slash_particles.emitting = false
-	slash_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
+	slash_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
 	slash_particles.lifetime = 0.4  # Slightly longer for visibility
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 1.0
@@ -285,8 +285,8 @@ func activate() -> void:
 	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
 		# Level 1+: More particles (PERF: halved on web)
-		var base_amount: int = 40 if _is_web else 80
-		var level_bonus: int = 12 if _is_web else 25
+		var base_amount: int = 15 if _is_web else 30
+		var level_bonus: int = 5 if _is_web else 10
 		slash_particles.amount = base_amount + ((player_level - 1) * level_bonus)
 
 		if is_spin_attack:
@@ -374,25 +374,9 @@ func end_slash() -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: int) -> void:
 	"""Spawn a shockwave projectile that travels forward (Level 2+ effect)"""
@@ -448,7 +432,7 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	shockwave.add_child(trail)
 
 	trail.emitting = true
-	trail.amount = 15 if _is_web else 30  # PERF: Halved on web
+	trail.amount = 8 if _is_web else 15  # PERF: Reduced for performance
 	trail.lifetime = 0.4
 	trail.explosiveness = 0.0
 	trail.randomness = 0.2
@@ -491,42 +475,47 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 			shockwave.queue_free()
 	)
 
-	# Check for hits during shockwave travel
-	var check_timer: float = 0.0
-	while check_timer < shockwave_duration:
-		await get_tree().create_timer(0.05).timeout
-		check_timer += 0.05
+	# PERF: Use Area3D for shockwave hit detection instead of polling loop
+	var shockwave_area: Area3D = Area3D.new()
+	shockwave_area.name = "ShockwaveHitArea"
+	shockwave_area.collision_layer = 0
+	shockwave_area.collision_mask = 2  # Detect players (layer 2)
+	shockwave.add_child(shockwave_area)
 
-		if not is_instance_valid(shockwave) or not is_instance_valid(player):
-			break
+	var hit_shape: CollisionShape3D = CollisionShape3D.new()
+	var hit_sphere: SphereShape3D = SphereShape3D.new()
+	hit_sphere.radius = 2.0  # Hit radius
+	hit_shape.shape = hit_sphere
+	shockwave_area.add_child(hit_shape)
+	shockwave_area.monitoring = true
 
-		# Check for nearby targets
-		var players_container = player.get_parent()
-		for potential_target in players_container.get_children():
-			if potential_target == player:
-				continue
-			if potential_target in hit_targets:
-				continue
-			if not potential_target.has_method('receive_damage_from'):
-				continue
-			if "health" in potential_target and potential_target.health <= 0:
-				continue
+	# Connect body_entered for event-driven hit detection (no polling needed)
+	shockwave_area.body_entered.connect(func(body: Node3D) -> void:
+		if not is_instance_valid(player):
+			return
+		if body == player:
+			return
+		if body in hit_targets:
+			return
+		if not body.has_method('receive_damage_from'):
+			return
+		if "health" in body and body.health <= 0:
+			return
 
-			var distance: float = potential_target.global_position.distance_to(shockwave.global_position)
-			if distance < 2.0:  # Hit radius
-				hit_targets.append(potential_target)
+		hit_targets.append(body)
 
-				# Deal damage
-				var target_id: int = potential_target.get_multiplayer_authority()
-				if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
-					potential_target.receive_damage_from(shockwave_damage, owner_id)
-				else:
-					potential_target.receive_damage_from.rpc_id(target_id, shockwave_damage, owner_id)
+		# Deal damage
+		var target_id: int = body.get_multiplayer_authority()
+		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			body.receive_damage_from(shockwave_damage, owner_id)
+		else:
+			body.receive_damage_from.rpc_id(target_id, shockwave_damage, owner_id)
 
-				# Apply knockback
-				var knockback_dir: Vector3 = direction
-				knockback_dir.y = 0.3
-				potential_target.apply_central_impulse(knockback_dir * 80.0)
+		# Apply knockback
+		var knockback_dir: Vector3 = direction
+		knockback_dir.y = 0.3
+		body.apply_central_impulse(knockback_dir * 80.0)
+	)
 
 func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	"""Spawn a circular slash effect for spin attack (Level 3 effect)"""
@@ -540,7 +529,7 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	ring_particles.global_position = position
 
 	ring_particles.emitting = true
-	ring_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
+	ring_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
 	ring_particles.lifetime = 0.4
 	ring_particles.one_shot = true
 	ring_particles.explosiveness = 1.0
@@ -664,7 +653,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	flash_container.add_child(burst_particles)
 
 	burst_particles.emitting = true
-	burst_particles.amount = (15 + (level * 5)) if _is_web else (30 + (level * 10))  # PERF: Halved on web
+	burst_particles.amount = (8 + (level * 2)) if _is_web else (15 + (level * 5))  # PERF: Reduced for performance
 	burst_particles.lifetime = 0.25
 	burst_particles.one_shot = true
 	burst_particles.explosiveness = 1.0
@@ -736,7 +725,7 @@ func create_arc_indicator() -> void:
 
 	# Configure particles - along the front edge of the hitbox
 	edge_particles.emitting = true
-	edge_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	edge_particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	edge_particles.lifetime = 0.8
 	edge_particles.explosiveness = 0.0
 	edge_particles.randomness = 0.15

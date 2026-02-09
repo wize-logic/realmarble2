@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure fire particles - Trail effect (enhanced for more powerful dash)
 	fire_trail.emitting = false
-	fire_trail.amount = 60 if OS.has_feature("web") else 180  # Reduced on web for performance
+	fire_trail.amount = 25 if OS.has_feature("web") else 60  # PERF: Significantly reduced for performance
 	fire_trail.lifetime = 1.4  # Increased from 1.2s for longer lasting trail
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.3
@@ -334,25 +334,9 @@ func _physics_process(delta: float) -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	"""Spawn a magenta explosion effect at the given position (level-based effect)"""
@@ -428,7 +412,7 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 
 	# Configure explosion particles
 	explosion.emitting = true
-	var base_amount: int = 20 if _is_web else 40  # PERF: Halved on web
+	var base_amount: int = 10 if _is_web else 20  # PERF: Reduced for performance
 	explosion.amount = int(base_amount * scale_mult)
 	explosion.lifetime = 0.4
 	explosion.one_shot = true
@@ -537,7 +521,7 @@ func create_direction_indicator() -> void:
 
 	# Configure particles - orbiting around the sphere
 	sphere_particles.emitting = true
-	sphere_particles.amount = 8 if _is_web else 16  # PERF: Halved on web
+	sphere_particles.amount = 4 if _is_web else 8  # PERF: Reduced for performance
 	sphere_particles.lifetime = 0.8
 	sphere_particles.explosiveness = 0.0
 	sphere_particles.randomness = 0.2

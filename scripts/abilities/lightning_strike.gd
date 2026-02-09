@@ -58,6 +58,8 @@ func find_nearest_player() -> Node3D:
 	var nearest_distance: float = INF
 	var max_lock_range: float = lock_range
 	var max_angle_degrees: float = 90.0  # Wider cone than cannon since lightning comes from above
+	# PERF: Precompute cosine threshold to avoid acos() per target
+	var cos_max_angle: float = cos(deg_to_rad(max_angle_degrees))
 
 	# Get player's forward direction
 	var forward_direction: Vector3
@@ -94,13 +96,11 @@ func find_nearest_player() -> Node3D:
 		to_target.y = 0
 		to_target = to_target.normalized()
 
-		# Calculate angle between forward direction and target direction
+		# PERF: Use dot product directly instead of expensive acos() + rad_to_deg()
 		var dot_product: float = forward_horizontal.dot(to_target)
-		var angle_radians: float = acos(clamp(dot_product, -1.0, 1.0))
-		var angle_degrees: float = rad_to_deg(angle_radians)
 
-		# Skip targets outside the forward cone
-		if angle_degrees > max_angle_degrees:
+		# Skip targets outside the forward cone (dot < cos(max_angle) means angle > max_angle)
+		if dot_product < cos_max_angle:
 			continue
 
 		# Calculate distance
@@ -182,6 +182,8 @@ func find_multiple_targets(max_targets: int) -> Array:
 	var targets: Array = []
 	var max_lock_range: float = lock_range
 	var max_angle_degrees: float = 90.0
+	# PERF: Precompute cosine threshold to avoid acos() per target
+	var cos_max_angle: float = cos(deg_to_rad(max_angle_degrees))
 
 	# Get player's forward direction
 	var forward_direction: Vector3
@@ -198,6 +200,11 @@ func find_multiple_targets(max_targets: int) -> Array:
 	# Build a list of valid targets sorted by distance
 	var potential_targets: Array = []
 
+	# PERF: Compute forward_horizontal once outside the loop
+	var forward_horizontal: Vector3 = forward_direction
+	forward_horizontal.y = 0
+	forward_horizontal = forward_horizontal.normalized()
+
 	# PERF: Use group instead of get_children() to avoid array allocation
 	for potential_target in get_tree().get_nodes_in_group("players"):
 		if potential_target == player:
@@ -212,15 +219,11 @@ func find_multiple_targets(max_targets: int) -> Array:
 		to_target.y = 0
 		to_target = to_target.normalized()
 
-		var forward_horizontal: Vector3 = forward_direction
-		forward_horizontal.y = 0
-		forward_horizontal = forward_horizontal.normalized()
-
+		# PERF: Use dot product directly instead of expensive acos() + rad_to_deg()
 		var dot_product: float = forward_horizontal.dot(to_target)
-		var angle_radians: float = acos(clamp(dot_product, -1.0, 1.0))
-		var angle_degrees: float = rad_to_deg(angle_radians)
 
-		if angle_degrees > max_angle_degrees:
+		# Skip targets outside the forward cone
+		if dot_product < cos_max_angle:
 			continue
 
 		var distance = player.global_position.distance_to(potential_target.global_position)
@@ -287,8 +290,9 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 			target.apply_central_impulse(Vector3.UP * knockback * 0.7 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * knockback * 0.3)
 
 	# Also check for any players in the strike radius
-	# PERF: Use group instead of get_children() to avoid array allocation
-	for potential_target in get_tree().get_nodes_in_group("players"):
+	# PERF: Cache group lookup and reuse for chain lightning
+	var all_players: Array = get_tree().get_nodes_in_group("players")
+	for potential_target in all_players:
 		if potential_target == player:
 			continue
 		if potential_target in hit_targets:
@@ -320,7 +324,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 	if level >= 2 and hit_targets.size() > 0:
 		var chain_delay: float = 0.4
 		await get_tree().create_timer(chain_delay).timeout
-		spawn_chain_lightning(hit_targets, level)
+		spawn_chain_lightning(hit_targets, level, all_players)
 
 func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	"""Spawn a warning circle at the strike location, scaled by level"""
@@ -358,7 +362,7 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	indicator.add_child(warning_particles)
 
 	warning_particles.emitting = true
-	warning_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
+	warning_particles.amount = 5 if _is_web else 10  # PERF: Reduced for performance
 	warning_particles.lifetime = 0.5
 	warning_particles.explosiveness = 0.5
 	warning_particles.randomness = 0.3
@@ -487,7 +491,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	bolt_container.add_child(impact_particles)
 
 	impact_particles.emitting = true
-	impact_particles.amount = 12 if _is_web else 25  # PERF: Halved on web
+	impact_particles.amount = 6 if _is_web else 12  # PERF: Reduced for performance
 	impact_particles.lifetime = 0.4
 	impact_particles.one_shot = true
 	impact_particles.explosiveness = 1.0
@@ -528,7 +532,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	# Clean up after effect ends
 	get_tree().create_timer(0.6).timeout.connect(bolt_container.queue_free)
 
-func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
+func spawn_chain_lightning(hit_targets: Array, level: int, cached_players: Array = []) -> void:
 	"""Spawn chain lightning to nearby enemies (Level 2+ effect)"""
 	if not player or not player.get_parent():
 		return
@@ -544,8 +548,9 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 			continue
 
 		var chains_spawned: int = 0
-		# PERF: Use group instead of get_children()
-		for potential_target in get_tree().get_nodes_in_group("players"):
+		# PERF: Use cached player list instead of querying group again
+		var player_list: Array = cached_players if cached_players.size() > 0 else get_tree().get_nodes_in_group("players")
+		for potential_target in player_list:
 			if chains_spawned >= num_chains:
 				break
 			if potential_target == player:
@@ -687,7 +692,7 @@ func create_reticle() -> void:
 	reticle.add_child(particles)
 
 	particles.emitting = true
-	particles.amount = 8 if _is_web else 15  # PERF: Halved on web
+	particles.amount = 4 if _is_web else 8  # PERF: Reduced for performance
 	particles.lifetime = 0.5
 	particles.explosiveness = 0.0
 	particles.randomness = 0.3

@@ -31,6 +31,11 @@ static var _shared_particle_quad_xlarge: QuadMesh = null  # 0.8x0.8
 static var _is_web: bool = false
 static var _shared_resources_initialized: bool = false
 
+# PERF: Shared hit sound pool to avoid creating AudioStreamPlayer3D per hit
+var _hit_sound_pool: Array[AudioStreamPlayer3D] = []
+const HIT_SOUND_POOL_SIZE: int = 3
+var _hit_sound_pool_initialized: bool = false
+
 static func _ensure_shared_resources() -> void:
 	if _shared_resources_initialized:
 		return
@@ -93,6 +98,41 @@ func is_local_human_player() -> bool:
 		return false
 	return not (player.has_method("is_bot") and player.is_bot())
 
+func _ensure_hit_sound_pool() -> void:
+	"""Lazily initialize the hit sound pool"""
+	if _hit_sound_pool_initialized:
+		return
+	_hit_sound_pool_initialized = true
+	for i in range(HIT_SOUND_POOL_SIZE):
+		var snd: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		snd.name = "PooledHitSound_%d" % i
+		snd.max_distance = 20.0
+		snd.volume_db = 3.0
+		add_child(snd)
+		_hit_sound_pool.append(snd)
+
+func play_pooled_hit_sound(position: Vector3) -> void:
+	"""Play a hit sound from the pool instead of creating a new AudioStreamPlayer3D"""
+	# ability_sound is declared in subclasses via @onready, access dynamically
+	var snd_source: AudioStreamPlayer3D = get("ability_sound") as AudioStreamPlayer3D
+	if not snd_source or not snd_source.stream:
+		return
+	_ensure_hit_sound_pool()
+	# Find a non-playing sound in the pool
+	for snd in _hit_sound_pool:
+		if not snd.playing:
+			snd.stream = snd_source.stream
+			snd.global_position = position
+			snd.pitch_scale = randf_range(1.2, 1.4)
+			snd.play()
+			return
+	# All busy - reuse the first one (oldest sound)
+	var snd: AudioStreamPlayer3D = _hit_sound_pool[0]
+	snd.stream = snd_source.stream
+	snd.global_position = position
+	snd.pitch_scale = randf_range(1.2, 1.4)
+	snd.play()
+
 func _ready() -> void:
 	# PERF: Initialize shared resources once (idempotent)
 	_ensure_shared_resources()
@@ -106,7 +146,7 @@ func _ready() -> void:
 
 		# Configure charge particles - growing glow
 		charge_particles.emitting = false
-		charge_particles.amount = 25 if _is_web else 50  # PERF: Halved on web
+		charge_particles.amount = 12 if _is_web else 25  # PERF: Reduced for performance
 		charge_particles.lifetime = 0.8
 		charge_particles.explosiveness = 0.0  # Continuous emission
 		charge_particles.randomness = 0.3
@@ -271,19 +311,19 @@ func update_charge_visuals() -> void:
 	var web_mult: int = 1 if not _is_web else 2
 	match charge_level:
 		1:  # Weak - dim glow
-			charge_particles.amount = 30 / web_mult
+			charge_particles.amount = 15 / web_mult
 			charge_particles.scale_amount_min = 1.0
 			charge_particles.scale_amount_max = 1.5
 			charge_particles.initial_velocity_min = 1.0
 			charge_particles.initial_velocity_max = 2.0
 		2:  # Medium - bright pulse
-			charge_particles.amount = 60 / web_mult
+			charge_particles.amount = 30 / web_mult
 			charge_particles.scale_amount_min = 1.5
 			charge_particles.scale_amount_max = 2.5
 			charge_particles.initial_velocity_min = 2.0
 			charge_particles.initial_velocity_max = 4.0
 		3:  # Max - explosion aura
-			charge_particles.amount = 100 / web_mult
+			charge_particles.amount = 50 / web_mult
 			charge_particles.scale_amount_min = 2.0
 			charge_particles.scale_amount_max = 4.0
 			charge_particles.initial_velocity_min = 3.0
