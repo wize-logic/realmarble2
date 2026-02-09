@@ -31,6 +31,11 @@ static var _shared_particle_quad_xlarge: QuadMesh = null  # 0.8x0.8
 static var _is_web: bool = false
 static var _shared_resources_initialized: bool = false
 
+# PERF: Shared hit sound pool to avoid creating AudioStreamPlayer3D per hit
+var _hit_sound_pool: Array[AudioStreamPlayer3D] = []
+const HIT_SOUND_POOL_SIZE: int = 3
+var _hit_sound_pool_initialized: bool = false
+
 static func _ensure_shared_resources() -> void:
 	if _shared_resources_initialized:
 		return
@@ -92,6 +97,39 @@ func is_local_human_player() -> bool:
 	if not player.is_multiplayer_authority():
 		return false
 	return not (player.has_method("is_bot") and player.is_bot())
+
+func _ensure_hit_sound_pool() -> void:
+	"""Lazily initialize the hit sound pool"""
+	if _hit_sound_pool_initialized:
+		return
+	_hit_sound_pool_initialized = true
+	for i in range(HIT_SOUND_POOL_SIZE):
+		var snd: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
+		snd.name = "PooledHitSound_%d" % i
+		snd.max_distance = 20.0
+		snd.volume_db = 3.0
+		add_child(snd)
+		_hit_sound_pool.append(snd)
+
+func play_pooled_hit_sound(position: Vector3) -> void:
+	"""Play a hit sound from the pool instead of creating a new AudioStreamPlayer3D"""
+	if not ability_sound or not ability_sound.stream:
+		return
+	_ensure_hit_sound_pool()
+	# Find a non-playing sound in the pool
+	for snd in _hit_sound_pool:
+		if not snd.playing:
+			snd.stream = ability_sound.stream
+			snd.global_position = position
+			snd.pitch_scale = randf_range(1.2, 1.4)
+			snd.play()
+			return
+	# All busy - reuse the first one (oldest sound)
+	var snd: AudioStreamPlayer3D = _hit_sound_pool[0]
+	snd.stream = ability_sound.stream
+	snd.global_position = position
+	snd.pitch_scale = randf_range(1.2, 1.4)
+	snd.play()
 
 func _ready() -> void:
 	# PERF: Initialize shared resources once (idempotent)

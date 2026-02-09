@@ -374,25 +374,9 @@ func end_slash() -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: int) -> void:
 	"""Spawn a shockwave projectile that travels forward (Level 2+ effect)"""
@@ -491,42 +475,47 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 			shockwave.queue_free()
 	)
 
-	# Check for hits during shockwave travel
-	var check_timer: float = 0.0
-	while check_timer < shockwave_duration:
-		await get_tree().create_timer(0.05).timeout
-		check_timer += 0.05
+	# PERF: Use Area3D for shockwave hit detection instead of polling loop
+	var shockwave_area: Area3D = Area3D.new()
+	shockwave_area.name = "ShockwaveHitArea"
+	shockwave_area.collision_layer = 0
+	shockwave_area.collision_mask = 2  # Detect players (layer 2)
+	shockwave.add_child(shockwave_area)
 
-		if not is_instance_valid(shockwave) or not is_instance_valid(player):
-			break
+	var hit_shape: CollisionShape3D = CollisionShape3D.new()
+	var hit_sphere: SphereShape3D = SphereShape3D.new()
+	hit_sphere.radius = 2.0  # Hit radius
+	hit_shape.shape = hit_sphere
+	shockwave_area.add_child(hit_shape)
+	shockwave_area.monitoring = true
 
-		# Check for nearby targets
-		var players_container = player.get_parent()
-		for potential_target in players_container.get_children():
-			if potential_target == player:
-				continue
-			if potential_target in hit_targets:
-				continue
-			if not potential_target.has_method('receive_damage_from'):
-				continue
-			if "health" in potential_target and potential_target.health <= 0:
-				continue
+	# Connect body_entered for event-driven hit detection (no polling needed)
+	shockwave_area.body_entered.connect(func(body: Node3D) -> void:
+		if not is_instance_valid(player):
+			return
+		if body == player:
+			return
+		if body in hit_targets:
+			return
+		if not body.has_method('receive_damage_from'):
+			return
+		if "health" in body and body.health <= 0:
+			return
 
-			var distance: float = potential_target.global_position.distance_to(shockwave.global_position)
-			if distance < 2.0:  # Hit radius
-				hit_targets.append(potential_target)
+		hit_targets.append(body)
 
-				# Deal damage
-				var target_id: int = potential_target.get_multiplayer_authority()
-				if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
-					potential_target.receive_damage_from(shockwave_damage, owner_id)
-				else:
-					potential_target.receive_damage_from.rpc_id(target_id, shockwave_damage, owner_id)
+		# Deal damage
+		var target_id: int = body.get_multiplayer_authority()
+		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			body.receive_damage_from(shockwave_damage, owner_id)
+		else:
+			body.receive_damage_from.rpc_id(target_id, shockwave_damage, owner_id)
 
-				# Apply knockback
-				var knockback_dir: Vector3 = direction
-				knockback_dir.y = 0.3
-				potential_target.apply_central_impulse(knockback_dir * 80.0)
+		# Apply knockback
+		var knockback_dir: Vector3 = direction
+		knockback_dir.y = 0.3
+		body.apply_central_impulse(knockback_dir * 80.0)
+	)
 
 func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	"""Spawn a circular slash effect for spin attack (Level 3 effect)"""

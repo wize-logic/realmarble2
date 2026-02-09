@@ -334,25 +334,9 @@ func _physics_process(delta: float) -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	"""Spawn a magenta explosion effect at the given position (level-based effect)"""

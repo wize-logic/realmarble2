@@ -177,8 +177,8 @@ func activate() -> void:
 		explosion_area.monitoring = true
 
 		# Check for nearby players and damage them
-		await get_tree().create_timer(0.05).timeout  # Small delay for effect
-		damage_nearby_players()
+		# PERF: Use deferred call instead of blocking await for damage check
+		get_tree().create_timer(0.05).timeout.connect(damage_nearby_players)
 
 	# Launch player upward (rocket jump effect) - scaled by charge
 	if player is RigidBody3D:
@@ -266,25 +266,9 @@ func end_explosion() -> void:
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
-	if not ability_sound:
-		return
-
-	# Create a separate AudioStreamPlayer3D for hit confirmation
-	var hit_sound: AudioStreamPlayer3D = AudioStreamPlayer3D.new()
-	hit_sound.name = "AttackHitSound"
-	add_child(hit_sound)
-	hit_sound.max_distance = 20.0
-	hit_sound.volume_db = 3.0  # Slightly louder for satisfaction
-	hit_sound.pitch_scale = randf_range(1.2, 1.4)  # Higher pitch for "ding" effect
-
-	# Use same stream as ability sound if available, otherwise skip
-	if ability_sound.stream:
-		hit_sound.stream = ability_sound.stream
-		hit_sound.play()
-
-		# Auto-cleanup after sound finishes
-		await hit_sound.finished
-		hit_sound.queue_free()
+	# PERF: Use pooled hit sound instead of creating new AudioStreamPlayer3D per hit
+	if player:
+		play_pooled_hit_sound(player.global_position)
 
 func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	"""Spawn a bright flash effect at the explosion center (GL Compatibility friendly)"""
@@ -407,6 +391,11 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 	if _is_web:
 		num_patches = mini(num_patches, 2)  # PERF: Max 2 patches on web
 
+	# PERF: Reuse raycast query and space_state across all fire patches
+	var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.new()
+	query.collision_mask = 1  # World only
+
 	for i in range(num_patches):
 		# Random position around explosion center
 		var offset: Vector3 = Vector3(
@@ -416,13 +405,9 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		)
 		var fire_pos: Vector3 = position + offset
 
-		# Raycast to find ground
-		var space_state: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
-		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(
-			fire_pos + Vector3.UP * 10.0,
-			fire_pos + Vector3.DOWN * 20.0
-		)
-		query.collision_mask = 1  # World only
+		# Raycast to find ground (reuse query object)
+		query.from = fire_pos + Vector3.UP * 10.0
+		query.to = fire_pos + Vector3.DOWN * 20.0
 		var result: Dictionary = space_state.intersect_ray(query)
 		if result:
 			fire_pos = result.position + Vector3.UP * 0.1
