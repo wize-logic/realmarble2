@@ -6,6 +6,15 @@ extends Node3D
 var beam_particles: CPUParticles3D = null
 static var _shared_beam_material: StandardMaterial3D = null
 
+static func precache_resources() -> void:
+	if _shared_beam_material != null:
+		return
+	_shared_beam_material = StandardMaterial3D.new()
+	_shared_beam_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_beam_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_beam_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	_shared_beam_material.vertex_color_use_as_albedo = true
+
 func _ready() -> void:
 	create_beam_effect()
 
@@ -38,11 +47,7 @@ func create_beam_effect() -> void:
 
 	# PERF: Share beam material across all instances
 	if _shared_beam_material == null:
-		_shared_beam_material = StandardMaterial3D.new()
-		_shared_beam_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_shared_beam_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_shared_beam_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		_shared_beam_material.vertex_color_use_as_albedo = true
+		precache_resources()
 
 	var quad_mesh = QuadMesh.new()
 	quad_mesh.size = Vector2(0.5, 0.5)

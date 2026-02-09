@@ -52,6 +52,7 @@ const COLOR_SCHEMES = [
 
 # Track used color indices to avoid duplicates when possible
 var used_colors: Array = []
+var _precache_material: Material = null
 
 func create_marble_material(color_index: int = -1) -> Material:
 	"""Create a unique marble material with optional specific color index"""
@@ -201,3 +202,42 @@ func get_color_scheme_name(index: int) -> String:
 func get_color_scheme_count() -> int:
 	"""Get the total number of available color schemes"""
 	return COLOR_SCHEMES.size()
+
+func precache_shader_materials() -> void:
+	"""Warm up marble materials to avoid shader compilation spikes."""
+	if _precache_material:
+		return
+	var scheme := COLOR_SCHEMES[0]
+	if _should_use_standard_material():
+		var material := StandardMaterial3D.new()
+		material.albedo_color = _boost_color(scheme.primary)
+		material.albedo_texture = ROLL_TEXTURE
+		material.emission_enabled = true
+		material.emission = material.albedo_color * 0.12
+		material.roughness = 0.7
+		material.metallic = 0.05
+		material.specular = 0.1
+		material.uv1_scale = Vector3(3.5, 3.5, 3.5)
+		material.uv1_triplanar = true
+		_precache_material = material
+		return
+
+	var shader_material := ShaderMaterial.new()
+	shader_material.shader = MARBLE_SHADER
+	shader_material.set_shader_parameter("primary_color", _boost_color(scheme.primary))
+	shader_material.set_shader_parameter("secondary_color", _boost_color(scheme.secondary))
+	shader_material.set_shader_parameter("swirl_color", _boost_color(scheme.swirl))
+	shader_material.set_shader_parameter("glossiness", 0.5)
+	shader_material.set_shader_parameter("metallic_amount", 0.1)
+	shader_material.set_shader_parameter("transparency", 0.02)
+	shader_material.set_shader_parameter("swirl_scale", 2.0)
+	shader_material.set_shader_parameter("swirl_intensity", 0.6)
+	shader_material.set_shader_parameter("bubble_density", 0.4)
+	shader_material.set_shader_parameter("time_speed", 0.2)
+	shader_material.set_shader_parameter("glow_strength", 0.12)
+	shader_material.set_shader_parameter("glow_pulse_speed", 1.2)
+	shader_material.set_shader_parameter("glow_pulse_amount", 0.08)
+	shader_material.set_shader_parameter("outer_rim_power", 2.2)
+	shader_material.set_shader_parameter("outer_rim_intensity", 0.2)
+	shader_material.set_shader_parameter("rim_intensity", 0.15)
+	_precache_material = shader_material

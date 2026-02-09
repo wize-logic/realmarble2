@@ -4,14 +4,29 @@ extends Node
 ## Centralized material management for reusable StandardMaterial3D and procedural materials.
 
 const PROCEDURAL_MANAGER_PATH := "res://scripts/procedural_material_manager.gd"
+const SHADER_PATHS: Array[String] = [
+	"res://scripts/shaders/marble_shader.gdshader",
+	"res://scripts/shaders/procedural_surface.gdshader",
+	"res://scripts/shaders/hazard_surface.gdshader",
+	"res://scripts/shaders/heat_distortion.gdshader",
+	"res://scripts/shaders/video_wall.gdshader",
+	"res://scripts/shaders/visualizer_wmp9.gdshader",
+	"res://scripts/shaders/blur.gdshader",
+	"res://scripts/shaders/plasma_glow.gdshader",
+	"res://scripts/shaders/card_glow.gdshader",
+	"res://scripts/shaders/screen_effects.gdshader",
+]
 
 var _standard_materials: Dictionary = {}
 var _hazard_fallbacks: Dictionary = {}
 var _procedural_manager: Node = null
+var _precache_initialized: bool = false
+var _precache_materials: Array[Material] = []
 
 func _ready() -> void:
 	_build_standard_materials()
 	_build_hazard_fallbacks()
+	precache_visual_resources()
 
 func _build_standard_materials() -> void:
 	_standard_materials["floor"] = _create_standard_material(
@@ -87,3 +102,28 @@ func get_procedural_material(preset_name: String, color_variation: float = 0.0) 
 	if manager:
 		return manager.create_material(preset_name, color_variation)
 	return null
+
+func precache_visual_resources() -> void:
+	"""Pre-cache shaders and procedural materials to avoid first-use hitches."""
+	if _precache_initialized:
+		return
+	_precache_initialized = true
+	_precache_shaders()
+	_precache_procedural_materials()
+
+func _precache_shaders() -> void:
+	for path in SHADER_PATHS:
+		if not ResourceLoader.exists(path):
+			continue
+		var shader := load(path)
+		if shader:
+			var material := ShaderMaterial.new()
+			material.shader = shader
+			_precache_materials.append(material)
+
+func _precache_procedural_materials() -> void:
+	var manager = get_procedural_manager()
+	if not manager:
+		return
+	for preset_name in manager.get_preset_names():
+		manager.create_material(preset_name, 0.0)
