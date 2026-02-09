@@ -323,7 +323,9 @@ func _ready() -> void:
 
 	ground_ray.enabled = true
 	ground_ray.target_position = Vector3.DOWN * 0.85
-	ground_ray.collision_mask = 0xFFFFFFFF
+	# PERF: Only check world geometry (layer 1) instead of all 32 layers
+	# Checking 0xFFFFFFFF caused unnecessary collision tests against players, projectiles, etc.
+	ground_ray.collision_mask = 1
 	ground_ray.collide_with_areas = false
 	ground_ray.collide_with_bodies = true
 

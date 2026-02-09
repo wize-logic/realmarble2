@@ -174,7 +174,8 @@ vec3 render_bars(vec2 uv, float time) {
 		float angle = uv.x * TAU;  // Horizontal angle around dome
 		float dist_from_top = 1.0 - uv.y;  // 0 at top, 1 at bottom
 
-		int num_bars = 32;
+		// Quality-adaptive bar count: Low=16, Medium=24, High=32
+		int num_bars = quality_level == 0 ? 16 : (quality_level == 1 ? 24 : 32);
 		float bar_angle_width = TAU / float(num_bars);
 
 		// Background glow based on audio - covers full dome
@@ -264,8 +265,8 @@ vec3 render_bars(vec2 uv, float time) {
 		color += mix(color_primary.rgb, color_accent.rgb, audio_level) * zenith_glow * glow_intensity * 0.4;
 
 	} else {
-		// ORIGINAL WALL MODE
-		int num_bars = 32;
+		// ORIGINAL WALL MODE - quality-adaptive bar count
+		int num_bars = quality_level == 0 ? 16 : (quality_level == 1 ? 24 : 32);
 		float bar_spacing = 1.0 / float(num_bars);
 
 		// Background glow based on audio
@@ -375,10 +376,15 @@ vec3 render_scope(vec2 uv, float time) {
 		color += mix(color_primary.rgb, color_secondary.rgb, dist_from_top) * bg_noise * audio_level;
 
 		// Multiple waveform rings at different latitudes spanning full dome
+		// Quality-adaptive: Low=2, Medium=3, High=5 rings
+		int max_rings = quality_level == 0 ? 2 : (quality_level == 1 ? 3 : 5);
+		int max_layers = quality_level == 0 ? 1 : 2;
 		for (int ring = 0; ring < 5; ring++) {
+			if (ring >= max_rings) break;
 			float ring_base = 0.1 + float(ring) * 0.2;  // Rings at 0.1, 0.3, 0.5, 0.7, 0.9
 
 			for (int layer = 1; layer >= 0; layer--) {
+				if (layer >= max_layers) continue;
 				float layer_offset = float(layer) * 0.05;
 				float layer_alpha = 1.0 - float(layer) * 0.4;
 				float layer_width = 1.0 + float(layer) * 0.3;
@@ -416,10 +422,11 @@ vec3 render_scope(vec2 uv, float time) {
 			}
 		}
 
-		// Vertical energy lines connecting the rings
-		int num_lines = 16;
+		// Vertical energy lines connecting the rings - quality-adaptive
+		int num_lines = quality_level == 0 ? 8 : (quality_level == 1 ? 12 : 16);
 		float line_spacing = TAU / float(num_lines);
-		for (int i = 0; i < num_lines; i++) {
+		for (int i = 0; i < 16; i++) {
+			if (i >= num_lines) break;
 			float line_angle = float(i) * line_spacing;
 			float angle_diff = abs(mod(angle - line_angle + PI, TAU) - PI);
 
@@ -447,7 +454,9 @@ vec3 render_scope(vec2 uv, float time) {
 
 		float center_y = 0.5;
 
+		int max_wall_layers = quality_level == 0 ? 1 : (quality_level == 1 ? 2 : 3);
 		for (int layer = 2; layer >= 0; layer--) {
+			if (3 - layer > max_wall_layers) continue;
 			float layer_offset = float(layer) * 0.02;
 			float layer_alpha = 1.0 - float(layer) * 0.3;
 			float layer_width = 1.0 + float(layer) * 0.5;
@@ -473,7 +482,9 @@ vec3 render_scope(vec2 uv, float time) {
 			color += wave_color * glow * glow_intensity * 0.3 * layer_alpha;
 		}
 
+		int max_echoes = quality_level == 0 ? 2 : (quality_level == 1 ? 3 : 5);
 		for (int i = 1; i <= 5; i++) {
+			if (i > max_echoes) break;
 			float echo_offset = float(i) * 0.025;
 			float echo_alpha = 1.0 - float(i) * 0.18;
 
@@ -605,13 +616,15 @@ vec3 render_ambience(vec2 uv, float time) {
 		}
 	}
 
-	// Bass-reactive vertical energy streaks
-	float streak_intensity = pow(bass_level, 1.5) * 0.4;
-	if (streak_intensity > 0.01) {
-		float streak = fbm(vec2(uv.x * 15.0, time * 3.0), 3);
-		streak = pow(streak, 2.0);
-		vec3 streak_color = mix(color_primary.rgb, color_accent.rgb, uv.y);
-		color += streak_color * streak * streak_intensity * (1.0 - abs(uv.y - 0.5) * 1.5);
+	// Bass-reactive vertical energy streaks (skip on low quality - fbm is expensive)
+	if (quality_level > 0) {
+		float streak_intensity = pow(bass_level, 1.5) * 0.4;
+		if (streak_intensity > 0.01) {
+			float streak = fbm(vec2(uv.x * 15.0, time * 3.0), 3);
+			streak = pow(streak, 2.0);
+			vec3 streak_color = mix(color_primary.rgb, color_accent.rgb, uv.y);
+			color += streak_color * streak * streak_intensity * (1.0 - abs(uv.y - 0.5) * 1.5);
+		}
 	}
 
 	// Beat flash
@@ -651,9 +664,10 @@ vec3 render_battery(vec2 uv, float time) {
 	field *= audio_level * 0.2;
 	color += mix(color_primary.rgb, color_secondary.rgb, field) * field;
 
-	// Rotating energy beams with smooth edges
-	int num_beams = 12;
-	for (int i = 0; i < num_beams; i++) {
+	// Rotating energy beams with smooth edges - quality-adaptive
+	int num_beams = quality_level == 0 ? 6 : (quality_level == 1 ? 8 : 12);
+	for (int i = 0; i < 12; i++) {
+		if (i >= num_beams) break;
 		float fi = float(i);
 		float beam_angle = (fi / float(num_beams)) * TAU + time * (0.4 + fi * 0.05);
 
@@ -730,9 +744,11 @@ vec3 render_battery(vec2 uv, float time) {
 		color += color_secondary.rgb * ring_glow * 0.1;
 	}
 
-	// Outer radial spectrum bars
+	// Outer radial spectrum bars - quality-adaptive
+	int num_radial_bars = quality_level == 0 ? 12 : (quality_level == 1 ? 20 : 32);
 	float bar_start = 0.42;
 	for (int i = 0; i < 32; i++) {
+		if (i >= num_radial_bars) break;
 		float bar_angle = (float(i) / 32.0) * TAU - PI * 0.5;
 		float angle_diff = abs(mod(angle - bar_angle + PI, TAU) - PI);
 

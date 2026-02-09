@@ -77,9 +77,8 @@ func find_nearest_player() -> Node3D:
 
 	forward_direction = forward_direction.normalized()
 
-	# Get all nodes in the Players container
-	var players_container = player.get_parent()
-	for potential_target in players_container.get_children():
+	# PERF: Use group instead of get_children() to avoid array allocation
+	for potential_target in get_tree().get_nodes_in_group("players"):
 		# Skip if it's ourselves
 		if potential_target == player:
 			continue

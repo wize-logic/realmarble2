@@ -182,6 +182,7 @@ var navigation_region: NavigationRegion3D = null
 var lights: Array[OmniLight3D] = []
 var occluders: Array[OccluderInstance3D] = []
 var spawn_markers: Array[Marker3D] = []
+var _cached_spawn_points: PackedVector3Array = PackedVector3Array()  # PERF: Cached spawn points
 
 # Grid system for structure placement
 const CELL_SIZE: float = 8.0
@@ -390,6 +391,7 @@ func _rebuild_cached_references(root: Node) -> void:
 	lights.clear()
 	occluders.clear()
 	spawn_markers.clear()
+	_cached_spawn_points.clear()
 	navigation_region = null
 	_collect_cached_nodes(root)
 
@@ -439,6 +441,7 @@ func clear_level() -> void:
 	lights.clear()
 	occluders.clear()
 	spawn_markers.clear()
+	_cached_spawn_points.clear()
 	navigation_region = null
 	bsp_root = null
 
@@ -2180,13 +2183,15 @@ func _on_death_zone_entered(body: Node3D) -> void:
 
 func filter_spawns_near_positions(positions: Array[Vector3], min_distance: float) -> void:
 	## Remove spawn points that are too close to given positions
+	# PERF: Use squared distance to avoid sqrt + Vector2 allocations
+	var min_dist_sq: float = min_distance * min_distance
 	var filtered: Array[Vector3] = []
 	for spawn in clear_positions:
 		var too_close: bool = false
 		for pos in positions:
-			# Check horizontal distance only (ignore Y)
-			var h_dist: float = Vector2(spawn.x, spawn.z).distance_to(Vector2(pos.x, pos.z))
-			if h_dist < min_distance:
+			var dx: float = spawn.x - pos.x
+			var dz: float = spawn.z - pos.z
+			if dx * dx + dz * dz < min_dist_sq:
 				too_close = true
 				break
 		if not too_close:
@@ -2260,8 +2265,9 @@ func is_near_platform_geometry(pos: Vector3, min_distance: float) -> bool:
 	## Returns true if position is within min_distance of blocking geometry.
 	## Skips floor-like meshes (large AND flat) but checks tall structures.
 
-	for child in get_children():
-		if not child is MeshInstance3D or child.mesh == null:
+	# PERF: Use platforms array instead of get_children() to avoid array allocation
+	for child in platforms:
+		if not is_instance_valid(child) or child.mesh == null:
 			continue
 
 		# Explicitly skip main floor and raised sections (these are placeable surfaces)
@@ -2534,12 +2540,17 @@ func _generate_arena_light_grid() -> void:
 	var grid_idx: int = 0
 	var lights_created: int = 0
 	for gx in range(grid_count_x):
+		# PERF: Stop grid loop early if light cap reached
+		if not _can_add_light():
+			break
 		for gz in range(grid_count_z):
+			if not _can_add_light():
+				break
 			var pos_x: float = start_x + gx * grid_step
 			var pos_z: float = start_z + gz * grid_step
 
 			# Ceiling light - primary illumination (always enabled)
-			if q3_ceiling_lights:
+			if q3_ceiling_lights and _can_add_light():
 				var ceiling_light: OmniLight3D = OmniLight3D.new()
 				ceiling_light.name = "GridCeilingLight_%d" % grid_idx
 				ceiling_light.position = Vector3(pos_x, room_height * 0.85, pos_z)
@@ -2552,7 +2563,7 @@ func _generate_arena_light_grid() -> void:
 				lights_created += 1
 
 			# Floor fill light - only on medium/high quality
-			if q3_floor_fill and lighting_quality >= 1:
+			if q3_floor_fill and lighting_quality >= 1 and _can_add_light():
 				var floor_light: OmniLight3D = OmniLight3D.new()
 				floor_light.name = "GridFloorLight_%d" % grid_idx
 				floor_light.position = Vector3(pos_x, 1.5, pos_z)
@@ -2565,7 +2576,7 @@ func _generate_arena_light_grid() -> void:
 				lights_created += 1
 
 			# Mid-height ambient light - only on high quality
-			if lighting_quality >= 2:
+			if lighting_quality >= 2 and _can_add_light():
 				var mid_light: OmniLight3D = OmniLight3D.new()
 				mid_light.name = "GridMidLight_%d" % grid_idx
 				mid_light.position = Vector3(pos_x, room_height * 0.4, pos_z)
@@ -2594,6 +2605,10 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 	if q3_use_colored_zones:
 		tinted_color = q3_light_color.lerp(zone_color, q3_color_intensity)
 
+	# PERF: Early exit if light cap reached
+	if not _can_add_light():
+		return
+
 	# Primary room light - bright central illumination
 	var main_light: OmniLight3D = OmniLight3D.new()
 	main_light.name = "RoomMainLight_%d" % room.room_id
@@ -2616,6 +2631,8 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 	]
 
 	for c_idx in range(corners.size()):
+		if not _can_add_light():
+			break
 		var corner_light: OmniLight3D = OmniLight3D.new()
 		corner_light.name = "RoomCornerLight_%d_%d" % [room.room_id, c_idx]
 		corner_light.position = corners[c_idx]
@@ -2628,6 +2645,8 @@ func _generate_room_q3_lights(room: BSPNode, zone_color: Color, room_idx: int) -
 
 	# Floor-level corner lights - brighten ground in corners
 	for c_idx in range(corners.size()):
+		if not _can_add_light():
+			break
 		var floor_corner: OmniLight3D = OmniLight3D.new()
 		floor_corner.name = "RoomFloorCorner_%d_%d" % [room.room_id, c_idx]
 		floor_corner.position = Vector3(corners[c_idx].x, room.height_offset + 1.0, corners[c_idx].z)
@@ -2910,19 +2929,20 @@ func generate_spawn_markers() -> void:
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Created %d spawn markers" % spawn_markers.size())
 
 func get_spawn_points() -> PackedVector3Array:
-	## Return spawn points for game integration
-	var spawns: PackedVector3Array = PackedVector3Array()
+	## Return spawn points for game integration (cached after first call)
+	if not _cached_spawn_points.is_empty():
+		return _cached_spawn_points
 
 	for marker in spawn_markers:
 		if is_instance_valid(marker):
-			spawns.append(marker.global_position)
+			_cached_spawn_points.append(marker.global_position)
 
 	# Fallback to clear_positions if no markers
-	if spawns.is_empty():
+	if _cached_spawn_points.is_empty():
 		for pos in clear_positions:
-			spawns.append(pos)
+			_cached_spawn_points.append(pos)
 
-	return spawns
+	return _cached_spawn_points
 
 func get_random_spawn_point() -> Vector3:
 	## Get a random spawn point for respawning
