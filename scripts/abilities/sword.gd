@@ -26,6 +26,17 @@ var _ground_ray_timer: float = 0.0  # Throttle ground raycast for indicator
 var _cached_ground_pos: Vector3 = Vector3.ZERO  # Cached ground hit position
 var _indicator_ray_query: PhysicsRayQueryParameters3D = null  # Reuse query object
 
+# PERF: Reusable pooled effects to avoid per-swing allocations/hitches
+const SPIN_RING_POOL_SIZE: int = 2
+const FLASH_POOL_SIZE: int = 2
+var _spin_ring_pool: Array[CPUParticles3D] = []
+var _spin_ring_pool_index: int = 0
+var _flash_pool: Array[Dictionary] = []
+var _flash_pool_index: int = 0
+static var _spin_ring_mesh: QuadMesh = null
+static var _spin_ring_gradient: Gradient = null
+static var _flash_burst_gradient: Gradient = null
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Sword"
@@ -103,6 +114,125 @@ func _ready() -> void:
 	# Create arc indicator for sword swing range (human player only)
 	if not _is_bot_owner():
 		create_arc_indicator()
+
+func _ensure_spin_ring_pool(parent_node: Node) -> void:
+	if _spin_ring_pool.size() > 0:
+		return
+	if _spin_ring_mesh == null:
+		_spin_ring_mesh = QuadMesh.new()
+		_spin_ring_mesh.size = Vector2(0.5, 0.2)
+		_spin_ring_mesh.material = _shared_particle_mat_no_billboard
+	if _spin_ring_gradient == null:
+		_spin_ring_gradient = Gradient.new()
+		_spin_ring_gradient.add_point(0.0, Color(0.7, 0.85, 1.0, 1.0))  # Bright cyan-blue
+		_spin_ring_gradient.add_point(0.3, Color(0.6, 0.75, 1.0, 0.8))  # Light blue
+		_spin_ring_gradient.add_point(0.7, Color(0.4, 0.5, 0.9, 0.4))  # Darker blue
+		_spin_ring_gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
+	for i in range(SPIN_RING_POOL_SIZE):
+		var ring_particles := CPUParticles3D.new()
+		ring_particles.name = "SpinAttackRing_%d" % i
+		ring_particles.emitting = false
+		ring_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
+		ring_particles.lifetime = 0.4
+		ring_particles.one_shot = true
+		ring_particles.explosiveness = 1.0
+		ring_particles.randomness = 0.2
+		ring_particles.local_coords = false
+		ring_particles.mesh = _spin_ring_mesh
+		ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		ring_particles.emission_ring_axis = Vector3.UP
+		ring_particles.emission_ring_height = 0.2
+		ring_particles.direction = Vector3(1, 0, 0)  # Outward
+		ring_particles.spread = 30.0
+		ring_particles.gravity = Vector3.ZERO
+		ring_particles.initial_velocity_min = 8.0
+		ring_particles.initial_velocity_max = 15.0
+		ring_particles.scale_amount_min = 3.0
+		ring_particles.scale_amount_max = 5.0
+		ring_particles.color_ramp = _spin_ring_gradient
+		parent_node.add_child(ring_particles)
+		_spin_ring_pool.append(ring_particles)
+
+func _ensure_flash_pool(parent_node: Node) -> void:
+	if _flash_pool.size() > 0:
+		return
+	if _flash_burst_gradient == null:
+		_flash_burst_gradient = Gradient.new()
+		_flash_burst_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
+		_flash_burst_gradient.add_point(0.3, Color(0.8, 0.9, 1.0, 0.8))  # Bright cyan
+		_flash_burst_gradient.add_point(1.0, Color(0.4, 0.6, 1.0, 0.0))  # Fade to blue
+	for i in range(FLASH_POOL_SIZE):
+		var flash_container := Node3D.new()
+		flash_container.name = "SlashFlash_%d" % i
+		parent_node.add_child(flash_container)
+		flash_container.visible = false
+
+		var outer_flash := MeshInstance3D.new()
+		var outer_sphere := SphereMesh.new()
+		outer_flash.mesh = outer_sphere
+		var outer_mat := StandardMaterial3D.new()
+		outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
+		outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		outer_flash.material_override = outer_mat
+		flash_container.add_child(outer_flash)
+
+		var middle_flash: MeshInstance3D = null
+		var middle_sphere: SphereMesh = null
+		var middle_mat: StandardMaterial3D = null
+		if not _is_web:
+			middle_flash = MeshInstance3D.new()
+			middle_sphere = SphereMesh.new()
+			middle_flash.mesh = middle_sphere
+			middle_mat = StandardMaterial3D.new()
+			middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+			middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			middle_flash.material_override = middle_mat
+			flash_container.add_child(middle_flash)
+
+		var core_flash := MeshInstance3D.new()
+		var core_sphere := SphereMesh.new()
+		core_flash.mesh = core_sphere
+		var core_mat := StandardMaterial3D.new()
+		core_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)
+		core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		core_flash.material_override = core_mat
+		flash_container.add_child(core_flash)
+
+		var burst_particles := CPUParticles3D.new()
+		burst_particles.name = "FlashBurst"
+		burst_particles.emitting = false
+		burst_particles.one_shot = true
+		burst_particles.explosiveness = 1.0
+		burst_particles.local_coords = false
+		burst_particles.mesh = _shared_particle_quad_medium
+		burst_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		burst_particles.emission_sphere_radius = 0.3
+		burst_particles.direction = Vector3.UP
+		burst_particles.spread = 180.0
+		burst_particles.gravity = Vector3.ZERO
+		burst_particles.initial_velocity_min = 10.0
+		burst_particles.initial_velocity_max = 20.0
+		burst_particles.scale_amount_min = 2.0
+		burst_particles.scale_amount_max = 4.0
+		burst_particles.color_ramp = _flash_burst_gradient
+		flash_container.add_child(burst_particles)
+
+		_flash_pool.append({
+			"container": flash_container,
+			"outer_sphere": outer_sphere,
+			"outer_mat": outer_mat,
+			"middle_sphere": middle_sphere,
+			"middle_mat": middle_mat,
+			"core_sphere": core_sphere,
+			"core_mat": core_mat,
+			"burst": burst_particles,
+		})
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -522,54 +652,23 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	if not player or not player.get_parent():
 		return
 
-	# Create a ring of slash particles around the player
-	var ring_particles: CPUParticles3D = CPUParticles3D.new()
-	ring_particles.name = "SpinAttackRing"
-	player.get_parent().add_child(ring_particles)
+	# Reuse pooled ring particles to avoid per-use allocations.
+	_ensure_spin_ring_pool(player.get_parent())
+	var ring_particles: CPUParticles3D = _spin_ring_pool[_spin_ring_pool_index]
+	_spin_ring_pool_index = (_spin_ring_pool_index + 1) % _spin_ring_pool.size()
 	ring_particles.global_position = position
 
-	ring_particles.emitting = true
-	ring_particles.amount = 15 if _is_web else 30  # PERF: Reduced for performance
-	ring_particles.lifetime = 0.4
-	ring_particles.one_shot = true
-	ring_particles.explosiveness = 1.0
-	ring_particles.randomness = 0.2
-	ring_particles.local_coords = false
-
-	# PERF: Use shared non-billboard particle material
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.5, 0.2)
-	particle_mesh.material = _shared_particle_mat_no_billboard
-	ring_particles.mesh = particle_mesh
-
 	# Emit in a ring around player
-	ring_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	ring_particles.emission_ring_axis = Vector3.UP
-	ring_particles.emission_ring_height = 0.2
 	ring_particles.emission_ring_radius = radius * 0.8
 	ring_particles.emission_ring_inner_radius = 0.5
 
-	ring_particles.direction = Vector3(1, 0, 0)  # Outward
-	ring_particles.spread = 30.0
-	ring_particles.gravity = Vector3.ZERO
-	ring_particles.initial_velocity_min = 8.0
-	ring_particles.initial_velocity_max = 15.0
-
-	ring_particles.scale_amount_min = 3.0
-	ring_particles.scale_amount_max = 5.0
-
-	# Steel blue gradient
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.7, 0.85, 1.0, 1.0))  # Bright cyan-blue
-	gradient.add_point(0.3, Color(0.6, 0.75, 1.0, 0.8))  # Light blue
-	gradient.add_point(0.7, Color(0.4, 0.5, 0.9, 0.4))  # Darker blue
-	gradient.add_point(1.0, Color(0.2, 0.3, 0.6, 0.0))  # Transparent
-	ring_particles.color_ramp = gradient
+	ring_particles.emitting = true
+	ring_particles.restart()
 
 	# Auto-cleanup
 	get_tree().create_timer(ring_particles.lifetime + 0.5).timeout.connect(func():
 		if is_instance_valid(ring_particles):
-			ring_particles.queue_free()
+			ring_particles.emitting = false
 	)
 
 func spawn_slash_flash(position: Vector3, level: int) -> void:
@@ -581,11 +680,13 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	if _is_web and _is_bot_owner():
 		return
 
-	# Create flash container
-	var flash_container: Node3D = Node3D.new()
-	flash_container.name = "SlashFlash"
-	player.get_parent().add_child(flash_container)
+	# Reuse pooled flash containers to avoid per-swing allocations.
+	_ensure_flash_pool(player.get_parent())
+	var flash_data: Dictionary = _flash_pool[_flash_pool_index]
+	_flash_pool_index = (_flash_pool_index + 1) % _flash_pool.size()
+	var flash_container: Node3D = flash_data["container"]
 	flash_container.global_position = position
+	flash_container.visible = true
 
 	# Create multi-layer flash effect using geometry (no lights)
 	var flash_size: float = 2.0 + ((level - 1) * 0.5)
@@ -594,89 +695,40 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	var ring_count: int = 4 if _is_web else 8
 
 	# Layer 1: Outer glow sphere
-	var outer_flash: MeshInstance3D = MeshInstance3D.new()
-	var outer_sphere: SphereMesh = SphereMesh.new()
+	var outer_sphere: SphereMesh = flash_data["outer_sphere"]
 	outer_sphere.radius = flash_size * 1.5
 	outer_sphere.height = flash_size * 3.0
 	outer_sphere.radial_segments = radial_segs
 	outer_sphere.rings = ring_count
-	outer_flash.mesh = outer_sphere
-
-	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
+	var outer_mat: StandardMaterial3D = flash_data["outer_mat"]
 	outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
-	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	outer_flash.material_override = outer_mat
-	flash_container.add_child(outer_flash)
 
 	# PERF: On web, skip middle layer - outer + core is sufficient
-	var middle_mat: StandardMaterial3D = null
-	if not _is_web:
-		# Layer 2: Middle bright layer
-		var middle_flash: MeshInstance3D = MeshInstance3D.new()
-		var middle_sphere: SphereMesh = SphereMesh.new()
+	var middle_mat: StandardMaterial3D = flash_data["middle_mat"]
+	var middle_sphere: SphereMesh = flash_data["middle_sphere"]
+	if middle_sphere:
 		middle_sphere.radius = flash_size * 0.8
 		middle_sphere.height = flash_size * 1.6
 		middle_sphere.radial_segments = radial_segs
 		middle_sphere.rings = ring_count
-		middle_flash.mesh = middle_sphere
-
-		middle_mat = StandardMaterial3D.new()
-		middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
-		middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		middle_flash.material_override = middle_mat
-		flash_container.add_child(middle_flash)
+		if middle_mat:
+			middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
 
 	# Layer 3: Bright white core
-	var core_flash: MeshInstance3D = MeshInstance3D.new()
-	var core_sphere: SphereMesh = SphereMesh.new()
+	var core_sphere: SphereMesh = flash_data["core_sphere"]
 	core_sphere.radius = flash_size * 0.3
 	core_sphere.height = flash_size * 0.6
 	core_sphere.radial_segments = 8 if _is_web else 12
 	core_sphere.rings = 4 if _is_web else 6
-	core_flash.mesh = core_sphere
-
-	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
+	var core_mat: StandardMaterial3D = flash_data["core_mat"]
 	core_mat.albedo_color = Color(1.0, 1.0, 1.0, 0.9)
-	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_flash.material_override = core_mat
-	flash_container.add_child(core_flash)
 
 	# Add burst particles for extra impact
-	var burst_particles: CPUParticles3D = CPUParticles3D.new()
-	burst_particles.name = "FlashBurst"
-	flash_container.add_child(burst_particles)
-
-	burst_particles.emitting = true
+	var burst_particles: CPUParticles3D = flash_data["burst"]
 	burst_particles.amount = (8 + (level * 2)) if _is_web else (15 + (level * 5))  # PERF: Reduced for performance
 	burst_particles.lifetime = 0.25
-	burst_particles.one_shot = true
-	burst_particles.explosiveness = 1.0
-	burst_particles.local_coords = false
-
-	# PERF: Use shared particle mesh + material
-	burst_particles.mesh = _shared_particle_quad_medium
-
-	burst_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	burst_particles.emission_sphere_radius = 0.3
-	burst_particles.direction = Vector3.UP
-	burst_particles.spread = 180.0
-	burst_particles.gravity = Vector3.ZERO
-	burst_particles.initial_velocity_min = 10.0
-	burst_particles.initial_velocity_max = 20.0
-	burst_particles.scale_amount_min = 2.0
-	burst_particles.scale_amount_max = 4.0
-
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
-	gradient.add_point(0.3, Color(0.8, 0.9, 1.0, 0.8))  # Bright cyan
-	gradient.add_point(1.0, Color(0.4, 0.6, 1.0, 0.0))  # Fade to blue
-	burst_particles.color_ramp = gradient
+	burst_particles.emitting = true
+	burst_particles.restart()
 
 	# Animate and cleanup
 	var tween: Tween = get_tree().create_tween()
@@ -687,7 +739,10 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.1)
 	tween.set_parallel(false)
 	tween.tween_interval(0.25)
-	tween.tween_callback(flash_container.queue_free)
+	tween.tween_callback(func():
+		flash_container.visible = false
+		burst_particles.emitting = false
+	)
 
 func create_arc_indicator() -> void:
 	"""Create a box indicator that shows the sword hitbox area while charging"""
