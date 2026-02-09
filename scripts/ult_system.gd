@@ -78,6 +78,13 @@ func setup(p_player: Node) -> void:
 	_is_bot_owner = player and player.has_method("is_bot") and player.is_bot()
 	# Create visual effects now that we know if this is a bot (skip for bots on HTML5)
 	create_visual_effects()
+	# PERF: Pre-initialize effect pools now instead of on first ult activation.
+	# On WebGL2, deferred pool creation causes hitches from node allocation + material setup.
+	if player and player.get_parent() and not (_is_web and _is_bot_owner):
+		_ensure_activation_pool(player.get_parent())
+		_ensure_hit_impact_pool(player.get_parent())
+		_ensure_motion_line_pool(player.get_parent())
+		_ensure_end_shockwave_pool(player.get_parent())
 
 func _process(delta: float) -> void:
 	if not player:
