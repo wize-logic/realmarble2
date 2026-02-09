@@ -38,6 +38,31 @@ var ult_ready_flash: float = 0.0
 var _is_bot_owner: bool = false  # PERF: Cache whether owner is a bot
 var _is_web: bool = false  # PERF: Cache platform check
 
+# PERF: Reusable pooled effects to avoid per-activation allocations.
+const ACTIVATION_POOL_SIZE: int = 2
+const HIT_IMPACT_POOL_SIZE: int = 4
+const MOTION_LINE_POOL_SIZE: int = 8
+const END_SHOCKWAVE_POOL_SIZE: int = 2
+
+var _activation_pool: Array[Dictionary] = []
+var _activation_pool_index: int = 0
+var _hit_impact_pool: Array[CPUParticles3D] = []
+var _hit_impact_pool_index: int = 0
+var _motion_line_pool: Array[Dictionary] = []
+var _motion_line_pool_index: int = 0
+var _end_shockwave_pool: Array[Dictionary] = []
+var _end_shockwave_pool_index: int = 0
+
+static var _activation_torus_mesh: TorusMesh = null
+static var _activation_burst_mesh: QuadMesh = null
+static var _activation_burst_material: StandardMaterial3D = null
+static var _activation_burst_gradient: Gradient = null
+static var _hit_impact_mesh: QuadMesh = null
+static var _hit_impact_material: StandardMaterial3D = null
+static var _hit_impact_gradient: Gradient = null
+static var _motion_line_mesh: BoxMesh = null
+static var _end_shockwave_mesh: TorusMesh = null
+
 signal ult_activated
 signal ult_charge_changed(new_charge: float)
 signal ult_ready
@@ -282,6 +307,8 @@ func create_visual_effects() -> void:
 	if _is_web and _is_bot_owner:
 		return
 
+	_ensure_shared_effect_resources()
+
 	# Power aura (shows when ult is ready)
 	power_aura = CPUParticles3D.new()
 	power_aura.name = "PowerAura"
@@ -367,6 +394,195 @@ func create_visual_effects() -> void:
 	ult_light.omni_range = 15.0
 	ult_light.omni_attenuation = 1.5
 
+func _ensure_shared_effect_resources() -> void:
+	if _activation_torus_mesh == null:
+		_activation_torus_mesh = TorusMesh.new()
+		_activation_torus_mesh.inner_radius = 0.5
+		_activation_torus_mesh.outer_radius = 1.0
+		_activation_torus_mesh.rings = 8 if _is_web else 16
+		_activation_torus_mesh.ring_segments = 6 if _is_web else 12
+
+	if _activation_burst_mesh == null:
+		_activation_burst_mesh = QuadMesh.new()
+		_activation_burst_mesh.size = Vector2(0.5, 0.5)
+
+	if _activation_burst_material == null:
+		_activation_burst_material = StandardMaterial3D.new()
+		_activation_burst_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_activation_burst_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_activation_burst_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_activation_burst_material.vertex_color_use_as_albedo = true
+		_activation_burst_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+
+	if _activation_burst_gradient == null:
+		_activation_burst_gradient = Gradient.new()
+		_activation_burst_gradient.add_point(0.0, Color(1.0, 0.95, 0.5, 1.0))
+		_activation_burst_gradient.add_point(0.2, Color(1.0, 0.85, 0.3, 1.0))
+		_activation_burst_gradient.add_point(0.5, Color(1.0, 0.5, 0.1, 0.8))
+		_activation_burst_gradient.add_point(0.8, Color(1.0, 0.2, 0.0, 0.4))
+		_activation_burst_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))
+
+	if _hit_impact_mesh == null:
+		_hit_impact_mesh = QuadMesh.new()
+		_hit_impact_mesh.size = Vector2(0.4, 0.4)
+
+	if _hit_impact_material == null:
+		_hit_impact_material = StandardMaterial3D.new()
+		_hit_impact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_hit_impact_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_hit_impact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_hit_impact_material.vertex_color_use_as_albedo = true
+		_hit_impact_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+
+	if _hit_impact_gradient == null:
+		_hit_impact_gradient = Gradient.new()
+		_hit_impact_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))
+		_hit_impact_gradient.add_point(0.3, Color(1.0, 0.7, 0.2, 1.0))
+		_hit_impact_gradient.add_point(0.7, Color(1.0, 0.3, 0.1, 0.5))
+		_hit_impact_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))
+
+	if _motion_line_mesh == null:
+		_motion_line_mesh = BoxMesh.new()
+		_motion_line_mesh.size = Vector3(0.05, 0.05, 1.0)
+
+	if _end_shockwave_mesh == null:
+		_end_shockwave_mesh = TorusMesh.new()
+		_end_shockwave_mesh.inner_radius = 0.3
+		_end_shockwave_mesh.outer_radius = 0.6
+
+func _ensure_activation_pool(parent_node: Node) -> void:
+	if _activation_pool.size() > 0:
+		return
+	_ensure_shared_effect_resources()
+	for i in range(ACTIVATION_POOL_SIZE):
+		var explosion_container := Node3D.new()
+		explosion_container.name = "UltActivation_%d" % i
+		parent_node.add_child(explosion_container)
+		explosion_container.visible = false
+
+		var flash_light := OmniLight3D.new()
+		flash_light.light_color = Color(1.0, 0.75, 0.35)
+		flash_light.light_energy = 0.0
+		flash_light.omni_range = 25.0
+		explosion_container.add_child(flash_light)
+
+		var ring := MeshInstance3D.new()
+		ring.mesh = _activation_torus_mesh
+		var ring_mat := StandardMaterial3D.new()
+		ring_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.9)
+		ring_mat.emission_enabled = true
+		ring_mat.emission = Color(1.0, 0.6, 0.1)
+		ring_mat.emission_energy_multiplier = 3.0
+		ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		ring.material_override = ring_mat
+		explosion_container.add_child(ring)
+
+		var burst := CPUParticles3D.new()
+		burst.emitting = false
+		burst.amount = 20 if _is_web else 40
+		burst.lifetime = 0.6
+		burst.one_shot = true
+		burst.explosiveness = 1.0
+		burst.randomness = 0.4
+		burst.local_coords = false
+		burst.mesh = _activation_burst_mesh
+		burst.mesh.material = _activation_burst_material
+		burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		burst.emission_sphere_radius = 1.0
+		burst.direction = Vector3.ZERO
+		burst.spread = 180.0
+		burst.gravity = Vector3.ZERO
+		burst.initial_velocity_min = 15.0
+		burst.initial_velocity_max = 25.0
+		burst.scale_amount_min = 3.0
+		burst.scale_amount_max = 5.0
+		burst.color_ramp = _activation_burst_gradient
+		explosion_container.add_child(burst)
+
+		_activation_pool.append({
+			"container": explosion_container,
+			"light": flash_light,
+			"ring": ring,
+			"ring_mat": ring_mat,
+			"burst": burst,
+		})
+
+func _ensure_hit_impact_pool(parent_node: Node) -> void:
+	if _hit_impact_pool.size() > 0:
+		return
+	_ensure_shared_effect_resources()
+	for i in range(HIT_IMPACT_POOL_SIZE):
+		var impact := CPUParticles3D.new()
+		impact.name = "UltHitImpact_%d" % i
+		impact.emitting = false
+		impact.amount = 10 if _is_web else 20
+		impact.lifetime = 0.4
+		impact.one_shot = true
+		impact.explosiveness = 1.0
+		impact.randomness = 0.3
+		impact.local_coords = false
+		impact.mesh = _hit_impact_mesh
+		impact.mesh.material = _hit_impact_material
+		impact.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		impact.emission_sphere_radius = 0.5
+		impact.direction = Vector3.ZERO
+		impact.spread = 180.0
+		impact.gravity = Vector3.ZERO
+		impact.initial_velocity_min = 8.0
+		impact.initial_velocity_max = 15.0
+		impact.scale_amount_min = 2.0
+		impact.scale_amount_max = 4.0
+		impact.color_ramp = _hit_impact_gradient
+		parent_node.add_child(impact)
+		_hit_impact_pool.append(impact)
+
+func _ensure_motion_line_pool(parent_node: Node) -> void:
+	if _motion_line_pool.size() > 0:
+		return
+	_ensure_shared_effect_resources()
+	for i in range(MOTION_LINE_POOL_SIZE):
+		var line := MeshInstance3D.new()
+		line.name = "UltMotionLine_%d" % i
+		line.mesh = _motion_line_mesh
+		var line_mat := StandardMaterial3D.new()
+		line_mat.albedo_color = Color(1.0, 0.8, 0.3, 0.8)
+		line_mat.emission_enabled = true
+		line_mat.emission = Color(1.0, 0.6, 0.1)
+		line_mat.emission_energy_multiplier = 2.0
+		line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		line.material_override = line_mat
+		line.visible = false
+		parent_node.add_child(line)
+		_motion_line_pool.append({
+			"line": line,
+			"mat": line_mat,
+		})
+
+func _ensure_end_shockwave_pool(parent_node: Node) -> void:
+	if _end_shockwave_pool.size() > 0:
+		return
+	_ensure_shared_effect_resources()
+	for i in range(END_SHOCKWAVE_POOL_SIZE):
+		var ring := MeshInstance3D.new()
+		ring.name = "EndShockwave_%d" % i
+		ring.mesh = _end_shockwave_mesh
+		var ring_mat := StandardMaterial3D.new()
+		ring_mat.albedo_color = Color(1.0, 0.6, 0.2, 0.8)
+		ring_mat.emission_enabled = true
+		ring_mat.emission = Color(1.0, 0.4, 0.1)
+		ring_mat.emission_energy_multiplier = 2.0
+		ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		ring.material_override = ring_mat
+		ring.visible = false
+		parent_node.add_child(ring)
+		_end_shockwave_pool.append({
+			"ring": ring,
+			"mat": ring_mat,
+		})
+
 func create_hitbox() -> void:
 	"""Create the ult attack hitbox"""
 	hitbox = Area3D.new()
@@ -415,78 +631,25 @@ func spawn_activation_explosion() -> void:
 	if not player or not player.get_parent():
 		return
 
-	# Create explosion container
-	var explosion_container: Node3D = Node3D.new()
-	explosion_container.name = "UltActivation"
-	player.get_parent().add_child(explosion_container)
+	_ensure_activation_pool(player.get_parent())
+	var activation_data: Dictionary = _activation_pool[_activation_pool_index]
+	_activation_pool_index = (_activation_pool_index + 1) % _activation_pool.size()
+
+	var explosion_container: Node3D = activation_data["container"]
 	explosion_container.global_position = player.global_position
+	explosion_container.visible = true
 
-	# Central flash (warm golden, not white)
-	var flash_light: OmniLight3D = OmniLight3D.new()
-	flash_light.light_color = Color(1.0, 0.75, 0.35)
+	var flash_light: OmniLight3D = activation_data["light"]
 	flash_light.light_energy = 18.0
-	flash_light.omni_range = 25.0
-	explosion_container.add_child(flash_light)
 
-	# Expanding shockwave ring
-	var ring: MeshInstance3D = MeshInstance3D.new()
-	var torus: TorusMesh = TorusMesh.new()
-	torus.inner_radius = 0.5
-	torus.outer_radius = 1.0
-	torus.rings = 8 if _is_web else 16
-	torus.ring_segments = 6 if _is_web else 12
-	ring.mesh = torus
-
-	var ring_mat: StandardMaterial3D = StandardMaterial3D.new()
+	var ring: MeshInstance3D = activation_data["ring"]
+	ring.scale = Vector3.ONE
+	var ring_mat: StandardMaterial3D = activation_data["ring_mat"]
 	ring_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.9)
-	ring_mat.emission_enabled = true
-	ring_mat.emission = Color(1.0, 0.6, 0.1)
-	ring_mat.emission_energy_multiplier = 3.0
-	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring.material_override = ring_mat
-	explosion_container.add_child(ring)
 
-	# Burst particles
-	var burst: CPUParticles3D = CPUParticles3D.new()
+	var burst: CPUParticles3D = activation_data["burst"]
 	burst.emitting = true
-	burst.amount = 20 if _is_web else 40
-	burst.lifetime = 0.6
-	burst.one_shot = true
-	burst.explosiveness = 1.0
-	burst.randomness = 0.4
-	burst.local_coords = false
-
-	var burst_mesh: QuadMesh = QuadMesh.new()
-	burst_mesh.size = Vector2(0.5, 0.5)
-	burst.mesh = burst_mesh
-
-	var burst_material: StandardMaterial3D = StandardMaterial3D.new()
-	burst_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	burst_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	burst_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	burst_material.vertex_color_use_as_albedo = true
-	burst_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	burst.mesh.material = burst_material
-
-	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	burst.emission_sphere_radius = 1.0
-	burst.direction = Vector3.ZERO
-	burst.spread = 180.0
-	burst.gravity = Vector3.ZERO
-	burst.initial_velocity_min = 15.0
-	burst.initial_velocity_max = 25.0
-	burst.scale_amount_min = 3.0
-	burst.scale_amount_max = 5.0
-
-	var burst_gradient: Gradient = Gradient.new()
-	burst_gradient.add_point(0.0, Color(1.0, 0.95, 0.5, 1.0))  # Bright golden center (no white)
-	burst_gradient.add_point(0.2, Color(1.0, 0.85, 0.3, 1.0))  # Yellow
-	burst_gradient.add_point(0.5, Color(1.0, 0.5, 0.1, 0.8))  # Orange
-	burst_gradient.add_point(0.8, Color(1.0, 0.2, 0.0, 0.4))  # Red
-	burst_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))  # Fade
-	burst.color_ramp = burst_gradient
-	explosion_container.add_child(burst)
+	burst.restart()
 
 	# Animate ring expansion and cleanup
 	var tween: Tween = get_tree().create_tween()
@@ -495,7 +658,10 @@ func spawn_activation_explosion() -> void:
 	tween.tween_property(ring_mat, "albedo_color:a", 0.0, 0.5)
 	tween.tween_property(flash_light, "light_energy", 0.0, 0.3)
 	tween.set_parallel(false)
-	tween.tween_callback(explosion_container.queue_free)
+	tween.tween_callback(func():
+		explosion_container.visible = false
+		burst.emitting = false
+	)
 
 func spawn_motion_lines() -> void:
 	"""Spawn speed lines during ult dash"""
@@ -506,21 +672,14 @@ func spawn_motion_lines() -> void:
 	if randf() > 0.3:
 		return
 
-	var line: MeshInstance3D = MeshInstance3D.new()
-	var box: BoxMesh = BoxMesh.new()
-	box.size = Vector3(0.05, 0.05, randf_range(2.0, 4.0))
-	line.mesh = box
-
-	var line_mat: StandardMaterial3D = StandardMaterial3D.new()
+	_ensure_motion_line_pool(player.get_parent())
+	var line_data: Dictionary = _motion_line_pool[_motion_line_pool_index]
+	_motion_line_pool_index = (_motion_line_pool_index + 1) % _motion_line_pool.size()
+	var line: MeshInstance3D = line_data["line"]
+	var line_mat: StandardMaterial3D = line_data["mat"]
+	line.visible = true
+	line.scale = Vector3(1.0, 1.0, randf_range(2.0, 4.0))
 	line_mat.albedo_color = Color(1.0, 0.8, 0.3, 0.8)
-	line_mat.emission_enabled = true
-	line_mat.emission = Color(1.0, 0.6, 0.1)
-	line_mat.emission_energy_multiplier = 2.0
-	line_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	line.material_override = line_mat
-
-	player.get_parent().add_child(line)
 
 	# Position behind player with random offset
 	var offset: Vector3 = Vector3(
@@ -534,81 +693,42 @@ func spawn_motion_lines() -> void:
 	# Animate and cleanup
 	var tween: Tween = get_tree().create_tween()
 	tween.tween_property(line_mat, "albedo_color:a", 0.0, 0.3)
-	tween.tween_callback(line.queue_free)
+	tween.tween_callback(func():
+		line.visible = false
+	)
 
 func spawn_hit_impact(position: Vector3) -> void:
 	"""Spawn impact effect when hitting an enemy"""
 	if not player or not player.get_parent():
 		return
 
-	var impact: CPUParticles3D = CPUParticles3D.new()
-	impact.name = "UltHitImpact"
-	player.get_parent().add_child(impact)
+	_ensure_hit_impact_pool(player.get_parent())
+	var impact: CPUParticles3D = _hit_impact_pool[_hit_impact_pool_index]
+	_hit_impact_pool_index = (_hit_impact_pool_index + 1) % _hit_impact_pool.size()
 	impact.global_position = position
 
 	impact.emitting = true
-	impact.amount = 10 if _is_web else 20
-	impact.lifetime = 0.4
-	impact.one_shot = true
-	impact.explosiveness = 1.0
-	impact.randomness = 0.3
-	impact.local_coords = false
+	impact.restart()
 
-	var impact_mesh: QuadMesh = QuadMesh.new()
-	impact_mesh.size = Vector2(0.4, 0.4)
-	impact.mesh = impact_mesh
-
-	var impact_material: StandardMaterial3D = StandardMaterial3D.new()
-	impact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	impact_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	impact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	impact_material.vertex_color_use_as_albedo = true
-	impact_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	impact.mesh.material = impact_material
-
-	impact.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	impact.emission_sphere_radius = 0.5
-	impact.direction = Vector3.ZERO
-	impact.spread = 180.0
-	impact.gravity = Vector3.ZERO
-	impact.initial_velocity_min = 8.0
-	impact.initial_velocity_max = 15.0
-	impact.scale_amount_min = 2.0
-	impact.scale_amount_max = 4.0
-
-	var impact_gradient: Gradient = Gradient.new()
-	impact_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright golden (no white)
-	impact_gradient.add_point(0.3, Color(1.0, 0.7, 0.2, 1.0))
-	impact_gradient.add_point(0.7, Color(1.0, 0.3, 0.1, 0.5))
-	impact_gradient.add_point(1.0, Color(0.5, 0.0, 0.0, 0.0))
-	impact.color_ramp = impact_gradient
-
-	get_tree().create_timer(0.5).timeout.connect(impact.queue_free)
+	get_tree().create_timer(0.5).timeout.connect(func():
+		if is_instance_valid(impact):
+			impact.emitting = false
+	)
 
 func spawn_end_shockwave() -> void:
 	"""Spawn final shockwave when ult ends"""
 	if not player or not player.get_parent():
 		return
 
-	# Create ground shockwave
-	var ring: MeshInstance3D = MeshInstance3D.new()
-	ring.name = "EndShockwave"
-	player.get_parent().add_child(ring)
+	_ensure_end_shockwave_pool(player.get_parent())
+	var ring_data: Dictionary = _end_shockwave_pool[_end_shockwave_pool_index]
+	_end_shockwave_pool_index = (_end_shockwave_pool_index + 1) % _end_shockwave_pool.size()
+	var ring: MeshInstance3D = ring_data["ring"]
+	var ring_mat: StandardMaterial3D = ring_data["mat"]
+	ring.visible = true
 	ring.global_position = player.global_position
-
-	var torus: TorusMesh = TorusMesh.new()
-	torus.inner_radius = 0.3
-	torus.outer_radius = 0.6
-	ring.mesh = torus
-
-	var ring_mat: StandardMaterial3D = StandardMaterial3D.new()
+	ring.scale = Vector3.ONE
 	ring_mat.albedo_color = Color(1.0, 0.6, 0.2, 0.8)
-	ring_mat.emission_enabled = true
-	ring_mat.emission = Color(1.0, 0.4, 0.1)
-	ring_mat.emission_energy_multiplier = 2.0
-	ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring.material_override = ring_mat
 
 	# Animate expansion
 	var tween: Tween = get_tree().create_tween()
@@ -616,5 +736,6 @@ func spawn_end_shockwave() -> void:
 	tween.tween_property(ring, "scale", Vector3(10, 10, 10), 0.4)
 	tween.tween_property(ring_mat, "albedo_color:a", 0.0, 0.4)
 	tween.set_parallel(false)
-	tween.tween_callback(ring.queue_free)
-
+	tween.tween_callback(func():
+		ring.visible = false
+	)
