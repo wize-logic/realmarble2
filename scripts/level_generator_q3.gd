@@ -2061,17 +2061,17 @@ func _create_perimeter_rail(start: Vector3, end: Vector3, index: int, side_name:
 
 func generate_perimeter_walls() -> void:
 	# Outer walls have been removed - only video walls are used now (when enabled or on main menu)
-	print("[LevelGen] Skipping perimeter walls - outer walls removed")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Skipping perimeter walls - outer walls removed")
 	perimeter_walls.clear()
 
 
 func apply_video_walls() -> void:
 	## Create video panel meshes - only shown when enabled OR on main menu
-	print("[LevelGen] apply_video_walls() called, enable_video_walls: %s, menu_preview_mode: %s" % [enable_video_walls, menu_preview_mode])
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] apply_video_walls() called, enable_video_walls: %s, menu_preview_mode: %s" % [enable_video_walls, menu_preview_mode])
 
 	# Only show video walls if explicitly enabled OR if we're on the main menu (menu preview mode)
 	if not enable_video_walls and not menu_preview_mode:
-		print("[LevelGen] Video walls disabled and not on main menu - skipping")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Video walls disabled and not on main menu - skipping")
 		return
 
 	# Rotating cylinder sizing based on arena
@@ -2081,7 +2081,7 @@ func apply_video_walls() -> void:
 	var cylinder_center: Vector3 = Vector3(0, cylinder_height / 2.0, 0)
 
 	# Load and initialize video wall manager
-	print("[LevelGen] Loading VideoWallManager...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Loading VideoWallManager...")
 	var VideoWallManagerScript = load("res://scripts/video_wall_manager.gd")
 	if VideoWallManagerScript == null:
 		push_error("Failed to load VideoWallManager script")
@@ -2095,7 +2095,7 @@ func apply_video_walls() -> void:
 
 	# Initialize video and create rotating cylinder
 	if video_wall_manager.initialize(VIDEO_WALL_PATH, VIDEO_WALL_RESOLUTION):
-		print("[LevelGen] Creating rotating video cylinder...")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Creating rotating video cylinder...")
 		video_wall_manager.create_video_cylinder(cylinder_radius, cylinder_height, cylinder_center, 64, 1)
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Rotating video cylinder created with: " + VIDEO_WALL_PATH)
 	else:
@@ -2106,15 +2106,15 @@ func apply_video_walls() -> void:
 
 func apply_visualizer_walls() -> void:
 	## Create WMP9-style audio visualizer projected onto walls
-	print("[LevelGen] apply_visualizer_walls() called, enable_visualizer_walls: %s" % enable_visualizer_walls)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] apply_visualizer_walls() called, enable_visualizer_walls: %s" % enable_visualizer_walls)
 
 	if not enable_visualizer_walls:
-		print("[LevelGen] Visualizer walls disabled - skipping")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Visualizer walls disabled - skipping")
 		return
 
 	# Don't create visualizer walls if video walls are already enabled
 	if enable_video_walls:
-		print("[LevelGen] Video walls enabled, skipping visualizer walls")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Video walls enabled, skipping visualizer walls")
 		return
 
 	# Dome sizing: radius encompasses the arena with some breathing room
@@ -2122,7 +2122,7 @@ func apply_visualizer_walls() -> void:
 	var dome_radius: float = arena_size * 0.65
 
 	# Load and initialize visualizer wall manager
-	print("[LevelGen] Loading VisualizerWallManager...")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Loading VisualizerWallManager...")
 	var VisualizerWallManagerScript = load("res://scripts/visualizer_wall_manager.gd")
 	if VisualizerWallManagerScript == null:
 		push_error("Failed to load VisualizerWallManager script")
@@ -2139,7 +2139,7 @@ func apply_visualizer_walls() -> void:
 
 	# Initialize visualizer and create dome
 	if visualizer_wall_manager.initialize(VISUALIZER_AUDIO_BUS, VISUALIZER_RESOLUTION):
-		print("[LevelGen] Creating visualizer dome...")
+		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "[LevelGen] Creating visualizer dome...")
 		# Complete sphere with 64h x 48v segments for smooth coverage
 		visualizer_wall_manager.create_visualizer_dome(dome_radius, Vector3.ZERO, 64, 48)
 

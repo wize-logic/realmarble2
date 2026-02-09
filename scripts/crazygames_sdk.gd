@@ -68,7 +68,7 @@ func _ready() -> void:
 		_setup_javascript_bridge()
 		await get_tree().create_timer(0.5).timeout
 	else:
-		print("CrazyGames SDK: Not running in web browser, using mock mode")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Not running in web browser, using mock mode")
 		is_initialized = true
 		sdk_initialized.emit(true)
 
@@ -87,7 +87,7 @@ func _setup_javascript_bridge() -> void:
 		};
 	"""
 	JavaScriptBridge.eval(js_code, true)
-	print("CrazyGames SDK: JavaScript bridge initialized")
+	DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: JavaScript bridge initialized")
 
 # Called from JavaScript when events occur
 func _on_crazygames_event(event_type: String, data_json: String) -> void:
@@ -103,7 +103,7 @@ func _on_crazygames_event(event_type: String, data_json: String) -> void:
 				# Auto-register settings listener
 				_js_call("window.CrazyGamesSDK.addSettingsChangeListener();")
 				_js_call("window.CrazyGamesSDK.getSettings();")
-			print("CrazyGames SDK initialized: ", is_initialized)
+			DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK initialized: %s" % is_initialized)
 
 		# User events
 		"user_info_loaded":
@@ -210,7 +210,7 @@ func is_user_account_available() -> bool:
 
 func show_auth_prompt() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock auth prompt shown")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock auth prompt shown")
 		await get_tree().create_timer(0.5).timeout
 		auth_completed.emit(true)
 		return
@@ -218,7 +218,7 @@ func show_auth_prompt() -> void:
 
 func show_account_link_prompt() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock account link prompt shown")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock account link prompt shown")
 		await get_tree().create_timer(0.5).timeout
 		account_linked.emit(true)
 		return
@@ -226,7 +226,7 @@ func show_account_link_prompt() -> void:
 
 func get_user_token() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock user token request")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock user token request")
 		await get_tree().create_timer(0.3).timeout
 		user_token_received.emit(true, "mock_token_abc123")
 		return
@@ -250,7 +250,7 @@ func get_friends() -> Array:
 
 func invite_friend(friend_id: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock friend invite sent to ", friend_id)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock friend invite sent to %s" % friend_id)
 		await get_tree().create_timer(0.5).timeout
 		friend_invited.emit(friend_id, true)
 		return
@@ -262,7 +262,7 @@ func invite_friend(friend_id: String) -> void:
 
 func request_ad(ad_type: String = "midgame") -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock ad requested (", ad_type, ")")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock ad requested (%s)" % ad_type)
 		await get_tree().create_timer(0.5).timeout
 		ad_started.emit(ad_type)
 		await get_tree().create_timer(2.0).timeout
@@ -276,7 +276,7 @@ func show_ad(ad_type: String = "midgame") -> void:
 
 func has_adblock() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock adblock check")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock adblock check")
 		await get_tree().create_timer(0.3).timeout
 		adblock_result.emit(false)
 		return
@@ -288,7 +288,7 @@ func has_adblock() -> void:
 
 func request_banner(options: Dictionary = {}) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock banner requested")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock banner requested")
 		await get_tree().create_timer(0.5).timeout
 		banner_shown.emit(true, options.get("id", ""))
 		return
@@ -297,7 +297,7 @@ func request_banner(options: Dictionary = {}) -> void:
 
 func request_responsive_banner(container_id: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock responsive banner requested for ", container_id)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock responsive banner requested for %s" % container_id)
 		await get_tree().create_timer(0.5).timeout
 		banner_shown.emit(true, container_id)
 		return
@@ -326,31 +326,31 @@ func clear_all_banners() -> void:
 
 func gameplay_start() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock gameplay started")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock gameplay started")
 		return
 	_js_safe_call("gameplayStart")
 
 func gameplay_stop() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock gameplay stopped")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock gameplay stopped")
 		return
 	_js_safe_call("gameplayStop")
 
 func loading_start() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock loading started")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock loading started")
 		return
 	_js_safe_call("loadingStart")
 
 func loading_stop() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock loading stopped")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock loading stopped")
 		return
 	_js_safe_call("loadingStop")
 
 func happytime() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock happytime!")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock happytime!")
 		return
 	_js_call("window.CrazyGamesSDK.happytime();")
 
@@ -382,7 +382,7 @@ func is_instant_multiplayer() -> bool:
 
 func invite_link(params: Dictionary = {}) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock invite link generated")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock invite link generated")
 		await get_tree().create_timer(0.3).timeout
 		invite_link_result.emit(true, "https://crazygames.com/invite/mock_link")
 		return
@@ -391,7 +391,7 @@ func invite_link(params: Dictionary = {}) -> void:
 
 func get_invite_param(key: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock invite param for ", key)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock invite param for %s" % key)
 		await get_tree().create_timer(0.1).timeout
 		invite_param_result.emit(key, "")
 		return
@@ -399,7 +399,7 @@ func get_invite_param(key: String) -> void:
 
 func show_invite_button(params: Dictionary = {}) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock invite button shown")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock invite button shown")
 		invite_button_shown.emit(true)
 		return
 	var params_json = JSON.stringify(params)
@@ -407,7 +407,7 @@ func show_invite_button(params: Dictionary = {}) -> void:
 
 func hide_invite_button() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock invite button hidden")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock invite button hidden")
 		return
 	_js_call("window.CrazyGamesSDK.hideInviteButton();")
 
@@ -417,7 +417,7 @@ func hide_invite_button() -> void:
 
 func data_get_item(key: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock data get for key: ", key)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock data get for key: %s" % key)
 		await get_tree().create_timer(0.1).timeout
 		data_get_result.emit(key, null)
 		return
@@ -425,7 +425,7 @@ func data_get_item(key: String) -> void:
 
 func data_set_item(key: String, value: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock data set for key: ", key)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock data set for key: %s" % key)
 		await get_tree().create_timer(0.1).timeout
 		data_set_result.emit(key, true)
 		return
@@ -433,7 +433,7 @@ func data_set_item(key: String, value: String) -> void:
 
 func data_remove_item(key: String) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock data remove for key: ", key)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock data remove for key: %s" % key)
 		await get_tree().create_timer(0.1).timeout
 		data_remove_result.emit(key, true)
 		return
@@ -441,7 +441,7 @@ func data_remove_item(key: String) -> void:
 
 func data_clear() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock data clear")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock data clear")
 		await get_tree().create_timer(0.1).timeout
 		data_clear_result.emit(true)
 		return
@@ -453,7 +453,7 @@ func data_clear() -> void:
 
 func get_xsolla_user_token() -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock Xsolla token request")
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock Xsolla token request")
 		await get_tree().create_timer(0.3).timeout
 		xsolla_token_result.emit(true, "mock_xsolla_token_abc123")
 		return
@@ -461,7 +461,7 @@ func get_xsolla_user_token() -> void:
 
 func track_order(provider: String = "xsolla", order_data: Dictionary = {}) -> void:
 	if not is_web:
-		print("CrazyGames SDK: Mock order tracked: ", provider)
+		DebugLogger.dlog(DebugLogger.Category.CRAZYGAMES, "CrazyGames SDK: Mock order tracked: %s" % provider)
 		await get_tree().create_timer(0.1).timeout
 		track_order_result.emit(true)
 		return

@@ -92,24 +92,24 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func collect_buttons() -> void:
 	menu_buttons.clear()
-	print("Collecting main menu buttons...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Collecting main menu buttons...")
 	for child in main_buttons_container.get_children():
-		print("  Found child: ", child.name, " (type: ", child.get_class(), ")")
+		DebugLogger.dlog(DebugLogger.Category.UI, "  Found child: %s (type: %s)" % [child.name, child.get_class()])
 		if child is RLMenuButton:
 			menu_buttons.append(child)
 			child.button_pressed.connect(_on_main_button_pressed.bind(child))
-			print("  Added button: ", child.name)
-	print("Total main menu buttons: ", menu_buttons.size())
+			DebugLogger.dlog(DebugLogger.Category.UI, "  Added button: %s" % child.name)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Total main menu buttons: %d" % menu_buttons.size())
 
 	submenu_buttons.clear()
-	print("Collecting submenu buttons...")
+	DebugLogger.dlog(DebugLogger.Category.UI, "Collecting submenu buttons...")
 	for child in submenu_buttons_container.get_children():
-		print("  Found submenu child: ", child.name, " (type: ", child.get_class(), ")")
+		DebugLogger.dlog(DebugLogger.Category.UI, "  Found submenu child: %s (type: %s)" % [child.name, child.get_class()])
 		if child is RLMenuButton:
 			submenu_buttons.append(child)
 			child.button_pressed.connect(_on_submenu_button_pressed.bind(child))
-			print("  Added submenu button: ", child.name)
-	print("Total submenu buttons: ", submenu_buttons.size())
+			DebugLogger.dlog(DebugLogger.Category.UI, "  Added submenu button: %s" % child.name)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Total submenu buttons: %d" % submenu_buttons.size())
 
 func navigate_down() -> void:
 	var buttons: Array[RLMenuButton] = submenu_buttons if in_submenu else menu_buttons
@@ -141,10 +141,10 @@ func activate_current_button() -> void:
 		buttons[current_focus_index]._activate()
 
 func _on_main_button_pressed(button: RLMenuButton) -> void:
-	print("Main button pressed: ", button.name)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Main button pressed: %s" % button.name)
 	match button.name:
 		"PlayButton":
-			print("Showing submenu")
+			DebugLogger.dlog(DebugLogger.Category.UI, "Showing submenu")
 			show_submenu()
 		"ItemShopButton":
 			item_shop_pressed.emit()
@@ -171,12 +171,12 @@ func _on_submenu_button_pressed(button: RLMenuButton) -> void:
 			hide_submenu()
 
 func show_submenu() -> void:
-	print("show_submenu called")
+	DebugLogger.dlog(DebugLogger.Category.UI, "show_submenu called")
 	in_submenu = true
 	if play_submenu:
-		print("Setting play_submenu visible")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Setting play_submenu visible")
 		play_submenu.visible = true
-		print("Submenu is now visible: ", play_submenu.visible)
+	DebugLogger.dlog(DebugLogger.Category.UI, "Submenu is now visible: %s" % play_submenu.visible)
 
 	# Clear focus from main menu
 	if current_focus_index >= 0 and current_focus_index < menu_buttons.size():
@@ -185,10 +185,10 @@ func show_submenu() -> void:
 	# Focus first submenu button
 	current_focus_index = 0
 	if submenu_buttons.size() > 0:
-		print("Focusing first submenu button")
+		DebugLogger.dlog(DebugLogger.Category.UI, "Focusing first submenu button")
 		submenu_buttons[0].focus_entered()
 	else:
-		print("No submenu buttons found!")
+		DebugLogger.dlog(DebugLogger.Category.UI, "No submenu buttons found!")
 
 func hide_submenu() -> void:
 	in_submenu = false

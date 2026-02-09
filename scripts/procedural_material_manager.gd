@@ -123,7 +123,7 @@ func apply_materials_to_level(level_generator: Node3D) -> void:
 		return
 
 	var applied_count = _apply_materials_recursive(level_generator)
-	print("Applied procedural materials to %d objects" % applied_count)
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Applied procedural materials to %d objects" % applied_count)
 
 func _apply_materials_recursive(node: Node, depth: int = 0) -> int:
 	"""Recursively apply materials to all MeshInstance3D children"""

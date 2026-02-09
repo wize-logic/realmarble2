@@ -76,7 +76,7 @@ func _initialize_indices() -> void:
 func start_playlist() -> void:
 	"""Start playing the playlist"""
 	if playlist.is_empty():
-		print("Music playlist is empty - playing in silence")
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Music playlist is empty - playing in silence")
 		return
 
 	if is_playing and not is_paused:
@@ -231,14 +231,14 @@ func _play_current_track() -> void:
 	var track: AudioStream = playlist[track_index]
 
 	if not track:
-		print("Invalid track at index %d, skipping" % track_index)
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Invalid track at index %d, skipping" % track_index)
 		_skip_attempts += 1
 		_advance_track()
 		_play_current_track()
 		return
 
 	_skip_attempts = 0
-	print("Now playing: Track %d/%d" % [current_track_index + 1, playlist.size()])
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "Now playing: Track %d/%d" % [current_track_index + 1, playlist.size()])
 
 	# Set up audio player
 	audio_player.stream = track
@@ -359,7 +359,7 @@ func add_song(song: AudioStream, file_path: String = "") -> void:
 		if shuffled_indices.size() < playlist.size():
 			shuffled_indices.append(playlist.size() - 1)
 
-		print("Added song to playlist: %s (total: %d)" % [metadata["title"], playlist.size()])
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Added song to playlist: %s (total: %d)" % [metadata["title"], playlist.size()])
 
 func remove_song(index: int) -> void:
 	"""Remove a song from the playlist"""
@@ -377,7 +377,7 @@ func remove_song(index: int) -> void:
 		if current_track_index >= playlist.size():
 			current_track_index = max(0, playlist.size() - 1)
 
-		print("Removed song from playlist (total: %d)" % playlist.size())
+		DebugLogger.dlog(DebugLogger.Category.AUDIO, "Removed song from playlist (total: %d)" % playlist.size())
 
 func clear_playlist() -> void:
 	"""Clear all songs from playlist"""
@@ -390,7 +390,7 @@ func clear_playlist() -> void:
 	shuffled_indices.clear()
 	current_track_index = 0
 	_skip_attempts = 0
-	print("Playlist cleared")
+	DebugLogger.dlog(DebugLogger.Category.AUDIO, "Playlist cleared")
 
 func get_current_track_metadata() -> Dictionary:
 	"""Get the metadata of the currently playing track"""

@@ -41,10 +41,10 @@ func _on_friends_list_updated(friends: Array) -> void:
 
 func _on_friend_invited(friend_id: String, success: bool) -> void:
 	if success:
-		print("Friend invited successfully: ", friend_id)
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "Friend invited successfully: %s" % friend_id)
 		# Could show a notification here
 	else:
-		print("Failed to invite friend: ", friend_id)
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "Failed to invite friend: %s" % friend_id)
 
 func _update_friends_display() -> void:
 	if not FriendsManager:
@@ -169,7 +169,7 @@ func _add_friend_entry(friend: Dictionary) -> void:
 func _on_invite_friend(friend_id: String) -> void:
 	if FriendsManager:
 		FriendsManager.invite_to_game(friend_id)
-		print("Inviting friend: ", friend_id)
+		DebugLogger.dlog(DebugLogger.Category.PROFILE, "Inviting friend: %s" % friend_id)
 
 func _on_refresh_pressed() -> void:
 	if FriendsManager:

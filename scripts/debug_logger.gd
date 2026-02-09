@@ -65,6 +65,9 @@ var enabled_categories: Dictionary = {}
 # Global master toggle
 var debug_enabled: bool = false
 
+# Global logging toggle (for performance)
+var logging_enabled: bool = true
+
 # Entity filtering (null = show all entities, otherwise show only specific entity ID)
 var watched_entity_id: Variant = null
 
@@ -85,6 +88,9 @@ func dlog(category: Category, message: String, force: bool = false, entity_id: V
 		force: If true, bypass all filters
 		entity_id: Optional entity ID (player/bot ID). If set and watched_entity_id is set, only logs from watched entity show
 	"""
+	if not logging_enabled and not force:
+		return
+
 	if not debug_enabled and not force:
 		return
 
@@ -112,6 +118,9 @@ func dlog(category: Category, message: String, force: bool = false, entity_id: V
 
 func dlogf(category: Category, format: String, args: Array, force: bool = false, entity_id: Variant = null) -> void:
 	"""Debug log a formatted message"""
+	if not logging_enabled and not force:
+		return
+
 	if not debug_enabled and not force:
 		return
 
@@ -138,7 +147,7 @@ func toggle_category(category: Category) -> void:
 
 func is_category_enabled(category: Category) -> bool:
 	"""Check if a category is enabled"""
-	return debug_enabled and enabled_categories.get(category, false)
+	return logging_enabled and debug_enabled and enabled_categories.get(category, false)
 
 func enable_all() -> void:
 	"""Enable all debug categories"""
@@ -183,6 +192,7 @@ func save_preferences() -> void:
 	"""Save debug preferences to disk"""
 	var config := ConfigFile.new()
 	config.set_value("debug", "enabled", debug_enabled)
+	config.set_value("debug", "logging_enabled", logging_enabled)
 	config.set_value("debug", "watched_entity_id", watched_entity_id)
 	for category in Category.values():
 		config.set_value("debug", "category_%d" % category, enabled_categories.get(category, false))
@@ -196,6 +206,7 @@ func load_preferences() -> void:
 		return  # No saved preferences, use defaults
 
 	debug_enabled = config.get_value("debug", "enabled", false)
+	logging_enabled = config.get_value("debug", "logging_enabled", true)
 	watched_entity_id = config.get_value("debug", "watched_entity_id", -1) if config.has_section_key("debug", "watched_entity_id") else null
 	for category in Category.values():
 		enabled_categories[category] = config.get_value("debug", "category_%d" % category, false)
