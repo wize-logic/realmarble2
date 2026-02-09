@@ -402,26 +402,14 @@ func add_projectile_trail(projectile: Node3D) -> void:
 
 	# Configure trail particles - thicker, more dramatic than gun
 	trail.emitting = true
-	trail.amount = 50  # More particles than gun (was 30)
+	trail.amount = 20 if _is_web else 50  # PERF: Reduced on web
 	trail.lifetime = 0.6  # Longer lifetime than gun (was 0.4)
 	trail.explosiveness = 0.0  # Continuous emission
 	trail.randomness = 0.3
 	trail.local_coords = false  # World space - particles stay where emitted
 
-	# Set up particle mesh - larger
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)  # Larger than gun (was 0.15)
-
-	# Create material for trail
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	trail.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	trail.mesh = _shared_particle_quad_medium
 
 	# Emission shape - point source
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_POINT
@@ -455,6 +443,10 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	if not player or not player.get_parent():
 		return
 
+	# PERF: Skip muzzle flash for bots on web - visual only, not gameplay-critical
+	if _is_web and _is_bot_owner():
+		return
+
 	# Create muzzle flash particles - much larger and more dramatic than gun
 	var muzzle_flash: CPUParticles3D = CPUParticles3D.new()
 	muzzle_flash.name = "MuzzleFlash"
@@ -463,27 +455,15 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 
 	# Configure muzzle flash - bigger burst than gun
 	muzzle_flash.emitting = true
-	muzzle_flash.amount = 30  # More than gun (was 15)
+	muzzle_flash.amount = 15 if _is_web else 30  # PERF: Halved on web
 	muzzle_flash.lifetime = 0.25  # Longer than gun (was 0.15)
 	muzzle_flash.one_shot = true
 	muzzle_flash.explosiveness = 1.0
 	muzzle_flash.randomness = 0.4
 	muzzle_flash.local_coords = false
 
-	# Set up particle mesh - larger
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.8, 0.8)  # Much larger than gun (was 0.4)
-
-	# Create material for flash
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	muzzle_flash.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	muzzle_flash.mesh = _shared_particle_quad_xlarge
 
 	# Emission shape - larger sphere
 	muzzle_flash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -528,27 +508,15 @@ func spawn_explosion_effect(position: Vector3) -> void:
 
 	# Configure explosion - dramatic burst
 	explosion.emitting = true
-	explosion.amount = 40
+	explosion.amount = 20 if _is_web else 40  # PERF: Halved on web
 	explosion.lifetime = 0.5
 	explosion.one_shot = true
 	explosion.explosiveness = 1.0
 	explosion.randomness = 0.4
 	explosion.local_coords = false
 
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.6, 0.6)
-
-	# Create material for explosion
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	explosion.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	explosion.mesh = _shared_particle_quad_large
 
 	# Emission shape - sphere burst
 	explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -594,8 +562,8 @@ func create_reticle() -> void:
 	var torus: TorusMesh = TorusMesh.new()
 	torus.inner_radius = 0.8
 	torus.outer_radius = 1.2
-	torus.rings = 32
-	torus.ring_segments = 16
+	torus.rings = 12 if _is_web else 32  # PERF: Reduced mesh complexity on web
+	torus.ring_segments = 8 if _is_web else 16
 	reticle.mesh = torus
 
 	# Create material - subtle lime green, transparent, with additive blending
@@ -616,26 +584,14 @@ func create_reticle() -> void:
 
 	# Configure particles - subtle rotating glow
 	particles.emitting = true
-	particles.amount = 20
+	particles.amount = 10 if _is_web else 20  # PERF: Halved on web
 	particles.lifetime = 0.8
 	particles.explosiveness = 0.0
 	particles.randomness = 0.2
 	particles.local_coords = true
 
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.15, 0.15)
-
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	particles.mesh = _shared_particle_quad_small
 
 	# Emission shape - ring around reticle
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING

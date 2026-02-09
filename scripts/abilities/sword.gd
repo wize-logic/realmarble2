@@ -62,29 +62,15 @@ func _ready() -> void:
 
 	# Configure slash particles - horizontal arc (enhanced for visual impact)
 	slash_particles.emitting = false
-	slash_particles.amount = 80  # More particles for fuller effect
+	slash_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
 	slash_particles.lifetime = 0.4  # Slightly longer for visibility
 	slash_particles.one_shot = true
 	slash_particles.explosiveness = 1.0
 	slash_particles.randomness = 0.3
 	slash_particles.local_coords = false
 
-	# Set up particle mesh - larger, more visible
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.6, 0.3)  # Larger slash particles
-
-	# Create material for slash effect
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES  # Always face camera for visibility
-	particle_material.disable_receive_shadows = true
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
-	slash_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	slash_particles.mesh = _shared_particle_quad_large
 
 	# Emission shape - arc in front
 	slash_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -298,8 +284,10 @@ func activate() -> void:
 
 	# Trigger slash particles - enhanced at higher levels
 	if slash_particles and player:
-		# Level 1+: More particles
-		slash_particles.amount = 80 + ((player_level - 1) * 25)
+		# Level 1+: More particles (PERF: halved on web)
+		var base_amount: int = 40 if _is_web else 80
+		var level_bonus: int = 12 if _is_web else 25
+		slash_particles.amount = base_amount + ((player_level - 1) * level_bonus)
 
 		if is_spin_attack:
 			# Spin attack: particles emit in all directions
@@ -460,25 +448,14 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 	shockwave.add_child(trail)
 
 	trail.emitting = true
-	trail.amount = 30
+	trail.amount = 15 if _is_web else 30  # PERF: Halved on web
 	trail.lifetime = 0.4
 	trail.explosiveness = 0.0
 	trail.randomness = 0.2
 	trail.local_coords = false
 
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
-	trail.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	trail.mesh = _shared_particle_quad_medium
 
 	trail.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	trail.emission_sphere_radius = 0.5
@@ -563,25 +540,17 @@ func spawn_spin_attack_effect(position: Vector3, radius: float) -> void:
 	ring_particles.global_position = position
 
 	ring_particles.emitting = true
-	ring_particles.amount = 80
+	ring_particles.amount = 40 if _is_web else 80  # PERF: Halved on web
 	ring_particles.lifetime = 0.4
 	ring_particles.one_shot = true
 	ring_particles.explosiveness = 1.0
 	ring_particles.randomness = 0.2
 	ring_particles.local_coords = false
 
+	# PERF: Use shared non-billboard particle material
 	var particle_mesh: QuadMesh = QuadMesh.new()
 	particle_mesh.size = Vector2(0.5, 0.2)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
-
-	# Set material on mesh BEFORE assigning to particles
-	particle_mesh.material = particle_material
+	particle_mesh.material = _shared_particle_mat_no_billboard
 	ring_particles.mesh = particle_mesh
 
 	# Emit in a ring around player
@@ -619,6 +588,10 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	if not player or not player.get_parent():
 		return
 
+	# PERF: Skip flash for bots on web - visual only, not gameplay-critical
+	if _is_web and _is_bot_owner():
+		return
+
 	# Create flash container
 	var flash_container: Node3D = Node3D.new()
 	flash_container.name = "SlashFlash"
@@ -627,14 +600,17 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 
 	# Create multi-layer flash effect using geometry (no lights)
 	var flash_size: float = 2.0 + ((level - 1) * 0.5)
+	# PERF: Fewer segments on web
+	var radial_segs: int = 8 if _is_web else 16
+	var ring_count: int = 4 if _is_web else 8
 
 	# Layer 1: Outer glow sphere
 	var outer_flash: MeshInstance3D = MeshInstance3D.new()
 	var outer_sphere: SphereMesh = SphereMesh.new()
 	outer_sphere.radius = flash_size * 1.5
 	outer_sphere.height = flash_size * 3.0
-	outer_sphere.radial_segments = 16
-	outer_sphere.rings = 8
+	outer_sphere.radial_segments = radial_segs
+	outer_sphere.rings = ring_count
 	outer_flash.mesh = outer_sphere
 
 	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -645,30 +621,33 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	outer_flash.material_override = outer_mat
 	flash_container.add_child(outer_flash)
 
-	# Layer 2: Middle bright layer
-	var middle_flash: MeshInstance3D = MeshInstance3D.new()
-	var middle_sphere: SphereMesh = SphereMesh.new()
-	middle_sphere.radius = flash_size * 0.8
-	middle_sphere.height = flash_size * 1.6
-	middle_sphere.radial_segments = 16
-	middle_sphere.rings = 8
-	middle_flash.mesh = middle_sphere
+	# PERF: On web, skip middle layer - outer + core is sufficient
+	var middle_mat: StandardMaterial3D = null
+	if not _is_web:
+		# Layer 2: Middle bright layer
+		var middle_flash: MeshInstance3D = MeshInstance3D.new()
+		var middle_sphere: SphereMesh = SphereMesh.new()
+		middle_sphere.radius = flash_size * 0.8
+		middle_sphere.height = flash_size * 1.6
+		middle_sphere.radial_segments = radial_segs
+		middle_sphere.rings = ring_count
+		middle_flash.mesh = middle_sphere
 
-	var middle_mat: StandardMaterial3D = StandardMaterial3D.new()
-	middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
-	middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	middle_flash.material_override = middle_mat
-	flash_container.add_child(middle_flash)
+		middle_mat = StandardMaterial3D.new()
+		middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+		middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		middle_flash.material_override = middle_mat
+		flash_container.add_child(middle_flash)
 
 	# Layer 3: Bright white core
 	var core_flash: MeshInstance3D = MeshInstance3D.new()
 	var core_sphere: SphereMesh = SphereMesh.new()
 	core_sphere.radius = flash_size * 0.3
 	core_sphere.height = flash_size * 0.6
-	core_sphere.radial_segments = 12
-	core_sphere.rings = 6
+	core_sphere.radial_segments = 8 if _is_web else 12
+	core_sphere.rings = 4 if _is_web else 6
 	core_flash.mesh = core_sphere
 
 	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
@@ -685,23 +664,14 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	flash_container.add_child(burst_particles)
 
 	burst_particles.emitting = true
-	burst_particles.amount = 30 + (level * 10)
+	burst_particles.amount = (15 + (level * 5)) if _is_web else (30 + (level * 10))  # PERF: Halved on web
 	burst_particles.lifetime = 0.25
 	burst_particles.one_shot = true
 	burst_particles.explosiveness = 1.0
 	burst_particles.local_coords = false
 
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.4, 0.4)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
-	burst_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	burst_particles.mesh = _shared_particle_quad_medium
 
 	burst_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	burst_particles.emission_sphere_radius = 0.3
@@ -723,7 +693,8 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	var tween: Tween = get_tree().create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.2)
-	tween.tween_property(middle_mat, "albedo_color:a", 0.0, 0.15)
+	if middle_mat:
+		tween.tween_property(middle_mat, "albedo_color:a", 0.0, 0.15)
 	tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.1)
 	tween.set_parallel(false)
 	tween.tween_interval(0.25)
@@ -765,25 +736,14 @@ func create_arc_indicator() -> void:
 
 	# Configure particles - along the front edge of the hitbox
 	edge_particles.emitting = true
-	edge_particles.amount = 20
+	edge_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
 	edge_particles.lifetime = 0.8
 	edge_particles.explosiveness = 0.0
 	edge_particles.randomness = 0.15
 	edge_particles.local_coords = true
 
-	# Set up particle mesh
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.15, 0.15)
-	# Create material for particles
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_material.disable_receive_shadows = true
-	particle_mesh.material = particle_material
-	edge_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	edge_particles.mesh = _shared_particle_quad_small
 
 	# Emission shape - box matching the hitbox area
 	edge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX

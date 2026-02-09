@@ -71,9 +71,12 @@ func find_nearest_player() -> Node3D:
 
 	forward_direction = forward_direction.normalized()
 
-	# Get all nodes in the Players container
-	var players_container = player.get_parent()
-	for potential_target in players_container.get_children():
+	# PERF: Use group instead of get_children() to avoid array allocation
+	var forward_horizontal: Vector3 = forward_direction
+	forward_horizontal.y = 0
+	forward_horizontal = forward_horizontal.normalized()
+
+	for potential_target in get_tree().get_nodes_in_group("players"):
 		# Skip if it's ourselves
 		if potential_target == player:
 			continue
@@ -90,10 +93,6 @@ func find_nearest_player() -> Node3D:
 		var to_target: Vector3 = (potential_target.global_position - player.global_position)
 		to_target.y = 0
 		to_target = to_target.normalized()
-
-		var forward_horizontal: Vector3 = forward_direction
-		forward_horizontal.y = 0
-		forward_horizontal = forward_horizontal.normalized()
 
 		# Calculate angle between forward direction and target direction
 		var dot_product: float = forward_horizontal.dot(to_target)
@@ -198,9 +197,9 @@ func find_multiple_targets(max_targets: int) -> Array:
 
 	# Build a list of valid targets sorted by distance
 	var potential_targets: Array = []
-	var players_container = player.get_parent()
 
-	for potential_target in players_container.get_children():
+	# PERF: Use group instead of get_children() to avoid array allocation
+	for potential_target in get_tree().get_nodes_in_group("players"):
 		if potential_target == player:
 			continue
 		if not potential_target.has_method('receive_damage_from'):
@@ -288,8 +287,8 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 			target.apply_central_impulse(Vector3.UP * knockback * 0.7 + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * knockback * 0.3)
 
 	# Also check for any players in the strike radius
-	var players_container = player.get_parent()
-	for potential_target in players_container.get_children():
+	# PERF: Use group instead of get_children() to avoid array allocation
+	for potential_target in get_tree().get_nodes_in_group("players"):
 		if potential_target == player:
 			continue
 		if potential_target in hit_targets:
@@ -359,23 +358,14 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	indicator.add_child(warning_particles)
 
 	warning_particles.emitting = true
-	warning_particles.amount = 20
+	warning_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
 	warning_particles.lifetime = 0.5
 	warning_particles.explosiveness = 0.5
 	warning_particles.randomness = 0.3
 	warning_particles.local_coords = false
 
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.2, 0.2)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
-	warning_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	warning_particles.mesh = _shared_particle_quad_small
 
 	warning_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	warning_particles.emission_ring_axis = Vector3.UP
@@ -467,8 +457,8 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	create_bolt_layer(bolt_container, bolt_path, 1.0, Color(0.5, 0.7, 1.0, 0.4), 0.0, true)  # Subtle blue glow
 	create_bolt_layer(bolt_container, bolt_path, 0.3, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)  # White core
 
-	# Add 1-2 small branches
-	var num_branches: int = 1 + int(level * 0.5)
+	# Add 1-2 small branches (skip branches on web for performance)
+	var num_branches: int = 0 if _is_web else (1 + int(level * 0.5))  # PERF: No branches on web
 	for b in range(num_branches):
 		var branch_start_idx: int = randi_range(4, num_segments - 5)
 		var branch_start: Vector3 = bolt_path[branch_start_idx]
@@ -497,24 +487,15 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	bolt_container.add_child(impact_particles)
 
 	impact_particles.emitting = true
-	impact_particles.amount = 25
+	impact_particles.amount = 12 if _is_web else 25  # PERF: Halved on web
 	impact_particles.lifetime = 0.4
 	impact_particles.one_shot = true
 	impact_particles.explosiveness = 1.0
 	impact_particles.randomness = 0.4
 	impact_particles.local_coords = false
 
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.3, 0.3)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
-	impact_particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	impact_particles.mesh = _shared_particle_quad_medium
 
 	impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	impact_particles.emission_sphere_radius = 0.5
@@ -555,7 +536,6 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 	var chain_range: float = 8.0 + ((level - 1) * 2.0)  # Chain range increases with level
 	var num_chains: int = 1 + (level - 2)  # Level 2: 1 chain, Level 3: 2 chains
 	var owner_id: int = player.name.to_int() if player else -1
-	var players_container = player.get_parent()
 
 	# For each hit target, find nearby enemies to chain to
 	var chained_targets: Array = []
@@ -564,7 +544,8 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 			continue
 
 		var chains_spawned: int = 0
-		for potential_target in players_container.get_children():
+		# PERF: Use group instead of get_children()
+		for potential_target in get_tree().get_nodes_in_group("players"):
 			if chains_spawned >= num_chains:
 				break
 			if potential_target == player:
@@ -621,7 +602,7 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 
 	# Generate jagged chain path
 	var chain_path: Array[Vector3] = []
-	var num_chain_segments: int = 8
+	var num_chain_segments: int = 4 if _is_web else 8  # PERF: Fewer segments on web
 	var segment_length: float = distance / num_chain_segments
 	var chain_pos: Vector3 = from_pos - midpoint  # Relative to container
 
@@ -643,6 +624,16 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 
 func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color) -> void:
 	"""Create a single layer for chain lightning (GL Compatibility friendly)"""
+	# PERF: Share one material across all segments in this layer (was creating one per segment)
+	var shared_mat: StandardMaterial3D = StandardMaterial3D.new()
+	shared_mat.albedo_color = color
+	shared_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	if color.a < 1.0:
+		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+
+	var radial_segs: int = 3 if _is_web else 6  # PERF: Fewer segments on web
+
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
 		segment.name = "ChainLayer_%d" % i
@@ -654,17 +645,9 @@ func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, 
 		cylinder.top_radius = radius
 		cylinder.bottom_radius = radius
 		cylinder.height = start_pos.distance_to(end_pos)
-		cylinder.radial_segments = 6
+		cylinder.radial_segments = radial_segs
 		segment.mesh = cylinder
-
-		# GL Compatibility: bright color, no emission
-		var mat: StandardMaterial3D = StandardMaterial3D.new()
-		mat.albedo_color = color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		if color.a < 1.0:
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		segment.material_override = mat
+		segment.material_override = shared_mat
 
 		container.add_child(segment)
 
@@ -684,7 +667,7 @@ func create_reticle() -> void:
 	var torus: TorusMesh = TorusMesh.new()
 	torus.inner_radius = 0.6
 	torus.outer_radius = 1.0
-	torus.rings = 4  # Diamond shape
+	torus.rings = 4  # Diamond shape - already low poly
 	torus.ring_segments = 4
 	reticle.mesh = torus
 
@@ -704,23 +687,14 @@ func create_reticle() -> void:
 	reticle.add_child(particles)
 
 	particles.emitting = true
-	particles.amount = 15
+	particles.amount = 8 if _is_web else 15  # PERF: Halved on web
 	particles.lifetime = 0.5
 	particles.explosiveness = 0.0
 	particles.randomness = 0.3
 	particles.local_coords = true
 
-	var particle_mesh: QuadMesh = QuadMesh.new()
-	particle_mesh.size = Vector2(0.1, 0.1)
-
-	var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-	particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	particle_material.vertex_color_use_as_albedo = true
-	particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	particle_mesh.material = particle_material
-	particles.mesh = particle_mesh
+	# PERF: Use shared particle mesh + material
+	particles.mesh = _shared_particle_quad_small
 
 	particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
 	particles.emission_ring_axis = Vector3(0, 1, 0)

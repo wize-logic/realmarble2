@@ -20,6 +20,58 @@ var charge_time: float = 0.0  # Current charge time
 var charge_level: int = 1  # 1 = weak, 2 = medium, 3 = max
 var charge_particles: CPUParticles3D = null  # Visual feedback for charging
 
+# PERF: Static shared resources for particle effects across ALL abilities
+# Avoids redundant StandardMaterial3D creation which triggers WebGL shader recompilation
+static var _shared_particle_mat_billboard: StandardMaterial3D = null  # Additive, billboard, unshaded
+static var _shared_particle_mat_no_billboard: StandardMaterial3D = null  # Additive, no billboard, unshaded
+static var _shared_particle_quad_small: QuadMesh = null  # 0.15x0.15
+static var _shared_particle_quad_medium: QuadMesh = null  # 0.3x0.3
+static var _shared_particle_quad_large: QuadMesh = null  # 0.5x0.5
+static var _shared_particle_quad_xlarge: QuadMesh = null  # 0.8x0.8
+static var _is_web: bool = false
+static var _shared_resources_initialized: bool = false
+
+static func _ensure_shared_resources() -> void:
+	if _shared_resources_initialized:
+		return
+	_shared_resources_initialized = true
+	_is_web = OS.has_feature("web")
+
+	# Billboard additive particle material (most common)
+	_shared_particle_mat_billboard = StandardMaterial3D.new()
+	_shared_particle_mat_billboard.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_particle_mat_billboard.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_particle_mat_billboard.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_particle_mat_billboard.vertex_color_use_as_albedo = true
+	_shared_particle_mat_billboard.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	_shared_particle_mat_billboard.disable_receive_shadows = true
+
+	# Non-billboard additive particle material (for spin attacks etc.)
+	_shared_particle_mat_no_billboard = StandardMaterial3D.new()
+	_shared_particle_mat_no_billboard.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_particle_mat_no_billboard.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_particle_mat_no_billboard.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_particle_mat_no_billboard.vertex_color_use_as_albedo = true
+	_shared_particle_mat_no_billboard.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+	_shared_particle_mat_no_billboard.disable_receive_shadows = true
+
+	# Shared quad meshes at common sizes
+	_shared_particle_quad_small = QuadMesh.new()
+	_shared_particle_quad_small.size = Vector2(0.15, 0.15)
+	_shared_particle_quad_small.material = _shared_particle_mat_billboard
+
+	_shared_particle_quad_medium = QuadMesh.new()
+	_shared_particle_quad_medium.size = Vector2(0.3, 0.3)
+	_shared_particle_quad_medium.material = _shared_particle_mat_billboard
+
+	_shared_particle_quad_large = QuadMesh.new()
+	_shared_particle_quad_large.size = Vector2(0.5, 0.5)
+	_shared_particle_quad_large.material = _shared_particle_mat_billboard
+
+	_shared_particle_quad_xlarge = QuadMesh.new()
+	_shared_particle_quad_xlarge.size = Vector2(0.8, 0.8)
+	_shared_particle_quad_xlarge.material = _shared_particle_mat_billboard
+
 func get_entity_id() -> int:
 	"""Get the owner player/bot's entity ID for debug logging"""
 	if player:
@@ -42,6 +94,9 @@ func is_local_human_player() -> bool:
 	return not (player.has_method("is_bot") and player.is_bot())
 
 func _ready() -> void:
+	# PERF: Initialize shared resources once (idempotent)
+	_ensure_shared_resources()
+
 	# Create charge particles if charging is supported
 	# PERF: Skip charge particles for bots on HTML5 - bots never charge abilities
 	if supports_charging and not _is_bot_owner():
@@ -51,26 +106,14 @@ func _ready() -> void:
 
 		# Configure charge particles - growing glow
 		charge_particles.emitting = false
-		charge_particles.amount = 50
+		charge_particles.amount = 25 if _is_web else 50  # PERF: Halved on web
 		charge_particles.lifetime = 0.8
 		charge_particles.explosiveness = 0.0  # Continuous emission
 		charge_particles.randomness = 0.3
 		charge_particles.local_coords = true
 
-		# Set up particle mesh
-		var particle_mesh: QuadMesh = QuadMesh.new()
-		particle_mesh.size = Vector2(0.2, 0.2)
-		charge_particles.mesh = particle_mesh
-
-		# Create material for particles
-		var particle_material: StandardMaterial3D = StandardMaterial3D.new()
-		particle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		particle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		particle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		particle_material.vertex_color_use_as_albedo = true
-		particle_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-		particle_material.disable_receive_shadows = true
-		charge_particles.mesh.material = particle_material
+		# PERF: Use shared particle mesh + material instead of creating new ones
+		charge_particles.mesh = _shared_particle_quad_small
 
 		# Emission shape - sphere around ability
 		charge_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -224,21 +267,23 @@ func update_charge_visuals() -> void:
 	charge_particles.global_position = player.global_position
 
 	# Scale particle intensity based on charge level
+	# PERF: Halved particle counts on web for HTML5 performance
+	var web_mult: int = 1 if not _is_web else 2
 	match charge_level:
 		1:  # Weak - dim glow
-			charge_particles.amount = 30
+			charge_particles.amount = 30 / web_mult
 			charge_particles.scale_amount_min = 1.0
 			charge_particles.scale_amount_max = 1.5
 			charge_particles.initial_velocity_min = 1.0
 			charge_particles.initial_velocity_max = 2.0
 		2:  # Medium - bright pulse
-			charge_particles.amount = 60
+			charge_particles.amount = 60 / web_mult
 			charge_particles.scale_amount_min = 1.5
 			charge_particles.scale_amount_max = 2.5
 			charge_particles.initial_velocity_min = 2.0
 			charge_particles.initial_velocity_max = 4.0
 		3:  # Max - explosion aura
-			charge_particles.amount = 100
+			charge_particles.amount = 100 / web_mult
 			charge_particles.scale_amount_min = 2.0
 			charge_particles.scale_amount_max = 4.0
 			charge_particles.initial_velocity_min = 3.0
