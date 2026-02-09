@@ -147,7 +147,9 @@ func activate() -> void:
 		explosion_particles.restart()
 
 	# Spawn bright flash effect at center (GL Compatibility friendly)
-	spawn_explosion_flash(player_pos, player_level)
+	# PERF: Skip flash on web - creates 5+ mesh objects per use, particles are sufficient
+	if not _is_web:
+		spawn_explosion_flash(player_pos, player_level)
 
 	# Trigger magma particles (scaled with player level)
 	var magma_particles: CPUParticles3D = get_node_or_null("MagmaParticles")
@@ -187,13 +189,15 @@ func activate() -> void:
 		DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Player launched upward with %.1fx force!" % charge_multiplier, false, get_entity_id())
 
 	# Level-based effects
-	# Level 2+: Spawn lingering fire patches on the ground
-	if player_level >= 2:
-		spawn_lingering_fire(player_pos, player_level)
+	# PERF: Skip lingering fire and secondary explosions on web - too many node allocations
+	if not _is_web:
+		# Level 2+: Spawn lingering fire patches on the ground
+		if player_level >= 2:
+			spawn_lingering_fire(player_pos, player_level)
 
-	# Level 3: Spawn secondary explosions in a ring around main explosion
-	if player_level >= 3:
-		spawn_secondary_explosions(player_pos)
+		# Level 3: Spawn secondary explosions in a ring around main explosion
+		if player_level >= 3:
+			spawn_secondary_explosions(player_pos)
 
 func damage_nearby_players() -> void:
 	"""Damage all players in explosion radius"""

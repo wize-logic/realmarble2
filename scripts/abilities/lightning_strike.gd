@@ -352,38 +352,37 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	player.get_parent().add_child(indicator)
 	indicator.global_position = position + Vector3.UP * 0.1
 
-	# Add warning particles
-	var warning_particles: CPUParticles3D = CPUParticles3D.new()
-	warning_particles.name = "WarningParticles"
-	indicator.add_child(warning_particles)
+	# PERF: Skip warning particles on web - the disc indicator alone is sufficient
+	if not _is_web:
+		var warning_particles: CPUParticles3D = CPUParticles3D.new()
+		warning_particles.name = "WarningParticles"
+		indicator.add_child(warning_particles)
 
-	warning_particles.emitting = true
-	warning_particles.amount = 10 if _is_web else 20  # PERF: Halved on web
-	warning_particles.lifetime = 0.5
-	warning_particles.explosiveness = 0.5
-	warning_particles.randomness = 0.3
-	warning_particles.local_coords = false
+		warning_particles.emitting = true
+		warning_particles.amount = 20
+		warning_particles.lifetime = 0.5
+		warning_particles.explosiveness = 0.5
+		warning_particles.randomness = 0.3
+		warning_particles.local_coords = false
+		warning_particles.mesh = _shared_particle_quad_small
 
-	# PERF: Use shared particle mesh + material
-	warning_particles.mesh = _shared_particle_quad_small
+		warning_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+		warning_particles.emission_ring_axis = Vector3.UP
+		warning_particles.emission_ring_height = 0.1
+		warning_particles.emission_ring_radius = 2.0
+		warning_particles.emission_ring_inner_radius = 0.5
 
-	warning_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
-	warning_particles.emission_ring_axis = Vector3.UP
-	warning_particles.emission_ring_height = 0.1
-	warning_particles.emission_ring_radius = 2.0
-	warning_particles.emission_ring_inner_radius = 0.5
+		warning_particles.direction = Vector3.UP
+		warning_particles.spread = 30.0
+		warning_particles.gravity = Vector3.ZERO
+		warning_particles.initial_velocity_min = 2.0
+		warning_particles.initial_velocity_max = 4.0
 
-	warning_particles.direction = Vector3.UP
-	warning_particles.spread = 30.0
-	warning_particles.gravity = Vector3.ZERO
-	warning_particles.initial_velocity_min = 2.0
-	warning_particles.initial_velocity_max = 4.0
-
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.6, 0.9, 1.0, 1.0))  # Bright cyan
-	gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.8))  # Electric blue
-	gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
-	warning_particles.color_ramp = gradient
+		var gradient: Gradient = Gradient.new()
+		gradient.add_point(0.0, Color(0.6, 0.9, 1.0, 1.0))
+		gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.8))
+		gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))
+		warning_particles.color_ramp = gradient
 
 	# Remove after strike
 	get_tree().create_timer(strike_delay + 0.1).timeout.connect(indicator.queue_free)
@@ -398,7 +397,7 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 
-	var radial_segs: int = 4 if OS.has_feature("web") else 8
+	var radial_segs: int = 4 if _is_web else 8
 
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
@@ -438,9 +437,10 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	bolt_container.global_position = position
 
 	# Generate main bolt path with sharp zigzag pattern
+	# PERF: 4 segments on web (was 8) - halves MeshInstance3D count per layer
 	var bolt_path: Array[Vector3] = []
 	var current_pos: Vector3 = Vector3.ZERO
-	var num_segments: int = 8 if OS.has_feature("web") else 16
+	var num_segments: int = 4 if _is_web else 16
 	var segment_height: float = bolt_height / num_segments
 
 	bolt_path.append(current_pos)
@@ -453,9 +453,12 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 		bolt_path.append(next_pos)
 		current_pos = next_pos
 
-	# Simple 2-layer bolt: subtle glow + bright white core
-	create_bolt_layer(bolt_container, bolt_path, 1.0, Color(0.5, 0.7, 1.0, 0.4), 0.0, true)  # Subtle blue glow
-	create_bolt_layer(bolt_container, bolt_path, 0.3, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)  # White core
+	# PERF: Single bright layer on web (saves 4 MeshInstance3D + CylinderMesh), 2 layers on desktop
+	if _is_web:
+		create_bolt_layer(bolt_container, bolt_path, 0.5, Color(0.8, 0.9, 1.0, 1.0), 0.0, false)  # Single bright bolt
+	else:
+		create_bolt_layer(bolt_container, bolt_path, 1.0, Color(0.5, 0.7, 1.0, 0.4), 0.0, true)  # Subtle blue glow
+		create_bolt_layer(bolt_container, bolt_path, 0.3, Color(1.0, 1.0, 1.0, 1.0), 0.0, false)  # White core
 
 	# Add 1-2 small branches (skip branches on web for performance)
 	var num_branches: int = 0 if _is_web else (1 + int(level * 0.5))  # PERF: No branches on web
@@ -481,39 +484,36 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 		create_bolt_layer(bolt_container, branch_path, 0.5, Color(0.6, 0.8, 1.0, 0.35), 0.0, true)
 		create_bolt_layer(bolt_container, branch_path, 0.15, Color(1.0, 1.0, 1.0, 0.9), 0.0, false)
 
-	# Small impact spark particles at ground
-	var impact_particles: CPUParticles3D = CPUParticles3D.new()
-	impact_particles.name = "ImpactParticles"
-	bolt_container.add_child(impact_particles)
+	# PERF: Skip impact particles on web - one less CPUParticles3D + Gradient allocation
+	if not _is_web:
+		var impact_particles: CPUParticles3D = CPUParticles3D.new()
+		impact_particles.name = "ImpactParticles"
+		bolt_container.add_child(impact_particles)
 
-	impact_particles.emitting = true
-	impact_particles.amount = 12 if _is_web else 25  # PERF: Halved on web
-	impact_particles.lifetime = 0.4
-	impact_particles.one_shot = true
-	impact_particles.explosiveness = 1.0
-	impact_particles.randomness = 0.4
-	impact_particles.local_coords = false
+		impact_particles.emitting = true
+		impact_particles.amount = 25
+		impact_particles.lifetime = 0.4
+		impact_particles.one_shot = true
+		impact_particles.explosiveness = 1.0
+		impact_particles.randomness = 0.4
+		impact_particles.local_coords = false
+		impact_particles.mesh = _shared_particle_quad_medium
 
-	# PERF: Use shared particle mesh + material
-	impact_particles.mesh = _shared_particle_quad_medium
+		impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		impact_particles.emission_sphere_radius = 0.5
+		impact_particles.direction = Vector3.UP
+		impact_particles.spread = 120.0
+		impact_particles.gravity = Vector3(0, -12.0, 0)
+		impact_particles.initial_velocity_min = 8.0
+		impact_particles.initial_velocity_max = 15.0
+		impact_particles.scale_amount_min = 1.5
+		impact_particles.scale_amount_max = 3.0
 
-	impact_particles.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	impact_particles.emission_sphere_radius = 0.5
-
-	impact_particles.direction = Vector3.UP
-	impact_particles.spread = 120.0
-	impact_particles.gravity = Vector3(0, -12.0, 0)
-	impact_particles.initial_velocity_min = 8.0
-	impact_particles.initial_velocity_max = 15.0
-
-	impact_particles.scale_amount_min = 1.5
-	impact_particles.scale_amount_max = 3.0
-
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
-	gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))  # Light blue
-	gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
-	impact_particles.color_ramp = gradient
+		var gradient: Gradient = Gradient.new()
+		gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))
+		gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))
+		gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))
+		impact_particles.color_ramp = gradient
 
 	# Play thunder sound
 	if ability_sound:
@@ -564,8 +564,9 @@ func spawn_chain_lightning(hit_targets: Array, level: int) -> void:
 				chained_targets.append(potential_target)
 				chains_spawned += 1
 
-				# Spawn visual chain effect
-				spawn_chain_arc(source_target.global_position, potential_target.global_position)
+				# PERF: Skip chain arc visual on web - creates 8-16 MeshInstance3D per arc
+				if not _is_web:
+					spawn_chain_arc(source_target.global_position, potential_target.global_position)
 
 				# Deal reduced damage
 				var chain_damage: int = 1

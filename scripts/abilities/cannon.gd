@@ -357,7 +357,8 @@ func create_projectile(level: int = 0) -> Node3D:
 	projectile.add_child(mesh_instance)
 
 	# GL Compatibility: Add outer glow layer instead of emission
-	if level >= 1:
+	# PERF: Skip glow layer on web - saves 1 MeshInstance3D + SphereMesh + StandardMaterial3D per projectile
+	if level >= 1 and not _is_web:
 		var glow_mesh: MeshInstance3D = MeshInstance3D.new()
 		var glow_sphere: SphereMesh = SphereMesh.new()
 		glow_sphere.radius = (0.4 * size_mult) * 1.4  # Slightly larger

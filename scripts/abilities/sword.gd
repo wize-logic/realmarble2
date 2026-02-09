@@ -294,7 +294,9 @@ func activate() -> void:
 			slash_particles.spread = 180.0
 			slash_particles.global_position = player.global_position + Vector3.UP * 0.5
 			slash_particles.global_rotation = Vector3.ZERO
-			spawn_spin_attack_effect(player.global_position, scaled_range)
+			# PERF: Skip spin ring on web - creates CPUParticles3D + QuadMesh per use
+			if not _is_web:
+				spawn_spin_attack_effect(player.global_position, scaled_range)
 		else:
 			slash_particles.spread = slash_arc_angle / 2
 			slash_particles.global_position = player.global_position + Vector3.UP * 0.5 + slash_direction * 1.5
@@ -303,8 +305,14 @@ func activate() -> void:
 		slash_particles.emitting = true
 		slash_particles.restart()
 
-	# Add a brief light flash for visual impact
-	spawn_slash_flash(player.global_position + Vector3.UP * 0.5 + slash_direction * 1.0, player_level)
+	# PERF: Skip flash and shockwave on web - creates 5-10 mesh objects per use
+	if not _is_web:
+		# Add a brief light flash for visual impact
+		spawn_slash_flash(player.global_position + Vector3.UP * 0.5 + slash_direction * 1.0, player_level)
+
+		# Level 2+: Spawn shockwave projectile that travels forward
+		if player_level >= 2 and not is_spin_attack:
+			spawn_sword_shockwave(player.global_position + Vector3.UP * 0.5, slash_direction, player_level)
 
 	# Play slash sound
 	if ability_sound:
@@ -312,10 +320,6 @@ func activate() -> void:
 		# Higher pitch for spin attack
 		ability_sound.pitch_scale = 1.3 if is_spin_attack else 1.0
 		ability_sound.play()
-
-	# Level 2+: Spawn shockwave projectile that travels forward
-	if player_level >= 2 and not is_spin_attack:
-		spawn_sword_shockwave(player.global_position + Vector3.UP * 0.5, slash_direction, player_level)
 
 func _on_slash_hitbox_body_entered(body: Node3D) -> void:
 	if not is_slashing or not player:

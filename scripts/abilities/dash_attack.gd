@@ -62,7 +62,7 @@ func _ready() -> void:
 
 	# Configure fire particles - Trail effect (enhanced for more powerful dash)
 	fire_trail.emitting = false
-	fire_trail.amount = 60 if OS.has_feature("web") else 180  # Reduced on web for performance
+	fire_trail.amount = 60 if _is_web else 180  # Reduced on web for performance
 	fire_trail.lifetime = 1.4  # Increased from 1.2s for longer lasting trail
 	fire_trail.explosiveness = 0.0  # Continuous emission for smooth trail
 	fire_trail.randomness = 0.3
@@ -220,8 +220,9 @@ func activate() -> void:
 	afterimage_timer = 0.0
 
 	# Level-based effect: Level 2+ creates explosion at dash START
+	# PERF: Skip flash on web - creates 3 mesh objects + particles per use
 	var player_level: int = player.level if player and "level" in player else 0
-	if player_level >= 2:
+	if player_level >= 2 and not _is_web:
 		spawn_dash_explosion(player.global_position, player_level)
 
 	# Scale hitbox based on charge level AND player level to match visual indicator
@@ -299,7 +300,8 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 
 func end_dash() -> void:
 	# Visual effect at dash END - always spawn explosion scaled by level
-	if player and is_instance_valid(player):
+	# PERF: Skip flash on web - creates 3 mesh objects + particles per use
+	if player and is_instance_valid(player) and not _is_web:
 		var player_level: int = player.level if "level" in player else 1
 		spawn_dash_explosion(player.global_position, player_level)
 
@@ -323,14 +325,14 @@ func _physics_process(delta: float) -> void:
 			fire_trail.global_position = player.global_position
 
 		# Level 3: Spawn afterimages during dash
-		# PERF: Skip afterimages for bots on web, and use longer interval on web
-		var player_level: int = player.level if "level" in player else 0
-		if player_level >= 3 and not (_is_web and _is_bot_owner()):
-			afterimage_timer += delta
-			var interval: float = 0.1 if _is_web else AFTERIMAGE_INTERVAL  # PERF: 2x longer interval on web
-			if afterimage_timer >= interval:
-				afterimage_timer = 0.0
-				spawn_afterimage(player.global_position)
+		# PERF: Skip afterimages entirely on web - each creates MeshInstance3D + SphereMesh + StandardMaterial3D + Tween
+		if not _is_web:
+			var player_level: int = player.level if "level" in player else 0
+			if player_level >= 3:
+				afterimage_timer += delta
+				if afterimage_timer >= AFTERIMAGE_INTERVAL:
+					afterimage_timer = 0.0
+					spawn_afterimage(player.global_position)
 
 func play_attack_hit_sound() -> void:
 	"""Play satisfying hit sound when attack lands on enemy"""
