@@ -39,9 +39,16 @@ var _lingering_fire_pool: Array[CPUParticles3D] = []
 var _lingering_fire_pool_index: int = 0
 var _lingering_fire_token: int = 0
 var _lingering_fire_gradient: Gradient = null
+static var _shared_resources_ready: bool = false
+static var _shared_indicator_mesh: SphereMesh = null
+static var _shared_indicator_material: StandardMaterial3D = null
+static var _shared_indicator_gradient: Gradient = null
+static var _shared_magma_curve: Curve = null
+static var _shared_magma_gradient: Gradient = null
 
 func _ready() -> void:
 	super._ready()
+	_ensure_shared_explosion_resources()
 	ability_name = "Explosion"
 	ability_color = Color.ORANGE
 	cooldown_time = 2.5
@@ -74,6 +81,42 @@ func _ready() -> void:
 	# Create radius indicator for visual feedback (human player only)
 	if not _is_bot_owner():
 		create_radius_indicator()
+
+static func _ensure_shared_explosion_resources() -> void:
+	if _shared_resources_ready:
+		return
+	_shared_resources_ready = true
+
+	_shared_indicator_mesh = SphereMesh.new()
+	_shared_indicator_mesh.radius = 1.0
+	_shared_indicator_mesh.height = 2.0
+	_shared_indicator_mesh.radial_segments = 8 if _is_web else 16
+	_shared_indicator_mesh.rings = 4 if _is_web else 8
+
+	_shared_indicator_material = StandardMaterial3D.new()
+	_shared_indicator_material.albedo_color = Color(0.9, 0.75, 0.6, 0.12)
+	_shared_indicator_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_indicator_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_indicator_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_indicator_material.disable_receive_shadows = true
+	_shared_indicator_material.disable_fog = true
+	_shared_indicator_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	_shared_indicator_gradient = Gradient.new()
+	_shared_indicator_gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))
+	_shared_indicator_gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))
+	_shared_indicator_gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))
+
+	_shared_magma_curve = Curve.new()
+	_shared_magma_curve.add_point(Vector2(0, 1.0))
+	_shared_magma_curve.add_point(Vector2(0.5, 0.7))
+	_shared_magma_curve.add_point(Vector2(1, 0.0))
+
+	_shared_magma_gradient = Gradient.new()
+	_shared_magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))
+	_shared_magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))
+	_shared_magma_gradient.add_point(0.7, Color(0.8, 0.1, 0.0, 0.8))
+	_shared_magma_gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -108,7 +151,8 @@ func _process(delta: float) -> void:
 			var charge_scale: float = 1.0 + (charge_level - 1) * 0.5
 			var level_scale: float = 1.0 + ((player_level - 1) * 0.15)  # +15% radius per level
 			var scale_factor: float = charge_scale * level_scale
-			radius_indicator.scale = Vector3(scale_factor, scale_factor, scale_factor)
+			var base_scale: float = explosion_radius * scale_factor
+			radius_indicator.scale = Vector3(base_scale, base_scale, base_scale)
 
 			# Update indicator color based on level (more intense at higher levels)
 			var mat: StandardMaterial3D = radius_indicator.material_override
@@ -537,17 +581,8 @@ func _create_magma_particles() -> void:
 	magma_particles.initial_velocity_max = 12.0
 	magma_particles.scale_amount_min = 1.2
 	magma_particles.scale_amount_max = 2.0
-	var magma_curve := Curve.new()
-	magma_curve.add_point(Vector2(0, 1.0))
-	magma_curve.add_point(Vector2(0.5, 0.7))
-	magma_curve.add_point(Vector2(1, 0.0))
-	magma_particles.scale_amount_curve = magma_curve
-	var magma_gradient: Gradient = Gradient.new()
-	magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))
-	magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))
-	magma_gradient.add_point(0.7, Color(0.8, 0.1, 0.0, 0.8))
-	magma_gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))
-	magma_particles.color_ramp = magma_gradient
+	magma_particles.scale_amount_curve = _shared_magma_curve
+	magma_particles.color_ramp = _shared_magma_gradient
 
 func create_radius_indicator() -> void:
 	"""Create a sphere indicator that shows the explosion hitbox while charging"""
@@ -555,23 +590,11 @@ func create_radius_indicator() -> void:
 	radius_indicator.name = "ExplosionRadiusIndicator"
 
 	# Create a sphere mesh matching the actual hitbox (sphere with radius explosion_radius)
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = explosion_radius  # Match hitbox radius
-	sphere.height = explosion_radius * 2  # Diameter
-	sphere.radial_segments = 8 if _is_web else 16  # PERF: Reduced mesh complexity
-	sphere.rings = 4 if _is_web else 8
-	radius_indicator.mesh = sphere
+	radius_indicator.mesh = _shared_indicator_mesh
+	radius_indicator.scale = Vector3.ONE * explosion_radius
 
 	# Create material - very subtle, transparent, non-distracting
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)  # Subtle warm tone, 12% opacity
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	mat.disable_fog = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides (inside and out)
-	radius_indicator.material_override = mat
+	radius_indicator.material_override = _shared_indicator_material
 
 	# Add particles around the sphere surface for extra visual feedback
 	var sphere_particles: CPUParticles3D = CPUParticles3D.new()
@@ -605,11 +628,7 @@ func create_radius_indicator() -> void:
 	sphere_particles.scale_amount_max = 1.5
 
 	# Color - very subtle warm gradient
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))  # Subtle warm tone
-	gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))  # Very subtle
-	gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))  # Transparent
-	sphere_particles.color_ramp = gradient
+	sphere_particles.color_ramp = _shared_indicator_gradient
 
 	# Initially hidden (will show when charging)
 	radius_indicator.visible = false

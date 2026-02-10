@@ -34,9 +34,18 @@ var _explosion_curve: Curve = null
 var _explosion_gradient: Gradient = null
 var _trail_curve: Curve = null
 var _trail_gradient: Gradient = null
+static var _shared_resources_ready: bool = false
+static var _shared_projectile_mesh: SphereMesh = null
+static var _shared_glow_mesh: SphereMesh = null
+static var _shared_projectile_material: StandardMaterial3D = null
+static var _shared_glow_materials: Dictionary = {}
+static var _shared_reticle_mesh: TorusMesh = null
+static var _shared_reticle_material: StandardMaterial3D = null
+static var _shared_reticle_gradient: Gradient = null
 
 func _ready() -> void:
 	super._ready()
+	_ensure_shared_cannon_resources()
 	ability_name = "Cannon"
 	ability_color = Color(0.5, 1.0, 0.0)  # Lime green for high visibility
 	cooldown_time = fire_rate
@@ -50,6 +59,58 @@ func _ready() -> void:
 	_build_trail_resources()
 	_build_muzzle_flash_pool()
 	_build_explosion_pool()
+
+static func _ensure_shared_cannon_resources() -> void:
+	if _shared_resources_ready:
+		return
+	_shared_resources_ready = true
+
+	_shared_projectile_mesh = SphereMesh.new()
+	_shared_projectile_mesh.radius = 0.4
+	_shared_projectile_mesh.height = 0.8
+
+	_shared_glow_mesh = SphereMesh.new()
+	_shared_glow_mesh.radius = 0.4
+	_shared_glow_mesh.height = 0.8
+
+	_shared_projectile_material = StandardMaterial3D.new()
+	_shared_projectile_material.albedo_color = Color(0.6, 1.0, 0.1)  # Bright lime green
+	_shared_projectile_material.metallic = 0.2
+	_shared_projectile_material.roughness = 0.4
+	_shared_projectile_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	_shared_reticle_mesh = TorusMesh.new()
+	_shared_reticle_mesh.inner_radius = 0.8
+	_shared_reticle_mesh.outer_radius = 1.2
+	_shared_reticle_mesh.rings = 12 if _is_web else 32  # PERF: Reduced mesh complexity on web
+	_shared_reticle_mesh.ring_segments = 8 if _is_web else 16
+
+	_shared_reticle_material = StandardMaterial3D.new()
+	_shared_reticle_material.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
+	_shared_reticle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_reticle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_reticle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_reticle_material.disable_receive_shadows = true
+	_shared_reticle_material.disable_fog = true
+	_shared_reticle_material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+
+	_shared_reticle_gradient = Gradient.new()
+	_shared_reticle_gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
+	_shared_reticle_gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
+	_shared_reticle_gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
+
+static func _get_shared_glow_material(level: int) -> StandardMaterial3D:
+	var key := "glow_%d" % level
+	if _shared_glow_materials.has(key):
+		return _shared_glow_materials[key]
+	var glow_mat := StandardMaterial3D.new()
+	var glow_alpha: float = 0.25 + ((level - 1) * 0.05)
+	glow_mat.albedo_color = Color(0.5, 1.0, 0.2, glow_alpha)  # Green glow
+	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_glow_materials[key] = glow_mat
+	return glow_mat
 
 func drop() -> void:
 	"""Override drop to clean up reticle"""
@@ -353,36 +414,19 @@ func create_projectile(level: int = 0) -> Node3D:
 
 	# Create mesh - larger cannonball, scales with level
 	var mesh_instance: MeshInstance3D = MeshInstance3D.new()
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 0.4 * size_mult  # Scale with level
-	sphere.height = 0.8 * size_mult
-	mesh_instance.mesh = sphere
+	mesh_instance.mesh = _shared_projectile_mesh
+	mesh_instance.scale = Vector3.ONE * size_mult
 
 	# Create material - lime green for visibility, brighter at higher levels (GL Compatibility - no emission)
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	var green_intensity: float = 1.0 + ((level - 1) * 0.075)  # Brighter at higher levels
-	mat.albedo_color = Color(0.6, minf(green_intensity, 1.0), 0.1)  # Bright lime green
-	mat.metallic = 0.2
-	mat.roughness = 0.4
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED  # Always bright
-	mesh_instance.material_override = mat
+	mesh_instance.material_override = _shared_projectile_material
 	projectile.add_child(mesh_instance)
 
 	# GL Compatibility: Add outer glow layer instead of emission
 	if level >= 1:
 		var glow_mesh: MeshInstance3D = MeshInstance3D.new()
-		var glow_sphere: SphereMesh = SphereMesh.new()
-		glow_sphere.radius = (0.4 * size_mult) * 1.4  # Slightly larger
-		glow_sphere.height = (0.8 * size_mult) * 1.4
-		glow_mesh.mesh = glow_sphere
-
-		var glow_mat: StandardMaterial3D = StandardMaterial3D.new()
-		var glow_alpha: float = 0.25 + ((level - 1) * 0.05)
-		glow_mat.albedo_color = Color(0.5, 1.0, 0.2, glow_alpha)  # Green glow
-		glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		glow_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		glow_mesh.material_override = glow_mat
+		glow_mesh.mesh = _shared_glow_mesh
+		glow_mesh.scale = Vector3.ONE * (1.4 * size_mult)
+		glow_mesh.material_override = _get_shared_glow_material(level)
 		projectile.add_child(glow_mesh)
 
 	# Create collision shape - larger, scales with level
@@ -552,23 +596,10 @@ func create_reticle() -> void:
 	reticle.name = "CannonReticle"
 
 	# Create a torus (ring) mesh for the reticle
-	var torus: TorusMesh = TorusMesh.new()
-	torus.inner_radius = 0.8
-	torus.outer_radius = 1.2
-	torus.rings = 12 if _is_web else 32  # PERF: Reduced mesh complexity on web
-	torus.ring_segments = 8 if _is_web else 16
-	reticle.mesh = torus
+	reticle.mesh = _shared_reticle_mesh
 
 	# Create material - subtle lime green, transparent, with additive blending
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	mat.disable_fog = true
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y  # Face camera but stay horizontal
-	reticle.material_override = mat
+	reticle.material_override = _shared_reticle_material
 
 	# Add particle effect to reticle for extra visual feedback
 	var particles: CPUParticles3D = CPUParticles3D.new()
@@ -605,11 +636,7 @@ func create_reticle() -> void:
 	particles.scale_amount_max = 1.5
 
 	# Color - lime green fade
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
-	gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
-	gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
-	particles.color_ramp = gradient
+	particles.color_ramp = _shared_reticle_gradient
 
 	# Initially hidden (will show when target is locked)
 	reticle.visible = false
