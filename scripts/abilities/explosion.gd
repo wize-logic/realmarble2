@@ -21,6 +21,24 @@ var hit_players: Array = []  # Track who we've hit
 
 # Ground indicator for AoE radius
 var radius_indicator: MeshInstance3D = null
+const SECONDARY_EXPLOSION_POOL_SIZE: int = 6
+const LINGERING_FIRE_POOL_SIZE: int = 6
+var _flash_container: Node3D = null
+var _flash_outer_mat: StandardMaterial3D = null
+var _flash_middle_mat: StandardMaterial3D = null
+var _flash_core_mat: StandardMaterial3D = null
+var _flash_wave_mat: StandardMaterial3D = null
+var _flash_shockwave: MeshInstance3D = null
+var _flash_tween: Tween = null
+var _secondary_explosion_pool: Array[CPUParticles3D] = []
+var _secondary_explosion_pool_index: int = 0
+var _secondary_explosion_token: int = 0
+var _secondary_explosion_gradient: Gradient = null
+var _secondary_explosion_curve: Curve = null
+var _lingering_fire_pool: Array[CPUParticles3D] = []
+var _lingering_fire_pool_index: int = 0
+var _lingering_fire_token: int = 0
+var _lingering_fire_gradient: Gradient = null
 
 func _ready() -> void:
 	super._ready()
@@ -33,6 +51,9 @@ func _ready() -> void:
 	# Create explosion particle effects (visible attack effects - keep for all players)
 	_create_explosion_particles()
 	_create_magma_particles()
+	_build_explosion_flash()
+	_build_secondary_explosion_pool()
+	_build_lingering_fire_pool()
 
 	# Create damage area for detecting hits
 	explosion_area = Area3D.new()
@@ -279,105 +300,41 @@ func spawn_explosion_flash(position: Vector3, level: int) -> void:
 	if _is_web and _is_bot_owner():
 		return
 
-	var flash_container: Node3D = Node3D.new()
-	flash_container.name = "ExplosionFlash"
-	player.get_parent().add_child(flash_container)
-	flash_container.global_position = position
+	if not _flash_container:
+		return
 
 	var flash_size: float = 3.0 + (level * 0.5)
-	# PERF: Fewer segments on web
-	var radial_segs: int = 6 if _is_web else 8
-	var ring_count: int = 3 if _is_web else 4
+	var flash_scale: float = flash_size / 3.0
+	_flash_container.global_position = position
+	_flash_container.scale = Vector3.ONE * flash_scale
+	_flash_container.visible = true
 
-	# Layer 1: Outer orange glow
-	var outer_flash: MeshInstance3D = MeshInstance3D.new()
-	var outer_sphere: SphereMesh = SphereMesh.new()
-	outer_sphere.radius = flash_size * 2.0
-	outer_sphere.height = flash_size * 4.0
-	outer_sphere.radial_segments = radial_segs
-	outer_sphere.rings = ring_count
-	outer_flash.mesh = outer_sphere
+	_flash_outer_mat.albedo_color.a = 0.35
+	if _flash_middle_mat:
+		_flash_middle_mat.albedo_color.a = 0.6
+	_flash_core_mat.albedo_color.a = 0.9
+	if _flash_wave_mat:
+		_flash_wave_mat.albedo_color.a = 0.7
+	if _flash_shockwave:
+		_flash_shockwave.scale = Vector3.ONE
 
-	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
-	outer_mat.albedo_color = Color(1.0, 0.4, 0.0, 0.35)
-	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	outer_flash.material_override = outer_mat
-	flash_container.add_child(outer_flash)
-
-	# PERF: On web, skip middle layer - outer + core is sufficient
-	var middle_mat: StandardMaterial3D = null
-	if not _is_web:
-		# Layer 2: Middle yellow layer
-		var middle_flash: MeshInstance3D = MeshInstance3D.new()
-		var middle_sphere: SphereMesh = SphereMesh.new()
-		middle_sphere.radius = flash_size * 1.2
-		middle_sphere.height = flash_size * 2.4
-		middle_sphere.radial_segments = radial_segs
-		middle_sphere.rings = ring_count
-		middle_flash.mesh = middle_sphere
-
-		middle_mat = StandardMaterial3D.new()
-		middle_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.6)
-		middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		middle_flash.material_override = middle_mat
-		flash_container.add_child(middle_flash)
-
-	# Layer 3: Bright white-yellow core
-	var core_flash: MeshInstance3D = MeshInstance3D.new()
-	var core_sphere: SphereMesh = SphereMesh.new()
-	core_sphere.radius = flash_size * 0.5
-	core_sphere.height = flash_size * 1.0
-	core_sphere.radial_segments = 6 if _is_web else 8
-	core_sphere.rings = 3 if _is_web else 4
-	core_flash.mesh = core_sphere
-
-	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
-	core_mat.albedo_color = Color(1.0, 1.0, 0.9, 0.9)
-	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_flash.material_override = core_mat
-	flash_container.add_child(core_flash)
-
-	# Add shockwave ring effect
-	var shockwave: MeshInstance3D = MeshInstance3D.new()
-	var torus: TorusMesh = TorusMesh.new()
-	torus.inner_radius = flash_size * 0.8
-	torus.outer_radius = flash_size * 1.2
-	torus.rings = 6 if _is_web else 8  # PERF: Reduced mesh complexity
-	torus.ring_segments = 6 if _is_web else 12
-	shockwave.mesh = torus
-	shockwave.rotation.x = PI / 2  # Lay flat
-
-	var wave_mat: StandardMaterial3D = StandardMaterial3D.new()
-	wave_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.7)
-	wave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wave_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	wave_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	shockwave.material_override = wave_mat
-	flash_container.add_child(shockwave)
-
-	# Animate flash fading and shockwave expanding
-	var tween: Tween = get_tree().create_tween()
-	tween.set_parallel(true)
-
-	# Flash fades out
-	tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.3)
-	if middle_mat:
-		tween.tween_property(middle_mat, "albedo_color:a", 0.0, 0.2)
-	tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.15)
-
-	# Shockwave expands outward
-	tween.tween_property(shockwave, "scale", Vector3(4.0, 4.0, 4.0), 0.4)
-	tween.tween_property(wave_mat, "albedo_color:a", 0.0, 0.4)
-
-	tween.set_parallel(false)
-	tween.tween_interval(0.4)
-	tween.tween_callback(flash_container.queue_free)
+	if _flash_tween and is_instance_valid(_flash_tween):
+		_flash_tween.kill()
+	_flash_tween = get_tree().create_tween()
+	_flash_tween.set_parallel(true)
+	_flash_tween.tween_property(_flash_outer_mat, "albedo_color:a", 0.0, 0.3)
+	if _flash_middle_mat:
+		_flash_tween.tween_property(_flash_middle_mat, "albedo_color:a", 0.0, 0.2)
+	_flash_tween.tween_property(_flash_core_mat, "albedo_color:a", 0.0, 0.15)
+	if _flash_shockwave and _flash_wave_mat:
+		_flash_tween.tween_property(_flash_shockwave, "scale", Vector3(4.0, 4.0, 4.0), 0.4)
+		_flash_tween.tween_property(_flash_wave_mat, "albedo_color:a", 0.0, 0.4)
+	_flash_tween.set_parallel(false)
+	_flash_tween.tween_interval(0.4)
+	_flash_tween.tween_callback(func():
+		if _flash_container:
+			_flash_container.visible = false
+	)
 
 func spawn_lingering_fire(position: Vector3, level: int) -> void:
 	"""Spawn lingering fire patches on the ground (Level 2+ effect)"""
@@ -412,10 +369,10 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		if result:
 			fire_pos = result.position + Vector3.UP * 0.1
 
-		# Create fire particle
-		var fire: CPUParticles3D = CPUParticles3D.new()
-		fire.name = "LingeringFire"
-		player.get_parent().add_child(fire)
+		if _lingering_fire_pool.is_empty():
+			return
+		var fire: CPUParticles3D = _lingering_fire_pool[_lingering_fire_pool_index]
+		_lingering_fire_pool_index = (_lingering_fire_pool_index + 1) % _lingering_fire_pool.size()
 		fire.global_position = fire_pos
 
 		# Configure lingering fire
@@ -441,23 +398,17 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		fire.scale_amount_min = 1.5
 		fire.scale_amount_max = 2.5
 
-		# Orange-red fire gradient
-		var gradient: Gradient = Gradient.new()
-		gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 0.9))  # Bright yellow
-		gradient.add_point(0.3, Color(1.0, 0.5, 0.0, 0.8))  # Orange
-		gradient.add_point(0.6, Color(0.8, 0.2, 0.0, 0.5))  # Red
-		gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
-		fire.color_ramp = gradient
+		fire.color_ramp = _lingering_fire_gradient
+		fire.restart()
 
 		# Stop emitting after duration, then cleanup
 		var fire_duration: float = 1.5 + randf_range(0.0, 0.5)
+		_lingering_fire_token += 1
+		var token := _lingering_fire_token
+		fire.set_meta("lingering_fire_token", token)
 		get_tree().create_timer(fire_duration).timeout.connect(func():
-			if is_instance_valid(fire):
+			if is_instance_valid(fire) and fire.get_meta("lingering_fire_token", -1) == token:
 				fire.emitting = false
-		)
-		get_tree().create_timer(fire_duration + fire.lifetime + 0.5).timeout.connect(func():
-			if is_instance_valid(fire):
-				fire.queue_free()
 		)
 
 func spawn_secondary_explosions(center_position: Vector3) -> void:
@@ -490,10 +441,10 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	if not player or not player.get_parent():
 		return
 
-	# Create secondary explosion particles (smaller than main)
-	var explosion: CPUParticles3D = CPUParticles3D.new()
-	explosion.name = "SecondaryExplosion"
-	player.get_parent().add_child(explosion)
+	if _secondary_explosion_pool.is_empty():
+		return
+	var explosion: CPUParticles3D = _secondary_explosion_pool[_secondary_explosion_pool_index]
+	_secondary_explosion_pool_index = (_secondary_explosion_pool_index + 1) % _secondary_explosion_pool.size()
 	explosion.global_position = position
 
 	explosion.emitting = true
@@ -518,19 +469,16 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 
 	explosion.scale_amount_min = 1.5
 	explosion.scale_amount_max = 3.0
+	explosion.scale_amount_curve = _secondary_explosion_curve
+	explosion.color_ramp = _secondary_explosion_gradient
+	explosion.restart()
 
-	# Orange explosion gradient
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))  # Bright yellow
-	gradient.add_point(0.2, Color(1.0, 0.6, 0.0, 1.0))  # Orange
-	gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))  # Red-orange
-	gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Dark/transparent
-	explosion.color_ramp = gradient
-
-	# Auto-delete
+	_secondary_explosion_token += 1
+	var token := _secondary_explosion_token
+	explosion.set_meta("secondary_explosion_token", token)
 	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(func():
-		if is_instance_valid(explosion):
-			explosion.queue_free()
+		if is_instance_valid(explosion) and explosion.get_meta("secondary_explosion_token", -1) == token:
+			explosion.emitting = false
 	)
 
 func _create_explosion_particles() -> void:
@@ -555,10 +503,11 @@ func _create_explosion_particles() -> void:
 	explosion_particles.initial_velocity_max = 15.0
 	explosion_particles.scale_amount_min = 1.5
 	explosion_particles.scale_amount_max = 3.0
-	explosion_particles.scale_amount_curve = Curve.new()
-	explosion_particles.scale_amount_curve.add_point(Vector2(0, 2.0))
-	explosion_particles.scale_amount_curve.add_point(Vector2(0.3, 1.5))
-	explosion_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+	var explosion_curve := Curve.new()
+	explosion_curve.add_point(Vector2(0, 2.0))
+	explosion_curve.add_point(Vector2(0.3, 1.5))
+	explosion_curve.add_point(Vector2(1, 0.0))
+	explosion_particles.scale_amount_curve = explosion_curve
 	var gradient: Gradient = Gradient.new()
 	gradient.add_point(0.0, Color(1.0, 0.9, 0.35, 1.0))
 	gradient.add_point(0.2, Color(1.0, 0.7, 0.0, 1.0))
@@ -588,10 +537,11 @@ func _create_magma_particles() -> void:
 	magma_particles.initial_velocity_max = 12.0
 	magma_particles.scale_amount_min = 1.2
 	magma_particles.scale_amount_max = 2.0
-	magma_particles.scale_amount_curve = Curve.new()
-	magma_particles.scale_amount_curve.add_point(Vector2(0, 1.0))
-	magma_particles.scale_amount_curve.add_point(Vector2(0.5, 0.7))
-	magma_particles.scale_amount_curve.add_point(Vector2(1, 0.0))
+	var magma_curve := Curve.new()
+	magma_curve.add_point(Vector2(0, 1.0))
+	magma_curve.add_point(Vector2(0.5, 0.7))
+	magma_curve.add_point(Vector2(1, 0.0))
+	magma_particles.scale_amount_curve = magma_curve
 	var magma_gradient: Gradient = Gradient.new()
 	magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))
 	magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))
@@ -675,3 +625,147 @@ func cleanup_indicator() -> void:
 		if radius_indicator.is_inside_tree():
 			radius_indicator.queue_free()
 		radius_indicator = null
+
+func _build_explosion_flash() -> void:
+	if _flash_container:
+		return
+
+	_flash_container = Node3D.new()
+	_flash_container.name = "ExplosionFlash"
+	add_child(_flash_container)
+	_flash_container.visible = false
+
+	var flash_size: float = 3.0
+	var radial_segs: int = 6 if _is_web else 8
+	var ring_count: int = 3 if _is_web else 4
+
+	var outer_flash: MeshInstance3D = MeshInstance3D.new()
+	var outer_sphere: SphereMesh = SphereMesh.new()
+	outer_sphere.radius = flash_size * 2.0
+	outer_sphere.height = flash_size * 4.0
+	outer_sphere.radial_segments = radial_segs
+	outer_sphere.rings = ring_count
+	outer_flash.mesh = outer_sphere
+	_flash_outer_mat = StandardMaterial3D.new()
+	_flash_outer_mat.albedo_color = Color(1.0, 0.4, 0.0, 0.35)
+	_flash_outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_flash_outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_flash_outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = _flash_outer_mat
+	_flash_container.add_child(outer_flash)
+
+	if not _is_web:
+		var middle_flash: MeshInstance3D = MeshInstance3D.new()
+		var middle_sphere: SphereMesh = SphereMesh.new()
+		middle_sphere.radius = flash_size * 1.2
+		middle_sphere.height = flash_size * 2.4
+		middle_sphere.radial_segments = radial_segs
+		middle_sphere.rings = ring_count
+		middle_flash.mesh = middle_sphere
+		_flash_middle_mat = StandardMaterial3D.new()
+		_flash_middle_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.6)
+		_flash_middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_flash_middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		_flash_middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		middle_flash.material_override = _flash_middle_mat
+		_flash_container.add_child(middle_flash)
+
+	var core_flash: MeshInstance3D = MeshInstance3D.new()
+	var core_sphere: SphereMesh = SphereMesh.new()
+	core_sphere.radius = flash_size * 0.5
+	core_sphere.height = flash_size * 1.0
+	core_sphere.radial_segments = 6 if _is_web else 8
+	core_sphere.rings = 3 if _is_web else 4
+	core_flash.mesh = core_sphere
+	_flash_core_mat = StandardMaterial3D.new()
+	_flash_core_mat.albedo_color = Color(1.0, 1.0, 0.9, 0.9)
+	_flash_core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_flash_core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_flash_core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = _flash_core_mat
+	_flash_container.add_child(core_flash)
+
+	_flash_shockwave = MeshInstance3D.new()
+	var torus: TorusMesh = TorusMesh.new()
+	torus.inner_radius = flash_size * 0.8
+	torus.outer_radius = flash_size * 1.2
+	torus.rings = 6 if _is_web else 8
+	torus.ring_segments = 6 if _is_web else 12
+	_flash_shockwave.mesh = torus
+	_flash_shockwave.rotation.x = PI / 2
+	_flash_wave_mat = StandardMaterial3D.new()
+	_flash_wave_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.7)
+	_flash_wave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_flash_wave_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_flash_wave_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_flash_shockwave.material_override = _flash_wave_mat
+	_flash_container.add_child(_flash_shockwave)
+
+func _build_secondary_explosion_pool() -> void:
+	if _secondary_explosion_pool.size() > 0:
+		return
+
+	_secondary_explosion_curve = Curve.new()
+	_secondary_explosion_curve.add_point(Vector2(0, 1.5))
+	_secondary_explosion_curve.add_point(Vector2(0.3, 1.2))
+	_secondary_explosion_curve.add_point(Vector2(1, 0.0))
+
+	_secondary_explosion_gradient = Gradient.new()
+	_secondary_explosion_gradient.add_point(0.0, Color(1.0, 0.9, 0.4, 1.0))
+	_secondary_explosion_gradient.add_point(0.2, Color(1.0, 0.6, 0.0, 1.0))
+	_secondary_explosion_gradient.add_point(0.5, Color(1.0, 0.3, 0.0, 0.8))
+	_secondary_explosion_gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))
+
+	for i in range(SECONDARY_EXPLOSION_POOL_SIZE):
+		var explosion: CPUParticles3D = CPUParticles3D.new()
+		explosion.name = "SecondaryExplosion_%d" % i
+		add_child(explosion)
+		explosion.emitting = false
+		explosion.one_shot = true
+		explosion.explosiveness = 1.0
+		explosion.randomness = 0.4
+		explosion.local_coords = false
+		explosion.mesh = _shared_particle_quad_large
+		explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		explosion.emission_sphere_radius = 0.3
+		explosion.direction = Vector3.UP
+		explosion.spread = 180.0
+		explosion.gravity = Vector3(0, -10.0, 0)
+		explosion.initial_velocity_min = 5.0
+		explosion.initial_velocity_max = 10.0
+		explosion.scale_amount_curve = _secondary_explosion_curve
+		explosion.color_ramp = _secondary_explosion_gradient
+		_secondary_explosion_pool.append(explosion)
+
+func _build_lingering_fire_pool() -> void:
+	if _lingering_fire_pool.size() > 0:
+		return
+
+	_lingering_fire_gradient = Gradient.new()
+	_lingering_fire_gradient.add_point(0.0, Color(1.0, 0.8, 0.2, 0.9))
+	_lingering_fire_gradient.add_point(0.3, Color(1.0, 0.5, 0.0, 0.8))
+	_lingering_fire_gradient.add_point(0.6, Color(0.8, 0.2, 0.0, 0.5))
+	_lingering_fire_gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))
+
+	for i in range(LINGERING_FIRE_POOL_SIZE):
+		var fire: CPUParticles3D = CPUParticles3D.new()
+		fire.name = "LingeringFire_%d" % i
+		add_child(fire)
+		fire.emitting = false
+		fire.amount = 4 if _is_web else 10
+		fire.lifetime = 1.5
+		fire.explosiveness = 0.0
+		fire.randomness = 0.3
+		fire.local_coords = false
+		fire.mesh = _shared_particle_quad_medium
+		fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		fire.emission_sphere_radius = 0.5
+		fire.direction = Vector3.UP
+		fire.spread = 30.0
+		fire.gravity = Vector3(0, 1.0, 0)
+		fire.initial_velocity_min = 1.0
+		fire.initial_velocity_max = 3.0
+		fire.scale_amount_min = 1.5
+		fire.scale_amount_max = 2.5
+		fire.color_ramp = _lingering_fire_gradient
+		_lingering_fire_pool.append(fire)

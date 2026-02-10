@@ -19,6 +19,22 @@ var reticle: MeshInstance3D = null
 var reticle_target: Node3D = null
 var _target_scan_timer: float = 0.0  # Throttle find_nearest_player() calls
 
+# Effect pooling
+const MUZZLE_FLASH_POOL_SIZE: int = 6
+const EXPLOSION_POOL_SIZE: int = 8
+var _muzzle_flash_pool: Array[CPUParticles3D] = []
+var _muzzle_flash_pool_index: int = 0
+var _muzzle_flash_token: int = 0
+var _muzzle_flash_curve: Curve = null
+var _muzzle_flash_gradient: Gradient = null
+var _explosion_pool: Array[CPUParticles3D] = []
+var _explosion_pool_index: int = 0
+var _explosion_token: int = 0
+var _explosion_curve: Curve = null
+var _explosion_gradient: Gradient = null
+var _trail_curve: Curve = null
+var _trail_gradient: Gradient = null
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Cannon"
@@ -30,6 +46,10 @@ func _ready() -> void:
 	# Create reticle for target lock visualization (human player only)
 	if not _is_bot_owner():
 		create_reticle()
+
+	_build_trail_resources()
+	_build_muzzle_flash_pool()
+	_build_explosion_pool()
 
 func drop() -> void:
 	"""Override drop to clean up reticle"""
@@ -416,19 +436,10 @@ func add_projectile_trail(projectile: Node3D) -> void:
 	# Size over lifetime - grow then shrink (smoke effect)
 	trail.scale_amount_min = 2.0
 	trail.scale_amount_max = 3.0
-	trail.scale_amount_curve = Curve.new()
-	trail.scale_amount_curve.add_point(Vector2(0, 0.5))
-	trail.scale_amount_curve.add_point(Vector2(0.3, 1.2))  # Grow
-	trail.scale_amount_curve.add_point(Vector2(0.7, 0.8))
-	trail.scale_amount_curve.add_point(Vector2(1, 0.0))
+	trail.scale_amount_curve = _trail_curve
 
 	# Color - lime green to dark trail
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 1.0))  # Bright lime green
-	gradient.add_point(0.3, Color(0.5, 1.0, 0.2, 0.8))  # Green
-	gradient.add_point(0.6, Color(0.3, 0.6, 0.2, 0.5))  # Dark green
-	gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))  # Dark/transparent
-	trail.color_ramp = gradient
+	trail.color_ramp = _trail_gradient
 
 func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	"""Spawn large muzzle flash particle effect at cannon barrel"""
@@ -439,10 +450,10 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	if _is_web and _is_bot_owner():
 		return
 
-	# Create muzzle flash particles - much larger and more dramatic than gun
-	var muzzle_flash: CPUParticles3D = CPUParticles3D.new()
-	muzzle_flash.name = "MuzzleFlash"
-	player.get_parent().add_child(muzzle_flash)
+	if _muzzle_flash_pool.is_empty():
+		return
+	var muzzle_flash: CPUParticles3D = _muzzle_flash_pool[_muzzle_flash_pool_index]
+	_muzzle_flash_pool_index = (_muzzle_flash_pool_index + 1) % _muzzle_flash_pool.size()
 	muzzle_flash.global_position = position
 
 	# Configure muzzle flash - bigger burst than gun
@@ -471,31 +482,27 @@ func spawn_muzzle_flash(position: Vector3, direction: Vector3) -> void:
 	# Size over lifetime - bigger flash
 	muzzle_flash.scale_amount_min = 3.0  # Larger than gun (was 2.0)
 	muzzle_flash.scale_amount_max = 5.0  # Larger than gun (was 3.5)
-	muzzle_flash.scale_amount_curve = Curve.new()
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0, 2.0))
-	muzzle_flash.scale_amount_curve.add_point(Vector2(0.3, 1.2))
-	muzzle_flash.scale_amount_curve.add_point(Vector2(1, 0.0))
+	muzzle_flash.scale_amount_curve = _muzzle_flash_curve
+	muzzle_flash.color_ramp = _muzzle_flash_gradient
+	muzzle_flash.restart()
 
-	# Color - bright lime green flash
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.6, 0.95, 0.5, 1.0))  # Bright lime-green (no white)
-	gradient.add_point(0.3, Color(0.6, 1.0, 0.3, 0.9))  # Lime green
-	gradient.add_point(0.6, Color(0.4, 0.9, 0.2, 0.6))  # Green
-	gradient.add_point(1.0, Color(0.1, 0.3, 0.1, 0.0))  # Dark/transparent
-	muzzle_flash.color_ramp = gradient
-
-	# Auto-delete after lifetime
-	get_tree().create_timer(muzzle_flash.lifetime + 0.5).timeout.connect(muzzle_flash.queue_free)
+	_muzzle_flash_token += 1
+	var token := _muzzle_flash_token
+	muzzle_flash.set_meta("muzzle_flash_token", token)
+	get_tree().create_timer(muzzle_flash.lifetime + 0.5).timeout.connect(func():
+		if is_instance_valid(muzzle_flash) and muzzle_flash.get_meta("muzzle_flash_token", -1) == token:
+			muzzle_flash.emitting = false
+	)
 
 func spawn_explosion_effect(position: Vector3) -> void:
 	"""Spawn explosion particle effect at impact point"""
 	if not player or not player.get_parent():
 		return
 
-	# Create explosion particles
-	var explosion: CPUParticles3D = CPUParticles3D.new()
-	explosion.name = "CannonExplosion"
-	player.get_parent().add_child(explosion)
+	if _explosion_pool.is_empty():
+		return
+	var explosion: CPUParticles3D = _explosion_pool[_explosion_pool_index]
+	_explosion_pool_index = (_explosion_pool_index + 1) % _explosion_pool.size()
 	explosion.global_position = position
 
 	# Configure explosion - dramatic burst
@@ -524,23 +531,17 @@ func spawn_explosion_effect(position: Vector3) -> void:
 	# Size over lifetime - expand and fade
 	explosion.scale_amount_min = 2.0
 	explosion.scale_amount_max = 4.0
-	explosion.scale_amount_curve = Curve.new()
-	explosion.scale_amount_curve.add_point(Vector2(0, 1.5))
-	explosion.scale_amount_curve.add_point(Vector2(0.2, 1.8))
-	explosion.scale_amount_curve.add_point(Vector2(0.6, 1.0))
-	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
+	explosion.scale_amount_curve = _explosion_curve
+	explosion.color_ramp = _explosion_gradient
+	explosion.restart()
 
-	# Color - lime green explosion
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.65, 1.0, 0.7, 1.0))  # Bright green center (no white)
-	gradient.add_point(0.2, Color(0.7, 1.0, 0.3, 1.0))  # Bright lime green
-	gradient.add_point(0.5, Color(0.4, 0.9, 0.2, 0.7))  # Green
-	gradient.add_point(0.8, Color(0.2, 0.4, 0.2, 0.3))  # Dark green smoke
-	gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))  # Transparent
-	explosion.color_ramp = gradient
-
-	# Auto-delete after lifetime
-	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(explosion.queue_free)
+	_explosion_token += 1
+	var token := _explosion_token
+	explosion.set_meta("cannon_explosion_token", token)
+	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(func():
+		if is_instance_valid(explosion) and explosion.get_meta("cannon_explosion_token", -1) == token:
+			explosion.emitting = false
+	)
 
 func create_reticle() -> void:
 	"""Create a 3D reticle that follows the locked target"""
@@ -612,6 +613,82 @@ func create_reticle() -> void:
 
 	# Initially hidden (will show when target is locked)
 	reticle.visible = false
+
+func _build_trail_resources() -> void:
+	if _trail_curve:
+		return
+	_trail_curve = Curve.new()
+	_trail_curve.add_point(Vector2(0, 0.5))
+	_trail_curve.add_point(Vector2(0.3, 1.2))
+	_trail_curve.add_point(Vector2(0.7, 0.8))
+	_trail_curve.add_point(Vector2(1, 0.0))
+	_trail_gradient = Gradient.new()
+	_trail_gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 1.0))
+	_trail_gradient.add_point(0.3, Color(0.5, 1.0, 0.2, 0.8))
+	_trail_gradient.add_point(0.6, Color(0.3, 0.6, 0.2, 0.5))
+	_trail_gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))
+
+func _build_muzzle_flash_pool() -> void:
+	if _muzzle_flash_pool.size() > 0:
+		return
+	_muzzle_flash_curve = Curve.new()
+	_muzzle_flash_curve.add_point(Vector2(0, 2.0))
+	_muzzle_flash_curve.add_point(Vector2(0.3, 1.2))
+	_muzzle_flash_curve.add_point(Vector2(1, 0.0))
+	_muzzle_flash_gradient = Gradient.new()
+	_muzzle_flash_gradient.add_point(0.0, Color(0.6, 0.95, 0.5, 1.0))
+	_muzzle_flash_gradient.add_point(0.3, Color(0.6, 1.0, 0.3, 0.9))
+	_muzzle_flash_gradient.add_point(0.6, Color(0.4, 0.9, 0.2, 0.6))
+	_muzzle_flash_gradient.add_point(1.0, Color(0.1, 0.3, 0.1, 0.0))
+	for i in range(MUZZLE_FLASH_POOL_SIZE):
+		var muzzle_flash: CPUParticles3D = CPUParticles3D.new()
+		muzzle_flash.name = "MuzzleFlash_%d" % i
+		add_child(muzzle_flash)
+		muzzle_flash.emitting = false
+		muzzle_flash.one_shot = true
+		muzzle_flash.explosiveness = 1.0
+		muzzle_flash.randomness = 0.4
+		muzzle_flash.local_coords = false
+		muzzle_flash.mesh = _shared_particle_quad_xlarge
+		muzzle_flash.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		muzzle_flash.emission_sphere_radius = 0.4
+		muzzle_flash.gravity = Vector3.ZERO
+		muzzle_flash.scale_amount_curve = _muzzle_flash_curve
+		muzzle_flash.color_ramp = _muzzle_flash_gradient
+		_muzzle_flash_pool.append(muzzle_flash)
+
+func _build_explosion_pool() -> void:
+	if _explosion_pool.size() > 0:
+		return
+	_explosion_curve = Curve.new()
+	_explosion_curve.add_point(Vector2(0, 1.5))
+	_explosion_curve.add_point(Vector2(0.2, 1.8))
+	_explosion_curve.add_point(Vector2(0.6, 1.0))
+	_explosion_curve.add_point(Vector2(1, 0.0))
+	_explosion_gradient = Gradient.new()
+	_explosion_gradient.add_point(0.0, Color(0.65, 1.0, 0.7, 1.0))
+	_explosion_gradient.add_point(0.2, Color(0.7, 1.0, 0.3, 1.0))
+	_explosion_gradient.add_point(0.5, Color(0.4, 0.9, 0.2, 0.7))
+	_explosion_gradient.add_point(0.8, Color(0.2, 0.4, 0.2, 0.3))
+	_explosion_gradient.add_point(1.0, Color(0.1, 0.2, 0.1, 0.0))
+	for i in range(EXPLOSION_POOL_SIZE):
+		var explosion: CPUParticles3D = CPUParticles3D.new()
+		explosion.name = "CannonExplosion_%d" % i
+		add_child(explosion)
+		explosion.emitting = false
+		explosion.one_shot = true
+		explosion.explosiveness = 1.0
+		explosion.randomness = 0.4
+		explosion.local_coords = false
+		explosion.mesh = _shared_particle_quad_large
+		explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		explosion.emission_sphere_radius = 0.3
+		explosion.direction = Vector3.ZERO
+		explosion.spread = 180.0
+		explosion.gravity = Vector3(0, -5.0, 0)
+		explosion.scale_amount_curve = _explosion_curve
+		explosion.color_ramp = _explosion_gradient
+		_explosion_pool.append(explosion)
 
 func _process(delta: float) -> void:
 	super._process(delta)
