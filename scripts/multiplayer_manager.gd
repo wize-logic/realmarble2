@@ -214,7 +214,7 @@ func leave_game() -> void:
 
 func set_player_ready(ready: bool) -> void:
 	"""Set local player ready status"""
-	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null:
+	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		return
 
 	var peer_id: int = multiplayer.get_unique_id()
@@ -478,7 +478,7 @@ func _on_connected_to_server() -> void:
 	"""Called when successfully connected to server as client"""
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected to server!")
 
-	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null:
+	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected callback received after peer teardown - ignoring")
 		return
 
@@ -557,7 +557,7 @@ func attempt_host_migration() -> void:
 	peer_ids.sort()
 
 	var new_host_id: int = peer_ids[0]
-	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null:
+	if not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Cannot migrate host without an active multiplayer peer")
 		return
 
