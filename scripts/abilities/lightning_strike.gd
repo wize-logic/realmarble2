@@ -13,6 +13,17 @@ extends Ability
 # Track strike targets
 var pending_strikes: Array = []
 
+# PERF: Shared lightning resources to avoid runtime allocations and shader recompiles
+static var _shared_lightning_initialized: bool = false
+static var _shared_warning_mesh: CylinderMesh = null
+static var _shared_bolt_mesh: CylinderMesh = null
+static var _shared_chain_mesh: CylinderMesh = null
+static var _shared_warning_material: StandardMaterial3D = null
+static var _shared_materials: Dictionary = {}
+static var _shared_warning_gradient: Gradient = null
+static var _shared_impact_gradient: Gradient = null
+static var _shared_reticle_gradient: Gradient = null
+
 # Reticle system for target lock visualization
 var reticle: MeshInstance3D = null
 var reticle_target: Node3D = null
@@ -23,6 +34,7 @@ var warning_indicator: MeshInstance3D = null
 
 func _ready() -> void:
 	super._ready()
+	_ensure_shared_lightning_resources()
 	ability_name = "Lightning"
 	ability_color = Color(0.4, 0.8, 1.0)  # Electric cyan-blue
 	cooldown_time = fire_rate
@@ -32,6 +44,65 @@ func _ready() -> void:
 	# Create reticle for target lock visualization (human player only)
 	if not _is_bot_owner():
 		create_reticle()
+
+static func _ensure_shared_lightning_resources() -> void:
+	if _shared_lightning_initialized:
+		return
+	_shared_lightning_initialized = true
+
+	_shared_warning_mesh = CylinderMesh.new()
+	_shared_warning_mesh.top_radius = 1.0
+	_shared_warning_mesh.bottom_radius = 1.0
+	_shared_warning_mesh.height = 0.1
+
+	_shared_bolt_mesh = CylinderMesh.new()
+	_shared_bolt_mesh.top_radius = 1.0
+	_shared_bolt_mesh.bottom_radius = 1.0
+	_shared_bolt_mesh.height = 1.0
+	_shared_bolt_mesh.radial_segments = 4 if OS.has_feature("web") else 8
+
+	_shared_chain_mesh = CylinderMesh.new()
+	_shared_chain_mesh.top_radius = 1.0
+	_shared_chain_mesh.bottom_radius = 1.0
+	_shared_chain_mesh.height = 1.0
+	_shared_chain_mesh.radial_segments = 3 if OS.has_feature("web") else 6
+
+	_shared_warning_material = StandardMaterial3D.new()
+	_shared_warning_material.albedo_color = Color(0.4, 0.8, 1.0, 0.5)  # Electric blue
+	_shared_warning_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_warning_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_warning_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_warning_material.disable_receive_shadows = true
+
+	_shared_warning_gradient = Gradient.new()
+	_shared_warning_gradient.add_point(0.0, Color(0.6, 0.9, 1.0, 1.0))  # Bright cyan
+	_shared_warning_gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.8))  # Electric blue
+	_shared_warning_gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
+
+	_shared_impact_gradient = Gradient.new()
+	_shared_impact_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
+	_shared_impact_gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))  # Light blue
+	_shared_impact_gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
+
+	_shared_reticle_gradient = Gradient.new()
+	_shared_reticle_gradient.add_point(0.0, Color(0.8, 1.0, 1.0, 1.0))  # Bright cyan
+	_shared_reticle_gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.7))  # Electric blue
+	_shared_reticle_gradient.add_point(1.0, Color(0.2, 0.5, 0.8, 0.0))  # Fade
+
+static func _get_shared_material(color: Color, transparent: bool) -> StandardMaterial3D:
+	var key := "%s_%s" % [color.to_html(), str(transparent)]
+	if _shared_materials.has(key):
+		return _shared_materials[key]
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.disable_receive_shadows = true
+	if transparent:
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_materials[key] = mat
+	return mat
 
 func drop() -> void:
 	"""Override drop to clean up reticle"""
@@ -337,24 +408,13 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	var indicator: MeshInstance3D = MeshInstance3D.new()
 	indicator.name = "LightningWarning"
 
-	# Create a disc/cylinder mesh for the warning
-	var cylinder: CylinderMesh = CylinderMesh.new()
-	cylinder.top_radius = 2.5 * radius_scale
-	cylinder.bottom_radius = 2.5 * radius_scale
-	cylinder.height = 0.1
-	indicator.mesh = cylinder
-
-	# Pulsing electric material
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.4, 0.8, 1.0, 0.5)  # Electric blue
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	indicator.material_override = mat
+	# Shared mesh/material for warning disc
+	indicator.mesh = _shared_warning_mesh
+	indicator.material_override = _shared_warning_material
 
 	player.get_parent().add_child(indicator)
 	indicator.global_position = position + Vector3.UP * 0.1
+	indicator.scale = Vector3(2.5 * radius_scale, 1.0, 2.5 * radius_scale)
 
 	# Add warning particles
 	var warning_particles: CPUParticles3D = CPUParticles3D.new()
@@ -383,26 +443,14 @@ func spawn_warning_indicator(position: Vector3, level: int = 0) -> void:
 	warning_particles.initial_velocity_min = 2.0
 	warning_particles.initial_velocity_max = 4.0
 
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.6, 0.9, 1.0, 1.0))  # Bright cyan
-	gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.8))  # Electric blue
-	gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
-	warning_particles.color_ramp = gradient
+	warning_particles.color_ramp = _shared_warning_gradient
 
 	# Remove after strike
 	get_tree().create_timer(strike_delay + 0.1).timeout.connect(indicator.queue_free)
 
 func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color, _emission_energy: float, transparent: bool) -> void:
 	"""Create a single layer of the lightning bolt (GL Compatibility friendly - no emission)"""
-	# Share one material across all segments in this layer (was creating one per segment)
-	var shared_mat: StandardMaterial3D = StandardMaterial3D.new()
-	shared_mat.albedo_color = color
-	shared_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if transparent:
-		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
-	var radial_segs: int = 4 if OS.has_feature("web") else 8
+	var shared_mat: StandardMaterial3D = _get_shared_material(color, transparent)
 
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
@@ -411,15 +459,13 @@ func create_bolt_layer(container: Node3D, path: Array[Vector3], radius: float, c
 		var start_pos: Vector3 = path[i]
 		var end_pos: Vector3 = path[i + 1]
 
-		# Create cylinder mesh for segment
-		var cylinder: CylinderMesh = CylinderMesh.new()
+		# Shared mesh, scale per segment
 		var taper: float = float(i) / float(path.size())  # Taper towards top
-		cylinder.top_radius = radius * (1.0 - taper * 0.3)
-		cylinder.bottom_radius = radius * (1.0 - taper * 0.2)
-		cylinder.height = start_pos.distance_to(end_pos)
-		cylinder.radial_segments = radial_segs
-		segment.mesh = cylinder
+		var segment_radius: float = radius * (1.0 - taper * 0.25)
+		var segment_height: float = start_pos.distance_to(end_pos)
+		segment.mesh = _shared_bolt_mesh
 		segment.material_override = shared_mat
+		segment.scale = Vector3(segment_radius, segment_height, segment_radius)
 
 		container.add_child(segment)
 
@@ -513,11 +559,7 @@ func spawn_lightning_bolt(position: Vector3, level: int = 0) -> void:
 	impact_particles.scale_amount_min = 1.5
 	impact_particles.scale_amount_max = 3.0
 
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
-	gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))  # Light blue
-	gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
-	impact_particles.color_ramp = gradient
+	impact_particles.color_ramp = _shared_impact_gradient
 
 	# Play thunder sound
 	if ability_sound:
@@ -629,15 +671,7 @@ func spawn_chain_arc(from_pos: Vector3, to_pos: Vector3) -> void:
 
 func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, color: Color) -> void:
 	"""Create a single layer for chain lightning (GL Compatibility friendly)"""
-	# PERF: Share one material across all segments in this layer (was creating one per segment)
-	var shared_mat: StandardMaterial3D = StandardMaterial3D.new()
-	shared_mat.albedo_color = color
-	shared_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if color.a < 1.0:
-		shared_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		shared_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-
-	var radial_segs: int = 3 if _is_web else 6  # PERF: Fewer segments on web
+	var shared_mat: StandardMaterial3D = _get_shared_material(color, color.a < 1.0)
 
 	for i in range(path.size() - 1):
 		var segment: MeshInstance3D = MeshInstance3D.new()
@@ -646,13 +680,10 @@ func create_chain_layer(container: Node3D, path: Array[Vector3], radius: float, 
 		var start_pos: Vector3 = path[i]
 		var end_pos: Vector3 = path[i + 1]
 
-		var cylinder: CylinderMesh = CylinderMesh.new()
-		cylinder.top_radius = radius
-		cylinder.bottom_radius = radius
-		cylinder.height = start_pos.distance_to(end_pos)
-		cylinder.radial_segments = radial_segs
-		segment.mesh = cylinder
+		var segment_height: float = start_pos.distance_to(end_pos)
+		segment.mesh = _shared_chain_mesh
 		segment.material_override = shared_mat
+		segment.scale = Vector3(radius, segment_height, radius)
 
 		container.add_child(segment)
 
@@ -716,11 +747,7 @@ func create_reticle() -> void:
 	particles.scale_amount_min = 1.0
 	particles.scale_amount_max = 1.5
 
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.8, 1.0, 1.0, 1.0))  # Bright cyan
-	gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.7))  # Electric blue
-	gradient.add_point(1.0, Color(0.2, 0.5, 0.8, 0.0))  # Fade
-	particles.color_ramp = gradient
+	particles.color_ramp = _shared_reticle_gradient
 
 	reticle.visible = false
 
