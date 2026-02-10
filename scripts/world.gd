@@ -24,6 +24,11 @@ const CustomizePanelScript = preload("res://scripts/ui/customize_panel.gd")
 const MarbleMaterialManagerScript = preload("res://scripts/marble_material_manager.gd")
 const BeamSpawnEffectScript = preload("res://scripts/beam_spawn_effect.gd")
 const AbilityBaseScript = preload("res://scripts/abilities/ability_base.gd")
+const DashAttackScene = preload("res://abilities/dash_attack.tscn")
+const ExplosionScene = preload("res://abilities/explosion.tscn")
+const CannonScene = preload("res://abilities/cannon.tscn")
+const SwordScene = preload("res://abilities/sword.tscn")
+const LightningStrikeScene = preload("res://abilities/lightning_strike.tscn")
 var marble_material_manager = MarbleMaterialManagerScript.new()
 
 # Countdown UI (created dynamically)
@@ -196,10 +201,32 @@ func _precache_visual_resources() -> void:
 		marble_material_manager.precache_shader_materials()
 	AbilityBaseScript._ensure_shared_resources()
 	BeamSpawnEffectScript.precache_resources()
+	_precache_ability_effects()
 	# PERF: Force WebGL2 to compile all shader variants NOW instead of on first ability use.
 	# Without this, the first ability activation freezes for ~1s as 5+ shader variants compile.
 	if MaterialPool:
 		MaterialPool.warm_web_shader_variants()
+
+func _precache_ability_effects() -> void:
+	"""Instantiate key abilities once to warm effect pools/materials."""
+	var warmup_root := Node.new()
+	warmup_root.name = "AbilityWarmup"
+	add_child(warmup_root)
+
+	var scenes: Array[PackedScene] = [
+		DashAttackScene,
+		ExplosionScene,
+		CannonScene,
+		SwordScene,
+		LightningStrikeScene,
+	]
+
+	for scene in scenes:
+		if scene:
+			var instance := scene.instantiate()
+			warmup_root.add_child(instance)
+
+	get_tree().create_timer(0.2).timeout.connect(warmup_root.queue_free)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# HTML5: Resume AudioContext on first user interaction (browser policy)

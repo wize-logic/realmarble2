@@ -28,6 +28,21 @@ var direction_indicator: MeshInstance3D = null
 var afterimage_timer: float = 0.0
 const AFTERIMAGE_INTERVAL: float = 0.05
 
+const DASH_EXPLOSION_POOL_SIZE: int = 4
+const AFTERIMAGE_POOL_SIZE: int = 8
+var _dash_explosion_pool: Array[CPUParticles3D] = []
+var _dash_explosion_pool_index: int = 0
+var _dash_explosion_token: int = 0
+var _dash_explosion_curve: Curve = null
+var _dash_explosion_gradient: Gradient = null
+var _dash_flash_container: Node3D = null
+var _dash_flash_outer_mat: StandardMaterial3D = null
+var _dash_flash_core_mat: StandardMaterial3D = null
+var _dash_flash_tween: Tween = null
+var _afterimage_pool: Array[MeshInstance3D] = []
+var _afterimage_pool_index: int = 0
+var _afterimage_tweens: Dictionary = {}
+
 func _ready() -> void:
 	super._ready()
 	ability_name = "Dash Attack"
@@ -103,6 +118,10 @@ func _ready() -> void:
 	# Create direction indicator for dash targeting (human player only)
 	if not _is_bot_owner():
 		create_direction_indicator()
+
+	_build_dash_flash()
+	_build_dash_explosion_pool()
+	_build_afterimage_pool()
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -350,64 +369,10 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	# Scale effect with level
 	var scale_mult: float = 0.9 + ((level - 1) * 0.2)  # Level 1: 0.9, Level 2: 1.1, Level 3: 1.3
 
-	# Create flash container (GL Compatibility friendly)
-	var flash_container: Node3D = Node3D.new()
-	flash_container.name = "DashFlash"
-	player.get_parent().add_child(flash_container)
-	flash_container.global_position = position
+	_play_dash_flash(position, scale_mult)
 
-	var flash_size: float = 1.5 * scale_mult
-	# PERF: Fewer segments on web
-	var radial_segs: int = 6 if _is_web else 12
-	var ring_count: int = 3 if _is_web else 6
-
-	# Layer 1: Outer magenta glow
-	var outer_flash: MeshInstance3D = MeshInstance3D.new()
-	var outer_sphere: SphereMesh = SphereMesh.new()
-	outer_sphere.radius = flash_size * 2.0
-	outer_sphere.height = flash_size * 4.0
-	outer_sphere.radial_segments = radial_segs
-	outer_sphere.rings = ring_count
-	outer_flash.mesh = outer_sphere
-
-	var outer_mat: StandardMaterial3D = StandardMaterial3D.new()
-	outer_mat.albedo_color = Color(0.8, 0.2, 0.6, 0.3)
-	outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	outer_flash.material_override = outer_mat
-	flash_container.add_child(outer_flash)
-
-	# Layer 2: Bright pink core
-	var core_flash: MeshInstance3D = MeshInstance3D.new()
-	var core_sphere: SphereMesh = SphereMesh.new()
-	core_sphere.radius = flash_size * 0.8
-	core_sphere.height = flash_size * 1.6
-	core_sphere.radial_segments = radial_segs
-	core_sphere.rings = ring_count
-	core_flash.mesh = core_sphere
-
-	var core_mat: StandardMaterial3D = StandardMaterial3D.new()
-	core_mat.albedo_color = Color(1.0, 0.7, 0.95, 0.8)
-	core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_flash.material_override = core_mat
-	flash_container.add_child(core_flash)
-
-	# Animate flash fading
-	var flash_tween: Tween = get_tree().create_tween()
-	flash_tween.set_parallel(true)
-	flash_tween.tween_property(outer_mat, "albedo_color:a", 0.0, 0.25)
-	flash_tween.tween_property(core_mat, "albedo_color:a", 0.0, 0.15)
-	flash_tween.set_parallel(false)
-	flash_tween.tween_interval(0.25)
-	flash_tween.tween_callback(flash_container.queue_free)
-
-	# Create explosion particles
-	var explosion: CPUParticles3D = CPUParticles3D.new()
-	explosion.name = "DashExplosion"
-	player.get_parent().add_child(explosion)
+	var explosion: CPUParticles3D = _dash_explosion_pool[_dash_explosion_pool_index]
+	_dash_explosion_pool_index = (_dash_explosion_pool_index + 1) % _dash_explosion_pool.size()
 	explosion.global_position = position
 
 	# Configure explosion particles
@@ -437,58 +402,44 @@ func spawn_dash_explosion(position: Vector3, level: int) -> void:
 	# Size over lifetime
 	explosion.scale_amount_min = 2.0 * scale_mult
 	explosion.scale_amount_max = 4.0 * scale_mult
-	explosion.scale_amount_curve = Curve.new()
-	explosion.scale_amount_curve.add_point(Vector2(0, 1.5))
-	explosion.scale_amount_curve.add_point(Vector2(0.3, 1.2))
-	explosion.scale_amount_curve.add_point(Vector2(1, 0.0))
+	explosion.scale_amount_curve = _dash_explosion_curve
+	explosion.color_ramp = _dash_explosion_gradient
+	explosion.restart()
 
-	# Color - magenta explosion matching dash color
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.6, 1.0, 1.0))  # Bright pink-magenta
-	gradient.add_point(0.2, Color(1.0, 0.3, 0.8, 1.0))  # Hot pink
-	gradient.add_point(0.5, Color(0.8, 0.1, 0.6, 0.7))  # Deep magenta
-	gradient.add_point(1.0, Color(0.3, 0.0, 0.2, 0.0))  # Dark/transparent
-	explosion.color_ramp = gradient
-
-	# Auto-delete after lifetime
-	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(explosion.queue_free)
+	_dash_explosion_token += 1
+	var token := _dash_explosion_token
+	explosion.set_meta("dash_explosion_token", token)
+	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(func():
+		if is_instance_valid(explosion) and explosion.get_meta("dash_explosion_token", -1) == token:
+			explosion.emitting = false
+	)
 
 func spawn_afterimage(position: Vector3) -> void:
 	"""Spawn a ghostly afterimage at the given position (level 3 effect)"""
 	if not player or not player.get_parent():
 		return
 
-	# Create afterimage mesh
-	var afterimage: MeshInstance3D = MeshInstance3D.new()
-	afterimage.name = "DashAfterimage"
-
-	# Create sphere mesh matching player size
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 0.5
-	sphere.height = 1.0
-	sphere.radial_segments = 8 if _is_web else 16  # PERF: Reduced on web
-	sphere.rings = 4 if _is_web else 8
-	afterimage.mesh = sphere
-
-	# Create ghostly magenta material
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.3, 0.8, 0.6)  # Magenta, semi-transparent
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	afterimage.material_override = mat
-
-	player.get_parent().add_child(afterimage)
+	var afterimage: MeshInstance3D = _afterimage_pool[_afterimage_pool_index]
+	_afterimage_pool_index = (_afterimage_pool_index + 1) % _afterimage_pool.size()
 	afterimage.global_position = position
+	afterimage.scale = Vector3.ONE
+	afterimage.visible = true
 
 	# Fade out and shrink the afterimage
+	var mat := afterimage.material_override as StandardMaterial3D
+	if mat:
+		mat.albedo_color.a = 0.6
+	if _afterimage_tweens.has(afterimage) and is_instance_valid(_afterimage_tweens[afterimage]):
+		_afterimage_tweens[afterimage].kill()
 	var tween: Tween = get_tree().create_tween()
+	_afterimage_tweens[afterimage] = tween
 	tween.set_parallel(true)
 	tween.tween_property(mat, "albedo_color:a", 0.0, 0.3)
 	tween.tween_property(afterimage, "scale", Vector3(0.3, 0.3, 0.3), 0.3)
 	tween.set_parallel(false)
-	tween.tween_callback(afterimage.queue_free)
+	tween.tween_callback(func():
+		afterimage.visible = false
+	)
 
 func create_direction_indicator() -> void:
 	"""Create a sphere indicator that shows the dash hitbox area while charging"""
@@ -551,6 +502,131 @@ func create_direction_indicator() -> void:
 	gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))  # Very subtle
 	gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))  # Transparent
 	sphere_particles.color_ramp = gradient
+
+func _build_dash_flash() -> void:
+	if _dash_flash_container:
+		return
+
+	_dash_flash_container = Node3D.new()
+	_dash_flash_container.name = "DashFlash"
+	add_child(_dash_flash_container)
+	_dash_flash_container.visible = false
+
+	var flash_size: float = 1.5
+	var radial_segs: int = 6 if _is_web else 12
+	var ring_count: int = 3 if _is_web else 6
+
+	var outer_flash: MeshInstance3D = MeshInstance3D.new()
+	var outer_sphere: SphereMesh = SphereMesh.new()
+	outer_sphere.radius = flash_size * 2.0
+	outer_sphere.height = flash_size * 4.0
+	outer_sphere.radial_segments = radial_segs
+	outer_sphere.rings = ring_count
+	outer_flash.mesh = outer_sphere
+	_dash_flash_outer_mat = StandardMaterial3D.new()
+	_dash_flash_outer_mat.albedo_color = Color(0.8, 0.2, 0.6, 0.3)
+	_dash_flash_outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_dash_flash_outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_dash_flash_outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outer_flash.material_override = _dash_flash_outer_mat
+	_dash_flash_container.add_child(outer_flash)
+
+	var core_flash: MeshInstance3D = MeshInstance3D.new()
+	var core_sphere: SphereMesh = SphereMesh.new()
+	core_sphere.radius = flash_size * 0.8
+	core_sphere.height = flash_size * 1.6
+	core_sphere.radial_segments = radial_segs
+	core_sphere.rings = ring_count
+	core_flash.mesh = core_sphere
+	_dash_flash_core_mat = StandardMaterial3D.new()
+	_dash_flash_core_mat.albedo_color = Color(1.0, 0.7, 0.95, 0.8)
+	_dash_flash_core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_dash_flash_core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_dash_flash_core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_flash.material_override = _dash_flash_core_mat
+	_dash_flash_container.add_child(core_flash)
+
+func _play_dash_flash(position: Vector3, scale_mult: float) -> void:
+	if not _dash_flash_container:
+		return
+	_dash_flash_container.global_position = position
+	_dash_flash_container.scale = Vector3.ONE * scale_mult
+	_dash_flash_container.visible = true
+
+	if _dash_flash_outer_mat:
+		_dash_flash_outer_mat.albedo_color.a = 0.3
+	if _dash_flash_core_mat:
+		_dash_flash_core_mat.albedo_color.a = 0.8
+	if _dash_flash_tween and is_instance_valid(_dash_flash_tween):
+		_dash_flash_tween.kill()
+	_dash_flash_tween = get_tree().create_tween()
+	_dash_flash_tween.set_parallel(true)
+	_dash_flash_tween.tween_property(_dash_flash_outer_mat, "albedo_color:a", 0.0, 0.25)
+	_dash_flash_tween.tween_property(_dash_flash_core_mat, "albedo_color:a", 0.0, 0.15)
+	_dash_flash_tween.set_parallel(false)
+	_dash_flash_tween.tween_interval(0.25)
+	_dash_flash_tween.tween_callback(func():
+		if _dash_flash_container:
+			_dash_flash_container.visible = false
+	)
+
+func _build_dash_explosion_pool() -> void:
+	if _dash_explosion_pool.size() > 0:
+		return
+
+	_dash_explosion_curve = Curve.new()
+	_dash_explosion_curve.add_point(Vector2(0, 1.5))
+	_dash_explosion_curve.add_point(Vector2(0.3, 1.2))
+	_dash_explosion_curve.add_point(Vector2(1, 0.0))
+
+	_dash_explosion_gradient = Gradient.new()
+	_dash_explosion_gradient.add_point(0.0, Color(1.0, 0.6, 1.0, 1.0))
+	_dash_explosion_gradient.add_point(0.2, Color(1.0, 0.3, 0.8, 1.0))
+	_dash_explosion_gradient.add_point(0.5, Color(0.8, 0.1, 0.6, 0.7))
+	_dash_explosion_gradient.add_point(1.0, Color(0.3, 0.0, 0.2, 0.0))
+
+	for i in range(DASH_EXPLOSION_POOL_SIZE):
+		var explosion: CPUParticles3D = CPUParticles3D.new()
+		explosion.name = "DashExplosion_%d" % i
+		add_child(explosion)
+		explosion.emitting = false
+		explosion.one_shot = true
+		explosion.explosiveness = 1.0
+		explosion.randomness = 0.4
+		explosion.local_coords = false
+		explosion.mesh = _shared_particle_quad_large
+		explosion.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		explosion.direction = Vector3.ZERO
+		explosion.spread = 180.0
+		explosion.gravity = Vector3(0, -3.0, 0)
+		explosion.scale_amount_curve = _dash_explosion_curve
+		explosion.color_ramp = _dash_explosion_gradient
+		_dash_explosion_pool.append(explosion)
+
+func _build_afterimage_pool() -> void:
+	if _afterimage_pool.size() > 0:
+		return
+
+	var sphere: SphereMesh = SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	sphere.radial_segments = 8 if _is_web else 16
+	sphere.rings = 4 if _is_web else 8
+
+	for i in range(AFTERIMAGE_POOL_SIZE):
+		var afterimage: MeshInstance3D = MeshInstance3D.new()
+		afterimage.name = "DashAfterimage_%d" % i
+		afterimage.mesh = sphere
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.3, 0.8, 0.6)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.disable_receive_shadows = true
+		afterimage.material_override = mat
+		afterimage.visible = false
+		add_child(afterimage)
+		_afterimage_pool.append(afterimage)
 
 	# Initially hidden (will show when charging)
 	direction_indicator.visible = false
