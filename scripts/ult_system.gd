@@ -268,7 +268,7 @@ func _on_hitbox_body_entered(body: Node3D) -> void:
 		var target_id: int = body.get_multiplayer_authority()
 
 		# Deal damage
-		if target_id >= 9000 or player.multiplayer.multiplayer_peer == null or target_id == player.multiplayer.get_unique_id():
+		if target_id >= 9000 or not player.multiplayer.has_multiplayer_peer() or player.multiplayer.multiplayer_peer == null or target_id == player.multiplayer.get_unique_id():
 			body.receive_damage_from(damage, owner_id)
 			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "ULT HIT (local): %s | Damage: %d" % [body.name, damage], false, owner_id)
 		else:
