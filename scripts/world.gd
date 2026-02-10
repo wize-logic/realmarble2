@@ -1132,7 +1132,7 @@ func add_player(peer_id: int) -> void:
 
 	# Apply the synced color (or local selection as fallback for local player)
 	var local_peer_id: int = 1
-	if multiplayer.has_multiplayer_peer():
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null:
 		local_peer_id = multiplayer.get_unique_id()
 	var is_local_player = (peer_id == local_peer_id)
 	if player_color >= 0:
@@ -1581,7 +1581,7 @@ func return_to_multiplayer_lobby() -> void:
 		# so the lobby correctly shows everyone as not ready for the next match
 		if MultiplayerManager.is_host():
 			var local_peer_id: int = 1
-			if multiplayer.has_multiplayer_peer():
+			if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null:
 				local_peer_id = multiplayer.get_unique_id()
 			for peer_id in MultiplayerManager.players.keys():
 				if peer_id != local_peer_id:
@@ -3135,7 +3135,7 @@ func showcase_new_arena(arena_position: Vector3) -> void:
 
 	# Identify the local player (same logic as game_hud.gd)
 	var local_player_id: int = 1  # Default to player 1 for practice mode
-	if multiplayer.has_multiplayer_peer():
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null:
 		local_player_id = multiplayer.get_unique_id()
 	var local_player_name: String = str(local_player_id)
 	DebugLogger.dlog(DebugLogger.Category.WORLD, "Identifying local player: %s" % local_player_name)

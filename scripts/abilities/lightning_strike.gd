@@ -346,7 +346,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 			var owner_id: int = player.name.to_int() if player else -1
 			var target_id: int = target.get_multiplayer_authority()
 
-			if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 				target.receive_damage_from(damage, owner_id)
 				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Lightning struck player (local): %s | Damage: %d" % [target.name, damage], false, get_entity_id())
 			else:
@@ -379,7 +379,7 @@ func spawn_lightning_strike(position: Vector3, target: Node3D, level: int = 0) -
 			var owner_id: int = player.name.to_int() if player else -1
 			var target_id: int = potential_target.get_multiplayer_authority()
 
-			if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 				potential_target.receive_damage_from(damage, owner_id)
 			else:
 				potential_target.receive_damage_from.rpc_id(target_id, damage, owner_id)
@@ -618,7 +618,7 @@ func spawn_chain_lightning(hit_targets: Array, level: int, cached_players: Array
 				var chain_damage: int = 1
 				var target_id: int = potential_target.get_multiplayer_authority()
 
-				if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+				if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 					potential_target.receive_damage_from(chain_damage, owner_id)
 					DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Chain lightning hit (local): %s" % potential_target.name, false, get_entity_id())
 				else:

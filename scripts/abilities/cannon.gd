@@ -363,7 +363,7 @@ func _on_projectile_body_entered(body: Node, projectile: Node3D) -> void:
 	if body.has_method('receive_damage_from'):
 		var target_id: int = body.get_multiplayer_authority()
 		# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
-		if target_id >= 9000 or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+		if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
 			# Local call for bots, no multiplayer, or local peer
 			body.receive_damage_from(damage, owner_id)
 			DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Cannonball hit player (local): %s | Damage: %d" % [body.name, damage], false, get_entity_id())
