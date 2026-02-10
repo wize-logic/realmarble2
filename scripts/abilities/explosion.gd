@@ -302,7 +302,7 @@ func damage_nearby_players() -> void:
 			var target_id: int = body.get_multiplayer_authority()
 
 			# CRITICAL FIX: Don't call RPC on ourselves (check if target is local peer)
-			if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or target_id == multiplayer.get_unique_id():
+			if target_id >= 9000 or not multiplayer.has_multiplayer_peer() or multiplayer.multiplayer_peer == null or multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED or target_id == multiplayer.get_unique_id():
 				# Local call for bots, no multiplayer, or local peer
 				body.receive_damage_from(scaled_damage, attacker_id)
 				DebugLogger.dlog(DebugLogger.Category.ABILITIES, "Explosion hit player (local): %s | Damage: %d (charge x%.1f)" % [body.name, scaled_damage, charge_mult], false, get_entity_id())
