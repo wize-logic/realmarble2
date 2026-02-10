@@ -42,9 +42,16 @@ var _dash_flash_tween: Tween = null
 var _afterimage_pool: Array[MeshInstance3D] = []
 var _afterimage_pool_index: int = 0
 var _afterimage_tweens: Dictionary = {}
+static var _shared_resources_ready: bool = false
+static var _shared_indicator_mesh: SphereMesh = null
+static var _shared_indicator_material: StandardMaterial3D = null
+static var _shared_indicator_gradient: Gradient = null
+static var _shared_fire_trail_curve: Curve = null
+static var _shared_fire_trail_gradient: Gradient = null
 
 func _ready() -> void:
 	super._ready()
+	_ensure_shared_dash_resources()
 	ability_name = "Dash Attack"
 	ability_color = Color.MAGENTA
 	cooldown_time = 1.5
@@ -102,18 +109,10 @@ func _ready() -> void:
 	# Size over lifetime - start big, shrink gradually (enhanced for powerful dash)
 	fire_trail.scale_amount_min = 3.5  # Increased from 2.5
 	fire_trail.scale_amount_max = 5.5  # Increased from 4.0
-	fire_trail.scale_amount_curve = Curve.new()
-	fire_trail.scale_amount_curve.add_point(Vector2(0, 1.0))
-	fire_trail.scale_amount_curve.add_point(Vector2(0.4, 0.8))
-	fire_trail.scale_amount_curve.add_point(Vector2(1, 0.1))
+	fire_trail.scale_amount_curve = _shared_fire_trail_curve
 
 	# Color - magenta gradient (bright magenta -> pink -> purple -> dark)
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 1.0))  # Bright magenta
-	gradient.add_point(0.3, Color(1.0, 0.2, 0.8, 1.0))  # Hot pink
-	gradient.add_point(0.6, Color(0.8, 0.1, 0.6, 0.8))  # Deep magenta
-	gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
-	fire_trail.color_ramp = gradient
+	fire_trail.color_ramp = _shared_fire_trail_gradient
 
 	# Create direction indicator for dash targeting (human player only)
 	if not _is_bot_owner():
@@ -122,6 +121,42 @@ func _ready() -> void:
 	_build_dash_flash()
 	_build_dash_explosion_pool()
 	_build_afterimage_pool()
+
+static func _ensure_shared_dash_resources() -> void:
+	if _shared_resources_ready:
+		return
+	_shared_resources_ready = true
+
+	_shared_indicator_mesh = SphereMesh.new()
+	_shared_indicator_mesh.radius = 1.5
+	_shared_indicator_mesh.height = 3.0
+	_shared_indicator_mesh.radial_segments = 12 if _is_web else 24
+	_shared_indicator_mesh.rings = 6 if _is_web else 12
+
+	_shared_indicator_material = StandardMaterial3D.new()
+	_shared_indicator_material.albedo_color = Color(0.85, 0.75, 0.85, 0.15)  # Subtle neutral purple-pink
+	_shared_indicator_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_shared_indicator_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_shared_indicator_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_shared_indicator_material.disable_receive_shadows = true
+	_shared_indicator_material.disable_fog = true
+	_shared_indicator_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	_shared_indicator_gradient = Gradient.new()
+	_shared_indicator_gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))
+	_shared_indicator_gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))
+	_shared_indicator_gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))
+
+	_shared_fire_trail_curve = Curve.new()
+	_shared_fire_trail_curve.add_point(Vector2(0, 1.0))
+	_shared_fire_trail_curve.add_point(Vector2(0.4, 0.8))
+	_shared_fire_trail_curve.add_point(Vector2(1, 0.1))
+
+	_shared_fire_trail_gradient = Gradient.new()
+	_shared_fire_trail_gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 1.0))  # Bright magenta
+	_shared_fire_trail_gradient.add_point(0.3, Color(1.0, 0.2, 0.8, 1.0))  # Hot pink
+	_shared_fire_trail_gradient.add_point(0.6, Color(0.8, 0.1, 0.6, 0.8))  # Deep magenta
+	_shared_fire_trail_gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -447,23 +482,10 @@ func create_direction_indicator() -> void:
 	direction_indicator.name = "DashHitboxIndicator"
 
 	# Create a sphere mesh matching the hitbox radius (1.5)
-	var sphere: SphereMesh = SphereMesh.new()
-	sphere.radius = 1.5  # Match hitbox radius
-	sphere.height = 3.0  # Diameter = 2 * radius
-	sphere.radial_segments = 12 if _is_web else 24  # PERF: Reduced on web
-	sphere.rings = 6 if _is_web else 12
-	direction_indicator.mesh = sphere
+	direction_indicator.mesh = _shared_indicator_mesh
 
 	# Create material - very subtle, transparent, non-distracting
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)  # Subtle neutral purple-pink, 15% opacity
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.disable_receive_shadows = true
-	mat.disable_fog = true
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Visible from both sides
-	direction_indicator.material_override = mat
+	direction_indicator.material_override = _shared_indicator_material
 
 	# Add particles around the sphere for extra visual feedback
 	var sphere_particles: CPUParticles3D = CPUParticles3D.new()
@@ -497,11 +519,7 @@ func create_direction_indicator() -> void:
 	sphere_particles.scale_amount_max = 1.5
 
 	# Color - very subtle neutral purple gradient
-	var gradient: Gradient = Gradient.new()
-	gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))  # Subtle neutral purple
-	gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))  # Very subtle
-	gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))  # Transparent
-	sphere_particles.color_ramp = gradient
+	sphere_particles.color_ramp = _shared_indicator_gradient
 
 func _build_dash_flash() -> void:
 	if _dash_flash_container:
