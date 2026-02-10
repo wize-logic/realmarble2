@@ -95,7 +95,10 @@ func find_local_player() -> void:
 	if not world:
 		return
 
-	if multiplayer.has_multiplayer_peer():
+	# NOTE: has_multiplayer_peer() can briefly report true during teardown on web.
+	# Guard direct ID reads with an explicit peer null check to avoid engine errors
+	# while leaving a lobby.
+	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null:
 		_cached_peer_id = multiplayer.get_unique_id()
 
 	player = world.get_node_or_null(str(_cached_peer_id))

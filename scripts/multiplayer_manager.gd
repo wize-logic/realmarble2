@@ -478,6 +478,10 @@ func _on_connected_to_server() -> void:
 	"""Called when successfully connected to server as client"""
 	DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected to server!")
 
+	if multiplayer.multiplayer_peer == null:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Connected callback received after peer teardown - ignoring")
+		return
+
 	# Reset retry state on successful connection
 	connection_retry_count = 0
 	_pending_retry_room_code = ""
@@ -553,6 +557,10 @@ func attempt_host_migration() -> void:
 	peer_ids.sort()
 
 	var new_host_id: int = peer_ids[0]
+	if multiplayer.multiplayer_peer == null:
+		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "Cannot migrate host without an active multiplayer peer")
+		return
+
 	var local_id: int = multiplayer.get_unique_id()
 
 	if local_id == new_host_id:
