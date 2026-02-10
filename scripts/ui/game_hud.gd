@@ -96,10 +96,12 @@ func find_local_player() -> void:
 		return
 
 	# NOTE: has_multiplayer_peer() can briefly report true during teardown on web.
-	# Guard direct ID reads with an explicit peer null check to avoid engine errors
-	# while leaving a lobby.
+	# Also guard against disconnected peers: get_unique_id() logs engine errors when
+	# called after leaving a lobby while the peer object still exists.
 	if multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null:
-		_cached_peer_id = multiplayer.get_unique_id()
+		var peer: MultiplayerPeer = multiplayer.multiplayer_peer
+		if peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+			_cached_peer_id = multiplayer.get_unique_id()
 
 	player = world.get_node_or_null(str(_cached_peer_id))
 
