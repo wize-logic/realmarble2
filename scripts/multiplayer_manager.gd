@@ -214,6 +214,9 @@ func leave_game() -> void:
 
 func set_player_ready(ready: bool) -> void:
 	"""Set local player ready status"""
+	if not multiplayer.has_multiplayer_peer():
+		return
+
 	var peer_id: int = multiplayer.get_unique_id()
 	if players.has(peer_id):
 		players[peer_id].ready = ready
