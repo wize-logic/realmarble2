@@ -570,6 +570,12 @@ func attempt_host_migration() -> void:
 	else:
 		DebugLogger.dlog(DebugLogger.Category.MULTIPLAYER, "New host is: %d" % new_host_id)
 
+func has_active_peer() -> bool:
+	"""Check if multiplayer peer is assigned and connected.
+	Safe to call before get_unique_id() or is_multiplayer_authority()
+	which error when the peer is null or disconnected."""
+	return multiplayer.has_multiplayer_peer() and multiplayer.multiplayer_peer != null and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED
+
 func is_host() -> bool:
 	"""Check if local player is host"""
 	return network_mode == NetworkMode.HOST

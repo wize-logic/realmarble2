@@ -219,7 +219,7 @@ func is_bot() -> bool:
 
 func _sync_position_to_clients(delta: float) -> void:
 	"""Called by authority to periodically broadcast position to all clients"""
-	if not multiplayer.has_multiplayer_peer():
+	if not MultiplayerManager.has_active_peer():
 		return
 
 	# Only the authority should broadcast position
@@ -666,7 +666,7 @@ func _ready() -> void:
 
 	# In practice mode (no multiplayer peer), we're always the authority
 	# Otherwise, only run for nodes we have authority over
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		return
 
 	# Create ult system (needed for both players and bots - bots can ult)
@@ -715,7 +715,7 @@ func _force_camera_activation() -> void:
 	"""Force camera to be active - called via deferred to ensure it happens after full initialization (HTML5 fix)"""
 	# CRITICAL: Only local player with authority should activate camera
 	# Bots must NEVER activate their cameras or they'll hijack the player camera
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[CAMERA] Player %s: Skipping camera activation (not authority)" % name, false, get_entity_id())
 		return
 
@@ -768,7 +768,7 @@ func _process(delta: float) -> void:
 	# Force camera current
 	if camera and is_instance_valid(camera) and not camera.current:
 		# Skip if we're a remote player in multiplayer
-		if not (multiplayer.has_multiplayer_peer() and not is_multiplayer_authority()):
+		if not (MultiplayerManager.has_active_peer() and not is_multiplayer_authority()):
 			camera.current = true
 
 	# Handle last attacker timeout
@@ -795,7 +795,7 @@ func _process(delta: float) -> void:
 		return
 
 	# Early return for non-authority (remote players in multiplayer)
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		return
 
 	if not camera or not camera_arm:
@@ -872,7 +872,7 @@ func _physics_process_marble_roll(delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	# In practice mode (no multiplayer peer), we're always the authority
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		return
 
 	# Mouse look - 3rd person shooter style (handled in _input for priority)
@@ -888,7 +888,7 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# In practice mode (no multiplayer peer), we're always the authority
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		return
 
 	# Respawn on command
@@ -1084,7 +1084,7 @@ func _physics_process(delta: float) -> void:
 	_physics_process_marble_roll(delta)
 
 	# MULTIPLAYER POSITION SYNC FIX: Handle position synchronization
-	if multiplayer.multiplayer_peer != null:
+	if MultiplayerManager.has_active_peer():
 		if is_multiplayer_authority():
 			_sync_position_to_clients(delta)
 		else:
@@ -2290,7 +2290,7 @@ func create_area_detector() -> void:
 func _on_area_entered(area: Area3D) -> void:
 	"""Handle entering areas (jump pads, teleporters, etc.)"""
 	# Allow local player AND bots to use jump pads/teleporters
-	if not is_multiplayer_authority() and not is_bot():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority() and not is_bot():
 		return  # Only process for local player or bots
 
 	# Check if this is a jump pad
@@ -2473,7 +2473,7 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 	DebugLogger.dlog(DebugLogger.Category.PLAYER, "[NOTIFY_KILL] Called with killer_id: %d, victim_id: %d" % [killer_id, victim_id], false, get_entity_id())
 
 	# Only show if this is the local player (has authority)
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		DebugLogger.dlog(DebugLogger.Category.PLAYER, "[NOTIFY_KILL] Skipping - not authority", false, get_entity_id())
 		return  # Skip for non-authority players (bots, other players)
 
@@ -2504,7 +2504,7 @@ func notify_kill(killer_id: int, victim_id: int) -> void:
 func notify_killstreak(player_id: int, streak: int) -> void:
 	"""Notify the HUD about a killstreak milestone - should be called on the player's node"""
 	# Only show if this is the local player (has authority)
-	if multiplayer.has_multiplayer_peer() and not is_multiplayer_authority():
+	if MultiplayerManager.has_active_peer() and not is_multiplayer_authority():
 		return  # Skip for non-authority players (bots, other players)
 
 	var world: Node = get_parent()

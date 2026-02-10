@@ -1001,6 +1001,8 @@ func _on_trigger_expansion_pressed() -> void:
 func get_local_player() -> Node:
 	"""Get the local player"""
 	var players: Array[Node] = get_tree().get_nodes_in_group("players")
+	if not MultiplayerManager.has_active_peer():
+		return players[0] if players.size() > 0 else null
 	for player in players:
 		if player.is_multiplayer_authority():
 			return player
