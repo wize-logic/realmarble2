@@ -2436,7 +2436,7 @@ func apply_marble_material() -> void:
 	elif name.is_valid_int():
 		var player_id = int(name)
 		material = marble_material_manager.create_marble_material(player_id % marble_material_manager.get_color_scheme_count())
-	elif str(multiplayer.get_unique_id()) != "0":
+	elif multiplayer.has_multiplayer_peer():
 		var peer_id = multiplayer.get_unique_id()
 		material = marble_material_manager.create_marble_material(peer_id % marble_material_manager.get_color_scheme_count())
 	else:
@@ -2456,7 +2456,7 @@ func apply_marble_material() -> void:
 			scheme_index = custom_color_index
 		elif name.is_valid_int():
 			scheme_index = int(name) % marble_material_manager.get_color_scheme_count()
-		elif str(multiplayer.get_unique_id()) != "0":
+		elif multiplayer.has_multiplayer_peer():
 			scheme_index = multiplayer.get_unique_id() % marble_material_manager.get_color_scheme_count()
 
 		if scheme_index >= 0 and scheme_index < marble_material_manager.COLOR_SCHEMES.size():

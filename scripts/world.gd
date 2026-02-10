@@ -1131,7 +1131,10 @@ func add_player(peer_id: int) -> void:
 			player_color = player_info["color_index"]
 
 	# Apply the synced color (or local selection as fallback for local player)
-	var is_local_player = (peer_id == multiplayer.get_unique_id())
+	var local_peer_id: int = 1
+	if multiplayer.has_multiplayer_peer():
+		local_peer_id = multiplayer.get_unique_id()
+	var is_local_player = (peer_id == local_peer_id)
 	if player_color >= 0:
 		player.custom_color_index = player_color
 	elif is_local_player:
@@ -1577,8 +1580,11 @@ func return_to_multiplayer_lobby() -> void:
 		# MULTIPLAYER SYNC FIX: Host resets ALL players' ready states (including bots)
 		# so the lobby correctly shows everyone as not ready for the next match
 		if MultiplayerManager.is_host():
+			var local_peer_id: int = 1
+			if multiplayer.has_multiplayer_peer():
+				local_peer_id = multiplayer.get_unique_id()
 			for peer_id in MultiplayerManager.players.keys():
-				if peer_id != multiplayer.get_unique_id():
+				if peer_id != local_peer_id:
 					MultiplayerManager.players[peer_id].ready = false
 			# Re-ready bots since they should always be ready
 			for peer_id in MultiplayerManager.players.keys():
