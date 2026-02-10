@@ -420,6 +420,7 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		fire.global_position = fire_pos
 
 		# Configure lingering fire
+		fire.visible = true
 		fire.emitting = true
 		fire.amount = 4 if _is_web else 10  # PERF: Reduced for performance
 		fire.lifetime = 1.5
@@ -453,6 +454,11 @@ func spawn_lingering_fire(position: Vector3, level: int) -> void:
 		get_tree().create_timer(fire_duration).timeout.connect(func():
 			if is_instance_valid(fire) and fire.get_meta("lingering_fire_token", -1) == token:
 				fire.emitting = false
+				# Hide after remaining particles fade out
+				get_tree().create_timer(fire.lifetime).timeout.connect(func():
+					if is_instance_valid(fire) and fire.get_meta("lingering_fire_token", -1) == token:
+						fire.visible = false
+				)
 		)
 
 func spawn_secondary_explosions(center_position: Vector3) -> void:
@@ -491,6 +497,7 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	_secondary_explosion_pool_index = (_secondary_explosion_pool_index + 1) % _secondary_explosion_pool.size()
 	explosion.global_position = position
 
+	explosion.visible = true
 	explosion.emitting = true
 	explosion.amount = 8 if _is_web else 20  # PERF: Reduced for performance
 	explosion.lifetime = 0.4
@@ -523,6 +530,7 @@ func spawn_single_secondary_explosion(position: Vector3) -> void:
 	get_tree().create_timer(explosion.lifetime + 0.5).timeout.connect(func():
 		if is_instance_valid(explosion) and explosion.get_meta("secondary_explosion_token", -1) == token:
 			explosion.emitting = false
+			explosion.visible = false
 	)
 
 func _create_explosion_particles() -> void:
@@ -634,9 +642,21 @@ func create_radius_indicator() -> void:
 	radius_indicator.visible = false
 
 func drop() -> void:
-	"""Override drop to clean up indicator"""
+	"""Override drop to clean up indicator and pooled particles"""
 	super.drop()
 	cleanup_indicator()
+	_stop_all_pooled_particles()
+
+func _stop_all_pooled_particles() -> void:
+	"""Stop and hide all pooled particle systems"""
+	for fire in _lingering_fire_pool:
+		if is_instance_valid(fire):
+			fire.emitting = false
+			fire.visible = false
+	for explosion in _secondary_explosion_pool:
+		if is_instance_valid(explosion):
+			explosion.emitting = false
+			explosion.visible = false
 
 func cleanup_indicator() -> void:
 	"""Clean up the indicator when ability is dropped or destroyed"""
@@ -739,7 +759,9 @@ func _build_secondary_explosion_pool() -> void:
 		var explosion: CPUParticles3D = CPUParticles3D.new()
 		explosion.name = "SecondaryExplosion_%d" % i
 		add_child(explosion)
+		explosion.top_level = true
 		explosion.emitting = false
+		explosion.visible = false
 		explosion.one_shot = true
 		explosion.explosiveness = 1.0
 		explosion.randomness = 0.4
@@ -770,7 +792,9 @@ func _build_lingering_fire_pool() -> void:
 		var fire: CPUParticles3D = CPUParticles3D.new()
 		fire.name = "LingeringFire_%d" % i
 		add_child(fire)
+		fire.top_level = true
 		fire.emitting = false
+		fire.visible = false
 		fire.amount = 4 if _is_web else 10
 		fire.lifetime = 1.5
 		fire.explosiveness = 0.0
