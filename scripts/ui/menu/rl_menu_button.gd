@@ -38,6 +38,13 @@ func _ready() -> void:
 	mouse_exited.connect(_on_mouse_exited)
 	gui_input.connect(_on_gui_input)
 
+	# Initialize hover visuals to match the initial state
+	var initially_active: bool = is_hovered or is_focused or is_highlighted
+	if highlight:
+		highlight.visible = initially_active
+	if edge_glow:
+		edge_glow.visible = initially_active
+
 	set_process(false)
 
 func _process(delta: float) -> void:
