@@ -94,8 +94,11 @@ func is_local_human_player() -> bool:
 	"""Check if this ability is owned by the local human player (not a bot, not remote)"""
 	if not player:
 		return false
-	if not player.is_multiplayer_authority():
-		return false
+	# Guard: only call is_multiplayer_authority() when the peer is active.
+	# After leaving a lobby the peer is null/disconnected and get_unique_id() errors.
+	if MultiplayerManager.has_active_peer():
+		if not player.is_multiplayer_authority():
+			return false
 	return not (player.has_method("is_bot") and player.is_bot())
 
 func _ensure_hit_sound_pool() -> void:
