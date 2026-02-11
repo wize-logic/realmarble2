@@ -87,8 +87,8 @@ func generate_skybox() -> void:
 		sky_material.energy_multiplier = 0.82
 	sky_material.sky_curve = 0.22
 	sky_material.ground_curve = 0.18
-	sky_material.sun_angle_max = 36.0
-	sky_material.sun_curve = 0.18
+	sky_material.sun_angle_max = 2.0
+	sky_material.sun_curve = 0.02
 	sky_material.use_debanding = true
 	_apply_cloud_cover_if_supported()
 
@@ -155,7 +155,7 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
 	sky_material.ground_bottom_color = ground_color.darkened(0.15)
-	sky_material.ground_horizon_color = ground_color.lightened(0.22)
+	sky_material.ground_horizon_color = ground_color.lightened(0.14)
 
 
 func _apply_menu_static_lighting() -> void:

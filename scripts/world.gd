@@ -2865,6 +2865,29 @@ func play_countdown_beep(text: String) -> void:
 			var value = sin(phase) * amplitude
 			playback.push_frame(Vector2(value, value))
 
+func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
+	## Simple static lighting profile to emulate pre-baked feel (minimal dynamic sun influence).
+	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
+	if world_env:
+		var env: Environment = world_env.environment
+		if not env:
+			env = Environment.new()
+			world_env.environment = env
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(0.56, 0.56, 0.56)
+		env.ambient_light_energy = 0.52
+		env.tonemap_mode = Environment.TONE_MAPPER_ACES
+		env.tonemap_white = 3.4
+		if menu_preview:
+			env.ambient_light_energy = 0.42
+			env.tonemap_white = 2.6
+
+	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	if sun_light:
+		sun_light.light_energy = 0.22
+		sun_light.light_indirect_energy = 0.15
+		sun_light.shadow_enabled = false
+
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
@@ -2911,6 +2934,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
+	# Pre-baked lighting approach: rely on static world lighting profile, not generated dynamic light grids.
+	level_generator.generate_lights = false
 
 	# Configure video walls if enabled
 	if video_walls:
@@ -2959,6 +2984,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 		skybox_generator.menu_static_mode = true
 		skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
+
+	_apply_prebaked_lighting_profile(menu_preview)
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Procedural level generation complete!")
 
