@@ -2875,17 +2875,17 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = Color(0.56, 0.56, 0.56)
-		env.ambient_light_energy = 0.52
+		env.ambient_light_energy = 0.68
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.tonemap_white = 3.4
+		env.tonemap_white = 4.6
 		if menu_preview:
 			env.ambient_light_energy = 0.42
 			env.tonemap_white = 2.6
 
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_energy = 0.22
-		sun_light.light_indirect_energy = 0.15
+		sun_light.light_energy = 0.34
+		sun_light.light_indirect_energy = 0.22
 		sun_light.shadow_enabled = false
 
 # ============================================================================
