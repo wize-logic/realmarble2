@@ -12,6 +12,7 @@ extends Node3D
 @export var nebula_intensity: float = 0.5
 
 var sky_material: ProceduralSkyMaterial
+var _cloud_cover_texture: ImageTexture = null
 var _palettes: Array[Dictionary] = []
 var _current_palette_index: int = 0
 var _next_palette_index: int = 0
@@ -77,6 +78,7 @@ func generate_skybox() -> void:
 	sky_material.sun_angle_max = 36.0
 	sky_material.sun_curve = 0.18
 	sky_material.use_debanding = true
+	_apply_cloud_cover_if_supported()
 
 	# Apply first palette immediately (psychedelic dusk default)
 	_apply_palette(Color(0.22, 0.12, 0.52), Color(0.82, 0.40, 0.64), Color(0.20, 0.10, 0.22))
@@ -144,11 +146,64 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.ground_horizon_color = ground_color.lightened(0.22)
 
 
+func _apply_cloud_cover_if_supported() -> void:
+	if not sky_material:
+		return
+
+	var has_sky_cover: bool = false
+	var has_sky_cover_modulate: bool = false
+	for property_info in sky_material.get_property_list():
+		var property_name: String = String(property_info.name)
+		if property_name == "sky_cover":
+			has_sky_cover = true
+		elif property_name == "sky_cover_modulate":
+			has_sky_cover_modulate = true
+
+	if not has_sky_cover:
+		return
+
+	_cloud_cover_texture = _create_cloud_cover_texture()
+	sky_material.set("sky_cover", _cloud_cover_texture)
+	if has_sky_cover_modulate:
+		sky_material.set("sky_cover_modulate", Color(1.0, 1.0, 1.0, clampf(cloud_density, 0.0, 1.0)))
+
+func _create_cloud_cover_texture() -> ImageTexture:
+	var width: int = 512
+	var height: int = 256
+	var image: Image = Image.create(width, height, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.seed = int(Time.get_unix_time_from_system())
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.018
+	noise.fractal_octaves = 4
+
+	for y in range(height):
+		var v: float = float(y) / float(height - 1)
+		for x in range(width):
+			var n: float = noise.get_noise_2d(float(x), float(y) * 1.7)
+			var cloud_signal: float = clampf((n + 1.0) * 0.5, 0.0, 1.0)
+			cloud_signal = _smoothstep(0.54, 0.80, cloud_signal)
+			var horizon_fade: float = _smoothstep(0.12, 0.72, v) * (1.0 - _smoothstep(0.74, 0.97, v))
+			var alpha: float = cloud_signal * horizon_fade
+			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
+
+	var texture := ImageTexture.create_from_image(image)
+	return texture
+
+
+
+func _smoothstep(edge0: float, edge1: float, value: float) -> float:
+	var t: float = clampf((value - edge0) / max(edge1 - edge0, 0.0001), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+
 func set_star_density(_density: float) -> void:
 	pass
 
 func set_cloud_density(_density: float) -> void:
-	pass
+	cloud_density = clampf(_density, 0.0, 1.0)
+	_apply_cloud_cover_if_supported()
 
 func set_nebula_intensity(_intensity: float) -> void:
 	pass

@@ -12,21 +12,21 @@ var _material_cache: Dictionary = {}
 
 # Material presets - color/roughness/metallic + pattern params
 const MATERIAL_PRESETS = {
-	"floor": {"base_color": Color(0.18, 0.10, 0.30), "accent_color": Color(0.08, 0.34, 0.42), "roughness": 0.72, "metallic": 0.24, "scale": 3.9, "pattern_mix": 0.68, "detail_strength": 0.5, "wear_amount": 0.16},
-	"wall": {"base_color": Color(0.24, 0.17, 0.36), "accent_color": Color(0.10, 0.20, 0.42), "roughness": 0.8, "metallic": 0.2, "scale": 3.0, "pattern_mix": 0.52, "detail_strength": 0.48, "wear_amount": 0.3},
-	"platform": {"base_color": Color(0.16, 0.38, 0.55), "accent_color": Color(0.42, 0.14, 0.52), "roughness": 0.58, "metallic": 0.62, "scale": 4.6, "pattern_mix": 0.76, "detail_strength": 0.45, "wear_amount": 0.14},
-	"accent": {"base_color": Color(0.73, 0.27, 0.79), "accent_color": Color(0.16, 0.86, 0.78), "roughness": 0.36, "metallic": 0.66, "scale": 5.8, "pattern_mix": 0.82, "detail_strength": 0.4, "wear_amount": 0.08},
-	"ramp": {"base_color": Color(0.44, 0.18, 0.34), "accent_color": Color(0.16, 0.46, 0.44), "roughness": 0.68, "metallic": 0.4, "scale": 3.7, "pattern_mix": 0.56, "detail_strength": 0.42, "wear_amount": 0.28},
-	"pillar": {"base_color": Color(0.40, 0.38, 0.35), "accent_color": Color(0.30, 0.28, 0.25), "roughness": 0.95, "metallic": 0.05, "scale": 2.0, "pattern_mix": 0.3, "detail_strength": 0.6, "wear_amount": 0.45},
-	"cover": {"base_color": Color(0.44, 0.40, 0.35), "accent_color": Color(0.34, 0.30, 0.25), "roughness": 0.8, "metallic": 0.25, "scale": 5.0, "pattern_mix": 0.45, "detail_strength": 0.3, "wear_amount": 0.38},
-	"room_floor": {"base_color": Color(0.16, 0.15, 0.31), "accent_color": Color(0.12, 0.30, 0.46), "roughness": 0.76, "metallic": 0.3, "scale": 5.0, "pattern_mix": 0.7, "detail_strength": 0.45, "wear_amount": 0.22},
-	"room_wall": {"base_color": Color(0.26, 0.24, 0.40), "accent_color": Color(0.16, 0.32, 0.50), "roughness": 0.76, "metallic": 0.32, "scale": 3.2, "pattern_mix": 0.58, "detail_strength": 0.42, "wear_amount": 0.24},
-	"corridor": {"base_color": Color(0.22, 0.23, 0.40), "accent_color": Color(0.14, 0.28, 0.46), "roughness": 0.78, "metallic": 0.26, "scale": 3.8, "pattern_mix": 0.56, "detail_strength": 0.38, "wear_amount": 0.24},
-	"halfpipe": {"base_color": Color(0.48, 0.50, 0.55), "accent_color": Color(0.38, 0.40, 0.45), "roughness": 0.55, "metallic": 0.15, "scale": 4.0, "pattern_mix": 0.3, "detail_strength": 0.25, "wear_amount": 0.18},
-	"spring": {"base_color": Color(0.75, 0.22, 0.22), "accent_color": Color(0.55, 0.12, 0.12), "roughness": 0.35, "metallic": 0.6, "scale": 2.0, "pattern_mix": 0.2, "detail_strength": 0.3, "wear_amount": 0.12},
-	"metal_grate": {"base_color": Color(0.32, 0.34, 0.38), "accent_color": Color(0.22, 0.24, 0.28), "roughness": 0.6, "metallic": 0.7, "scale": 6.0, "pattern_mix": 0.8, "detail_strength": 0.5, "wear_amount": 0.32},
-	"tech_panel": {"base_color": Color(0.28, 0.38, 0.48), "accent_color": Color(0.18, 0.28, 0.38), "roughness": 0.5, "metallic": 0.55, "scale": 5.0, "pattern_mix": 0.75, "detail_strength": 0.3, "wear_amount": 0.15},
-	"rusty_metal": {"base_color": Color(0.48, 0.35, 0.22), "accent_color": Color(0.38, 0.22, 0.12), "roughness": 0.9, "metallic": 0.3, "scale": 2.5, "pattern_mix": 0.5, "detail_strength": 0.65, "wear_amount": 0.55},
+	"floor": {"base_color": Color(0.79, 0.93, 0.56), "accent_color": Color(0.45, 0.73, 0.32), "roughness": 0.9, "metallic": 0.02, "scale": 3.2, "pattern_mix": 0.42, "detail_strength": 0.26, "wear_amount": 0.08},
+	"wall": {"base_color": Color(0.96, 0.94, 0.82), "accent_color": Color(0.83, 0.74, 0.55), "roughness": 0.8, "metallic": 0.04, "scale": 2.6, "pattern_mix": 0.34, "detail_strength": 0.24, "wear_amount": 0.06},
+	"platform": {"base_color": Color(0.98, 0.78, 0.30), "accent_color": Color(0.92, 0.50, 0.16), "roughness": 0.72, "metallic": 0.08, "scale": 3.6, "pattern_mix": 0.48, "detail_strength": 0.3, "wear_amount": 0.08},
+	"accent": {"base_color": Color(0.98, 0.84, 0.22), "accent_color": Color(0.99, 0.56, 0.12), "roughness": 0.62, "metallic": 0.1, "scale": 4.1, "pattern_mix": 0.5, "detail_strength": 0.28, "wear_amount": 0.05},
+	"ramp": {"base_color": Color(0.86, 0.82, 0.70), "accent_color": Color(0.70, 0.64, 0.52), "roughness": 0.76, "metallic": 0.06, "scale": 3.2, "pattern_mix": 0.4, "detail_strength": 0.28, "wear_amount": 0.12},
+	"pillar": {"base_color": Color(0.95, 0.92, 0.78), "accent_color": Color(0.84, 0.78, 0.60), "roughness": 0.84, "metallic": 0.03, "scale": 2.2, "pattern_mix": 0.3, "detail_strength": 0.24, "wear_amount": 0.1},
+	"cover": {"base_color": Color(0.92, 0.88, 0.72), "accent_color": Color(0.80, 0.72, 0.54), "roughness": 0.82, "metallic": 0.05, "scale": 3.4, "pattern_mix": 0.38, "detail_strength": 0.22, "wear_amount": 0.12},
+	"room_floor": {"base_color": Color(0.73, 0.90, 0.50), "accent_color": Color(0.42, 0.68, 0.30), "roughness": 0.88, "metallic": 0.02, "scale": 3.5, "pattern_mix": 0.44, "detail_strength": 0.24, "wear_amount": 0.08},
+	"room_wall": {"base_color": Color(0.96, 0.95, 0.86), "accent_color": Color(0.86, 0.80, 0.64), "roughness": 0.8, "metallic": 0.04, "scale": 2.8, "pattern_mix": 0.36, "detail_strength": 0.22, "wear_amount": 0.08},
+	"corridor": {"base_color": Color(0.90, 0.92, 0.80), "accent_color": Color(0.74, 0.80, 0.64), "roughness": 0.8, "metallic": 0.04, "scale": 3.0, "pattern_mix": 0.38, "detail_strength": 0.24, "wear_amount": 0.1},
+	"halfpipe": {"base_color": Color(0.90, 0.94, 0.97), "accent_color": Color(0.66, 0.78, 0.90), "roughness": 0.55, "metallic": 0.18, "scale": 4.0, "pattern_mix": 0.28, "detail_strength": 0.22, "wear_amount": 0.14},
+	"spring": {"base_color": Color(0.95, 0.22, 0.22), "accent_color": Color(0.76, 0.12, 0.12), "roughness": 0.35, "metallic": 0.6, "scale": 2.0, "pattern_mix": 0.2, "detail_strength": 0.3, "wear_amount": 0.12},
+	"metal_grate": {"base_color": Color(0.72, 0.76, 0.78), "accent_color": Color(0.58, 0.62, 0.66), "roughness": 0.56, "metallic": 0.7, "scale": 6.0, "pattern_mix": 0.8, "detail_strength": 0.42, "wear_amount": 0.24},
+	"tech_panel": {"base_color": Color(0.54, 0.76, 0.92), "accent_color": Color(0.34, 0.60, 0.84), "roughness": 0.48, "metallic": 0.5, "scale": 5.0, "pattern_mix": 0.7, "detail_strength": 0.28, "wear_amount": 0.14},
+	"rusty_metal": {"base_color": Color(0.70, 0.56, 0.34), "accent_color": Color(0.56, 0.42, 0.24), "roughness": 0.86, "metallic": 0.26, "scale": 2.5, "pattern_mix": 0.5, "detail_strength": 0.52, "wear_amount": 0.4},
 }
 
 func create_material(preset_name: String, color_variation: float = 0.0) -> ShaderMaterial:
