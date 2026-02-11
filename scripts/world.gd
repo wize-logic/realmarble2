@@ -2507,9 +2507,9 @@ func _create_customize_panel() -> void:
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.4, 0.4, 0.5)  # Soft ambient for marble visibility
-	env.ambient_light_energy = 0.8
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 6.0
+	env.tonemap_white = 3.6
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2539,7 +2539,7 @@ func _create_customize_panel() -> void:
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 1.2
+	light.light_energy = 0.85
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2547,7 +2547,7 @@ func _create_customize_panel() -> void:
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.4
+	ambient_light.light_energy = 0.22
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2713,7 +2713,7 @@ func _create_marble_preview() -> void:
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 1.2
+	preview_light.light_energy = 0.85
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
@@ -2721,7 +2721,7 @@ func _create_marble_preview() -> void:
 	# Add an additional fill light for better showcase
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.5
+	fill_light.light_energy = 0.12
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2865,6 +2865,32 @@ func play_countdown_beep(text: String) -> void:
 			var value = sin(phase) * amplitude
 			playback.push_frame(Vector2(value, value))
 
+func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
+	## Simple static lighting profile to emulate pre-baked feel (minimal dynamic sun influence).
+	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
+	if world_env:
+		var env: Environment = world_env.environment
+		if not env:
+			env = Environment.new()
+			world_env.environment = env
+		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.tonemap_mode = Environment.TONE_MAPPER_ACES
+		if menu_preview:
+			env.ambient_light_color = Color(0.56, 0.56, 0.56)
+			env.ambient_light_energy = 0.56
+			env.tonemap_white = 3.4
+		else:
+			# Gameplay should be brighter than menu: same flat style, higher baked exposure.
+			env.ambient_light_color = Color(0.63, 0.63, 0.63)
+			env.ambient_light_energy = 0.72
+			env.tonemap_white = 4.4
+
+	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
+	if sun_light:
+		sun_light.light_energy = 0.0
+		sun_light.light_indirect_energy = 0.0
+		sun_light.shadow_enabled = false
+
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
 # ============================================================================
@@ -2911,6 +2937,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
+	# Pre-baked lighting approach: rely on static world lighting profile, not generated dynamic light grids.
+	level_generator.generate_lights = false
 
 	# Configure video walls if enabled
 	if video_walls:
@@ -2955,7 +2983,13 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator = Node3D.new()
 	skybox_generator.name = "SkyboxGenerator"
 	skybox_generator.set_script(SkyboxGenerator)
+	skybox_generator.menu_static_mode = menu_preview
+	if menu_preview:
+		skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
+	await get_tree().process_frame
+
+	_apply_prebaked_lighting_profile(menu_preview)
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Procedural level generation complete!")
 

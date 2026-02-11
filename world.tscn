@@ -108,9 +108,9 @@ camera_attributes = SubResource("CameraAttributesPractical_wntx8")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.835807, -0.47011, 0.283589, -0.375944, 0.866496, 0.328406, -0.400115, 0.167871, -0.900959, 0, 4.88489, 0)
 light_color = Color(0.95, 0.9, 0.82, 1)
-light_energy = 0.85
-light_indirect_energy = 0.5
-shadow_enabled = true
+light_energy = 0.0
+light_indirect_energy = 0.0
+shadow_enabled = false
 shadow_bias = 0.04
 directional_shadow_mode = 1
 
