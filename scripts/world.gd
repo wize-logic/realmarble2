@@ -2507,9 +2507,9 @@ func _create_customize_panel() -> void:
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.4, 0.4, 0.5)  # Soft ambient for marble visibility
-	env.ambient_light_energy = 0.8
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 6.0
+	env.tonemap_white = 3.6
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2539,7 +2539,7 @@ func _create_customize_panel() -> void:
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 1.2
+	light.light_energy = 0.85
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2547,7 +2547,7 @@ func _create_customize_panel() -> void:
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.4
+	ambient_light.light_energy = 0.22
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2713,7 +2713,7 @@ func _create_marble_preview() -> void:
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 1.2
+	preview_light.light_energy = 0.85
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
