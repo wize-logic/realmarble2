@@ -1073,23 +1073,22 @@ func generate_arena_visual_polish(floor_size: float, scale: float) -> void:
 		Vector3(center_outer_size, center_height, center_outer_size),
 		"AccentCenterOuter"
 	)
-	add_platform_with_collision(
-		Vector3(0, center_height + 0.12, 0),
-		Vector3(center_inner_size, 0.24, center_inner_size),
+	add_platform_visual_only(
+		Vector3(0, center_height + 0.10, 0),
+		Vector3(center_inner_size, 0.16, center_inner_size),
 		"AccentCenterInner"
 	)
 
-	var strip_height: float = 0.18
 	var strip_length: float = floor_size * 0.56
 	var strip_width: float = maxf(trim_width * 0.75, 1.1)
-	add_platform_with_collision(
-		Vector3(0, strip_height * 0.5, 0),
-		Vector3(strip_length, strip_height, strip_width),
+	add_platform_visual_only(
+		Vector3(0, 0.03, 0),
+		Vector3(strip_length, 0.06, strip_width),
 		"AccentPulseStripX"
 	)
-	add_platform_with_collision(
-		Vector3(0, strip_height * 0.5, 0),
-		Vector3(strip_width, strip_height, strip_length),
+	add_platform_visual_only(
+		Vector3(0, 0.03, 0),
+		Vector3(strip_width, 0.06, strip_length),
 		"AccentPulseStripZ"
 	)
 
@@ -2418,6 +2417,16 @@ func add_platform_with_collision(pos: Vector3, size: Vector3, name_prefix: Strin
 	static_body.add_child(collision)
 	instance.add_child(static_body)
 
+	platforms.append(instance)
+	return instance
+
+func add_platform_visual_only(pos: Vector3, size: Vector3, name_prefix: String) -> MeshInstance3D:
+	var mesh: BoxMesh = create_smooth_box_mesh(size)
+	var instance: MeshInstance3D = MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.name = name_prefix
+	instance.position = pos
+	add_child(instance)
 	platforms.append(instance)
 	return instance
 
