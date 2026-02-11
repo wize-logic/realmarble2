@@ -41,6 +41,12 @@ extends Node3D
 @export var generate_ceiling: bool = true  ## Generate ceiling geometry
 @export var generate_walls: bool = true  ## Generate perimeter walls
 
+@export_group("Visual Polish")
+@export var add_visual_polish: bool = true  ## Adds accent geometry to break up flat spaces
+@export var accent_trim_height: float = 0.45  ## Height of accent trims around the arena floor
+@export var accent_trim_width: float = 2.2  ## Width of accent trims around the arena floor
+@export var accent_plinth_size: float = 5.0  ## Corner plinth footprint size
+
 @export_group("Multi-Level")
 @export var num_levels: int = 1  ## Number of vertical levels
 @export var level_height_offset: float = 20.0  ## Height between levels in Godot units
@@ -994,6 +1000,9 @@ func generate_main_arena() -> void:
 		"MainArenaFloor"
 	)
 
+	if add_visual_polish:
+		generate_arena_visual_polish(floor_size, scale)
+
 	mark_cell_occupied(Vector3.ZERO, 0)
 	clear_positions.append(Vector3(0, 0, 0))
 
@@ -1011,6 +1020,78 @@ func generate_main_arena() -> void:
 					"RaisedSection%d" % i
 				)
 				clear_positions.append(Vector3(pos.x, section_height + 0.5, pos.z))
+
+func generate_arena_visual_polish(floor_size: float, scale: float) -> void:
+	## Add low-profile accent geometry with a mild psychedelic motif.
+	## Keeps contrast and rhythm high enough to read from distance without cluttering traversal.
+	var half_floor: float = floor_size * 0.5
+	var trim_width: float = accent_trim_width * scale
+	var trim_height: float = accent_trim_height
+	var inset: float = trim_width * 0.6
+
+	# Perimeter trims
+	add_platform_with_collision(
+		Vector3(0, trim_height * 0.5, half_floor - inset),
+		Vector3(floor_size - trim_width * 1.2, trim_height, trim_width),
+		"AccentPlatformNorth"
+	)
+	add_platform_with_collision(
+		Vector3(0, trim_height * 0.5, -half_floor + inset),
+		Vector3(floor_size - trim_width * 1.2, trim_height, trim_width),
+		"AccentPlatformSouth"
+	)
+	add_platform_with_collision(
+		Vector3(half_floor - inset, trim_height * 0.5, 0),
+		Vector3(trim_width, trim_height, floor_size - trim_width * 1.2),
+		"AccentPlatformEast"
+	)
+	add_platform_with_collision(
+		Vector3(-half_floor + inset, trim_height * 0.5, 0),
+		Vector3(trim_width, trim_height, floor_size - trim_width * 1.2),
+		"AccentPlatformWest"
+	)
+
+	# Corner plinths for stronger silhouette
+	var plinth_size: float = accent_plinth_size * scale
+	var plinth_y: float = 0.55
+	var plinth_offset: float = half_floor - plinth_size * 0.7
+	var corners: Array[Vector3] = [
+		Vector3(plinth_offset, plinth_y, plinth_offset),
+		Vector3(-plinth_offset, plinth_y, plinth_offset),
+		Vector3(plinth_offset, plinth_y, -plinth_offset),
+		Vector3(-plinth_offset, plinth_y, -plinth_offset),
+	]
+	for i in range(corners.size()):
+		add_platform_with_collision(corners[i], Vector3(plinth_size, 1.1, plinth_size), "AccentPlinth%d" % i)
+
+	# Centerpiece stack: nested dais + pulse strips for a subtle psychedelic focal point
+	var center_outer_size: float = 10.0 * scale
+	var center_inner_size: float = 6.4 * scale
+	var center_height: float = 0.32
+	add_platform_with_collision(
+		Vector3(0, center_height * 0.5, 0),
+		Vector3(center_outer_size, center_height, center_outer_size),
+		"AccentCenterOuter"
+	)
+	add_platform_with_collision(
+		Vector3(0, center_height + 0.12, 0),
+		Vector3(center_inner_size, 0.24, center_inner_size),
+		"AccentCenterInner"
+	)
+
+	var strip_height: float = 0.18
+	var strip_length: float = floor_size * 0.56
+	var strip_width: float = maxf(trim_width * 0.75, 1.1)
+	add_platform_with_collision(
+		Vector3(0, strip_height * 0.5, 0),
+		Vector3(strip_length, strip_height, strip_width),
+		"AccentPulseStripX"
+	)
+	add_platform_with_collision(
+		Vector3(0, strip_height * 0.5, 0),
+		Vector3(strip_width, strip_height, strip_length),
+		"AccentPulseStripZ"
+	)
 
 func generate_procedural_structures(budget: int) -> void:
 	## Place random structures within budget

@@ -1,18 +1,18 @@
 extends Node3D
 
-## Simple Skybox Generator
-## Uses Godot's built-in ProceduralSkyMaterial for a clean sky
+## Dynamic Skybox Generator
+## Uses ProceduralSkyMaterial with curated palettes and gentle animated transitions
 
 @export var animation_speed: float = 0.5
 @export var color_palette: int = 0
-@export var color_transition_duration: float = 10.0
-@export var color_hold_duration: float = 15.0
+@export var color_transition_duration: float = 14.0
+@export var color_hold_duration: float = 18.0
 @export var star_density: float = 0.3
 @export var cloud_density: float = 0.4
 @export var nebula_intensity: float = 0.5
 
 var sky_material: ProceduralSkyMaterial
-var _palettes: Array = []
+var _palettes: Array[Dictionary] = []
 var _current_palette_index: int = 0
 var _next_palette_index: int = 0
 var _transition_timer: float = 0.0
@@ -32,11 +32,12 @@ func _process(delta: float) -> void:
 	if _is_transitioning:
 		_transition_timer += scaled_delta
 		var progress := clampf(_transition_timer / max(color_transition_duration, 0.01), 0.0, 1.0)
-		var from_palette: Array = _palettes[_current_palette_index]
-		var to_palette: Array = _palettes[_next_palette_index]
-		var top_color: Color = from_palette[0].lerp(to_palette[0], progress)
-		var horizon_color: Color = from_palette[1].lerp(to_palette[1], progress)
-		_apply_palette(top_color, horizon_color)
+		var from_palette: Dictionary = _palettes[_current_palette_index]
+		var to_palette: Dictionary = _palettes[_next_palette_index]
+		var top_color: Color = from_palette.top.lerp(to_palette.top, progress)
+		var horizon_color: Color = from_palette.horizon.lerp(to_palette.horizon, progress)
+		var ground_color: Color = from_palette.ground.lerp(to_palette.ground, progress)
+		_apply_palette(top_color, horizon_color, ground_color)
 
 		if progress >= 1.0:
 			_current_palette_index = _next_palette_index
@@ -52,7 +53,7 @@ func _process(delta: float) -> void:
 		pass
 
 func generate_skybox() -> void:
-	"""Generate a clean procedural sky using built-in ProceduralSkyMaterial"""
+	"""Generate a richer procedural sky for a more atmospheric arena backdrop"""
 	var world_env: WorldEnvironment = get_node_or_null("/root/World/WorldEnvironment")
 	if not world_env:
 		DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "ERROR: WorldEnvironment not found!")
@@ -63,18 +64,29 @@ func generate_skybox() -> void:
 		environment = Environment.new()
 		world_env.environment = environment
 
-	# Use Godot's built-in ProceduralSkyMaterial for a simple, clean sky
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	environment.ambient_light_energy = 0.78
+	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	environment.tonemap_white = 4.4
+
+	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
-	_apply_palette(Color(0.15, 0.1, 0.35), Color(0.4, 0.2, 0.5))
-	sky_material.sun_angle_max = 30.0
-	sky_material.sun_curve = 0.15
+	sky_material.energy_multiplier = 1.22
+	sky_material.sky_curve = 0.22
+	sky_material.ground_curve = 0.18
+	sky_material.sun_angle_max = 20.0
+	sky_material.sun_curve = 0.08
+	sky_material.use_debanding = true
+
+	# Apply first palette immediately (psychedelic dusk default)
+	_apply_palette(Color(0.09, 0.08, 0.34), Color(0.70, 0.26, 0.56), Color(0.09, 0.05, 0.14))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
 
-	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Simple skybox generated!")
+	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Enhanced skybox generated!")
 
 func randomize_colors() -> void:
 	"""Change to a new random sky color scheme"""
@@ -86,27 +98,27 @@ func randomize_colors() -> void:
 	_transition_timer = 0.0
 	_hold_timer = 0.0
 	_is_transitioning = false
-	var palette: Array = _palettes[_current_palette_index]
-	_apply_palette(palette[0], palette[1])
+	var palette: Dictionary = _palettes[_current_palette_index]
+	_apply_palette(palette.top, palette.horizon, palette.ground)
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skybox colors randomized!")
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		[Color(0.95, 0.2, 0.8), Color(0.2, 0.9, 0.95)],   # Neon magenta -> cyan
-		[Color(0.15, 0.95, 0.6), Color(0.9, 0.7, 0.1)],   # Acid green -> gold
-		[Color(0.75, 0.25, 1.0), Color(0.15, 0.4, 0.95)], # Ultraviolet -> electric blue
-		[Color(1.0, 0.35, 0.15), Color(1.0, 0.1, 0.6)],   # Hot orange -> neon pink
-		[Color(0.2, 0.9, 0.4), Color(0.8, 0.2, 1.0)],     # Lime -> purple
-		[Color(0.1, 0.85, 1.0), Color(0.9, 0.3, 0.2)],    # Aqua -> coral
+		{"top": Color(0.09, 0.08, 0.34), "horizon": Color(0.70, 0.26, 0.56), "ground": Color(0.09, 0.05, 0.14)}, # ultraviolet magenta
+		{"top": Color(0.05, 0.18, 0.38), "horizon": Color(0.18, 0.76, 0.68), "ground": Color(0.05, 0.08, 0.12)}, # cyan surge
+		{"top": Color(0.14, 0.07, 0.30), "horizon": Color(0.84, 0.42, 0.28), "ground": Color(0.10, 0.06, 0.10)}, # tangerine synthwave
+		{"top": Color(0.08, 0.14, 0.30), "horizon": Color(0.56, 0.38, 0.90), "ground": Color(0.08, 0.06, 0.13)}, # violet pulse
+		{"top": Color(0.06, 0.20, 0.24), "horizon": Color(0.20, 0.84, 0.48), "ground": Color(0.07, 0.09, 0.08)}, # acid aurora
+		{"top": Color(0.12, 0.08, 0.22), "horizon": Color(0.92, 0.34, 0.78), "ground": Color(0.12, 0.05, 0.11)}, # fuchsia bloom
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
 	_transition_timer = 0.0
 	_hold_timer = 0.0
 	_is_transitioning = false
-	var palette: Array = _palettes[_current_palette_index]
-	_apply_palette(palette[0], palette[1])
+	var palette: Dictionary = _palettes[_current_palette_index]
+	_apply_palette(palette.top, palette.horizon, palette.ground)
 	# Schedule first transition after initial hold duration
 	if is_inside_tree() and _palettes.size() >= 2:
 		get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
@@ -121,13 +133,14 @@ func _start_next_transition() -> void:
 	_is_transitioning = true
 	set_process(true)
 
-func _apply_palette(top_color: Color, horizon_color: Color) -> void:
+func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color) -> void:
 	if not sky_material:
 		return
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
-	sky_material.ground_bottom_color = top_color.darkened(0.5)
-	sky_material.ground_horizon_color = horizon_color.darkened(0.35)
+	sky_material.ground_bottom_color = ground_color.darkened(0.15)
+	sky_material.ground_horizon_color = ground_color.lightened(0.1)
+
 
 func set_star_density(_density: float) -> void:
 	pass
