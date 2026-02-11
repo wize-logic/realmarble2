@@ -2955,6 +2955,9 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator = Node3D.new()
 	skybox_generator.name = "SkyboxGenerator"
 	skybox_generator.set_script(SkyboxGenerator)
+	if menu_preview:
+		skybox_generator.menu_static_mode = true
+		skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Procedural level generation complete!")

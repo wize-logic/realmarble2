@@ -10,6 +10,8 @@ extends Node3D
 @export var star_density: float = 0.3
 @export var cloud_density: float = 0.4
 @export var nebula_intensity: float = 0.5
+@export var menu_static_mode: bool = false
+@export var menu_static_palette: int = 1
 
 var sky_material: ProceduralSkyMaterial
 var _cloud_cover_texture: ImageTexture = null
@@ -23,6 +25,8 @@ var _is_transitioning: bool = false
 func _ready() -> void:
 	generate_skybox()
 	_setup_color_cycle()
+	if menu_static_mode:
+		_apply_menu_static_lighting()
 	set_process(false)
 
 func _process(delta: float) -> void:
@@ -47,7 +51,7 @@ func _process(delta: float) -> void:
 			_hold_timer = 0.0
 			set_process(false)
 			# Schedule next transition after hold duration
-			if is_inside_tree():
+			if is_inside_tree() and not menu_static_mode:
 				get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
 	else:
 		# Hold phase is handled by a timer; _process only runs during transitions
@@ -70,9 +74,15 @@ func generate_skybox() -> void:
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	environment.tonemap_white = 5.0
 
+	if menu_static_mode:
+		environment.ambient_light_energy = 0.70
+		environment.tonemap_white = 4.4
+
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
 	sky_material.energy_multiplier = 1.24
+	if menu_static_mode:
+		sky_material.energy_multiplier = 1.08
 	sky_material.sky_curve = 0.22
 	sky_material.ground_curve = 0.18
 	sky_material.sun_angle_max = 36.0
@@ -124,11 +134,11 @@ func _setup_color_cycle() -> void:
 	var palette: Dictionary = _palettes[_current_palette_index]
 	_apply_palette(palette.top, palette.horizon, palette.ground)
 	# Schedule first transition after initial hold duration
-	if is_inside_tree() and _palettes.size() >= 2:
+	if is_inside_tree() and _palettes.size() >= 2 and not menu_static_mode:
 		get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
 
 func _start_next_transition() -> void:
-	if _palettes.size() < 2:
+	if menu_static_mode or _palettes.size() < 2:
 		return
 	_next_palette_index = randi() % _palettes.size()
 	if _next_palette_index == _current_palette_index:
@@ -145,6 +155,17 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.ground_bottom_color = ground_color.darkened(0.15)
 	sky_material.ground_horizon_color = ground_color.lightened(0.22)
 
+
+func _apply_menu_static_lighting() -> void:
+	if _palettes.is_empty():
+		return
+	_current_palette_index = clampi(menu_static_palette, 0, _palettes.size() - 1)
+	_next_palette_index = _current_palette_index
+	_transition_timer = 0.0
+	_is_transitioning = false
+	var palette: Dictionary = _palettes[_current_palette_index]
+	_apply_palette(palette.top, palette.horizon, palette.ground)
+	set_process(false)
 
 func _apply_cloud_cover_if_supported() -> void:
 	if not sky_material:
