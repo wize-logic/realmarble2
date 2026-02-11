@@ -2874,10 +2874,16 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			env = Environment.new()
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.56, 0.56, 0.56)
-		env.ambient_light_energy = 0.56
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.tonemap_white = 3.4
+		if menu_preview:
+			env.ambient_light_color = Color(0.56, 0.56, 0.56)
+			env.ambient_light_energy = 0.56
+			env.tonemap_white = 3.4
+		else:
+			# Gameplay should be brighter than menu: same flat style, higher baked exposure.
+			env.ambient_light_color = Color(0.63, 0.63, 0.63)
+			env.ambient_light_energy = 0.72
+			env.tonemap_white = 4.4
 
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
@@ -2977,8 +2983,9 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator = Node3D.new()
 	skybox_generator.name = "SkyboxGenerator"
 	skybox_generator.set_script(SkyboxGenerator)
-	skybox_generator.menu_static_mode = true
-	skybox_generator.menu_static_palette = 1
+	skybox_generator.menu_static_mode = menu_preview
+	if menu_preview:
+		skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
 	await get_tree().process_frame
 

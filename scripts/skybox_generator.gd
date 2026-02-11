@@ -70,22 +70,23 @@ func generate_skybox() -> void:
 		world_env.environment = environment
 
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color(0.55, 0.56, 0.58)
-	environment.ambient_light_energy = 0.56
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
-	environment.tonemap_white = 3.4
-
 	if menu_static_mode:
-		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		environment.ambient_light_color = Color(0.55, 0.56, 0.58)
 		environment.ambient_light_energy = 0.56
 		environment.tonemap_white = 3.4
+	else:
+		# Gameplay lighting intentionally brighter than menu while keeping simple baked look.
+		environment.ambient_light_color = Color(0.62, 0.63, 0.64)
+		environment.ambient_light_energy = 0.72
+		environment.tonemap_white = 4.4
 
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 0.95
 	if menu_static_mode:
 		sky_material.energy_multiplier = 0.95
+	else:
+		sky_material.energy_multiplier = 1.15
 	sky_material.sky_curve = 0.22
 	sky_material.ground_curve = 0.04
 	sky_material.sun_angle_max = 2.0
@@ -155,8 +156,8 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 		return
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
-	sky_material.ground_bottom_color = horizon_color.darkened(0.08)
-	sky_material.ground_horizon_color = horizon_color.darkened(0.02)
+	sky_material.ground_bottom_color = ground_color.darkened(0.10)
+	sky_material.ground_horizon_color = ground_color.lightened(0.08)
 
 
 func _apply_menu_static_lighting() -> void:
