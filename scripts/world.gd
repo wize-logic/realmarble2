@@ -2721,7 +2721,7 @@ func _create_marble_preview() -> void:
 	# Add an additional fill light for better showcase
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.22
+	fill_light.light_energy = 0.12
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2980,6 +2980,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator.menu_static_mode = true
 	skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
+	await get_tree().process_frame
 
 	_apply_prebaked_lighting_profile(menu_preview)
 

@@ -595,9 +595,9 @@ func _ready() -> void:
 
 		# Configure light properties - enhanced for marble visibility
 		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Will be updated to match marble color
-		aura_light.light_energy = 1.1  # Subtle visibility boost without bright floor bloom
-		aura_light.omni_range = 3.0  # Smaller radius to avoid large hotspot under marble
-		aura_light.omni_attenuation = 2.3  # Faster falloff to contain local glow
+		aura_light.light_energy = 0.35  # Subtle visibility boost without bright floor bloom
+		aura_light.omni_range = 1.8  # Smaller radius to avoid large hotspot under marble
+		aura_light.omni_attenuation = 3.2  # Faster falloff to contain local glow
 
 		# Shadow settings - disable for performance
 		aura_light.shadow_enabled = false
