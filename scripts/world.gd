@@ -2881,8 +2881,8 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_energy = 0.30
-		sun_light.light_indirect_energy = 0.22
+		sun_light.light_energy = 0.0
+		sun_light.light_indirect_energy = 0.0
 		sun_light.shadow_enabled = false
 
 # ============================================================================
