@@ -70,9 +70,9 @@ func generate_skybox() -> void:
 		world_env.environment = environment
 
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	environment.ambient_light_energy = 0.74
+	environment.ambient_light_energy = 0.48
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
-	environment.tonemap_white = 4.6
+	environment.tonemap_white = 3.0
 
 	if menu_static_mode:
 		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -82,7 +82,7 @@ func generate_skybox() -> void:
 
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 1.12
+	sky_material.energy_multiplier = 0.82
 	if menu_static_mode:
 		sky_material.energy_multiplier = 0.82
 	sky_material.sky_curve = 0.22
@@ -212,9 +212,7 @@ func _create_cloud_cover_texture() -> ImageTexture:
 			var n: float = noise.get_noise_3d(nx, ny, nz)
 			var cloud_signal: float = clampf((n + 1.0) * 0.5, 0.0, 1.0)
 			cloud_signal = _smoothstep(0.50, 0.78, cloud_signal)
-			# Keep clouds across most of the dome; only fade near poles to avoid hard borders.
-			var pole_fade: float = _smoothstep(0.02, 0.14, v) * (1.0 - _smoothstep(0.90, 0.995, v))
-			var alpha: float = cloud_signal * pole_fade
+			var alpha: float = cloud_signal * clampf(cloud_density, 0.0, 1.0)
 			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
 
 	var texture := ImageTexture.create_from_image(image)

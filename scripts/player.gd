@@ -595,12 +595,13 @@ func _ready() -> void:
 
 		# Configure light properties - enhanced for marble visibility
 		aura_light.light_color = Color(0.6, 0.8, 1.0)  # Will be updated to match marble color
-		aura_light.light_energy = 2.5  # Brighter to make marble stand out
-		aura_light.omni_range = 5.0  # Larger illumination radius
-		aura_light.omni_attenuation = 1.5  # Softer falloff for wider glow
+		aura_light.light_energy = 1.1  # Subtle visibility boost without bright floor bloom
+		aura_light.omni_range = 3.0  # Smaller radius to avoid large hotspot under marble
+		aura_light.omni_attenuation = 2.3  # Faster falloff to contain local glow
 
 		# Shadow settings - disable for performance
 		aura_light.shadow_enabled = false
+		aura_light.position = Vector3(0, 0.35, 0)  # Lift glow center above floor to reduce under-marble hotspot
 
 	# Create grind spark particles (Sonic series style)
 	# PERF: Skip for bots on HTML5 - bots don't grind rails

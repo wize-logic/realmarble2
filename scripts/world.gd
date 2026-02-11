@@ -2721,7 +2721,7 @@ func _create_marble_preview() -> void:
 	# Add an additional fill light for better showcase
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.5
+	fill_light.light_energy = 0.22
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2875,17 +2875,14 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = Color(0.56, 0.56, 0.56)
-		env.ambient_light_energy = 0.68
+		env.ambient_light_energy = 0.42
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.tonemap_white = 4.6
-		if menu_preview:
-			env.ambient_light_energy = 0.42
-			env.tonemap_white = 2.6
+		env.tonemap_white = 2.6
 
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_energy = 0.34
-		sun_light.light_indirect_energy = 0.22
+		sun_light.light_energy = 0.22
+		sun_light.light_indirect_energy = 0.15
 		sun_light.shadow_enabled = false
 
 # ============================================================================
@@ -2980,9 +2977,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	skybox_generator = Node3D.new()
 	skybox_generator.name = "SkyboxGenerator"
 	skybox_generator.set_script(SkyboxGenerator)
-	if menu_preview:
-		skybox_generator.menu_static_mode = true
-		skybox_generator.menu_static_palette = 1
+	skybox_generator.menu_static_mode = true
+	skybox_generator.menu_static_palette = 1
 	add_child(skybox_generator)
 
 	_apply_prebaked_lighting_profile(menu_preview)
