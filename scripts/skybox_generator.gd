@@ -71,21 +71,21 @@ func generate_skybox() -> void:
 
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color(0.55, 0.56, 0.58)
-	environment.ambient_light_energy = 0.42
+	environment.ambient_light_energy = 0.56
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
-	environment.tonemap_white = 2.6
+	environment.tonemap_white = 3.4
 
 	if menu_static_mode:
 		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		environment.ambient_light_color = Color(0.55, 0.56, 0.58)
-		environment.ambient_light_energy = 0.42
-		environment.tonemap_white = 2.6
+		environment.ambient_light_energy = 0.56
+		environment.tonemap_white = 3.4
 
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 0.72
+	sky_material.energy_multiplier = 0.95
 	if menu_static_mode:
-		sky_material.energy_multiplier = 0.72
+		sky_material.energy_multiplier = 0.95
 	sky_material.sky_curve = 0.22
 	sky_material.ground_curve = 0.04
 	sky_material.sun_angle_max = 2.0
