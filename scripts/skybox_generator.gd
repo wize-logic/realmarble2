@@ -37,7 +37,7 @@ func _process(delta: float) -> void:
 		var top_color: Color = from_palette.top.lerp(to_palette.top, progress)
 		var horizon_color: Color = from_palette.horizon.lerp(to_palette.horizon, progress)
 		var ground_color: Color = from_palette.ground.lerp(to_palette.ground, progress)
-		_apply_palette(top_color, horizon_color, ground_color, from_palette.get("sun", Color(1.0, 0.74, 0.92)).lerp(to_palette.get("sun", Color(1.0, 0.74, 0.92)), progress))
+		_apply_palette(top_color, horizon_color, ground_color)
 
 		if progress >= 1.0:
 			_current_palette_index = _next_palette_index
@@ -76,11 +76,10 @@ func generate_skybox() -> void:
 	sky_material.ground_curve = 0.18
 	sky_material.sun_angle_max = 36.0
 	sky_material.sun_curve = 0.18
-	sky_material.sun_color = Color(1.0, 0.76, 0.92)
 	sky_material.use_debanding = true
 
 	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.22, 0.12, 0.52), Color(0.82, 0.40, 0.64), Color(0.20, 0.10, 0.22), Color(1.0, 0.74, 0.92))
+	_apply_palette(Color(0.22, 0.12, 0.52), Color(0.82, 0.40, 0.64), Color(0.20, 0.10, 0.22))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -100,20 +99,20 @@ func randomize_colors() -> void:
 	_hold_timer = 0.0
 	_is_transitioning = false
 	var palette: Dictionary = _palettes[_current_palette_index]
-	_apply_palette(palette.top, palette.horizon, palette.ground, palette.get("sun", Color(1.0, 0.74, 0.92)))
+	_apply_palette(palette.top, palette.horizon, palette.ground)
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Skybox colors randomized!")
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		{"top": Color(0.22, 0.12, 0.52), "horizon": Color(0.82, 0.40, 0.64), "ground": Color(0.20, 0.10, 0.22), "sun": Color(1.0, 0.74, 0.92)}, # ultraviolet bloom
-		{"top": Color(0.10, 0.28, 0.56), "horizon": Color(0.24, 0.84, 0.76), "ground": Color(0.10, 0.14, 0.20), "sun": Color(0.84, 0.98, 1.0)}, # cyan glass
-		{"top": Color(0.26, 0.12, 0.44), "horizon": Color(0.92, 0.54, 0.30), "ground": Color(0.16, 0.10, 0.16), "sun": Color(1.0, 0.90, 0.70)}, # synth amber
-		{"top": Color(0.14, 0.20, 0.46), "horizon": Color(0.64, 0.48, 0.96), "ground": Color(0.12, 0.10, 0.20), "sun": Color(0.90, 0.86, 1.0)}, # violet pulse
-		{"top": Color(0.10, 0.30, 0.30), "horizon": Color(0.34, 0.92, 0.56), "ground": Color(0.10, 0.14, 0.12), "sun": Color(0.88, 1.0, 0.80)}, # acid aurora
-		{"top": Color(0.24, 0.12, 0.34), "horizon": Color(0.98, 0.40, 0.82), "ground": Color(0.16, 0.08, 0.16), "sun": Color(1.0, 0.82, 0.98)}, # fuchsia haze
-		{"top": Color(0.14, 0.16, 0.50), "horizon": Color(0.44, 0.74, 0.98), "ground": Color(0.12, 0.10, 0.22), "sun": Color(0.86, 0.94, 1.0)}, # electric dusk
-		{"top": Color(0.20, 0.08, 0.40), "horizon": Color(0.96, 0.64, 0.40), "ground": Color(0.18, 0.10, 0.14), "sun": Color(1.0, 0.88, 0.68)}, # neon sunset
+		{"top": Color(0.22, 0.12, 0.52), "horizon": Color(0.82, 0.40, 0.64), "ground": Color(0.20, 0.10, 0.22)}, # ultraviolet bloom
+		{"top": Color(0.10, 0.28, 0.56), "horizon": Color(0.24, 0.84, 0.76), "ground": Color(0.10, 0.14, 0.20)}, # cyan glass
+		{"top": Color(0.26, 0.12, 0.44), "horizon": Color(0.92, 0.54, 0.30), "ground": Color(0.16, 0.10, 0.16)}, # synth amber
+		{"top": Color(0.14, 0.20, 0.46), "horizon": Color(0.64, 0.48, 0.96), "ground": Color(0.12, 0.10, 0.20)}, # violet pulse
+		{"top": Color(0.10, 0.30, 0.30), "horizon": Color(0.34, 0.92, 0.56), "ground": Color(0.10, 0.14, 0.12)}, # acid aurora
+		{"top": Color(0.24, 0.12, 0.34), "horizon": Color(0.98, 0.40, 0.82), "ground": Color(0.16, 0.08, 0.16)}, # fuchsia haze
+		{"top": Color(0.14, 0.16, 0.50), "horizon": Color(0.44, 0.74, 0.98), "ground": Color(0.12, 0.10, 0.22)}, # electric dusk
+		{"top": Color(0.20, 0.08, 0.40), "horizon": Color(0.96, 0.64, 0.40), "ground": Color(0.18, 0.10, 0.14)}, # neon sunset
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
@@ -121,7 +120,7 @@ func _setup_color_cycle() -> void:
 	_hold_timer = 0.0
 	_is_transitioning = false
 	var palette: Dictionary = _palettes[_current_palette_index]
-	_apply_palette(palette.top, palette.horizon, palette.ground, palette.get("sun", Color(1.0, 0.74, 0.92)))
+	_apply_palette(palette.top, palette.horizon, palette.ground)
 	# Schedule first transition after initial hold duration
 	if is_inside_tree() and _palettes.size() >= 2:
 		get_tree().create_timer(color_hold_duration / max(animation_speed, 0.01)).timeout.connect(_start_next_transition)
@@ -136,14 +135,13 @@ func _start_next_transition() -> void:
 	_is_transitioning = true
 	set_process(true)
 
-func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color, sun_color: Color) -> void:
+func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color) -> void:
 	if not sky_material:
 		return
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
 	sky_material.ground_bottom_color = ground_color.darkened(0.15)
 	sky_material.ground_horizon_color = ground_color.lightened(0.22)
-	sky_material.sun_color = sun_color
 
 
 func set_star_density(_density: float) -> void:
