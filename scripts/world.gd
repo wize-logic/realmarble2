@@ -2877,18 +2877,17 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# Ambient fill — same for menu and gameplay (directional light handles the rest)
-		env.ambient_light_color = Color(0.55, 0.56, 0.58)
-		env.ambient_light_energy = 0.55
+		env.ambient_light_color = Color(0.65, 0.65, 0.68)
+		env.ambient_light_energy = 0.75
 		env.tonemap_white = 3.4
 
-	# DirectionalLight3D is the primary scene light — lights all surfaces properly
+	# DirectionalLight3D as primary sun — single light pass, very cheap
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(0.95, 0.92, 0.84)  # Warm white sun
-		sun_light.light_energy = 0.8
-		sun_light.light_indirect_energy = 0.3
-		sun_light.shadow_enabled = false  # Shadows off for WebGL2 perf
+		sun_light.light_color = Color(0.98, 0.95, 0.88)
+		sun_light.light_energy = 1.2
+		sun_light.light_indirect_energy = 0.4
+		sun_light.shadow_enabled = false
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
