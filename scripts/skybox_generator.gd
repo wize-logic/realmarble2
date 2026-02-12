@@ -69,17 +69,10 @@ func generate_skybox() -> void:
 		environment = Environment.new()
 		world_env.environment = environment
 
+	# NOTE: ambient_light and tonemap are set by _apply_prebaked_lighting_profile() in world.gd
+	# which runs AFTER skybox generation. Only set sky-specific properties here.
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
-	if menu_static_mode:
-		environment.ambient_light_color = Color(0.55, 0.56, 0.58)
-		environment.ambient_light_energy = 0.56
-		environment.tonemap_white = 3.4
-	else:
-		# Gameplay lighting intentionally brighter than menu while keeping simple baked look.
-		environment.ambient_light_color = Color(0.62, 0.63, 0.64)
-		environment.ambient_light_energy = 0.72
-		environment.tonemap_white = 4.4
 
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()

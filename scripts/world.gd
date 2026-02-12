@@ -2867,8 +2867,8 @@ func play_countdown_beep(text: String) -> void:
 
 func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 	## Pre-baked lighting profile: ambient fill + shader-baked directional + strategic OmniLights.
-	## The procedural_surface shader handles fake directional light and AO in-shader,
-	## so real ambient can be lower to let OmniLights and shader lighting provide depth.
+	## Gameplay levels have complex geometry (walls, overhangs, bunkers) that eats light,
+	## so they need significantly MORE ambient than the simple flat-floor menu.
 	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
 	if world_env:
 		var env: Environment = world_env.environment
@@ -2877,10 +2877,16 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# Reduced ambient lets OmniLights and shader baked-light provide visible contrast
-		env.ambient_light_color = Color(0.50, 0.50, 0.52)
-		env.ambient_light_energy = 0.45
-		env.tonemap_white = 3.4
+		if menu_preview:
+			# Menu: flat floor + video walls are self-lit, modest ambient is fine
+			env.ambient_light_color = Color(0.55, 0.56, 0.58)
+			env.ambient_light_energy = 0.55
+			env.tonemap_white = 3.4
+		else:
+			# Gameplay: complex geometry absorbs light — push ambient higher
+			env.ambient_light_color = Color(0.65, 0.65, 0.67)
+			env.ambient_light_energy = 0.80
+			env.tonemap_white = 4.0
 
 	# Keep the real sun off — the shader handles a fake baked directional instead (cheaper)
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
@@ -2935,13 +2941,13 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
-	# Re-enable strategic OmniLight3D placement (conservative: low quality, capped count)
+	# Strategic OmniLight3D placement — fills dark spots around structures
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0       # Low quality — fewest lights
-	level_generator.max_light_count = 16       # Hard cap for WebGL2 perf
-	level_generator.q3_light_energy = 0.6      # Subtle fill, not dominant
-	level_generator.q3_light_range = 30.0      # Wide coverage per light
-	level_generator.q3_grid_spacing = 35.0     # Sparse grid for fewer nodes
+	level_generator.max_light_count = 24       # Slightly higher cap for coverage
+	level_generator.q3_light_energy = 1.2      # Visible fill around structures
+	level_generator.q3_light_range = 35.0      # Wide coverage per light
+	level_generator.q3_grid_spacing = 30.0     # Moderate grid density
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
 	level_generator.q3_bounce_enabled = false
