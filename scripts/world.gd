@@ -2878,16 +2878,14 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
 		if menu_preview:
-			# Menu: flat floor + video walls are self-lit, modest ambient is fine
 			env.ambient_light_color = Color(0.55, 0.56, 0.58)
 			env.ambient_light_energy = 0.55
 			env.tonemap_white = 3.4
 		else:
-			# Gameplay: complex geometry (walls, overhangs, bunkers) absorbs light.
-			# Needs much stronger ambient than menu to appear similarly bright.
-			env.ambient_light_color = Color(0.72, 0.72, 0.74)
-			env.ambient_light_energy = 1.0
-			env.tonemap_white = 4.0
+			# Slightly stronger ambient than menu to compensate for complex geometry
+			env.ambient_light_color = Color(0.58, 0.58, 0.60)
+			env.ambient_light_energy = 0.62
+			env.tonemap_white = 3.4
 
 	# Keep the real sun off — the shader handles a fake baked directional instead (cheaper)
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
@@ -2945,10 +2943,10 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	# Strategic OmniLight3D placement — fills dark spots around structures
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0       # Low quality — fewest lights
-	level_generator.max_light_count = 24       # Slightly higher cap for coverage
-	level_generator.q3_light_energy = 1.2      # Visible fill around structures
-	level_generator.q3_light_range = 35.0      # Wide coverage per light
-	level_generator.q3_grid_spacing = 30.0     # Moderate grid density
+	level_generator.max_light_count = 20       # Moderate cap for WebGL2
+	level_generator.q3_light_energy = 0.8      # Subtle fill, not dominant
+	level_generator.q3_light_range = 30.0      # Wide coverage per light
+	level_generator.q3_grid_spacing = 32.0     # Sparse grid
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
 	level_generator.q3_bounce_enabled = false

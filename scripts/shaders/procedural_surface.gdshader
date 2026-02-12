@@ -14,7 +14,7 @@ uniform float wear_amount : hint_range(0.0, 1.0) = 0.2;
 // Fake baked directional light (emulates pre-baked sun contribution)
 uniform vec3 baked_light_dir = vec3(-0.5, -0.7, -0.3);
 uniform vec3 baked_light_color : source_color = vec3(0.95, 0.9, 0.82);
-uniform float baked_light_energy : hint_range(0.0, 2.0) = 0.4;
+uniform float baked_light_energy : hint_range(0.0, 2.0) = 0.25;
 
 // Cheap hash noise (single sample, no octaves)
 float hash(vec2 p) {
