@@ -2877,25 +2877,26 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.ambient_light_color = Color(0.55, 0.50, 0.62)
-		env.ambient_light_energy = 0.5
-		env.tonemap_white = 3.6
-		env.tonemap_exposure = 1.0
-		# Glow / bloom — subtle psychedelic bloom on bright surfaces
+		# MBU-style: moderate ambient tinted to sky, high contrast
+		env.ambient_light_color = Color(0.45, 0.40, 0.58)
+		env.ambient_light_energy = 0.45
+		env.tonemap_white = 3.2
+		env.tonemap_exposure = 1.05
+		# MBU signature: strong HDR bloom — makes sky glow, marbles shimmer
 		env.glow_enabled = true
-		env.glow_intensity = 0.4
-		env.glow_strength = 0.6
-		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-		env.glow_bloom = 0.1
-		env.glow_hdr_threshold = 0.9
-		env.glow_hdr_scale = 1.2
+		env.glow_intensity = 0.8
+		env.glow_strength = 1.0
+		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+		env.glow_bloom = 0.25
+		env.glow_hdr_threshold = 0.8
+		env.glow_hdr_scale = 2.0
 
-	# DirectionalLight3D as primary sun — single light pass, very cheap
+	# DirectionalLight3D — clean white sun, MBU-style
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(0.96, 0.92, 0.88)
-		sun_light.light_energy = 1.1
-		sun_light.light_indirect_energy = 0.35
+		sun_light.light_color = Color(1.0, 0.98, 0.94)
+		sun_light.light_energy = 1.3
+		sun_light.light_indirect_energy = 0.4
 		sun_light.shadow_enabled = false
 
 # ============================================================================

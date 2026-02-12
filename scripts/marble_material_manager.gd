@@ -73,10 +73,10 @@ func create_marble_material(color_index: int = -1) -> Material:
 	material.set_shader_parameter("secondary_color", boosted_secondary)
 	material.set_shader_parameter("swirl_color", boosted_swirl)
 
-	# Set material properties with slight randomization
-	material.set_shader_parameter("glossiness", randf_range(0.4, 0.6))
-	material.set_shader_parameter("metallic_amount", randf_range(0.05, 0.15))
-	material.set_shader_parameter("transparency", 0.02)  # Fixed low transparency for opaque marbles
+	# MBU-style: glossy, shiny marbles with strong specular
+	material.set_shader_parameter("glossiness", randf_range(0.7, 0.85))
+	material.set_shader_parameter("metallic_amount", randf_range(0.15, 0.3))
+	material.set_shader_parameter("transparency", 0.02)
 
 	# Randomize pattern properties for uniqueness
 	material.set_shader_parameter("swirl_scale", randf_range(1.5, 2.5))
@@ -84,13 +84,13 @@ func create_marble_material(color_index: int = -1) -> Material:
 	material.set_shader_parameter("bubble_density", randf_range(0.3, 0.5))
 	material.set_shader_parameter("time_speed", randf_range(0.15, 0.25))
 
-	# Special marble lighting - subtle glow to help marbles stand out (reduced from previous bright values)
-	material.set_shader_parameter("glow_strength", randf_range(0.08, 0.15))
+	# MBU-style marble glow — visible rim lighting and subtle emission
+	material.set_shader_parameter("glow_strength", randf_range(0.15, 0.25))
 	material.set_shader_parameter("glow_pulse_speed", randf_range(1.0, 1.4))
-	material.set_shader_parameter("glow_pulse_amount", randf_range(0.05, 0.1))
+	material.set_shader_parameter("glow_pulse_amount", randf_range(0.08, 0.15))
 	material.set_shader_parameter("outer_rim_power", randf_range(2.0, 2.5))
-	material.set_shader_parameter("outer_rim_intensity", randf_range(0.15, 0.25))
-	material.set_shader_parameter("rim_intensity", randf_range(0.12, 0.2))
+	material.set_shader_parameter("outer_rim_intensity", randf_range(0.25, 0.4))
+	material.set_shader_parameter("rim_intensity", randf_range(0.2, 0.35))
 
 	return material
 
@@ -100,10 +100,10 @@ func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial
 	material.albedo_color = _boost_color(scheme.primary)
 	material.albedo_texture = ROLL_TEXTURE
 	material.emission_enabled = true
-	material.emission = material.albedo_color * 0.12
-	material.roughness = randf_range(0.6, 0.75)
-	material.metallic = randf_range(0.0, 0.05)
-	material.specular = 0.1
+	material.emission = material.albedo_color * 0.2
+	material.roughness = randf_range(0.2, 0.35)
+	material.metallic = randf_range(0.15, 0.3)
+	material.specular = 0.5
 	material.uv1_scale = Vector3(3.5, 3.5, 3.5)
 	material.uv1_triplanar = true
 	return material

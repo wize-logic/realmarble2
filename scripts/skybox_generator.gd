@@ -77,18 +77,18 @@ func generate_skybox() -> void:
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
 	if menu_static_mode:
-		sky_material.energy_multiplier = 0.95
+		sky_material.energy_multiplier = 1.0
 	else:
-		sky_material.energy_multiplier = 1.15
-	sky_material.sky_curve = 0.18
-	sky_material.ground_curve = 0.18
-	sky_material.sun_angle_max = 2.0
-	sky_material.sun_curve = 0.02
+		sky_material.energy_multiplier = 1.4
+	sky_material.sky_curve = 0.12
+	sky_material.ground_curve = 0.12
+	sky_material.sun_angle_max = 1.0
+	sky_material.sun_curve = 0.01
 	sky_material.use_debanding = true
 	_apply_cloud_cover_if_supported()
 
 	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.22, 0.12, 0.52), Color(0.82, 0.40, 0.64), Color(0.36, 0.18, 0.52))
+	_apply_palette(Color(0.06, 0.02, 0.18), Color(0.85, 0.30, 0.65), Color(0.14, 0.04, 0.28))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -114,14 +114,15 @@ func randomize_colors() -> void:
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		{"top": Color(0.22, 0.12, 0.52), "horizon": Color(0.82, 0.40, 0.64), "ground": Color(0.36, 0.18, 0.52)}, # ultraviolet bloom
-		{"top": Color(0.10, 0.28, 0.56), "horizon": Color(0.24, 0.84, 0.76), "ground": Color(0.12, 0.32, 0.48)}, # cyan glass
-		{"top": Color(0.26, 0.12, 0.44), "horizon": Color(0.92, 0.54, 0.30), "ground": Color(0.38, 0.18, 0.32)}, # synth amber
-		{"top": Color(0.14, 0.20, 0.46), "horizon": Color(0.64, 0.48, 0.96), "ground": Color(0.24, 0.16, 0.46)}, # violet pulse
-		{"top": Color(0.10, 0.30, 0.30), "horizon": Color(0.34, 0.92, 0.56), "ground": Color(0.14, 0.30, 0.24)}, # acid aurora
-		{"top": Color(0.24, 0.12, 0.34), "horizon": Color(0.98, 0.40, 0.82), "ground": Color(0.36, 0.14, 0.34)}, # fuchsia haze
-		{"top": Color(0.14, 0.16, 0.50), "horizon": Color(0.44, 0.74, 0.98), "ground": Color(0.20, 0.22, 0.50)}, # electric dusk
-		{"top": Color(0.20, 0.08, 0.40), "horizon": Color(0.96, 0.64, 0.40), "ground": Color(0.34, 0.16, 0.28)}, # neon sunset
+		# MBU-inspired deep space nebula palettes — dark zenith, vivid horizon, rich ground
+		{"top": Color(0.06, 0.02, 0.18), "horizon": Color(0.85, 0.30, 0.65), "ground": Color(0.14, 0.04, 0.28)}, # nebula magenta
+		{"top": Color(0.02, 0.06, 0.22), "horizon": Color(0.20, 0.75, 0.90), "ground": Color(0.04, 0.12, 0.30)}, # deep ocean cyan
+		{"top": Color(0.10, 0.02, 0.20), "horizon": Color(0.95, 0.50, 0.20), "ground": Color(0.18, 0.06, 0.16)}, # solar flare
+		{"top": Color(0.04, 0.04, 0.20), "horizon": Color(0.55, 0.40, 0.95), "ground": Color(0.10, 0.06, 0.28)}, # cosmic violet
+		{"top": Color(0.02, 0.10, 0.12), "horizon": Color(0.25, 0.90, 0.50), "ground": Color(0.04, 0.16, 0.14)}, # emerald nebula
+		{"top": Color(0.12, 0.02, 0.16), "horizon": Color(1.0, 0.35, 0.75), "ground": Color(0.20, 0.04, 0.22)}, # hot pink nova
+		{"top": Color(0.03, 0.05, 0.22), "horizon": Color(0.35, 0.65, 1.0), "ground": Color(0.06, 0.10, 0.30)}, # electric blue
+		{"top": Color(0.08, 0.02, 0.16), "horizon": Color(1.0, 0.55, 0.25), "ground": Color(0.16, 0.06, 0.12)}, # amber sunset
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
@@ -150,7 +151,7 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
 	sky_material.ground_bottom_color = ground_color
-	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.4)
+	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.5)
 
 
 func _apply_menu_static_lighting() -> void:
