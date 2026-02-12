@@ -2866,9 +2866,9 @@ func play_countdown_beep(text: String) -> void:
 			playback.push_frame(Vector2(value, value))
 
 func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
-	## Pre-baked lighting profile: ambient fill + shader-baked directional + strategic OmniLights.
-	## Gameplay levels have complex geometry (walls, overhangs, bunkers) that eats light,
-	## so they need significantly MORE ambient than the simple flat-floor menu.
+	## Lighting profile: DirectionalLight3D as primary sun + ambient fill.
+	## DirectionalLight3D properly illuminates all surfaces through the PBR pipeline.
+	## Ambient provides fill for areas the directional doesn't reach.
 	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
 	if world_env:
 		var env: Environment = world_env.environment
@@ -2877,22 +2877,18 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		if menu_preview:
-			env.ambient_light_color = Color(0.55, 0.56, 0.58)
-			env.ambient_light_energy = 0.55
-			env.tonemap_white = 3.4
-		else:
-			# Slightly stronger ambient than menu to compensate for complex geometry
-			env.ambient_light_color = Color(0.58, 0.58, 0.60)
-			env.ambient_light_energy = 0.62
-			env.tonemap_white = 3.4
+		# Ambient fill — same for menu and gameplay (directional light handles the rest)
+		env.ambient_light_color = Color(0.55, 0.56, 0.58)
+		env.ambient_light_energy = 0.55
+		env.tonemap_white = 3.4
 
-	# Keep the real sun off — the shader handles a fake baked directional instead (cheaper)
+	# DirectionalLight3D is the primary scene light — lights all surfaces properly
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_energy = 0.0
-		sun_light.light_indirect_energy = 0.0
-		sun_light.shadow_enabled = false
+		sun_light.light_color = Color(0.95, 0.92, 0.84)  # Warm white sun
+		sun_light.light_energy = 0.8
+		sun_light.light_indirect_energy = 0.3
+		sun_light.shadow_enabled = false  # Shadows off for WebGL2 perf
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
@@ -2940,13 +2936,13 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
-	# Strategic OmniLight3D placement — fills dark spots around structures
+	# OmniLights as accent highlights (DirectionalLight3D is the primary light source)
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0       # Low quality — fewest lights
-	level_generator.max_light_count = 20       # Moderate cap for WebGL2
-	level_generator.q3_light_energy = 0.8      # Subtle fill, not dominant
-	level_generator.q3_light_range = 30.0      # Wide coverage per light
-	level_generator.q3_grid_spacing = 32.0     # Sparse grid
+	level_generator.max_light_count = 16       # Accent only, keep count low
+	level_generator.q3_light_energy = 0.5      # Subtle accent, sun does the heavy lifting
+	level_generator.q3_light_range = 25.0      # Localized highlights
+	level_generator.q3_grid_spacing = 40.0     # Very sparse — just key positions
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
 	level_generator.q3_bounce_enabled = false
