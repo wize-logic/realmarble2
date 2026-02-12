@@ -2883,9 +2883,10 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			env.ambient_light_energy = 0.55
 			env.tonemap_white = 3.4
 		else:
-			# Gameplay: complex geometry absorbs light — push ambient higher
-			env.ambient_light_color = Color(0.65, 0.65, 0.67)
-			env.ambient_light_energy = 0.80
+			# Gameplay: complex geometry (walls, overhangs, bunkers) absorbs light.
+			# Needs much stronger ambient than menu to appear similarly bright.
+			env.ambient_light_color = Color(0.72, 0.72, 0.74)
+			env.ambient_light_energy = 1.0
 			env.tonemap_white = 4.0
 
 	# Keep the real sun off — the shader handles a fake baked directional instead (cheaper)

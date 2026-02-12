@@ -14,11 +14,7 @@ uniform float wear_amount : hint_range(0.0, 1.0) = 0.2;
 // Fake baked directional light (emulates pre-baked sun contribution)
 uniform vec3 baked_light_dir = vec3(-0.5, -0.7, -0.3);
 uniform vec3 baked_light_color : source_color = vec3(0.95, 0.9, 0.82);
-uniform float baked_light_energy : hint_range(0.0, 2.0) = 0.35;
-
-// Fake ambient occlusion
-uniform float ao_strength : hint_range(0.0, 1.0) = 0.35;
-uniform float ao_height_fade : hint_range(0.1, 30.0) = 6.0;
+uniform float baked_light_energy : hint_range(0.0, 2.0) = 0.4;
 
 // Cheap hash noise (single sample, no octaves)
 float hash(vec2 p) {
@@ -73,17 +69,10 @@ void fragment() {
 	float wrapped = ndotl * 0.5 + 0.5;
 	color += color * baked_light_color * wrapped * baked_light_energy;
 
-	// --- Fake ambient occlusion ---
-	// Height-based AO: darken geometry near floor level
-	float height_ao = smoothstep(0.0, ao_height_fade, world_pos.y);
-	float ao = mix(1.0 - ao_strength, 1.0, height_ao);
-	// Underside darkening: surfaces facing downward get extra shadow
-	float underside = max(-world_normal.y, 0.0) * ao_strength * 0.5;
-	ao -= underside;
-	// Corner contact hint: add noise-based micro-AO at floor level for grit
-	float contact_noise = noise(world_pos.xz * 0.5) * 0.15 * (1.0 - height_ao);
-	ao -= contact_noise;
-	color *= max(ao, 0.05);
+	// --- Fake ambient occlusion (subtle) ---
+	// Only darken undersides of overhangs (normals pointing down) — not floors
+	float underside_ao = max(-world_normal.y, 0.0) * 0.2;
+	color *= 1.0 - underside_ao;
 
 	ALBEDO = color;
 	ROUGHNESS = roughness + n * 0.05;
