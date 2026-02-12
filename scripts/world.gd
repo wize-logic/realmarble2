@@ -2877,25 +2877,25 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.ambient_light_color = Color(0.75, 0.75, 0.82)
-		env.ambient_light_energy = 1.0
-		env.tonemap_white = 4.0
-		env.tonemap_exposure = 1.15
-		# Glow / bloom — cheap post-process, adds visual punch
+		env.ambient_light_color = Color(0.55, 0.50, 0.62)
+		env.ambient_light_energy = 0.5
+		env.tonemap_white = 3.6
+		env.tonemap_exposure = 1.0
+		# Glow / bloom — subtle psychedelic bloom on bright surfaces
 		env.glow_enabled = true
-		env.glow_intensity = 0.6
-		env.glow_strength = 0.8
+		env.glow_intensity = 0.4
+		env.glow_strength = 0.6
 		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-		env.glow_bloom = 0.15
-		env.glow_hdr_threshold = 1.0
-		env.glow_hdr_scale = 1.5
+		env.glow_bloom = 0.1
+		env.glow_hdr_threshold = 0.9
+		env.glow_hdr_scale = 1.2
 
 	# DirectionalLight3D as primary sun — single light pass, very cheap
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(1.0, 0.96, 0.9)
-		sun_light.light_energy = 1.8
-		sun_light.light_indirect_energy = 0.6
+		sun_light.light_color = Color(0.96, 0.92, 0.88)
+		sun_light.light_energy = 1.1
+		sun_light.light_indirect_energy = 0.35
 		sun_light.shadow_enabled = false
 
 # ============================================================================
@@ -2948,8 +2948,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0
 	level_generator.max_light_count = 16
-	level_generator.q3_light_energy = 1.2
-	level_generator.q3_light_range = 35.0
+	level_generator.q3_light_energy = 0.8
+	level_generator.q3_light_range = 30.0
 	level_generator.q3_grid_spacing = 40.0
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
