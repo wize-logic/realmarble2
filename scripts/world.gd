@@ -2877,16 +2877,25 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.ambient_light_color = Color(0.65, 0.65, 0.68)
-		env.ambient_light_energy = 0.75
-		env.tonemap_white = 3.4
+		env.ambient_light_color = Color(0.75, 0.75, 0.82)
+		env.ambient_light_energy = 1.0
+		env.tonemap_white = 4.0
+		env.tonemap_exposure = 1.15
+		# Glow / bloom — cheap post-process, adds visual punch
+		env.glow_enabled = true
+		env.glow_intensity = 0.6
+		env.glow_strength = 0.8
+		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+		env.glow_bloom = 0.15
+		env.glow_hdr_threshold = 1.0
+		env.glow_hdr_scale = 1.5
 
 	# DirectionalLight3D as primary sun — single light pass, very cheap
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(0.98, 0.95, 0.88)
-		sun_light.light_energy = 1.2
-		sun_light.light_indirect_energy = 0.4
+		sun_light.light_color = Color(1.0, 0.96, 0.9)
+		sun_light.light_energy = 1.8
+		sun_light.light_indirect_energy = 0.6
 		sun_light.shadow_enabled = false
 
 # ============================================================================
@@ -2937,11 +2946,11 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
 	# OmniLights as accent highlights (DirectionalLight3D is the primary light source)
 	level_generator.generate_lights = true
-	level_generator.lighting_quality = 0       # Low quality — fewest lights
-	level_generator.max_light_count = 16       # Accent only, keep count low
-	level_generator.q3_light_energy = 0.5      # Subtle accent, sun does the heavy lifting
-	level_generator.q3_light_range = 25.0      # Localized highlights
-	level_generator.q3_grid_spacing = 40.0     # Very sparse — just key positions
+	level_generator.lighting_quality = 0
+	level_generator.max_light_count = 16
+	level_generator.q3_light_energy = 1.2
+	level_generator.q3_light_range = 35.0
+	level_generator.q3_grid_spacing = 40.0
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
 	level_generator.q3_bounce_enabled = false
