@@ -2877,11 +2877,11 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# Marble Blast style: balanced ambient, cool-neutral tint
-		env.ambient_light_color = Color(0.58, 0.60, 0.66)
-		env.ambient_light_energy = 0.55
-		env.tonemap_white = 3.0
-		env.tonemap_exposure = 0.95
+		# Marble Blast style: bright cheerful ambient
+		env.ambient_light_color = Color(0.65, 0.68, 0.72)
+		env.ambient_light_energy = 0.6
+		env.tonemap_white = 3.2
+		env.tonemap_exposure = 1.0
 		# Subtle bloom — just enough to soften bright edges, not blinding
 		env.glow_enabled = true
 		env.glow_intensity = 0.25

@@ -73,9 +73,9 @@ func create_marble_material(color_index: int = -1) -> Material:
 	material.set_shader_parameter("secondary_color", boosted_secondary)
 	material.set_shader_parameter("swirl_color", boosted_swirl)
 
-	# MBU style: satin finish, not glossy glass — patterns must read clearly
-	material.set_shader_parameter("glossiness", randf_range(0.3, 0.45))
-	material.set_shader_parameter("metallic_amount", randf_range(0.0, 0.05))
+	# MB style: moderate shine — visible specular highlight but patterns read clearly
+	material.set_shader_parameter("glossiness", randf_range(0.4, 0.55))
+	material.set_shader_parameter("metallic_amount", randf_range(0.02, 0.08))
 	material.set_shader_parameter("transparency", 0.0)
 
 	# Large, bold pattern regions — like continents on a globe
