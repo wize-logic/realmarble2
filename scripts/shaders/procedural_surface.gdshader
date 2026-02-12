@@ -11,6 +11,15 @@ uniform float pattern_mix : hint_range(0.0, 1.0) = 0.5;
 uniform float detail_strength : hint_range(0.0, 1.0) = 0.3;
 uniform float wear_amount : hint_range(0.0, 1.0) = 0.2;
 
+// Fake baked directional light (emulates pre-baked sun contribution)
+uniform vec3 baked_light_dir = vec3(-0.5, -0.7, -0.3);
+uniform vec3 baked_light_color : source_color = vec3(0.95, 0.9, 0.82);
+uniform float baked_light_energy : hint_range(0.0, 2.0) = 0.35;
+
+// Fake ambient occlusion
+uniform float ao_strength : hint_range(0.0, 1.0) = 0.35;
+uniform float ao_height_fade : hint_range(0.1, 30.0) = 6.0;
+
 // Cheap hash noise (single sample, no octaves)
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -28,9 +37,11 @@ float noise(vec2 p) {
 }
 
 varying vec3 world_pos;
+varying vec3 world_normal;
 
 void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
 
 void fragment() {
@@ -53,6 +64,26 @@ void fragment() {
 
 	// Simple wear: slightly lighten raised areas using noise
 	color = mix(color, color * 1.15, n * wear_amount * 0.3);
+
+	// --- Fake baked directional light ---
+	// Adds a cheap directional light contribution without a real DirectionalLight3D node
+	vec3 light_dir = normalize(baked_light_dir);
+	float ndotl = max(dot(world_normal, -light_dir), 0.0);
+	// Half-Lambert wrap for softer falloff (less harsh shadows)
+	float wrapped = ndotl * 0.5 + 0.5;
+	color += color * baked_light_color * wrapped * baked_light_energy;
+
+	// --- Fake ambient occlusion ---
+	// Height-based AO: darken geometry near floor level
+	float height_ao = smoothstep(0.0, ao_height_fade, world_pos.y);
+	float ao = mix(1.0 - ao_strength, 1.0, height_ao);
+	// Underside darkening: surfaces facing downward get extra shadow
+	float underside = max(-world_normal.y, 0.0) * ao_strength * 0.5;
+	ao -= underside;
+	// Corner contact hint: add noise-based micro-AO at floor level for grit
+	float contact_noise = noise(world_pos.xz * 0.5) * 0.15 * (1.0 - height_ao);
+	ao -= contact_noise;
+	color *= max(ao, 0.05);
 
 	ALBEDO = color;
 	ROUGHNESS = roughness + n * 0.05;
