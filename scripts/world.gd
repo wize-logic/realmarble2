@@ -2875,15 +2875,10 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		if menu_preview:
-			env.ambient_light_color = Color(0.56, 0.56, 0.56)
-			env.ambient_light_energy = 0.56
-			env.tonemap_white = 3.4
-		else:
-			# Gameplay should be brighter than menu: same flat style, higher baked exposure.
-			env.ambient_light_color = Color(0.63, 0.63, 0.63)
-			env.ambient_light_energy = 0.72
-			env.tonemap_white = 4.4
+		# Use identical pre-baked lighting for both menu and gameplay
+		env.ambient_light_color = Color(0.56, 0.56, 0.56)
+		env.ambient_light_energy = 0.56
+		env.tonemap_white = 3.4
 
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
