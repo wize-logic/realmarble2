@@ -73,19 +73,19 @@ func create_marble_material(color_index: int = -1) -> Material:
 	material.set_shader_parameter("secondary_color", boosted_secondary)
 	material.set_shader_parameter("swirl_color", boosted_swirl)
 
-	# Marble Blast style: glossy with well-defined visible patterns
-	material.set_shader_parameter("glossiness", randf_range(0.65, 0.8))
-	material.set_shader_parameter("metallic_amount", randf_range(0.1, 0.2))
-	material.set_shader_parameter("transparency", 0.02)
+	# MBU style: satin finish, not glossy glass — patterns must read clearly
+	material.set_shader_parameter("glossiness", randf_range(0.3, 0.45))
+	material.set_shader_parameter("metallic_amount", randf_range(0.0, 0.05))
+	material.set_shader_parameter("transparency", 0.0)
 
-	# Bold, well-defined patterns — always clearly visible
-	material.set_shader_parameter("swirl_scale", randf_range(2.0, 3.5))
-	material.set_shader_parameter("swirl_intensity", randf_range(0.85, 1.0))
-	material.set_shader_parameter("bubble_density", randf_range(0.4, 0.6))
-	material.set_shader_parameter("time_speed", randf_range(0.1, 0.2))
+	# Large, bold pattern regions — like continents on a globe
+	material.set_shader_parameter("swirl_scale", randf_range(1.0, 1.8))
+	material.set_shader_parameter("swirl_intensity", randf_range(0.9, 1.0))
+	material.set_shader_parameter("bubble_density", randf_range(0.3, 0.5))
+	material.set_shader_parameter("time_speed", randf_range(0.08, 0.15))
 
-	# Marble Blast style rim — subtle but visible
-	material.set_shader_parameter("rim_intensity", randf_range(0.1, 0.18))
+	# Subtle rim — not distracting from pattern
+	material.set_shader_parameter("rim_intensity", randf_range(0.04, 0.08))
 
 	return material
 
@@ -94,11 +94,10 @@ func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial
 	var scheme := _resolve_color_scheme(color_index)
 	material.albedo_color = _boost_color(scheme.primary)
 	material.albedo_texture = ROLL_TEXTURE
-	material.emission_enabled = true
-	material.emission = material.albedo_color * 0.08
-	material.roughness = randf_range(0.25, 0.4)
-	material.metallic = randf_range(0.08, 0.18)
-	material.specular = 0.35
+	material.emission_enabled = false
+	material.roughness = randf_range(0.55, 0.7)
+	material.metallic = randf_range(0.0, 0.05)
+	material.specular = 0.25
 	material.uv1_scale = Vector3(3.5, 3.5, 3.5)
 	material.uv1_triplanar = true
 	return material

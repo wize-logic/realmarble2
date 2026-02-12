@@ -2897,7 +2897,9 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 		sun_light.light_color = Color(1.0, 0.98, 0.95)
 		sun_light.light_energy = 1.0
 		sun_light.light_indirect_energy = 0.3
-		sun_light.shadow_enabled = false
+		sun_light.shadow_enabled = true
+		sun_light.shadow_bias = 0.05
+		sun_light.directional_shadow_max_distance = 200.0
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION

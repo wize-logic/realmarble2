@@ -117,16 +117,16 @@ void fragment() {
 	// Add bubble inclusions
 	float bubble = bubbles(world_pos);
 
-	// Sharpen the pattern for well-defined veins — Marble Blast style
-	float sharp_swirl = smoothstep(0.35, 0.65, swirl);
+	// Sharpen pattern into crisp distinct regions — like continents on a globe
+	float sharp_swirl = smoothstep(0.40, 0.60, swirl);
 
-	// Mix colors based on sharpened pattern — high contrast bands
+	// High contrast color regions — primary vs swirl clearly distinct
 	vec3 base_mix = mix(primary_color, secondary_color, sharp_swirl);
 	vec3 final_color = mix(base_mix, swirl_color, sharp_swirl * swirl_intensity);
 
-	// Add colored spots where bubbles are (use swirl color tinted)
-	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.1;
-	final_color = mix(final_color, bubble_tint, bubble * 0.4);
+	// Bubble inclusions add secondary color patches
+	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5);
+	final_color = mix(final_color, bubble_tint, bubble * 0.45);
 
 	// Calculate view direction from camera to fragment (world space)
 	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);
@@ -134,14 +134,14 @@ void fragment() {
 	// Calculate enhanced fresnel for rim lighting
 	float fresnel_amount = fresnel(rim_power, NORMAL, view_dir);
 
-	// Add rim highlight with color tint (not white) - reduced intensity
-	vec3 rim_color = mix(secondary_color, swirl_color, 0.5) * 1.2;
+	// Subtle rim tint — not distracting from the pattern
+	vec3 rim_color = mix(secondary_color, swirl_color, 0.5);
 	final_color += fresnel_amount * rim_intensity * rim_color;
 
-	// Output material properties
+	// Output — satin finish, pattern-forward
 	ALBEDO = final_color;
 	ROUGHNESS = 1.0 - glossiness;
 	METALLIC = metallic_amount;
-	SPECULAR = 0.3;
+	SPECULAR = 0.2;
 
 }

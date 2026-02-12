@@ -8,7 +8,7 @@ extends Node3D
 @export var color_transition_duration: float = 14.0
 @export var color_hold_duration: float = 18.0
 @export var star_density: float = 0.3
-@export var cloud_density: float = 0.4
+@export var cloud_density: float = 0.7
 @export var nebula_intensity: float = 0.5
 @export var menu_static_mode: bool = false
 @export var menu_static_palette: int = 1
@@ -80,15 +80,15 @@ func generate_skybox() -> void:
 		sky_material.energy_multiplier = 0.85
 	else:
 		sky_material.energy_multiplier = 0.95
-	sky_material.sky_curve = 0.12
-	sky_material.ground_curve = 0.12
+	sky_material.sky_curve = 0.15
+	sky_material.ground_curve = 0.25
 	sky_material.sun_angle_max = 1.0
 	sky_material.sun_curve = 0.01
 	sky_material.use_debanding = true
 	_apply_cloud_cover_if_supported()
 
 	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.04, 0.06, 0.18), Color(0.35, 0.40, 0.65), Color(0.08, 0.10, 0.22))
+	_apply_palette(Color(0.18, 0.08, 0.35), Color(0.75, 0.65, 0.80), Color(0.60, 0.55, 0.65))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -114,15 +114,15 @@ func randomize_colors() -> void:
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		# Marble Blast-style sky palettes — deep blues, calm purples, natural space
-		{"top": Color(0.04, 0.06, 0.18), "horizon": Color(0.35, 0.40, 0.65), "ground": Color(0.08, 0.10, 0.22)}, # deep blue
-		{"top": Color(0.06, 0.04, 0.16), "horizon": Color(0.40, 0.30, 0.55), "ground": Color(0.10, 0.08, 0.20)}, # twilight purple
-		{"top": Color(0.03, 0.08, 0.18), "horizon": Color(0.30, 0.50, 0.65), "ground": Color(0.06, 0.12, 0.24)}, # ocean blue
-		{"top": Color(0.05, 0.05, 0.14), "horizon": Color(0.45, 0.35, 0.55), "ground": Color(0.10, 0.08, 0.18)}, # dusk violet
-		{"top": Color(0.04, 0.08, 0.14), "horizon": Color(0.30, 0.45, 0.55), "ground": Color(0.08, 0.12, 0.18)}, # steel blue
-		{"top": Color(0.06, 0.04, 0.14), "horizon": Color(0.50, 0.35, 0.50), "ground": Color(0.12, 0.08, 0.18)}, # plum
-		{"top": Color(0.03, 0.06, 0.20), "horizon": Color(0.25, 0.45, 0.70), "ground": Color(0.06, 0.10, 0.26)}, # cobalt
-		{"top": Color(0.06, 0.05, 0.12), "horizon": Color(0.45, 0.40, 0.50), "ground": Color(0.10, 0.09, 0.16)}, # warm dusk
+		# MBU-style: deep colored sky top, bright cloudy horizon + ground
+		{"top": Color(0.18, 0.08, 0.35), "horizon": Color(0.75, 0.65, 0.80), "ground": Color(0.60, 0.55, 0.65)}, # purple haze
+		{"top": Color(0.08, 0.12, 0.32), "horizon": Color(0.65, 0.70, 0.85), "ground": Color(0.50, 0.55, 0.68)}, # deep blue
+		{"top": Color(0.22, 0.10, 0.38), "horizon": Color(0.80, 0.68, 0.82), "ground": Color(0.62, 0.56, 0.66)}, # royal violet
+		{"top": Color(0.12, 0.08, 0.28), "horizon": Color(0.72, 0.62, 0.78), "ground": Color(0.55, 0.50, 0.62)}, # twilight
+		{"top": Color(0.06, 0.14, 0.30), "horizon": Color(0.60, 0.72, 0.85), "ground": Color(0.48, 0.58, 0.70)}, # ocean sky
+		{"top": Color(0.20, 0.06, 0.30), "horizon": Color(0.78, 0.60, 0.75), "ground": Color(0.60, 0.50, 0.60)}, # plum cloud
+		{"top": Color(0.10, 0.10, 0.30), "horizon": Color(0.68, 0.68, 0.82), "ground": Color(0.52, 0.52, 0.66)}, # slate purple
+		{"top": Color(0.15, 0.08, 0.28), "horizon": Color(0.75, 0.65, 0.75), "ground": Color(0.58, 0.52, 0.60)}, # dusk violet
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
@@ -151,7 +151,7 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
 	sky_material.ground_bottom_color = ground_color
-	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.5)
+	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.3)
 
 
 func _apply_menu_static_lighting() -> void:
@@ -207,7 +207,7 @@ func _create_cloud_cover_texture() -> ImageTexture:
 			var ny: float = (v - 0.5) * 42.0
 			var n: float = noise.get_noise_3d(nx, ny, nz)
 			var cloud_signal: float = clampf((n + 1.0) * 0.5, 0.0, 1.0)
-			cloud_signal = _smoothstep(0.50, 0.78, cloud_signal)
+			cloud_signal = _smoothstep(0.38, 0.72, cloud_signal)
 			var alpha: float = cloud_signal * clampf(cloud_density, 0.0, 1.0)
 			image.set_pixel(x, y, Color(1.0, 1.0, 1.0, alpha))
 
