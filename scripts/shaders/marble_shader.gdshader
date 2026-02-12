@@ -117,13 +117,16 @@ void fragment() {
 	// Add bubble inclusions
 	float bubble = bubbles(world_pos);
 
-	// Mix colors based on patterns
-	vec3 base_mix = mix(primary_color, secondary_color, swirl);
-	vec3 final_color = mix(base_mix, swirl_color, swirl * swirl_intensity);
+	// Sharpen the pattern for well-defined veins — Marble Blast style
+	float sharp_swirl = smoothstep(0.35, 0.65, swirl);
 
-	// Add colored spots where bubbles are (not white, use swirl color tinted)
-	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.2;
-	final_color = mix(final_color, bubble_tint, bubble * 0.35);
+	// Mix colors based on sharpened pattern — high contrast bands
+	vec3 base_mix = mix(primary_color, secondary_color, sharp_swirl);
+	vec3 final_color = mix(base_mix, swirl_color, sharp_swirl * swirl_intensity);
+
+	// Add colored spots where bubbles are (use swirl color tinted)
+	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.1;
+	final_color = mix(final_color, bubble_tint, bubble * 0.4);
 
 	// Calculate view direction from camera to fragment (world space)
 	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);

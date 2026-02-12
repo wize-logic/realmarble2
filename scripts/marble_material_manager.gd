@@ -10,44 +10,44 @@ const COMPATIBILITY_RENDERER_SETTING := "rendering/renderer/rendering_method"
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
-	# Primary vibrant colors - very distinct from each other
-	{"name": "Ruby Red", "primary": Color(1.0, 0.0, 0.1), "secondary": Color(1.0, 0.2, 0.25), "swirl": Color(1.0, 0.5, 0.55)},
-	{"name": "Sapphire Blue", "primary": Color(0.0, 0.2, 1.0), "secondary": Color(0.2, 0.4, 1.0), "swirl": Color(0.5, 0.7, 1.0)},
-	{"name": "Emerald Green", "primary": Color(0.0, 0.9, 0.2), "secondary": Color(0.2, 1.0, 0.4), "swirl": Color(0.5, 1.0, 0.7)},
-	{"name": "Bright Purple", "primary": Color(0.7, 0.0, 1.0), "secondary": Color(0.8, 0.3, 1.0), "swirl": Color(0.9, 0.6, 1.0)},
-	{"name": "Vivid Orange", "primary": Color(1.0, 0.45, 0.0), "secondary": Color(1.0, 0.65, 0.2), "swirl": Color(1.0, 0.8, 0.5)},
-	{"name": "Hot Pink", "primary": Color(1.0, 0.0, 0.5), "secondary": Color(1.0, 0.3, 0.7), "swirl": Color(1.0, 0.6, 0.85)},
-	{"name": "Bright Cyan", "primary": Color(0.0, 0.9, 1.0), "secondary": Color(0.3, 1.0, 1.0), "swirl": Color(0.6, 1.0, 1.0)},
-	{"name": "Sunny Yellow", "primary": Color(1.0, 0.9, 0.0), "secondary": Color(1.0, 1.0, 0.3), "swirl": Color(1.0, 1.0, 0.6)},
+	# Marble Blast-style: bold base colors with high-contrast swirl veins
+	{"name": "Ruby Red", "primary": Color(0.75, 0.05, 0.1), "secondary": Color(0.95, 0.15, 0.2), "swirl": Color(1.0, 0.7, 0.65)},
+	{"name": "Sapphire Blue", "primary": Color(0.05, 0.15, 0.75), "secondary": Color(0.15, 0.3, 0.9), "swirl": Color(0.6, 0.75, 1.0)},
+	{"name": "Emerald Green", "primary": Color(0.05, 0.6, 0.15), "secondary": Color(0.15, 0.75, 0.3), "swirl": Color(0.65, 1.0, 0.7)},
+	{"name": "Bright Purple", "primary": Color(0.5, 0.05, 0.75), "secondary": Color(0.65, 0.2, 0.9), "swirl": Color(0.85, 0.6, 1.0)},
+	{"name": "Vivid Orange", "primary": Color(0.85, 0.35, 0.0), "secondary": Color(1.0, 0.55, 0.1), "swirl": Color(1.0, 0.85, 0.5)},
+	{"name": "Hot Pink", "primary": Color(0.85, 0.05, 0.4), "secondary": Color(1.0, 0.25, 0.6), "swirl": Color(1.0, 0.7, 0.85)},
+	{"name": "Bright Cyan", "primary": Color(0.05, 0.6, 0.75), "secondary": Color(0.2, 0.8, 0.9), "swirl": Color(0.7, 1.0, 1.0)},
+	{"name": "Sunny Yellow", "primary": Color(0.85, 0.75, 0.0), "secondary": Color(1.0, 0.9, 0.15), "swirl": Color(1.0, 1.0, 0.65)},
 
-	# Pure primary colors (maximum saturation)
-	{"name": "Blood Red", "primary": Color(0.8, 0.0, 0.0), "secondary": Color(0.9, 0.1, 0.1), "swirl": Color(1.0, 0.3, 0.3)},
-	{"name": "Deep Blue", "primary": Color(0.0, 0.0, 1.0), "secondary": Color(0.1, 0.1, 1.0), "swirl": Color(0.3, 0.3, 1.0)},
-	{"name": "Poison Green", "primary": Color(0.6, 1.0, 0.0), "secondary": Color(0.75, 1.0, 0.2), "swirl": Color(0.85, 1.0, 0.4)},
-	{"name": "Pure Yellow", "primary": Color(1.0, 1.0, 0.0), "secondary": Color(1.0, 1.0, 0.15), "swirl": Color(1.0, 1.0, 0.4)},
+	# Pure bold colors with strong veining
+	{"name": "Blood Red", "primary": Color(0.6, 0.0, 0.0), "secondary": Color(0.8, 0.05, 0.05), "swirl": Color(1.0, 0.45, 0.35)},
+	{"name": "Deep Blue", "primary": Color(0.0, 0.0, 0.7), "secondary": Color(0.1, 0.15, 0.85), "swirl": Color(0.45, 0.5, 1.0)},
+	{"name": "Poison Green", "primary": Color(0.35, 0.7, 0.0), "secondary": Color(0.55, 0.85, 0.1), "swirl": Color(0.8, 1.0, 0.5)},
+	{"name": "Pure Yellow", "primary": Color(0.8, 0.8, 0.0), "secondary": Color(0.95, 0.9, 0.1), "swirl": Color(1.0, 1.0, 0.55)},
 
-	# Distinct darks (high contrast)
-	{"name": "Midnight Black", "primary": Color(0.05, 0.05, 0.08), "secondary": Color(0.1, 0.1, 0.15), "swirl": Color(0.2, 0.2, 0.25)},
-	{"name": "Navy Blue", "primary": Color(0.0, 0.0, 0.5), "secondary": Color(0.1, 0.1, 0.65), "swirl": Color(0.2, 0.2, 0.8)},
-	{"name": "Chocolate Brown", "primary": Color(0.5, 0.25, 0.1), "secondary": Color(0.65, 0.35, 0.2), "swirl": Color(0.8, 0.5, 0.35)},
+	# Darks with visible light veins
+	{"name": "Midnight Black", "primary": Color(0.05, 0.05, 0.08), "secondary": Color(0.15, 0.15, 0.2), "swirl": Color(0.35, 0.35, 0.45)},
+	{"name": "Navy Blue", "primary": Color(0.02, 0.02, 0.35), "secondary": Color(0.1, 0.1, 0.5), "swirl": Color(0.3, 0.35, 0.8)},
+	{"name": "Chocolate Brown", "primary": Color(0.35, 0.18, 0.08), "secondary": Color(0.55, 0.3, 0.15), "swirl": Color(0.85, 0.6, 0.35)},
 
-	# Unique tones (distinct pastels and vivids)
-	{"name": "Salmon Pink", "primary": Color(1.0, 0.55, 0.45), "secondary": Color(1.0, 0.7, 0.6), "swirl": Color(1.0, 0.85, 0.8)},
-	{"name": "Jade Green", "primary": Color(0.0, 0.65, 0.5), "secondary": Color(0.2, 0.8, 0.65), "swirl": Color(0.4, 0.95, 0.8)},
-	{"name": "Lavender", "primary": Color(0.7, 0.5, 1.0), "secondary": Color(0.8, 0.65, 1.0), "swirl": Color(0.9, 0.8, 1.0)},
-	{"name": "Mint Green", "primary": Color(0.4, 1.0, 0.7), "secondary": Color(0.55, 1.0, 0.8), "swirl": Color(0.7, 1.0, 0.9)},
+	# Distinct tones with contrasting veins
+	{"name": "Salmon Pink", "primary": Color(0.85, 0.4, 0.35), "secondary": Color(1.0, 0.6, 0.5), "swirl": Color(1.0, 0.85, 0.75)},
+	{"name": "Jade Green", "primary": Color(0.0, 0.5, 0.35), "secondary": Color(0.15, 0.65, 0.5), "swirl": Color(0.55, 0.95, 0.8)},
+	{"name": "Lavender", "primary": Color(0.5, 0.35, 0.75), "secondary": Color(0.65, 0.5, 0.9), "swirl": Color(0.88, 0.8, 1.0)},
+	{"name": "Mint Green", "primary": Color(0.25, 0.7, 0.5), "secondary": Color(0.4, 0.85, 0.65), "swirl": Color(0.75, 1.0, 0.88)},
 
-	# Additional special colors
-	{"name": "Deep Black", "primary": Color(0.1, 0.1, 0.15), "secondary": Color(0.2, 0.2, 0.3), "swirl": Color(0.35, 0.35, 0.45)},
-	{"name": "Pearl", "primary": Color(0.92, 0.9, 0.95), "secondary": Color(0.88, 0.88, 0.95), "swirl": Color(0.82, 0.82, 0.9)},  # Pearlescent (not pure white)
-	{"name": "Bright Gold", "primary": Color(1.0, 0.75, 0.0), "secondary": Color(1.0, 0.85, 0.2), "swirl": Color(1.0, 0.95, 0.5)},
-	{"name": "Chrome Silver", "primary": Color(0.65, 0.7, 0.75), "secondary": Color(0.8, 0.85, 0.9), "swirl": Color(0.9, 0.95, 1.0)},
+	# Special colors
+	{"name": "Deep Black", "primary": Color(0.06, 0.06, 0.1), "secondary": Color(0.15, 0.15, 0.22), "swirl": Color(0.4, 0.38, 0.5)},
+	{"name": "Pearl", "primary": Color(0.8, 0.78, 0.85), "secondary": Color(0.9, 0.88, 0.95), "swirl": Color(1.0, 0.98, 1.0)},
+	{"name": "Bright Gold", "primary": Color(0.75, 0.55, 0.0), "secondary": Color(0.95, 0.75, 0.1), "swirl": Color(1.0, 0.95, 0.55)},
+	{"name": "Chrome Silver", "primary": Color(0.5, 0.52, 0.56), "secondary": Color(0.7, 0.72, 0.78), "swirl": Color(0.92, 0.94, 1.0)},
 
-	# Bold unique colors
-	{"name": "Electric Magenta", "primary": Color(1.0, 0.0, 0.8), "secondary": Color(1.0, 0.2, 0.9), "swirl": Color(1.0, 0.5, 1.0)},
-	{"name": "Electric Lime", "primary": Color(0.5, 1.0, 0.0), "secondary": Color(0.7, 1.0, 0.3), "swirl": Color(0.8, 1.0, 0.6)},
-	{"name": "Teal", "primary": Color(0.0, 0.7, 0.65), "secondary": Color(0.2, 0.85, 0.8), "swirl": Color(0.5, 1.0, 0.95)},
-	{"name": "Deep Indigo", "primary": Color(0.2, 0.0, 0.6), "secondary": Color(0.35, 0.2, 0.75), "swirl": Color(0.5, 0.4, 0.9)},
+	# Bold unique colors with contrasting veins
+	{"name": "Electric Magenta", "primary": Color(0.75, 0.0, 0.6), "secondary": Color(0.9, 0.15, 0.75), "swirl": Color(1.0, 0.6, 0.95)},
+	{"name": "Electric Lime", "primary": Color(0.35, 0.75, 0.0), "secondary": Color(0.55, 0.9, 0.15), "swirl": Color(0.8, 1.0, 0.55)},
+	{"name": "Teal", "primary": Color(0.0, 0.5, 0.48), "secondary": Color(0.15, 0.7, 0.65), "swirl": Color(0.55, 1.0, 0.9)},
+	{"name": "Deep Indigo", "primary": Color(0.15, 0.0, 0.45), "secondary": Color(0.3, 0.15, 0.65), "swirl": Color(0.55, 0.45, 0.95)},
 ]
 
 # Track used color indices to avoid duplicates when possible
@@ -73,24 +73,19 @@ func create_marble_material(color_index: int = -1) -> Material:
 	material.set_shader_parameter("secondary_color", boosted_secondary)
 	material.set_shader_parameter("swirl_color", boosted_swirl)
 
-	# MBU-style: glossy, shiny marbles with strong specular
-	material.set_shader_parameter("glossiness", randf_range(0.7, 0.85))
-	material.set_shader_parameter("metallic_amount", randf_range(0.15, 0.3))
+	# Marble Blast style: glossy with well-defined visible patterns
+	material.set_shader_parameter("glossiness", randf_range(0.65, 0.8))
+	material.set_shader_parameter("metallic_amount", randf_range(0.1, 0.2))
 	material.set_shader_parameter("transparency", 0.02)
 
-	# Randomize pattern properties for uniqueness
-	material.set_shader_parameter("swirl_scale", randf_range(1.5, 2.5))
-	material.set_shader_parameter("swirl_intensity", randf_range(0.5, 0.7))
-	material.set_shader_parameter("bubble_density", randf_range(0.3, 0.5))
-	material.set_shader_parameter("time_speed", randf_range(0.15, 0.25))
+	# Bold, well-defined patterns — always clearly visible
+	material.set_shader_parameter("swirl_scale", randf_range(2.0, 3.5))
+	material.set_shader_parameter("swirl_intensity", randf_range(0.85, 1.0))
+	material.set_shader_parameter("bubble_density", randf_range(0.4, 0.6))
+	material.set_shader_parameter("time_speed", randf_range(0.1, 0.2))
 
-	# MBU-style marble glow — visible rim lighting and subtle emission
-	material.set_shader_parameter("glow_strength", randf_range(0.15, 0.25))
-	material.set_shader_parameter("glow_pulse_speed", randf_range(1.0, 1.4))
-	material.set_shader_parameter("glow_pulse_amount", randf_range(0.08, 0.15))
-	material.set_shader_parameter("outer_rim_power", randf_range(2.0, 2.5))
-	material.set_shader_parameter("outer_rim_intensity", randf_range(0.25, 0.4))
-	material.set_shader_parameter("rim_intensity", randf_range(0.2, 0.35))
+	# Marble Blast style rim — subtle but visible
+	material.set_shader_parameter("rim_intensity", randf_range(0.1, 0.18))
 
 	return material
 
@@ -100,10 +95,10 @@ func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial
 	material.albedo_color = _boost_color(scheme.primary)
 	material.albedo_texture = ROLL_TEXTURE
 	material.emission_enabled = true
-	material.emission = material.albedo_color * 0.2
-	material.roughness = randf_range(0.2, 0.35)
-	material.metallic = randf_range(0.15, 0.3)
-	material.specular = 0.5
+	material.emission = material.albedo_color * 0.08
+	material.roughness = randf_range(0.25, 0.4)
+	material.metallic = randf_range(0.08, 0.18)
+	material.specular = 0.35
 	material.uv1_scale = Vector3(3.5, 3.5, 3.5)
 	material.uv1_triplanar = true
 	return material

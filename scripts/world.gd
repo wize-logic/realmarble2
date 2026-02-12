@@ -2877,26 +2877,26 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# MBU-style: moderate ambient tinted to sky, high contrast
-		env.ambient_light_color = Color(0.45, 0.40, 0.58)
-		env.ambient_light_energy = 0.45
-		env.tonemap_white = 3.2
-		env.tonemap_exposure = 1.05
-		# MBU signature: strong HDR bloom — makes sky glow, marbles shimmer
+		# Marble Blast style: balanced ambient, cool-neutral tint
+		env.ambient_light_color = Color(0.58, 0.60, 0.66)
+		env.ambient_light_energy = 0.55
+		env.tonemap_white = 3.0
+		env.tonemap_exposure = 0.95
+		# Subtle bloom — just enough to soften bright edges, not blinding
 		env.glow_enabled = true
-		env.glow_intensity = 0.8
-		env.glow_strength = 1.0
-		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-		env.glow_bloom = 0.25
-		env.glow_hdr_threshold = 0.8
-		env.glow_hdr_scale = 2.0
+		env.glow_intensity = 0.25
+		env.glow_strength = 0.4
+		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+		env.glow_bloom = 0.05
+		env.glow_hdr_threshold = 1.2
+		env.glow_hdr_scale = 1.0
 
-	# DirectionalLight3D — clean white sun, MBU-style
+	# DirectionalLight3D — clean white sun, Marble Blast style
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(1.0, 0.98, 0.94)
-		sun_light.light_energy = 1.3
-		sun_light.light_indirect_energy = 0.4
+		sun_light.light_color = Color(1.0, 0.98, 0.95)
+		sun_light.light_energy = 1.0
+		sun_light.light_indirect_energy = 0.3
 		sun_light.shadow_enabled = false
 
 # ============================================================================
@@ -2949,8 +2949,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0
 	level_generator.max_light_count = 16
-	level_generator.q3_light_energy = 0.8
-	level_generator.q3_light_range = 30.0
+	level_generator.q3_light_energy = 0.5
+	level_generator.q3_light_range = 25.0
 	level_generator.q3_grid_spacing = 40.0
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false

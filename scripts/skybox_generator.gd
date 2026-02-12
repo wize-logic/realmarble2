@@ -77,9 +77,9 @@ func generate_skybox() -> void:
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
 	if menu_static_mode:
-		sky_material.energy_multiplier = 1.0
+		sky_material.energy_multiplier = 0.85
 	else:
-		sky_material.energy_multiplier = 1.4
+		sky_material.energy_multiplier = 0.95
 	sky_material.sky_curve = 0.12
 	sky_material.ground_curve = 0.12
 	sky_material.sun_angle_max = 1.0
@@ -88,7 +88,7 @@ func generate_skybox() -> void:
 	_apply_cloud_cover_if_supported()
 
 	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.06, 0.02, 0.18), Color(0.85, 0.30, 0.65), Color(0.14, 0.04, 0.28))
+	_apply_palette(Color(0.04, 0.06, 0.18), Color(0.35, 0.40, 0.65), Color(0.08, 0.10, 0.22))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -114,15 +114,15 @@ func randomize_colors() -> void:
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		# MBU-inspired deep space nebula palettes — dark zenith, vivid horizon, rich ground
-		{"top": Color(0.06, 0.02, 0.18), "horizon": Color(0.85, 0.30, 0.65), "ground": Color(0.14, 0.04, 0.28)}, # nebula magenta
-		{"top": Color(0.02, 0.06, 0.22), "horizon": Color(0.20, 0.75, 0.90), "ground": Color(0.04, 0.12, 0.30)}, # deep ocean cyan
-		{"top": Color(0.10, 0.02, 0.20), "horizon": Color(0.95, 0.50, 0.20), "ground": Color(0.18, 0.06, 0.16)}, # solar flare
-		{"top": Color(0.04, 0.04, 0.20), "horizon": Color(0.55, 0.40, 0.95), "ground": Color(0.10, 0.06, 0.28)}, # cosmic violet
-		{"top": Color(0.02, 0.10, 0.12), "horizon": Color(0.25, 0.90, 0.50), "ground": Color(0.04, 0.16, 0.14)}, # emerald nebula
-		{"top": Color(0.12, 0.02, 0.16), "horizon": Color(1.0, 0.35, 0.75), "ground": Color(0.20, 0.04, 0.22)}, # hot pink nova
-		{"top": Color(0.03, 0.05, 0.22), "horizon": Color(0.35, 0.65, 1.0), "ground": Color(0.06, 0.10, 0.30)}, # electric blue
-		{"top": Color(0.08, 0.02, 0.16), "horizon": Color(1.0, 0.55, 0.25), "ground": Color(0.16, 0.06, 0.12)}, # amber sunset
+		# Marble Blast-style sky palettes — deep blues, calm purples, natural space
+		{"top": Color(0.04, 0.06, 0.18), "horizon": Color(0.35, 0.40, 0.65), "ground": Color(0.08, 0.10, 0.22)}, # deep blue
+		{"top": Color(0.06, 0.04, 0.16), "horizon": Color(0.40, 0.30, 0.55), "ground": Color(0.10, 0.08, 0.20)}, # twilight purple
+		{"top": Color(0.03, 0.08, 0.18), "horizon": Color(0.30, 0.50, 0.65), "ground": Color(0.06, 0.12, 0.24)}, # ocean blue
+		{"top": Color(0.05, 0.05, 0.14), "horizon": Color(0.45, 0.35, 0.55), "ground": Color(0.10, 0.08, 0.18)}, # dusk violet
+		{"top": Color(0.04, 0.08, 0.14), "horizon": Color(0.30, 0.45, 0.55), "ground": Color(0.08, 0.12, 0.18)}, # steel blue
+		{"top": Color(0.06, 0.04, 0.14), "horizon": Color(0.50, 0.35, 0.50), "ground": Color(0.12, 0.08, 0.18)}, # plum
+		{"top": Color(0.03, 0.06, 0.20), "horizon": Color(0.25, 0.45, 0.70), "ground": Color(0.06, 0.10, 0.26)}, # cobalt
+		{"top": Color(0.06, 0.05, 0.12), "horizon": Color(0.45, 0.40, 0.50), "ground": Color(0.10, 0.09, 0.16)}, # warm dusk
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
