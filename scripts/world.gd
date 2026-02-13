@@ -2506,11 +2506,11 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(1.0, 1.0, 1.0)
-	env.ambient_light_energy = 0.45
+	env.ambient_light_color = Color(0.7, 0.7, 0.75)
+	env.ambient_light_energy = 0.3
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_white = 1.0
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = 0.85
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2536,11 +2536,11 @@ func _create_customize_panel() -> void:
 	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_cam.current = true
 
-	# Key light — standard directional
+	# Key light — matches scene sun
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 1.0
+	light.light_energy = 0.8
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2548,7 +2548,7 @@ func _create_customize_panel() -> void:
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.3
+	ambient_light.light_energy = 0.25
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2714,7 +2714,7 @@ func _create_marble_preview() -> void:
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 1.0
+	preview_light.light_energy = 0.8
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
@@ -2722,7 +2722,7 @@ func _create_marble_preview() -> void:
 	# Fill light from opposite side
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.3
+	fill_light.light_energy = 0.25
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2874,23 +2874,23 @@ func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
 		if not env:
 			env = Environment.new()
 			world_env.environment = env
-		# Ambient: moderate fill so nothing is ever pitch black
+		# Ambient: gentle fill so shadows aren't black but scene isn't washed out
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(1.0, 1.0, 1.0)
-		env.ambient_light_energy = 0.45
-		# Tonemap: ACES at neutral exposure
+		env.ambient_light_color = Color(0.7, 0.7, 0.75)
+		env.ambient_light_energy = 0.3
+		# Tonemap: ACES with pulled-back exposure to prevent blowout
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
 		env.tonemap_white = 1.0
-		env.tonemap_exposure = 1.0
+		env.tonemap_exposure = 0.85
 		# No glow/bloom — keep it clean
 		env.glow_enabled = false
 
-	# DirectionalLight3D: standard sun at full energy with shadows
+	# DirectionalLight3D: slightly reduced sun to prevent white blowout on surfaces
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
 		sun_light.light_color = Color(1.0, 0.98, 0.95)
-		sun_light.light_energy = 1.0
-		sun_light.light_indirect_energy = 0.3
+		sun_light.light_energy = 0.8
+		sun_light.light_indirect_energy = 0.2
 		sun_light.shadow_enabled = true
 		sun_light.shadow_bias = 0.05
 		sun_light.directional_shadow_max_distance = 200.0

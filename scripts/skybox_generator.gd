@@ -74,7 +74,7 @@ func generate_skybox() -> void:
 
 	# ProceduralSkyMaterial — standard energy, symmetric curves for full sphere wrap
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 1.0
+	sky_material.energy_multiplier = 0.85
 	sky_material.sky_curve = 0.1
 	sky_material.ground_curve = 0.1
 	sky_material.sun_angle_max = 1.0
