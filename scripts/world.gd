@@ -2955,16 +2955,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.arena_size = 140.0 * arena_mult
 	level_generator.complexity = level_size
 	level_generator.level_seed = level_seed  # Set seed for deterministic generation (0 = random)
-	# OmniLights as accent highlights (DirectionalLight3D is the primary light source)
-	level_generator.generate_lights = true
-	level_generator.lighting_quality = 0
-	level_generator.max_light_count = 16
-	level_generator.q3_light_energy = 0.5
-	level_generator.q3_light_range = 25.0
-	level_generator.q3_grid_spacing = 40.0
-	level_generator.q3_ceiling_lights = true
-	level_generator.q3_floor_fill = false
-	level_generator.q3_bounce_enabled = false
+	# Disable level generator lighting entirely — scene uses DirectionalLight3D + MarbleLight only
+	level_generator.generate_lights = false
 
 	# Configure video walls if enabled
 	if video_walls:
