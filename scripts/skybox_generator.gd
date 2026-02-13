@@ -145,6 +145,27 @@ float hash3(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
 
+// 3D noise to avoid cylindrical UV seams
+float noise3d(vec3 p) {
+	vec3 i = floor(p);
+	vec3 f = fract(p);
+	f = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+	float n = dot(i, vec3(1.0, 57.0, 113.0));
+	float a = hash3(i);
+	float b = hash3(i + vec3(1.0, 0.0, 0.0));
+	float c = hash3(i + vec3(0.0, 1.0, 0.0));
+	float d = hash3(i + vec3(1.0, 1.0, 0.0));
+	float e = hash3(i + vec3(0.0, 0.0, 1.0));
+	float f2 = hash3(i + vec3(1.0, 0.0, 1.0));
+	float g = hash3(i + vec3(0.0, 1.0, 1.0));
+	float h = hash3(i + vec3(1.0, 1.0, 1.0));
+
+	float k0 = mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+	float k1 = mix(mix(e, f2, f.x), mix(g, h, f.x), f.y);
+	return mix(k0, k1, f.z);
+}
+
 // Super smooth noise using quintic hermite interpolation
 float noise(vec2 p) {
 	vec2 i = floor(p);
@@ -161,8 +182,24 @@ float noise(vec2 p) {
 	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-// Fractal Brownian Motion with quality-dependent octave count
-// quality 0: 3 octaves (web), quality 1: 5 octaves, quality 2: 8 octaves
+// 3D FBM using world direction (seamless, no UV seams)
+float fbm3d(vec3 p) {
+	float value = 0.0;
+	float amplitude = 0.5;
+	float frequency = 1.0;
+	int octaves = quality_level >= 2 ? 8 : (quality_level >= 1 ? 5 : 3);
+
+	for (int i = 0; i < 8; i++) {
+		if (i >= octaves) break;
+		value += amplitude * noise3d(p * frequency);
+		frequency *= 2.0;
+		amplitude *= 0.5;
+	}
+
+	return value;
+}
+
+// Fractal Brownian Motion with quality-dependent octave count (2D, for stars only)
 float fbm(vec2 p) {
 	float value = 0.0;
 	float amplitude = 0.5;
@@ -179,23 +216,24 @@ float fbm(vec2 p) {
 	return value;
 }
 
-// Star field generation
-float stars(vec2 uv, float density, float twinkle_time) {
-	// Grid-based star placement
-	vec2 grid = floor(uv * 200.0);
-	vec2 grid_uv = fract(uv * 200.0);
+// Star field generation using 3D direction (seamless)
+float stars3d(vec3 dir, float density, float twinkle_time) {
+	// Project direction onto a 3D grid for seamless star placement
+	vec3 scaled = dir * 100.0;
+	vec3 grid = floor(scaled);
+	vec3 grid_frac = fract(scaled);
 
 	float star = 0.0;
-	float star_hash = hash(grid);
+	float star_hash = hash3(grid);
 
 	// Only place stars at random positions
 	if (star_hash > (1.0 - density * 0.15)) {
 		// Star position within cell
-		vec2 star_pos = vec2(hash(grid + 0.1), hash(grid + 0.2));
-		float dist = length(grid_uv - star_pos);
+		vec3 star_pos = vec3(hash3(grid + 0.1), hash3(grid + 0.2), hash3(grid + 0.4));
+		float dist = length(grid_frac - star_pos);
 
 		// Star brightness with twinkle
-		float brightness = hash(grid + 0.3);
+		float brightness = hash3(grid + 0.3);
 		float twinkle = sin(twinkle_time * (brightness * 3.0 + 1.0) + star_hash * 6.28) * 0.3 + 0.7;
 
 		// Star glow (not pure white - tinted)
@@ -210,16 +248,16 @@ float stars(vec2 uv, float density, float twinkle_time) {
 	return star;
 }
 
-// Cloud layer (quality-adaptive: 1 fbm call on low, 3 on high)
-float clouds(vec2 uv, float cloud_time, float density) {
-	vec2 moving_uv = uv + vec2(cloud_time * 0.3, cloud_time * 0.15);
+// Cloud layer using 3D direction (seamless, no UV seams)
+float clouds3d(vec3 dir, float cloud_time, float density) {
+	vec3 moving_dir = dir + vec3(cloud_time * 0.3, 0.0, cloud_time * 0.15);
 
-	float cloud = fbm(moving_uv * 3.0);
+	float cloud = fbm3d(moving_dir * 3.0);
 	if (quality_level >= 1) {
-		cloud += fbm(moving_uv * 6.0 + 10.0) * 0.5;
+		cloud += fbm3d(moving_dir * 6.0 + 10.0) * 0.5;
 	}
 	if (quality_level >= 2) {
-		cloud += fbm(moving_uv * 12.0 + 20.0) * 0.25;
+		cloud += fbm3d(moving_dir * 12.0 + 20.0) * 0.25;
 	}
 
 	// Threshold for cloud coverage
@@ -228,13 +266,13 @@ float clouds(vec2 uv, float cloud_time, float density) {
 	return cloud * density;
 }
 
-// Nebula effect (skipped entirely on quality 0)
-vec3 nebula(vec2 uv, float neb_time, vec3 col1, vec3 col2, vec3 col3) {
-	vec2 moving_uv = uv + vec2(neb_time * 0.05, -neb_time * 0.03);
+// Nebula effect using 3D direction (seamless, no UV seams)
+vec3 nebula3d(vec3 dir, float neb_time, vec3 col1, vec3 col2, vec3 col3) {
+	vec3 moving_dir = dir + vec3(neb_time * 0.05, 0.0, -neb_time * 0.03);
 
-	float n1 = fbm(moving_uv * 2.0);
-	float n2 = fbm(moving_uv * 3.0 + vec2(10.0, 5.0));
-	float n3 = fbm(moving_uv * 4.0 + vec2(5.0, 10.0));
+	float n1 = fbm3d(moving_dir * 2.0);
+	float n2 = fbm3d(moving_dir * 3.0 + vec3(10.0, 5.0, 7.0));
+	float n3 = fbm3d(moving_dir * 4.0 + vec3(5.0, 10.0, 3.0));
 
 	vec3 nebula_color = mix(col1, col2, n1);
 	nebula_color = mix(nebula_color, col3, n2 * 0.5);
@@ -254,21 +292,10 @@ void sky() {
 	// Get sky direction
 	vec3 dir = normalize(EYEDIR);
 
-	// Anti-aliased UV mapping with pole smoothing
-	float phi = atan(dir.x, dir.z);
-	float theta = acos(clamp(dir.y, -1.0, 1.0));
-
-	vec2 uv = vec2(
-		phi / (3.14159265 * 2.0) + 0.5,
-		theta / 3.14159265
-	);
-
-	// Add slight offset to prevent seam artifacts
-	uv.x = fract(uv.x);
-
+	// Use 3D direction for all noise (seamless, no UV seam lines)
 	// Base psychedelic background
-	float n1 = fbm(uv * 3.0 + vec2(time * 0.1, -time * 0.08));
-	float n2 = fbm(uv * 5.0 + vec2(-time * 0.15, time * 0.12));
+	float n1 = fbm3d(dir * 3.0 + vec3(time * 0.1, -time * 0.08, time * 0.05));
+	float n2 = fbm3d(dir * 5.0 + vec3(-time * 0.15, time * 0.12, -time * 0.07));
 
 	// Base color mixing
 	vec3 color = smooth_color_mix(color1, color2, n1);
@@ -276,17 +303,17 @@ void sky() {
 
 	// Add nebula effect (skip on low quality - saves 3 fbm calls per pixel)
 	if (quality_level >= 1) {
-		vec3 neb = nebula(uv, time, color1 * 0.8, color2 * 0.8, color3 * 0.8);
+		vec3 neb = nebula3d(dir, time, color1 * 0.8, color2 * 0.8, color3 * 0.8);
 		color = mix(color, color + neb, nebula_intensity);
 	}
 
 	// Add cloud layer (tinted, not white)
-	float cloud_layer = clouds(uv, time * cloud_speed, cloud_density);
+	float cloud_layer = clouds3d(dir, time * cloud_speed, cloud_density);
 	vec3 cloud_color = mix(color1, color2, 0.5) * 0.9 + vec3(0.1);  // Tinted clouds
 	color = mix(color, cloud_color, cloud_layer * 0.4);
 
 	// Add shimmer (use n2 instead of separate n3 fbm on low quality)
-	float n3 = quality_level >= 1 ? fbm(uv * 7.0 + vec2(time * 0.2, time * 0.18)) : n2;
+	float n3 = quality_level >= 1 ? fbm3d(dir * 7.0 + vec3(time * 0.2, time * 0.18, time * 0.1)) : n2;
 	color += vec3(n3 * 0.15);
 
 	// Ultra-smooth gradient from top to bottom
@@ -298,9 +325,9 @@ void sky() {
 	color *= pulse;
 
 	// Add star field (tinted stars, not pure white)
-	float star_layer = stars(uv, star_density, time * star_twinkle_speed);
+	float star_layer = stars3d(dir, star_density, time * star_twinkle_speed);
 	// Stars are tinted slightly based on position
-	vec3 star_tint = mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.9, 0.85), hash(uv * 100.0));
+	vec3 star_tint = mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.9, 0.85), hash3(dir * 100.0));
 	color += star_layer * star_tint * 0.8;
 
 	// Apply gamma correction

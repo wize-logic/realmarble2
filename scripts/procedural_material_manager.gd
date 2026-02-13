@@ -13,8 +13,8 @@ var _material_cache: Dictionary = {}
 # Material presets - balanced for good lighting coverage with proper shadows
 const MATERIAL_PRESETS = {
 	"floor": {
-		"base_color": Color(0.22, 0.23, 0.26),  # Dark cool gray
-		"accent_color": Color(0.15, 0.16, 0.19),
+		"base_color": Color(0.28, 0.30, 0.34),  # Dark cool gray
+		"accent_color": Color(0.20, 0.22, 0.26),
 		"roughness": 0.85,
 		"metallic": 0.15,
 		"scale": 3.0,
