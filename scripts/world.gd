@@ -2506,10 +2506,11 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.4, 0.4, 0.5)  # Soft ambient for marble visibility
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.50, 0.50, 0.55)
+	env.ambient_light_energy = 0.28
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 3.6
+	env.tonemap_white = 2.8
+	env.tonemap_exposure = 0.6
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2535,19 +2536,19 @@ func _create_customize_panel() -> void:
 	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_cam.current = true
 
-	# Create lighting for the preview
+	# Create lighting for the preview — matches scene lighting levels
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 0.85
+	light.light_energy = 0.5
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
-	# Add ambient light
+	# Fill light from opposite side
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.22
+	ambient_light.light_energy = 0.15
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2713,15 +2714,15 @@ func _create_marble_preview() -> void:
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 0.85
+	preview_light.light_energy = 0.5
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
 
-	# Add an additional fill light for better showcase
+	# Fill light — subtle, from opposite side
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.12
+	fill_light.light_energy = 0.08
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
