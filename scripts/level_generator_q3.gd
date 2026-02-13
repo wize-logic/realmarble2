@@ -53,21 +53,21 @@ extends Node3D
 @export var generate_lights: bool = true  ## Add OmniLight3D to rooms
 ## Grid-based lighting for good coverage with proper shadows
 @export var q3_light_energy: float = 1.5  ## Base light energy for grid lights
-@export var q3_light_range: float = 25.0  ## Light range for coverage (increased to need fewer lights)
+@export var q3_light_range: float = 20.0  ## Light range for coverage
 @export var q3_light_color: Color = Color(0.92, 0.88, 0.82)  ## Warm white default
-@export var q3_grid_spacing: float = 22.0  ## Distance between grid lights (increased for fewer lights)
+@export var q3_grid_spacing: float = 14.0  ## Distance between grid lights
 @export var q3_ambient_energy: float = 0.5  ## Ambient fill for dark areas
-@export var q3_bounce_enabled: bool = false  ## Bounce lights disabled for simplicity
+@export var q3_bounce_enabled: bool = true  ## Add bounce lights near walls/ceilings
 @export var q3_bounce_energy: float = 0.5  ## Bounce light intensity
-@export var q3_use_colored_zones: bool = false  ## Zone color tints disabled for simplicity
-@export var q3_color_intensity: float = 0.0  ## How much zone color affects lights
+@export var q3_use_colored_zones: bool = true  ## Apply subtle color tints per zone
+@export var q3_color_intensity: float = 0.12  ## How much zone color affects lights
 @export var q3_ceiling_lights: bool = true  ## Add ceiling-mounted lights
-@export var q3_floor_fill: bool = false  ## Floor-level fill lights disabled for simplicity
-@export var q3_structure_boost: float = 1.0  ## Extra lighting on structures
+@export var q3_floor_fill: bool = true  ## Add floor-level fill lights
+@export var q3_structure_boost: float = 1.5  ## Extra lighting on structures
 ## Lighting quality for performance: 0=Low (few lights), 1=Medium, 2=High (full)
-@export var lighting_quality: int = 0
+@export var lighting_quality: int = 1
 ## Maximum total OmniLight3D nodes (forward renderer evaluates each per-fragment)
-@export var max_light_count: int = 32
+@export var max_light_count: int = 64
 
 @export_group("Spawn Points")
 @export var target_spawn_points: int = 16
