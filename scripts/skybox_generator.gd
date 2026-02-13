@@ -77,11 +77,11 @@ func generate_skybox() -> void:
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
 	if menu_static_mode:
-		sky_material.energy_multiplier = 0.8
+		sky_material.energy_multiplier = 0.5
 	else:
-		sky_material.energy_multiplier = 0.85
+		sky_material.energy_multiplier = 0.55
 	sky_material.sky_curve = 0.15
-	sky_material.ground_curve = 0.15
+	sky_material.ground_curve = 0.35
 	sky_material.sun_angle_max = 1.0
 	sky_material.sun_curve = 0.01
 	sky_material.use_debanding = true
@@ -148,10 +148,11 @@ func _start_next_transition() -> void:
 func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color) -> void:
 	if not sky_material:
 		return
+	# Wrap skybox as full sphere: top color mirrors to bottom, bright horizon band
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
-	sky_material.ground_bottom_color = ground_color
-	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.6)
+	sky_material.ground_bottom_color = top_color
+	sky_material.ground_horizon_color = horizon_color
 
 
 func _apply_menu_static_lighting() -> void:
