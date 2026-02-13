@@ -48,10 +48,12 @@ func _ready() -> void:
 		# Share material across all orbs - create once, reuse
 		if _shared_material == null:
 			_shared_material = StandardMaterial3D.new()
-			_shared_material.albedo_color = Color(0.3, 0.7, 1.0, 1.0)
-			_shared_material.emission_enabled = false
-			_shared_material.metallic = 0.2
-			_shared_material.roughness = 0.3
+			_shared_material.albedo_color = Color(0.1, 0.85, 1.0, 1.0)  # Vivid electric cyan
+			_shared_material.emission_enabled = true
+			_shared_material.emission = Color(0.05, 0.5, 0.9)
+			_shared_material.emission_energy_multiplier = 0.8
+			_shared_material.metallic = 0.15
+			_shared_material.roughness = 0.35
 		mesh_instance.material_override = _shared_material
 
 	# Use seeded RNG for starting animation phase (deterministic across clients)

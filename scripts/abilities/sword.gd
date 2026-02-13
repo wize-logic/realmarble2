@@ -40,7 +40,7 @@ static var _flash_burst_gradient: Gradient = null
 func _ready() -> void:
 	super._ready()
 	ability_name = "Sword"
-	ability_color = Color.STEEL_BLUE
+	ability_color = Color(0.2, 0.5, 1.0)  # Vivid bright blue
 	cooldown_time = 1.0
 	supports_charging = true  # Sword supports charging for more damage
 	max_charge_time = 2.0  # 2 seconds for max charge
@@ -171,7 +171,7 @@ func _ensure_flash_pool(parent_node: Node) -> void:
 		var outer_sphere := SphereMesh.new()
 		outer_flash.mesh = outer_sphere
 		var outer_mat := StandardMaterial3D.new()
-		outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
+		outer_mat.albedo_color = Color(0.15, 0.45, 1.0, 0.4)
 		outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -186,7 +186,7 @@ func _ensure_flash_pool(parent_node: Node) -> void:
 			middle_sphere = SphereMesh.new()
 			middle_flash.mesh = middle_sphere
 			middle_mat = StandardMaterial3D.new()
-			middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+			middle_mat.albedo_color = Color(0.3, 0.6, 1.0, 0.7)
 			middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 			middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 			middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -326,17 +326,17 @@ func _process(delta: float) -> void:
 			if mesh_instance and mesh_instance.material_override:
 				var mat: StandardMaterial3D = mesh_instance.material_override
 				if player_level >= 3:
-					# Level 3: Bright blue (spin attack)
-					mat.albedo_color = Color(0.6, 0.8, 1.0, 0.25)
+					# Level 3: Intense blue (spin attack)
+					mat.albedo_color = Color(0.15, 0.5, 1.0, 0.3)
 				elif player_level >= 2:
-					# Level 2: Brighter blue (shockwave)
-					mat.albedo_color = Color(0.7, 0.85, 0.95, 0.2)
+					# Level 2: Vivid blue (shockwave)
+					mat.albedo_color = Color(0.2, 0.55, 1.0, 0.25)
 				elif player_level >= 1:
-					# Level 1: Light blue (wider arc)
-					mat.albedo_color = Color(0.75, 0.85, 0.92, 0.18)
+					# Level 1: Bright blue (wider arc)
+					mat.albedo_color = Color(0.25, 0.6, 1.0, 0.22)
 				else:
-					# Level 0: Subtle cool
-					mat.albedo_color = Color(0.8, 0.85, 0.9, 0.15)
+					# Level 0: Clear blue
+					mat.albedo_color = Color(0.2, 0.5, 1.0, 0.18)
 
 			# Scale based on charge level AND player level
 			var charge_scale: float = 1.0 + (charge_level - 1) * 0.2
@@ -533,7 +533,7 @@ func spawn_sword_shockwave(start_position: Vector3, direction: Vector3, level: i
 
 	# Create material - steel blue energy wave (GL Compatibility - no emission)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.8, 0.9, 1.0, 0.85)  # Brighter color to compensate for no emission
+	mat.albedo_color = Color(0.4, 0.7, 1.0, 0.9)  # Vivid blue energy wave
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -701,7 +701,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 	outer_sphere.radial_segments = radial_segs
 	outer_sphere.rings = ring_count
 	var outer_mat: StandardMaterial3D = flash_data["outer_mat"]
-	outer_mat.albedo_color = Color(0.4, 0.6, 1.0, 0.3)
+	outer_mat.albedo_color = Color(0.15, 0.45, 1.0, 0.4)
 
 	# PERF: On web, skip middle layer - outer + core is sufficient
 	var middle_mat: StandardMaterial3D = flash_data["middle_mat"]
@@ -712,7 +712,7 @@ func spawn_slash_flash(position: Vector3, level: int) -> void:
 		middle_sphere.radial_segments = radial_segs
 		middle_sphere.rings = ring_count
 		if middle_mat:
-			middle_mat.albedo_color = Color(0.7, 0.85, 1.0, 0.6)
+			middle_mat.albedo_color = Color(0.3, 0.6, 1.0, 0.7)
 
 	# Layer 3: Bright white core
 	var core_sphere: SphereMesh = flash_data["core_sphere"]

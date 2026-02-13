@@ -5,7 +5,7 @@ extends Area3D
 
 @export var ability_scene: PackedScene  # The ability to grant
 @export var ability_name: String = "Unknown Ability"
-@export var ability_color: Color = Color(0.7, 0.85, 1.0)  # Soft cyan default (no white)
+@export var ability_color: Color = Color(0.2, 0.85, 1.0)  # Vivid electric cyan default
 
 @onready var mesh_instance: MeshInstance3D = $MeshInstance3D
 @onready var collision_shape: CollisionShape3D = $CollisionShape3D
@@ -50,9 +50,18 @@ func _ready() -> void:
 		# PERF: Share material by color - create only if not cached
 		if not _shared_color_materials.has(ability_color):
 			var mat = StandardMaterial3D.new()
-			mat.albedo_color = ability_color
-			mat.metallic = 0.3
-			mat.roughness = 0.3
+			# Boost saturation for vivid pickup appearance
+			var boosted := ability_color
+			var h := boosted.h
+			var s := minf(boosted.s * 1.3, 1.0)
+			var v := minf(boosted.v * 1.15, 1.0)
+			boosted = Color.from_hsv(h, s, v)
+			mat.albedo_color = boosted
+			mat.emission_enabled = true
+			mat.emission = boosted * 0.4
+			mat.emission_energy_multiplier = 0.6
+			mat.metallic = 0.2
+			mat.roughness = 0.35
 			_shared_color_materials[ability_color] = mat
 		glow_material = _shared_color_materials[ability_color]
 		mesh_instance.material_override = glow_material

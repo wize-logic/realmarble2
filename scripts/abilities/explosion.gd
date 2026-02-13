@@ -50,7 +50,7 @@ func _ready() -> void:
 	super._ready()
 	_ensure_shared_explosion_resources()
 	ability_name = "Explosion"
-	ability_color = Color.ORANGE
+	ability_color = Color(1.0, 0.45, 0.0)  # Vivid deep orange
 	cooldown_time = 2.5
 	supports_charging = true  # Explosion supports charging for bigger boom
 	max_charge_time = 2.0  # 2 seconds for max charge
@@ -94,7 +94,7 @@ static func _ensure_shared_explosion_resources() -> void:
 	_shared_indicator_mesh.rings = 4 if _is_web else 8
 
 	_shared_indicator_material = StandardMaterial3D.new()
-	_shared_indicator_material.albedo_color = Color(0.9, 0.75, 0.6, 0.12)
+	_shared_indicator_material.albedo_color = Color(1.0, 0.5, 0.1, 0.15)
 	_shared_indicator_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_shared_indicator_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_shared_indicator_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -103,9 +103,9 @@ static func _ensure_shared_explosion_resources() -> void:
 	_shared_indicator_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 	_shared_indicator_gradient = Gradient.new()
-	_shared_indicator_gradient.add_point(0.0, Color(0.9, 0.8, 0.7, 0.3))
-	_shared_indicator_gradient.add_point(0.5, Color(0.85, 0.75, 0.65, 0.2))
-	_shared_indicator_gradient.add_point(1.0, Color(0.8, 0.7, 0.6, 0.0))
+	_shared_indicator_gradient.add_point(0.0, Color(1.0, 0.6, 0.1, 0.4))
+	_shared_indicator_gradient.add_point(0.5, Color(1.0, 0.4, 0.05, 0.25))
+	_shared_indicator_gradient.add_point(1.0, Color(0.9, 0.3, 0.0, 0.0))
 
 	_shared_magma_curve = Curve.new()
 	_shared_magma_curve.add_point(Vector2(0, 1.0))
@@ -113,10 +113,10 @@ static func _ensure_shared_explosion_resources() -> void:
 	_shared_magma_curve.add_point(Vector2(1, 0.0))
 
 	_shared_magma_gradient = Gradient.new()
-	_shared_magma_gradient.add_point(0.0, Color(1.0, 0.9, 0.3, 1.0))
-	_shared_magma_gradient.add_point(0.3, Color(1.0, 0.4, 0.0, 1.0))
-	_shared_magma_gradient.add_point(0.7, Color(0.8, 0.1, 0.0, 0.8))
-	_shared_magma_gradient.add_point(1.0, Color(0.2, 0.0, 0.0, 0.0))
+	_shared_magma_gradient.add_point(0.0, Color(1.0, 1.0, 0.2, 1.0))  # Bright yellow core
+	_shared_magma_gradient.add_point(0.3, Color(1.0, 0.5, 0.0, 1.0))  # Deep orange
+	_shared_magma_gradient.add_point(0.7, Color(0.9, 0.1, 0.0, 0.85))  # Hot red
+	_shared_magma_gradient.add_point(1.0, Color(0.3, 0.0, 0.0, 0.0))  # Fade
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -158,17 +158,17 @@ func _process(delta: float) -> void:
 			var mat: StandardMaterial3D = radius_indicator.material_override
 			if mat:
 				if player_level >= 3:
-					# Level 3: Bright orange (secondary explosions)
-					mat.albedo_color = Color(1.0, 0.5, 0.1, 0.2)
+					# Level 3: Intense orange-red (secondary explosions)
+					mat.albedo_color = Color(1.0, 0.35, 0.0, 0.25)
 				elif player_level >= 2:
 					# Level 2: Hot orange (lingering fire)
-					mat.albedo_color = Color(1.0, 0.6, 0.2, 0.17)
+					mat.albedo_color = Color(1.0, 0.45, 0.05, 0.22)
 				elif player_level >= 1:
-					# Level 1: Warm orange (more particles)
-					mat.albedo_color = Color(0.95, 0.7, 0.4, 0.15)
+					# Level 1: Vivid orange (more particles)
+					mat.albedo_color = Color(1.0, 0.55, 0.1, 0.18)
 				else:
-					# Level 0: Subtle warm
-					mat.albedo_color = Color(0.9, 0.75, 0.6, 0.12)
+					# Level 0: Clear orange
+					mat.albedo_color = Color(1.0, 0.5, 0.1, 0.15)
 
 			# Pulse effect while charging (faster at higher levels)
 			var pulse_speed: float = 0.005 + ((player_level - 1) * 0.002)
@@ -686,7 +686,7 @@ func _build_explosion_flash() -> void:
 	outer_sphere.rings = ring_count
 	outer_flash.mesh = outer_sphere
 	_flash_outer_mat = StandardMaterial3D.new()
-	_flash_outer_mat.albedo_color = Color(1.0, 0.4, 0.0, 0.35)
+	_flash_outer_mat.albedo_color = Color(1.0, 0.35, 0.0, 0.45)
 	_flash_outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_flash_outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_flash_outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -702,7 +702,7 @@ func _build_explosion_flash() -> void:
 		middle_sphere.rings = ring_count
 		middle_flash.mesh = middle_sphere
 		_flash_middle_mat = StandardMaterial3D.new()
-		_flash_middle_mat.albedo_color = Color(1.0, 0.8, 0.2, 0.6)
+		_flash_middle_mat.albedo_color = Color(1.0, 0.7, 0.1, 0.7)
 		_flash_middle_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_flash_middle_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		_flash_middle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -717,7 +717,7 @@ func _build_explosion_flash() -> void:
 	core_sphere.rings = 3 if _is_web else 4
 	core_flash.mesh = core_sphere
 	_flash_core_mat = StandardMaterial3D.new()
-	_flash_core_mat.albedo_color = Color(1.0, 1.0, 0.9, 0.9)
+	_flash_core_mat.albedo_color = Color(1.0, 0.95, 0.6, 0.95)
 	_flash_core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_flash_core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_flash_core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -733,7 +733,7 @@ func _build_explosion_flash() -> void:
 	_flash_shockwave.mesh = torus
 	_flash_shockwave.rotation.x = PI / 2
 	_flash_wave_mat = StandardMaterial3D.new()
-	_flash_wave_mat.albedo_color = Color(1.0, 0.6, 0.1, 0.7)
+	_flash_wave_mat.albedo_color = Color(1.0, 0.5, 0.0, 0.8)
 	_flash_wave_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_flash_wave_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_flash_wave_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

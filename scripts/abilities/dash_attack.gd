@@ -53,7 +53,7 @@ func _ready() -> void:
 	super._ready()
 	_ensure_shared_dash_resources()
 	ability_name = "Dash Attack"
-	ability_color = Color.MAGENTA
+	ability_color = Color(1.0, 0.0, 0.6)  # Vivid hot pink
 	cooldown_time = 1.5
 	supports_charging = true  # Dash attack supports charging for more speed/damage
 	max_charge_time = 2.0  # 2 seconds for max charge
@@ -134,7 +134,7 @@ static func _ensure_shared_dash_resources() -> void:
 	_shared_indicator_mesh.rings = 6 if _is_web else 12
 
 	_shared_indicator_material = StandardMaterial3D.new()
-	_shared_indicator_material.albedo_color = Color(0.85, 0.75, 0.85, 0.15)  # Subtle neutral purple-pink
+	_shared_indicator_material.albedo_color = Color(1.0, 0.2, 0.6, 0.18)  # Vivid hot pink
 	_shared_indicator_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_shared_indicator_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_shared_indicator_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -143,9 +143,9 @@ static func _ensure_shared_dash_resources() -> void:
 	_shared_indicator_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 	_shared_indicator_gradient = Gradient.new()
-	_shared_indicator_gradient.add_point(0.0, Color(0.85, 0.8, 0.9, 0.35))
-	_shared_indicator_gradient.add_point(0.5, Color(0.8, 0.75, 0.85, 0.25))
-	_shared_indicator_gradient.add_point(1.0, Color(0.75, 0.7, 0.8, 0.0))
+	_shared_indicator_gradient.add_point(0.0, Color(1.0, 0.3, 0.7, 0.4))   # Vivid pink
+	_shared_indicator_gradient.add_point(0.5, Color(1.0, 0.15, 0.55, 0.3))  # Hot pink
+	_shared_indicator_gradient.add_point(1.0, Color(0.8, 0.0, 0.4, 0.0))   # Fade
 
 	_shared_fire_trail_curve = Curve.new()
 	_shared_fire_trail_curve.add_point(Vector2(0, 1.0))
@@ -153,10 +153,10 @@ static func _ensure_shared_dash_resources() -> void:
 	_shared_fire_trail_curve.add_point(Vector2(1, 0.1))
 
 	_shared_fire_trail_gradient = Gradient.new()
-	_shared_fire_trail_gradient.add_point(0.0, Color(1.0, 0.5, 1.0, 1.0))  # Bright magenta
-	_shared_fire_trail_gradient.add_point(0.3, Color(1.0, 0.2, 0.8, 1.0))  # Hot pink
-	_shared_fire_trail_gradient.add_point(0.6, Color(0.8, 0.1, 0.6, 0.8))  # Deep magenta
-	_shared_fire_trail_gradient.add_point(1.0, Color(0.2, 0.0, 0.2, 0.0))  # Dark/transparent
+	_shared_fire_trail_gradient.add_point(0.0, Color(1.0, 0.3, 0.9, 1.0))  # Vivid hot pink
+	_shared_fire_trail_gradient.add_point(0.3, Color(1.0, 0.1, 0.65, 1.0))  # Intense pink
+	_shared_fire_trail_gradient.add_point(0.6, Color(0.85, 0.0, 0.5, 0.85))  # Deep magenta
+	_shared_fire_trail_gradient.add_point(1.0, Color(0.3, 0.0, 0.15, 0.0))  # Fade
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -202,17 +202,17 @@ func _process(delta: float) -> void:
 			var mat: StandardMaterial3D = direction_indicator.material_override
 			if mat:
 				if player_level >= 3:
-					# Level 3: Bright magenta (shows afterimage + double explosion)
-					mat.albedo_color = Color(1.0, 0.4, 0.8, 0.25)
+					# Level 3: Intense hot pink
+					mat.albedo_color = Color(1.0, 0.15, 0.65, 0.3)
 				elif player_level >= 2:
-					# Level 2: Hot pink (shows double explosion)
-					mat.albedo_color = Color(0.95, 0.5, 0.75, 0.22)
+					# Level 2: Vivid pink
+					mat.albedo_color = Color(1.0, 0.25, 0.6, 0.25)
 				elif player_level >= 1:
-					# Level 1: Light magenta (shows end explosion)
-					mat.albedo_color = Color(0.9, 0.6, 0.85, 0.18)
+					# Level 1: Bright pink
+					mat.albedo_color = Color(1.0, 0.35, 0.65, 0.22)
 				else:
-					# Level 0: Subtle neutral
-					mat.albedo_color = Color(0.85, 0.75, 0.85, 0.15)
+					# Level 0: Clear pink
+					mat.albedo_color = Color(1.0, 0.2, 0.6, 0.18)
 
 			# Pulse effect while charging (faster at higher levels)
 			var pulse_speed: float = 0.008 + ((player_level - 1) * 0.002)
@@ -542,7 +542,7 @@ func _build_dash_flash() -> void:
 	outer_sphere.rings = ring_count
 	outer_flash.mesh = outer_sphere
 	_dash_flash_outer_mat = StandardMaterial3D.new()
-	_dash_flash_outer_mat.albedo_color = Color(0.8, 0.2, 0.6, 0.3)
+	_dash_flash_outer_mat.albedo_color = Color(1.0, 0.1, 0.55, 0.4)
 	_dash_flash_outer_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_dash_flash_outer_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_dash_flash_outer_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -557,7 +557,7 @@ func _build_dash_flash() -> void:
 	core_sphere.rings = ring_count
 	core_flash.mesh = core_sphere
 	_dash_flash_core_mat = StandardMaterial3D.new()
-	_dash_flash_core_mat.albedo_color = Color(1.0, 0.7, 0.95, 0.8)
+	_dash_flash_core_mat.albedo_color = Color(1.0, 0.5, 0.85, 0.9)
 	_dash_flash_core_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_dash_flash_core_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_dash_flash_core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

@@ -36,7 +36,7 @@ func _ready() -> void:
 	super._ready()
 	_ensure_shared_lightning_resources()
 	ability_name = "Lightning"
-	ability_color = Color(0.4, 0.8, 1.0)  # Electric cyan-blue
+	ability_color = Color(0.2, 0.85, 1.0)  # Vivid electric cyan
 	cooldown_time = fire_rate
 	supports_charging = true  # Must support charging for input to work
 	max_charge_time = 0.01  # Instant fire - minimal charge time
@@ -68,26 +68,26 @@ static func _ensure_shared_lightning_resources() -> void:
 	_shared_chain_mesh.radial_segments = 3 if OS.has_feature("web") else 6
 
 	_shared_warning_material = StandardMaterial3D.new()
-	_shared_warning_material.albedo_color = Color(0.4, 0.8, 1.0, 0.5)  # Electric blue
+	_shared_warning_material.albedo_color = Color(0.2, 0.85, 1.0, 0.6)  # Vivid electric cyan
 	_shared_warning_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_shared_warning_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_shared_warning_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_shared_warning_material.disable_receive_shadows = true
 
 	_shared_warning_gradient = Gradient.new()
-	_shared_warning_gradient.add_point(0.0, Color(0.6, 0.9, 1.0, 1.0))  # Bright cyan
-	_shared_warning_gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.8))  # Electric blue
-	_shared_warning_gradient.add_point(1.0, Color(0.2, 0.4, 0.8, 0.0))  # Fade
+	_shared_warning_gradient.add_point(0.0, Color(0.4, 0.95, 1.0, 1.0))  # Vivid cyan
+	_shared_warning_gradient.add_point(0.5, Color(0.2, 0.85, 1.0, 0.85))  # Electric cyan
+	_shared_warning_gradient.add_point(1.0, Color(0.1, 0.4, 0.9, 0.0))  # Deep blue fade
 
 	_shared_impact_gradient = Gradient.new()
-	_shared_impact_gradient.add_point(0.0, Color(1.0, 1.0, 1.0, 1.0))  # White
-	_shared_impact_gradient.add_point(0.3, Color(0.7, 0.85, 1.0, 0.8))  # Light blue
-	_shared_impact_gradient.add_point(1.0, Color(0.3, 0.5, 0.8, 0.0))  # Fade
+	_shared_impact_gradient.add_point(0.0, Color(0.9, 1.0, 1.0, 1.0))  # Bright white-cyan
+	_shared_impact_gradient.add_point(0.3, Color(0.3, 0.85, 1.0, 0.85))  # Electric cyan
+	_shared_impact_gradient.add_point(1.0, Color(0.1, 0.45, 0.9, 0.0))  # Deep blue fade
 
 	_shared_reticle_gradient = Gradient.new()
-	_shared_reticle_gradient.add_point(0.0, Color(0.8, 1.0, 1.0, 1.0))  # Bright cyan
-	_shared_reticle_gradient.add_point(0.5, Color(0.4, 0.8, 1.0, 0.7))  # Electric blue
-	_shared_reticle_gradient.add_point(1.0, Color(0.2, 0.5, 0.8, 0.0))  # Fade
+	_shared_reticle_gradient.add_point(0.0, Color(0.5, 1.0, 1.0, 1.0))  # Vivid cyan
+	_shared_reticle_gradient.add_point(0.5, Color(0.2, 0.85, 1.0, 0.8))  # Electric cyan
+	_shared_reticle_gradient.add_point(1.0, Color(0.05, 0.5, 0.9, 0.0))  # Deep blue fade
 
 static func _get_shared_material(color: Color, transparent: bool) -> StandardMaterial3D:
 	var key := "%s_%s" % [color.to_html(), str(transparent)]

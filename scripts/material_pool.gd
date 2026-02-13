@@ -31,20 +31,20 @@ func _ready() -> void:
 
 func _build_standard_materials() -> void:
 	_standard_materials["floor"] = _create_standard_material(
-		Color(0.4, 0.4, 0.45),
-		0.8,
+		Color(0.15, 0.75, 0.4),
+		0.92,
 		0.0,
 		BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	)
 	_standard_materials["wall"] = _create_standard_material(
-		Color(0.5, 0.45, 0.4),
-		0.9,
+		Color(0.85, 0.6, 0.12),
+		0.92,
 		0.0,
 		BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	)
 	_standard_materials["ceiling"] = _create_standard_material(
-		Color(0.35, 0.35, 0.4),
-		0.85,
+		Color(0.2, 0.45, 0.85),
+		0.92,
 		0.0,
 		BaseMaterial3D.SHADING_MODE_PER_PIXEL
 	)

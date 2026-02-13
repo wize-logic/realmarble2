@@ -47,7 +47,7 @@ func _ready() -> void:
 	super._ready()
 	_ensure_shared_cannon_resources()
 	ability_name = "Cannon"
-	ability_color = Color(0.5, 1.0, 0.0)  # Lime green for high visibility
+	ability_color = Color(0.3, 1.0, 0.0)  # Vivid neon green
 	cooldown_time = fire_rate
 	supports_charging = true  # Must support charging for input to work
 	max_charge_time = 0.01  # Instant fire - minimal charge time
@@ -74,7 +74,7 @@ static func _ensure_shared_cannon_resources() -> void:
 	_shared_glow_mesh.height = 0.8
 
 	_shared_projectile_material = StandardMaterial3D.new()
-	_shared_projectile_material.albedo_color = Color(0.6, 1.0, 0.1)  # Bright lime green
+	_shared_projectile_material.albedo_color = Color(0.3, 1.0, 0.05)  # Vivid neon green
 	_shared_projectile_material.metallic = 0.2
 	_shared_projectile_material.roughness = 0.4
 	_shared_projectile_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -86,7 +86,7 @@ static func _ensure_shared_cannon_resources() -> void:
 	_shared_reticle_mesh.ring_segments = 8 if _is_web else 16
 
 	_shared_reticle_material = StandardMaterial3D.new()
-	_shared_reticle_material.albedo_color = Color(0.5, 1.0, 0.0, 0.4)  # Lime green, 40% opacity
+	_shared_reticle_material.albedo_color = Color(0.3, 1.0, 0.0, 0.5)  # Neon green, 50% opacity
 	_shared_reticle_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_shared_reticle_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_shared_reticle_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -95,9 +95,9 @@ static func _ensure_shared_cannon_resources() -> void:
 	_shared_reticle_material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 
 	_shared_reticle_gradient = Gradient.new()
-	_shared_reticle_gradient.add_point(0.0, Color(0.7, 1.0, 0.3, 0.8))  # Bright lime green
-	_shared_reticle_gradient.add_point(0.5, Color(0.5, 1.0, 0.2, 0.6))  # Green
-	_shared_reticle_gradient.add_point(1.0, Color(0.3, 0.6, 0.1, 0.0))  # Transparent
+	_shared_reticle_gradient.add_point(0.0, Color(0.4, 1.0, 0.15, 0.9))  # Vivid neon green
+	_shared_reticle_gradient.add_point(0.5, Color(0.3, 1.0, 0.1, 0.7))  # Pure green
+	_shared_reticle_gradient.add_point(1.0, Color(0.15, 0.7, 0.05, 0.0))  # Transparent
 
 static func _get_shared_glow_material(level: int) -> StandardMaterial3D:
 	var key := "glow_%d" % level

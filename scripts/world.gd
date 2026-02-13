@@ -2710,18 +2710,19 @@ func _create_marble_preview() -> void:
 	# Make this the current camera
 	preview_camera.make_current()
 
-	# Create directional light for good lighting
+	# Create directional light — matches in-game sun energy
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 0.8
+	preview_light.light_color = Color(1.0, 1.0, 1.0)
+	preview_light.light_energy = 0.7  # Match in-game sun
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
 
-	# Fill light from opposite side
+	# Fill light from opposite side — subtle
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.25
+	fill_light.light_energy = 0.2
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 

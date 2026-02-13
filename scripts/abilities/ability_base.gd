@@ -5,7 +5,7 @@ class_name Ability
 ## Abilities can be picked up, used, and dropped by players
 
 @export var ability_name: String = "Ability"
-@export var ability_color: Color = Color(0.7, 0.85, 1.0)  # Soft cyan default (no white)
+@export var ability_color: Color = Color(0.2, 0.85, 1.0)  # Vivid electric cyan default
 @export var cooldown_time: float = 2.0
 @export var supports_charging: bool = true  # Can this ability be charged?
 @export var max_charge_time: float = 2.0  # Max charge time in seconds
