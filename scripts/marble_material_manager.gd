@@ -5,8 +5,6 @@ extends Node
 
 # Pre-load the marble shader
 const MARBLE_SHADER = preload("res://scripts/shaders/marble_shader.gdshader")
-const ROLL_TEXTURE = preload("res://textures/kenney_prototype_textures/orange/texture_09.png")
-const COMPATIBILITY_RENDERER_SETTING := "rendering/renderer/rendering_method"
 
 # Predefined color schemes for variety - all highly distinct
 const COLOR_SCHEMES = [
@@ -52,30 +50,41 @@ const COLOR_SCHEMES = [
 
 # Track used color indices to avoid duplicates when possible
 var used_colors: Array = []
-var _precache_material: Material = null
 
-func create_marble_material(color_index: int = -1) -> Material:
+func create_marble_material(color_index: int = -1) -> ShaderMaterial:
 	"""Create a unique marble material with optional specific color index"""
-	if _should_use_standard_material():
-		return _create_standard_marble_material(color_index)
-
 	var material = ShaderMaterial.new()
 	material.shader = MARBLE_SHADER
 
 	# Select color scheme
-	var scheme := _resolve_color_scheme(color_index)
-	var boosted_primary := _boost_color(scheme.primary)
-	var boosted_secondary := _boost_color(scheme.secondary)
-	var boosted_swirl := _boost_color(scheme.swirl)
+	var scheme: Dictionary
+	if color_index >= 0 and color_index < COLOR_SCHEMES.size():
+		scheme = COLOR_SCHEMES[color_index]
+	else:
+		# Pick a random unused color, or random if all used
+		var available_colors = []
+		for i in range(COLOR_SCHEMES.size()):
+			if not used_colors.has(i):
+				available_colors.append(i)
+
+		if available_colors.is_empty():
+			# All colors used, pick random
+			color_index = randi() % COLOR_SCHEMES.size()
+		else:
+			# Pick random from available
+			color_index = available_colors[randi() % available_colors.size()]
+
+		scheme = COLOR_SCHEMES[color_index]
+		used_colors.append(color_index)
 
 	# Apply color scheme
-	material.set_shader_parameter("primary_color", boosted_primary)
-	material.set_shader_parameter("secondary_color", boosted_secondary)
-	material.set_shader_parameter("swirl_color", boosted_swirl)
+	material.set_shader_parameter("primary_color", scheme.primary)
+	material.set_shader_parameter("secondary_color", scheme.secondary)
+	material.set_shader_parameter("swirl_color", scheme.swirl)
 
 	# Set material properties with slight randomization
-	material.set_shader_parameter("glossiness", randf_range(0.4, 0.6))
-	material.set_shader_parameter("metallic_amount", randf_range(0.05, 0.15))
+	material.set_shader_parameter("glossiness", randf_range(0.8, 0.95))
+	material.set_shader_parameter("metallic_amount", randf_range(0.2, 0.4))
 	material.set_shader_parameter("transparency", 0.02)  # Fixed low transparency for opaque marbles
 
 	# Randomize pattern properties for uniqueness
@@ -94,60 +103,8 @@ func create_marble_material(color_index: int = -1) -> Material:
 
 	return material
 
-func _create_standard_marble_material(color_index: int = -1) -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-	var scheme := _resolve_color_scheme(color_index)
-	material.albedo_color = _boost_color(scheme.primary)
-	material.albedo_texture = ROLL_TEXTURE
-	material.emission_enabled = true
-	material.emission = material.albedo_color * 0.12
-	material.roughness = randf_range(0.6, 0.75)
-	material.metallic = randf_range(0.0, 0.05)
-	material.specular = 0.1
-	material.uv1_scale = Vector3(3.5, 3.5, 3.5)
-	material.uv1_triplanar = true
-	return material
-
-func _resolve_color_scheme(color_index: int = -1) -> Dictionary:
-	var scheme: Dictionary
-	if color_index >= 0 and color_index < COLOR_SCHEMES.size():
-		scheme = COLOR_SCHEMES[color_index]
-	else:
-		var available_colors = []
-		for i in range(COLOR_SCHEMES.size()):
-			if not used_colors.has(i):
-				available_colors.append(i)
-
-		if available_colors.is_empty():
-			color_index = randi() % COLOR_SCHEMES.size()
-		else:
-			color_index = available_colors[randi() % available_colors.size()]
-
-		scheme = COLOR_SCHEMES[color_index]
-		used_colors.append(color_index)
-	return scheme
-
-func _should_use_standard_material() -> bool:
-	if not ProjectSettings.has_setting(COMPATIBILITY_RENDERER_SETTING):
-		return false
-	var rendering_method := str(ProjectSettings.get_setting(COMPATIBILITY_RENDERER_SETTING))
-	return rendering_method == "compatibility" or rendering_method == "gl_compatibility"
-
-func create_marble_material_from_hue(hue: float) -> Material:
+func create_marble_material_from_hue(hue: float) -> ShaderMaterial:
 	"""Create a marble material from a specific hue value (0.0 to 1.0)"""
-	if _should_use_standard_material():
-		var material := StandardMaterial3D.new()
-		material.albedo_color = _boost_color(Color.from_hsv(hue, 0.85, 0.9))
-		material.albedo_texture = ROLL_TEXTURE
-		material.emission_enabled = true
-		material.emission = material.albedo_color * 0.12
-		material.roughness = 0.7
-		material.metallic = 0.05
-		material.specular = 0.1
-		material.uv1_scale = Vector3(3.5, 3.5, 3.5)
-		material.uv1_triplanar = true
-		return material
-
 	var material = ShaderMaterial.new()
 	material.shader = MARBLE_SHADER
 
@@ -156,13 +113,13 @@ func create_marble_material_from_hue(hue: float) -> Material:
 	var secondary = Color.from_hsv(hue, 0.7, 1.0)
 	var swirl = Color.from_hsv(hue, 0.4, 1.0)
 
-	material.set_shader_parameter("primary_color", _boost_color(primary))
-	material.set_shader_parameter("secondary_color", _boost_color(secondary))
-	material.set_shader_parameter("swirl_color", _boost_color(swirl))
+	material.set_shader_parameter("primary_color", primary)
+	material.set_shader_parameter("secondary_color", secondary)
+	material.set_shader_parameter("swirl_color", swirl)
 
 	# Set material properties
-	material.set_shader_parameter("glossiness", 0.5)
-	material.set_shader_parameter("metallic_amount", 0.1)
+	material.set_shader_parameter("glossiness", 0.85)
+	material.set_shader_parameter("metallic_amount", 0.3)
 	material.set_shader_parameter("transparency", 0.02)  # Much less translucent
 	material.set_shader_parameter("swirl_scale", 2.0)
 	material.set_shader_parameter("swirl_intensity", 0.6)
@@ -179,15 +136,9 @@ func create_marble_material_from_hue(hue: float) -> Material:
 
 	return material
 
-func get_random_marble_material() -> Material:
+func get_random_marble_material() -> ShaderMaterial:
 	"""Get a completely random marble material"""
 	return create_marble_material(-1)
-
-func _boost_color(color: Color) -> Color:
-	var h := color.h
-	var s := minf(color.s * 1.25, 1.0)
-	var v := minf(color.v * 1.15, 1.0)
-	return Color.from_hsv(h, s, v)
 
 func reset_used_colors() -> void:
 	"""Reset the used colors tracker"""
@@ -202,42 +153,3 @@ func get_color_scheme_name(index: int) -> String:
 func get_color_scheme_count() -> int:
 	"""Get the total number of available color schemes"""
 	return COLOR_SCHEMES.size()
-
-func precache_shader_materials() -> void:
-	"""Warm up marble materials to avoid shader compilation spikes."""
-	if _precache_material:
-		return
-	var scheme := COLOR_SCHEMES[0]
-	if _should_use_standard_material():
-		var material := StandardMaterial3D.new()
-		material.albedo_color = _boost_color(scheme.primary)
-		material.albedo_texture = ROLL_TEXTURE
-		material.emission_enabled = true
-		material.emission = material.albedo_color * 0.12
-		material.roughness = 0.7
-		material.metallic = 0.05
-		material.specular = 0.1
-		material.uv1_scale = Vector3(3.5, 3.5, 3.5)
-		material.uv1_triplanar = true
-		_precache_material = material
-		return
-
-	var shader_material := ShaderMaterial.new()
-	shader_material.shader = MARBLE_SHADER
-	shader_material.set_shader_parameter("primary_color", _boost_color(scheme.primary))
-	shader_material.set_shader_parameter("secondary_color", _boost_color(scheme.secondary))
-	shader_material.set_shader_parameter("swirl_color", _boost_color(scheme.swirl))
-	shader_material.set_shader_parameter("glossiness", 0.5)
-	shader_material.set_shader_parameter("metallic_amount", 0.1)
-	shader_material.set_shader_parameter("transparency", 0.02)
-	shader_material.set_shader_parameter("swirl_scale", 2.0)
-	shader_material.set_shader_parameter("swirl_intensity", 0.6)
-	shader_material.set_shader_parameter("bubble_density", 0.4)
-	shader_material.set_shader_parameter("time_speed", 0.2)
-	shader_material.set_shader_parameter("glow_strength", 0.12)
-	shader_material.set_shader_parameter("glow_pulse_speed", 1.2)
-	shader_material.set_shader_parameter("glow_pulse_amount", 0.08)
-	shader_material.set_shader_parameter("outer_rim_power", 2.2)
-	shader_material.set_shader_parameter("outer_rim_intensity", 0.2)
-	shader_material.set_shader_parameter("rim_intensity", 0.15)
-	_precache_material = shader_material

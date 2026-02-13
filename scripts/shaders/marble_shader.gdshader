@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_back, depth_draw_opaque;
+render_mode blend_mix, depth_draw_always, depth_prepass_alpha, cull_back, diffuse_burley, specular_schlick_ggx;
 
 // Marble appearance parameters
 uniform vec3 primary_color : source_color = vec3(0.8, 0.2, 0.2);
@@ -7,8 +7,8 @@ uniform vec3 secondary_color : source_color = vec3(0.9, 0.4, 0.4);
 uniform vec3 swirl_color : source_color = vec3(1.0, 0.8, 0.8);
 
 // Material properties
-uniform float glossiness : hint_range(0.0, 1.0) = 0.6;
-uniform float metallic_amount : hint_range(0.0, 1.0) = 0.1;
+uniform float glossiness : hint_range(0.0, 1.0) = 0.85;
+uniform float metallic_amount : hint_range(0.0, 1.0) = 0.3;
 uniform float transparency : hint_range(0.0, 1.0) = 0.02;
 
 // Pattern controls
@@ -18,13 +18,21 @@ uniform float bubble_density : hint_range(0.0, 2.0) = 0.4;
 uniform float time_speed : hint_range(0.0, 2.0) = 0.2;
 
 // Enhanced visual effects
+uniform float iridescence_strength : hint_range(0.0, 1.0) = 0.3;
+uniform float sss_strength : hint_range(0.0, 1.0) = 0.4;
+uniform float specular_intensity : hint_range(0.0, 2.0) = 0.8;
 uniform float rim_power : hint_range(1.0, 8.0) = 2.5;
-uniform float rim_intensity : hint_range(0.0, 1.0) = 0.08;
+uniform float rim_intensity : hint_range(0.0, 1.0) = 0.15;
+
+// Special marble lighting - subtle glow to help marbles stand out (reduced values)
+uniform float glow_strength : hint_range(0.0, 1.0) = 0.12;
+uniform float glow_pulse_speed : hint_range(0.0, 5.0) = 1.2;
+uniform float glow_pulse_amount : hint_range(0.0, 0.5) = 0.08;
+uniform float outer_rim_power : hint_range(1.0, 5.0) = 2.2;
+uniform float outer_rim_intensity : hint_range(0.0, 1.0) = 0.2;
 
 // Performance quality: 0=Low (best FPS), 1=Medium, 2=High
 uniform int quality_level : hint_range(0, 2) = 1;
-
-varying vec3 world_pos;
 
 // Simple hash function
 float hash(vec3 p) {
@@ -106,11 +114,39 @@ float fresnel(float amount, vec3 normal, vec3 view) {
 	return pow(1.0 - clamp(dot(normalize(normal), normalize(view)), 0.0, 1.0), amount);
 }
 
-void vertex() {
-	world_pos = (WORLD_MATRIX * vec4(VERTEX, 1.0)).xyz;
+// Iridescence - rainbow effect based on view angle
+vec3 iridescence(vec3 normal, vec3 view, float strength) {
+	float ndotv = dot(normalize(normal), normalize(view));
+	float hue = fract(ndotv * 2.0 + 0.5);
+
+	// Convert hue to RGB (simplified HSV to RGB)
+	vec3 rgb;
+	float h = hue * 6.0;
+	float c = 1.0;
+	float x = c * (1.0 - abs(mod(h, 2.0) - 1.0));
+
+	if (h < 1.0) rgb = vec3(c, x, 0.0);
+	else if (h < 2.0) rgb = vec3(x, c, 0.0);
+	else if (h < 3.0) rgb = vec3(0.0, c, x);
+	else if (h < 4.0) rgb = vec3(0.0, x, c);
+	else if (h < 5.0) rgb = vec3(x, 0.0, c);
+	else rgb = vec3(c, 0.0, x);
+
+	return rgb * strength;
+}
+
+// Subsurface scattering approximation
+vec3 sss_color(vec3 base_color, vec3 view_dir, vec3 normal, float strength) {
+	// Simulate light passing through the marble
+	float sss_factor = pow(1.0 - abs(dot(normal, view_dir)), 2.0);
+	vec3 warm_tint = vec3(1.0, 0.85, 0.7); // Warm internal glow
+	return mix(base_color, base_color * warm_tint * 1.3, sss_factor * strength);
 }
 
 void fragment() {
+	// Get world position for consistent patterns
+	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+
 	// Create marble swirl pattern
 	float swirl = marble_pattern(world_pos, TIME);
 
@@ -125,8 +161,15 @@ void fragment() {
 	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5) * 1.2;
 	final_color = mix(final_color, bubble_tint, bubble * 0.35);
 
-	// Calculate view direction from camera to fragment (world space)
-	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);
+	// Calculate view direction
+	vec3 view_dir = normalize(VERTEX);
+
+	// Apply subsurface scattering simulation
+	final_color = sss_color(final_color, view_dir, NORMAL, sss_strength);
+
+	// Add iridescence effect
+	vec3 iris = iridescence(NORMAL, view_dir, iridescence_strength);
+	final_color += iris * 0.15;
 
 	// Calculate enhanced fresnel for rim lighting
 	float fresnel_amount = fresnel(rim_power, NORMAL, view_dir);
@@ -135,10 +178,46 @@ void fragment() {
 	vec3 rim_color = mix(secondary_color, swirl_color, 0.5) * 1.2;
 	final_color += fresnel_amount * rim_intensity * rim_color;
 
+	// Calculate outer rim glow - subtle wider glow (reduced intensity)
+	float outer_fresnel = fresnel(outer_rim_power, NORMAL, view_dir);
+	vec3 outer_glow_color = mix(primary_color, secondary_color, 0.3) * 1.3;
+	final_color += outer_fresnel * outer_rim_intensity * outer_glow_color;
+
 	// Output material properties
 	ALBEDO = final_color;
 	ROUGHNESS = 1.0 - glossiness;
 	METALLIC = metallic_amount;
-	SPECULAR = 0.3;
+	SPECULAR = specular_intensity;
 
+	// Set to fully opaque for proper shadow casting and receiving
+	ALPHA = 1.0;
+
+	// Enhanced normal map detail from swirl pattern (skip on low quality)
+	if (quality_level > 0) {
+		float normal_detail_x = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.1, 0.0, 0.0)) - 0.5) * 0.4;
+		float normal_detail_y = (noise3d(world_pos * swirl_scale * 4.0 + vec3(0.0, 0.1, 0.0)) - 0.5) * 0.4;
+		NORMAL_MAP = vec3(normal_detail_x, normal_detail_y, 1.0);
+		NORMAL_MAP_DEPTH = 0.8;
+	}
+
+	// === SPECIAL MARBLE LIGHTING - Subtle glow to help differentiate marbles ===
+	// Pulsing glow animation (subtle)
+	float pulse = 1.0 + sin(TIME * glow_pulse_speed) * glow_pulse_amount;
+
+	// Base emission color from marble colors
+	vec3 emission_base = mix(primary_color, secondary_color, 0.4);
+
+	// Core glow - subtle inner light
+	float core_glow = glow_strength * pulse;
+
+	// Rim emission - gentle glow at edges (significantly reduced)
+	float rim_emission = fresnel_amount * 0.3 + outer_fresnel * 0.15;
+
+	// Combine emission components (reduced multipliers)
+	vec3 total_emission = emission_base * core_glow * (0.15 + rim_emission * 0.2);
+
+	// Add a very subtle highlight at steep angles
+	total_emission += swirl_color * outer_fresnel * outer_fresnel * 0.08 * pulse;
+
+	EMISSION = total_emission;
 }

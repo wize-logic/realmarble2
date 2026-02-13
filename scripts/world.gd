@@ -197,7 +197,7 @@ func _precache_visual_resources() -> void:
 	"""Warm up shaders/materials/effects to avoid first-use hitching."""
 	if MaterialPool:
 		MaterialPool.precache_visual_resources()
-	if marble_material_manager:
+	if marble_material_manager and marble_material_manager.has_method("precache_shader_materials"):
 		marble_material_manager.precache_shader_materials()
 	AbilityBaseScript._ensure_shared_resources()
 	BeamSpawnEffectScript.precache_resources()
