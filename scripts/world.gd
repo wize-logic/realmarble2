@@ -2877,11 +2877,11 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 			world_env.environment = env
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# Marble Blast style: bright cheerful ambient
-		env.ambient_light_color = Color(0.65, 0.68, 0.72)
-		env.ambient_light_energy = 0.6
-		env.tonemap_white = 3.2
-		env.tonemap_exposure = 1.0
+		# Marble Blast style: balanced ambient — well-lit but not washed out
+		env.ambient_light_color = Color(0.55, 0.56, 0.60)
+		env.ambient_light_energy = 0.45
+		env.tonemap_white = 3.0
+		env.tonemap_exposure = 0.9
 		# Subtle bloom — just enough to soften bright edges, not blinding
 		env.glow_enabled = true
 		env.glow_intensity = 0.25
@@ -2895,8 +2895,8 @@ func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
 		sun_light.light_color = Color(1.0, 0.98, 0.95)
-		sun_light.light_energy = 1.0
-		sun_light.light_indirect_energy = 0.3
+		sun_light.light_energy = 0.85
+		sun_light.light_indirect_energy = 0.25
 		sun_light.shadow_enabled = true
 		sun_light.shadow_bias = 0.05
 		sun_light.directional_shadow_max_distance = 200.0

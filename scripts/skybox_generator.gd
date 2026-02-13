@@ -77,18 +77,18 @@ func generate_skybox() -> void:
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
 	if menu_static_mode:
-		sky_material.energy_multiplier = 1.0
+		sky_material.energy_multiplier = 0.8
 	else:
-		sky_material.energy_multiplier = 1.1
+		sky_material.energy_multiplier = 0.85
 	sky_material.sky_curve = 0.15
-	sky_material.ground_curve = 0.25
+	sky_material.ground_curve = 0.15
 	sky_material.sun_angle_max = 1.0
 	sky_material.sun_curve = 0.01
 	sky_material.use_debanding = true
 	_apply_cloud_cover_if_supported()
 
 	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.25, 0.35, 0.85), Color(0.70, 0.75, 0.90), Color(0.60, 0.62, 0.72))
+	_apply_palette(Color(0.25, 0.35, 0.85), Color(0.65, 0.70, 0.85), Color(0.18, 0.25, 0.55))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -114,15 +114,15 @@ func randomize_colors() -> void:
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		# MB-style: vivid saturated sky tops, bright cloudy horizons, bright ground
-		{"top": Color(0.25, 0.35, 0.85), "horizon": Color(0.70, 0.75, 0.90), "ground": Color(0.60, 0.62, 0.72)}, # bright blue (MBG classic)
-		{"top": Color(0.35, 0.15, 0.65), "horizon": Color(0.72, 0.60, 0.80), "ground": Color(0.58, 0.50, 0.65)}, # deep purple (MBU classic)
-		{"top": Color(0.15, 0.50, 0.55), "horizon": Color(0.55, 0.78, 0.75), "ground": Color(0.48, 0.62, 0.58)}, # teal green (MBU)
-		{"top": Color(0.20, 0.25, 0.70), "horizon": Color(0.65, 0.70, 0.88), "ground": Color(0.55, 0.58, 0.70)}, # royal blue
-		{"top": Color(0.40, 0.18, 0.60), "horizon": Color(0.75, 0.62, 0.78), "ground": Color(0.60, 0.52, 0.62)}, # violet
-		{"top": Color(0.20, 0.45, 0.65), "horizon": Color(0.60, 0.75, 0.85), "ground": Color(0.50, 0.60, 0.68)}, # ocean blue
-		{"top": Color(0.30, 0.20, 0.55), "horizon": Color(0.68, 0.58, 0.75), "ground": Color(0.55, 0.48, 0.60)}, # twilight purple
-		{"top": Color(0.18, 0.40, 0.48), "horizon": Color(0.58, 0.72, 0.70), "ground": Color(0.48, 0.58, 0.55)}, # sage teal
+		# MB-style: saturated top, bright horizon band, dark ground matching top
+		{"top": Color(0.25, 0.35, 0.85), "horizon": Color(0.65, 0.70, 0.85), "ground": Color(0.18, 0.25, 0.55)}, # bright blue
+		{"top": Color(0.35, 0.15, 0.65), "horizon": Color(0.65, 0.55, 0.75), "ground": Color(0.22, 0.10, 0.42)}, # deep purple
+		{"top": Color(0.15, 0.50, 0.55), "horizon": Color(0.50, 0.72, 0.70), "ground": Color(0.10, 0.32, 0.35)}, # teal green
+		{"top": Color(0.20, 0.25, 0.70), "horizon": Color(0.58, 0.62, 0.82), "ground": Color(0.14, 0.18, 0.48)}, # royal blue
+		{"top": Color(0.40, 0.18, 0.60), "horizon": Color(0.68, 0.55, 0.72), "ground": Color(0.26, 0.12, 0.40)}, # violet
+		{"top": Color(0.20, 0.45, 0.65), "horizon": Color(0.55, 0.68, 0.78), "ground": Color(0.14, 0.30, 0.42)}, # ocean blue
+		{"top": Color(0.30, 0.20, 0.55), "horizon": Color(0.60, 0.52, 0.68), "ground": Color(0.20, 0.14, 0.36)}, # twilight purple
+		{"top": Color(0.18, 0.40, 0.48), "horizon": Color(0.50, 0.65, 0.62), "ground": Color(0.12, 0.28, 0.32)}, # sage teal
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
@@ -151,7 +151,7 @@ func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color)
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
 	sky_material.ground_bottom_color = ground_color
-	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.3)
+	sky_material.ground_horizon_color = horizon_color.lerp(ground_color, 0.6)
 
 
 func _apply_menu_static_lighting() -> void:
