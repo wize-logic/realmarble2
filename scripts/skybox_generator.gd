@@ -70,22 +70,20 @@ func generate_skybox() -> void:
 		world_env.environment = environment
 
 	# NOTE: ambient_light and tonemap are set by _apply_prebaked_lighting_profile() in world.gd
-	# which runs AFTER skybox generation. Only set sky-specific properties here.
-	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
+	# which runs AFTER skybox generation. Only set sky-related properties here.
 
-	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
+	# ProceduralSkyMaterial — standard energy, symmetric curves for full sphere wrap
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 0.70
-	sky_material.sky_curve = 0.15
-	sky_material.ground_curve = 0.35
+	sky_material.energy_multiplier = 1.0
+	sky_material.sky_curve = 0.1
+	sky_material.ground_curve = 0.1
 	sky_material.sun_angle_max = 1.0
 	sky_material.sun_curve = 0.01
 	sky_material.use_debanding = true
 	_apply_cloud_cover_if_supported()
 
-	# Apply first palette immediately (psychedelic dusk default)
-	_apply_palette(Color(0.25, 0.35, 0.85), Color(0.65, 0.70, 0.85), Color(0.18, 0.25, 0.55))
+	# Apply first palette immediately
+	_apply_palette(Color(0.35, 0.45, 0.95), Color(0.75, 0.80, 0.95), Color(0.35, 0.45, 0.95))
 
 	var sky: Sky = Sky.new()
 	sky.sky_material = sky_material
@@ -111,15 +109,15 @@ func randomize_colors() -> void:
 
 func _setup_color_cycle() -> void:
 	_palettes = [
-		# MB-style: saturated top, bright horizon band, dark ground matching top
-		{"top": Color(0.25, 0.35, 0.85), "horizon": Color(0.65, 0.70, 0.85), "ground": Color(0.18, 0.25, 0.55)}, # bright blue
-		{"top": Color(0.35, 0.15, 0.65), "horizon": Color(0.65, 0.55, 0.75), "ground": Color(0.22, 0.10, 0.42)}, # deep purple
-		{"top": Color(0.15, 0.50, 0.55), "horizon": Color(0.50, 0.72, 0.70), "ground": Color(0.10, 0.32, 0.35)}, # teal green
-		{"top": Color(0.20, 0.25, 0.70), "horizon": Color(0.58, 0.62, 0.82), "ground": Color(0.14, 0.18, 0.48)}, # royal blue
-		{"top": Color(0.40, 0.18, 0.60), "horizon": Color(0.68, 0.55, 0.72), "ground": Color(0.26, 0.12, 0.40)}, # violet
-		{"top": Color(0.20, 0.45, 0.65), "horizon": Color(0.55, 0.68, 0.78), "ground": Color(0.14, 0.30, 0.42)}, # ocean blue
-		{"top": Color(0.30, 0.20, 0.55), "horizon": Color(0.60, 0.52, 0.68), "ground": Color(0.20, 0.14, 0.36)}, # twilight purple
-		{"top": Color(0.18, 0.40, 0.48), "horizon": Color(0.50, 0.65, 0.62), "ground": Color(0.12, 0.28, 0.32)}, # sage teal
+		# Marble Blast style: vivid saturated colors, bright enough to look good mirrored below
+		{"top": Color(0.35, 0.45, 0.95), "horizon": Color(0.75, 0.80, 0.95), "ground": Color(0.35, 0.45, 0.95)}, # vivid blue
+		{"top": Color(0.50, 0.25, 0.80), "horizon": Color(0.75, 0.65, 0.85), "ground": Color(0.50, 0.25, 0.80)}, # purple
+		{"top": Color(0.25, 0.60, 0.65), "horizon": Color(0.60, 0.80, 0.78), "ground": Color(0.25, 0.60, 0.65)}, # teal
+		{"top": Color(0.30, 0.35, 0.85), "horizon": Color(0.65, 0.70, 0.90), "ground": Color(0.30, 0.35, 0.85)}, # royal blue
+		{"top": Color(0.55, 0.30, 0.75), "horizon": Color(0.78, 0.65, 0.82), "ground": Color(0.55, 0.30, 0.75)}, # violet
+		{"top": Color(0.30, 0.55, 0.80), "horizon": Color(0.65, 0.78, 0.88), "ground": Color(0.30, 0.55, 0.80)}, # ocean blue
+		{"top": Color(0.40, 0.30, 0.70), "horizon": Color(0.70, 0.62, 0.78), "ground": Color(0.40, 0.30, 0.70)}, # twilight
+		{"top": Color(0.30, 0.55, 0.60), "horizon": Color(0.60, 0.75, 0.72), "ground": Color(0.30, 0.55, 0.60)}, # sage teal
 	]
 	_current_palette_index = clampi(color_palette, 0, _palettes.size() - 1)
 	_next_palette_index = _current_palette_index
@@ -145,10 +143,10 @@ func _start_next_transition() -> void:
 func _apply_palette(top_color: Color, horizon_color: Color, ground_color: Color) -> void:
 	if not sky_material:
 		return
-	# Wrap skybox as full sphere: top color mirrors to bottom, bright horizon band
+	# Full sphere: sky on top, mirrored on bottom, bright horizon band wrapping around
 	sky_material.sky_top_color = top_color
 	sky_material.sky_horizon_color = horizon_color
-	sky_material.ground_bottom_color = top_color
+	sky_material.ground_bottom_color = ground_color
 	sky_material.ground_horizon_color = horizon_color
 
 

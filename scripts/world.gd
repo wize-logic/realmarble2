@@ -2506,11 +2506,11 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.55, 0.60)
-	env.ambient_light_energy = 0.22
+	env.ambient_light_color = Color(1.0, 1.0, 1.0)
+	env.ambient_light_energy = 0.45
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 2.5
-	env.tonemap_exposure = 0.78
+	env.tonemap_white = 1.0
+	env.tonemap_exposure = 1.0
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2536,19 +2536,19 @@ func _create_customize_panel() -> void:
 	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_cam.current = true
 
-	# Key light — strong directional matching scene layers
+	# Key light — standard directional
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 0.85
+	light.light_energy = 1.0
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
-	# Fill light from opposite side — low energy, just prevents black shadows
+	# Fill light from opposite side
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.20
+	ambient_light.light_energy = 0.3
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2714,15 +2714,15 @@ func _create_marble_preview() -> void:
 	# Create directional light for good lighting
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
-	preview_light.light_energy = 0.85
+	preview_light.light_energy = 1.0
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
 
-	# Fill light — subtle, from opposite side
+	# Fill light from opposite side
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.12
+	fill_light.light_energy = 0.3
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2866,39 +2866,31 @@ func play_countdown_beep(text: String) -> void:
 			var value = sin(phase) * amplitude
 			playback.push_frame(Vector2(value, value))
 
-func _apply_prebaked_lighting_profile(menu_preview: bool) -> void:
-	## Lighting profile: DirectionalLight3D as primary sun + ambient fill.
-	## DirectionalLight3D properly illuminates all surfaces through the PBR pipeline.
-	## Ambient provides fill for areas the directional doesn't reach.
+func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
+	## Clean lighting from scratch — simple, bright, balanced.
 	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
 	if world_env:
 		var env: Environment = world_env.environment
 		if not env:
 			env = Environment.new()
 			world_env.environment = env
+		# Ambient: moderate fill so nothing is ever pitch black
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		env.ambient_light_color = Color(1.0, 1.0, 1.0)
+		env.ambient_light_energy = 0.45
+		# Tonemap: ACES at neutral exposure
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		# LAYER 1: Ambient fill — low energy, prevents pitch-black shadows while keeping contrast
-		env.ambient_light_color = Color(0.55, 0.55, 0.60)
-		env.ambient_light_energy = 0.22
-		# Tonemap — ACES with moderate exposure to lift midtones without washing highlights
-		env.tonemap_white = 2.5
-		env.tonemap_exposure = 0.78
-		# LAYER 4: Glow/bloom — soft highlight diffusion on bright surfaces
-		env.glow_enabled = true
-		env.glow_intensity = 0.30
-		env.glow_strength = 0.45
-		env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
-		env.glow_bloom = 0.06
-		env.glow_hdr_threshold = 1.1
-		env.glow_hdr_scale = 1.0
+		env.tonemap_white = 1.0
+		env.tonemap_exposure = 1.0
+		# No glow/bloom — keep it clean
+		env.glow_enabled = false
 
-	# LAYER 2: DirectionalLight3D — strong key light for shadows, specular highlights, and surface definition
+	# DirectionalLight3D: standard sun at full energy with shadows
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
 		sun_light.light_color = Color(1.0, 0.98, 0.95)
-		sun_light.light_energy = 0.85
-		sun_light.light_indirect_energy = 0.25
+		sun_light.light_energy = 1.0
+		sun_light.light_indirect_energy = 0.3
 		sun_light.shadow_enabled = true
 		sun_light.shadow_bias = 0.05
 		sun_light.directional_shadow_max_distance = 200.0
@@ -2953,8 +2945,8 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	level_generator.generate_lights = true
 	level_generator.lighting_quality = 0
 	level_generator.max_light_count = 16
-	level_generator.q3_light_energy = 0.45
-	level_generator.q3_light_range = 28.0
+	level_generator.q3_light_energy = 0.5
+	level_generator.q3_light_range = 25.0
 	level_generator.q3_grid_spacing = 40.0
 	level_generator.q3_ceiling_lights = true
 	level_generator.q3_floor_fill = false
