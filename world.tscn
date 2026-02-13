@@ -20,7 +20,7 @@
 [ext_resource type="FontFile" uid="uid://dyk783ccd5kes" path="res://fonts/Rajdhani-SemiBold.ttf" id="21_fontsemibold"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_r06yd"]
-energy_multiplier = 1.25
+energy_multiplier = 0.5
 
 [sub_resource type="Sky" id="Sky_78err"]
 sky_material = SubResource("PhysicalSkyMaterial_r06yd")
@@ -30,10 +30,10 @@ background_mode = 2
 sky = SubResource("Sky_78err")
 ambient_light_source = 2
 ambient_light_color = Color(0.75, 0.72, 0.68, 1)
-ambient_light_energy = 0.5
-reflected_light_source = 2
+ambient_light_energy = 0.18
+reflected_light_source = 0
 tonemap_mode = 2
-tonemap_white = 6.0
+tonemap_white = 1.8
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
 
