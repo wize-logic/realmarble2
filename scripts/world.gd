@@ -2506,10 +2506,10 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.7, 0.7, 0.75)
-	env.ambient_light_energy = 0.3
+	env.ambient_light_color = Color(0.6, 0.6, 0.65)
+	env.ambient_light_energy = 0.18
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_white = 1.0
+	env.tonemap_white = 1.8
 	env.tonemap_exposure = 0.85
 	world_env.environment = env
 	scene_root.add_child(world_env)
@@ -2874,13 +2874,13 @@ func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
 		if not env:
 			env = Environment.new()
 			world_env.environment = env
-		# Ambient: gentle fill so shadows aren't black but scene isn't washed out
+		# Ambient: low fill — lets shadows go darker for contrast
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.7, 0.7, 0.75)
-		env.ambient_light_energy = 0.3
-		# Tonemap: ACES with pulled-back exposure to prevent blowout
+		env.ambient_light_color = Color(0.6, 0.6, 0.65)
+		env.ambient_light_energy = 0.18
+		# Tonemap: ACES with wider white point to preserve highlight detail
 		env.tonemap_mode = Environment.TONE_MAPPER_ACES
-		env.tonemap_white = 1.0
+		env.tonemap_white = 1.8
 		env.tonemap_exposure = 0.85
 		# No glow/bloom — keep it clean
 		env.glow_enabled = false
