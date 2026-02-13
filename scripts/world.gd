@@ -2885,15 +2885,29 @@ func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
 		# No glow/bloom — keep it clean
 		env.glow_enabled = false
 
-	# DirectionalLight3D: slightly reduced sun to prevent white blowout on surfaces
+	# Scene sun — layer 1 only (world geometry, not marbles)
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
 		sun_light.light_color = Color(1.0, 0.98, 0.95)
 		sun_light.light_energy = 0.8
 		sun_light.light_indirect_energy = 0.2
+		sun_light.light_cull_mask = 1  # Layer 1 only — excludes marbles on layer 2
 		sun_light.shadow_enabled = true
 		sun_light.shadow_bias = 0.05
 		sun_light.directional_shadow_max_distance = 200.0
+
+	# Dedicated marble light — layer 2 only, independent of scene lighting
+	var marble_light: DirectionalLight3D = get_node_or_null("MarbleLight") as DirectionalLight3D
+	if not marble_light:
+		marble_light = DirectionalLight3D.new()
+		marble_light.name = "MarbleLight"
+		add_child(marble_light)
+	marble_light.light_color = Color(1.0, 1.0, 1.0)
+	marble_light.light_energy = 1.2
+	marble_light.light_indirect_energy = 0.0
+	marble_light.light_cull_mask = 2  # Layer 2 only — only affects marbles
+	marble_light.rotation_degrees = Vector3(-40, 30, 0)
+	marble_light.shadow_enabled = false  # No self-shadow on marbles
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION

@@ -1062,6 +1062,7 @@ func _register_light(light: OmniLight3D) -> OmniLight3D:
 	if not _can_add_light():
 		light.queue_free()
 		return null
+	light.light_cull_mask = 1  # Layer 1 only — world geometry, not marbles
 	add_child(light)
 	lights.append(light)
 	return light

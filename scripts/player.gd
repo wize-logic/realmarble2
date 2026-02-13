@@ -296,6 +296,10 @@ func _ready() -> void:
 	collision_layer = 2  # Player layer
 	collision_mask = 7   # Collide with world (1), players (2), projectiles (4)
 
+	# Put marble mesh on visual layer 2 only — dedicated marble lighting, unaffected by scene lights
+	if marble_mesh:
+		marble_mesh.layers = 2
+
 	# Make camera arm ignore parent rotation (prevents rolling with marble)
 	if camera_arm:
 		camera_arm.top_level = true
