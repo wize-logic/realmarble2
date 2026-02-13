@@ -2506,11 +2506,10 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.5, 0.55)
-	env.ambient_light_energy = 0.1
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_white = 1.5
-	env.tonemap_exposure = 0.75
+	env.ambient_light_color = Color(0.4, 0.42, 0.5)
+	env.ambient_light_energy = 0.12
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	env.tonemap_exposure = 0.9
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2867,29 +2866,35 @@ func play_countdown_beep(text: String) -> void:
 			playback.push_frame(Vector2(value, value))
 
 func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
-	## Clean lighting — preserves material color saturation.
+	## Vivid lighting — maximum color preservation, high contrast.
 	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
 	if world_env:
 		var env: Environment = world_env.environment
 		if not env:
 			env = Environment.new()
 			world_env.environment = env
-		# Ambient: very low, no grey wash — just enough to see into shadows
+		# Ambient: minimal tinted fill — just prevents pitch black, doesn't wash colors
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.5, 0.5, 0.55)
-		env.ambient_light_energy = 0.1
-		# Tonemap: Filmic preserves color saturation better than ACES
-		env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-		env.tonemap_white = 1.5
-		env.tonemap_exposure = 0.75
-		# No glow/bloom — keep it clean
+		env.ambient_light_color = Color(0.4, 0.42, 0.5)
+		env.ambient_light_energy = 0.12
+		# Tonemap: Linear — zero color distortion, what you set is what you see
+		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+		env.tonemap_exposure = 0.9
+		# Reflected light off for clean color
+		env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+		# No glow/bloom — keep it crisp
 		env.glow_enabled = false
+		# SSAO for depth and contrast in corners (if supported)
+		env.ssao_enabled = true
+		env.ssao_radius = 2.0
+		env.ssao_intensity = 1.5
+		env.ssao_power = 1.5
 
 	# Scene sun — layer 1 only (world geometry, not marbles)
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
 		sun_light.light_color = Color(1.0, 1.0, 1.0)
-		sun_light.light_energy = 0.65
+		sun_light.light_energy = 0.7
 		sun_light.light_indirect_energy = 0.0
 		sun_light.light_cull_mask = 1  # Layer 1 only — excludes marbles on layer 2
 		sun_light.shadow_enabled = true

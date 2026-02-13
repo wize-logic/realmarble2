@@ -179,8 +179,8 @@ func get_random_marble_material() -> Material:
 
 func _boost_color(color: Color) -> Color:
 	var h := color.h
-	var s := minf(color.s * 1.25, 1.0)
-	var v := minf(color.v * 1.15, 1.0)
+	var s := minf(color.s * 1.35, 1.0)
+	var v := minf(color.v * 1.2, 1.0)
 	return Color.from_hsv(h, s, v)
 
 func reset_used_colors() -> void:
