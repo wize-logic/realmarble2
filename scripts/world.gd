@@ -2506,10 +2506,10 @@ func _create_customize_panel() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.05, 0.05, 0.1, 1)  # Match viewport panel background
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.4, 0.42, 0.5)
-	env.ambient_light_energy = 0.12
+	env.ambient_light_color = Color(0.45, 0.48, 0.58)
+	env.ambient_light_energy = 0.18
 	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-	env.tonemap_exposure = 0.9
+	env.tonemap_exposure = 1.0
 	world_env.environment = env
 	scene_root.add_child(world_env)
 
@@ -2535,11 +2535,11 @@ func _create_customize_panel() -> void:
 	preview_cam.look_at(Vector3(0, 0, 0), Vector3.UP)
 	preview_cam.current = true
 
-	# Key light — matches scene sun
+	# Key light — matches production marble light
 	var light = DirectionalLight3D.new()
 	light.name = "PreviewLight"
 	light.position = Vector3(2, 3, 2)
-	light.light_energy = 0.8
+	light.light_energy = 1.5
 	scene_root.add_child(light)
 	light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2547,7 +2547,7 @@ func _create_customize_panel() -> void:
 	var ambient_light = DirectionalLight3D.new()
 	ambient_light.name = "AmbientLight"
 	ambient_light.position = Vector3(-2, 1, -2)
-	ambient_light.light_energy = 0.25
+	ambient_light.light_energy = 0.35
 	scene_root.add_child(ambient_light)
 	ambient_light.look_at(Vector3(0, 0, 0), Vector3.UP)
 
@@ -2710,19 +2710,19 @@ func _create_marble_preview() -> void:
 	# Make this the current camera
 	preview_camera.make_current()
 
-	# Create directional light — matches in-game sun energy
+	# Key light — matches production marble light energy
 	preview_light = DirectionalLight3D.new()
 	preview_light.name = "PreviewLight"
 	preview_light.light_color = Color(1.0, 1.0, 1.0)
-	preview_light.light_energy = 0.7  # Match in-game sun
+	preview_light.light_energy = 1.5
 	preview_light.rotation_degrees = Vector3(-45, 45, 0)
 	preview_light.shadow_enabled = true
 	preview_container.add_child(preview_light)
 
-	# Fill light from opposite side — subtle
+	# Fill light from opposite side
 	var fill_light = OmniLight3D.new()
 	fill_light.name = "FillLight"
-	fill_light.light_energy = 0.2
+	fill_light.light_energy = 0.3
 	fill_light.position = Vector3(2, 1, 2)
 	preview_container.add_child(fill_light)
 
@@ -2866,54 +2866,53 @@ func play_countdown_beep(text: String) -> void:
 			var value = sin(phase) * amplitude
 			playback.push_frame(Vector2(value, value))
 
-func _apply_prebaked_lighting_profile(_menu_preview: bool) -> void:
-	## Vivid lighting — maximum color preservation, high contrast.
+func _apply_lighting() -> void:
+	## Production lighting — vivid colors, high contrast, clean rendering.
 	var world_env: WorldEnvironment = get_node_or_null("WorldEnvironment")
 	if world_env:
 		var env: Environment = world_env.environment
 		if not env:
 			env = Environment.new()
 			world_env.environment = env
-		# Ambient: minimal tinted fill — just prevents pitch black, doesn't wash colors
+		# Ambient: cool-tinted fill, enough to read shadow areas
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		env.ambient_light_color = Color(0.4, 0.42, 0.5)
-		env.ambient_light_energy = 0.12
-		# Tonemap: Linear — zero color distortion, what you set is what you see
+		env.ambient_light_color = Color(0.45, 0.48, 0.58)
+		env.ambient_light_energy = 0.18
+		# Linear tonemap — pure color, no film curve distortion
 		env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-		env.tonemap_exposure = 0.9
-		# Reflected light off for clean color
+		env.tonemap_exposure = 1.0
+		# Sky reflection off — clean material colors
 		env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
-		# No glow/bloom — keep it crisp
 		env.glow_enabled = false
-		# SSAO for depth and contrast in corners (if supported)
+		# SSAO for geometric depth
 		env.ssao_enabled = true
-		env.ssao_radius = 2.0
-		env.ssao_intensity = 1.5
+		env.ssao_radius = 1.8
+		env.ssao_intensity = 1.2
 		env.ssao_power = 1.5
 
-	# Scene sun — layer 1 only (world geometry, not marbles)
+	# Sun light — layer 1 (world geometry only)
 	var sun_light: DirectionalLight3D = get_node_or_null("DirectionalLight3D") as DirectionalLight3D
 	if sun_light:
-		sun_light.light_color = Color(1.0, 1.0, 1.0)
-		sun_light.light_energy = 0.7
+		sun_light.light_color = Color(1.0, 0.98, 0.95)
+		sun_light.light_energy = 0.85
 		sun_light.light_indirect_energy = 0.0
-		sun_light.light_cull_mask = 1  # Layer 1 only — excludes marbles on layer 2
+		sun_light.light_cull_mask = 1
 		sun_light.shadow_enabled = true
 		sun_light.shadow_bias = 0.05
 		sun_light.directional_shadow_max_distance = 200.0
 
-	# Dedicated marble light — layer 2 only, independent of scene lighting
+	# Marble light — layer 2, brighter so marbles pop against geometry
 	var marble_light: DirectionalLight3D = get_node_or_null("MarbleLight") as DirectionalLight3D
 	if not marble_light:
 		marble_light = DirectionalLight3D.new()
 		marble_light.name = "MarbleLight"
 		add_child(marble_light)
 	marble_light.light_color = Color(1.0, 1.0, 1.0)
-	marble_light.light_energy = 1.2
+	marble_light.light_energy = 1.5
 	marble_light.light_indirect_energy = 0.0
-	marble_light.light_cull_mask = 2  # Layer 2 only — only affects marbles
+	marble_light.light_cull_mask = 2
 	marble_light.rotation_degrees = Vector3(-40, 30, 0)
-	marble_light.shadow_enabled = false  # No self-shadow on marbles
+	marble_light.shadow_enabled = false
 
 # ============================================================================
 # PROCEDURAL LEVEL GENERATION
@@ -3013,7 +3012,7 @@ func generate_procedural_level(spawn_collectibles: bool = true, level_size: int 
 	add_child(skybox_generator)
 	await get_tree().process_frame
 
-	_apply_prebaked_lighting_profile(menu_preview)
+	_apply_lighting()
 
 	DebugLogger.dlog(DebugLogger.Category.LEVEL_GEN, "Procedural level generation complete!")
 

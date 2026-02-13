@@ -69,7 +69,7 @@ func generate_skybox() -> void:
 		environment = Environment.new()
 		world_env.environment = environment
 
-	# NOTE: ambient_light and tonemap are set by _apply_prebaked_lighting_profile() in world.gd
+	# NOTE: ambient_light and tonemap are set by _apply_lighting() in world.gd
 	# which runs AFTER skybox generation. Only set sky-related properties here.
 
 	# ProceduralSkyMaterial — standard energy, symmetric curves for full sphere wrap

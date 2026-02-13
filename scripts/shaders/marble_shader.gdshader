@@ -9,17 +9,20 @@ uniform vec3 swirl_color : source_color = vec3(1.0, 0.8, 0.8);
 // Material properties
 uniform float glossiness : hint_range(0.0, 1.0) = 0.6;
 uniform float metallic_amount : hint_range(0.0, 1.0) = 0.1;
-uniform float transparency : hint_range(0.0, 1.0) = 0.02;
+uniform float transparency : hint_range(0.0, 1.0) = 0.0;
 
 // Pattern controls
-uniform float swirl_scale : hint_range(0.1, 5.0) = 2.0;
-uniform float swirl_intensity : hint_range(0.0, 1.0) = 0.6;
+uniform float swirl_scale : hint_range(0.1, 5.0) = 1.5;
+uniform float swirl_intensity : hint_range(0.0, 1.0) = 0.8;
 uniform float bubble_density : hint_range(0.0, 2.0) = 0.4;
-uniform float time_speed : hint_range(0.0, 2.0) = 0.2;
+uniform float time_speed : hint_range(0.0, 2.0) = 0.1;
 
 // Enhanced visual effects
-uniform float rim_power : hint_range(1.0, 8.0) = 2.5;
-uniform float rim_intensity : hint_range(0.0, 1.0) = 0.08;
+uniform float rim_power : hint_range(1.0, 8.0) = 3.0;
+uniform float rim_intensity : hint_range(0.0, 1.0) = 0.12;
+
+// Pattern darkness — how dark the vein pattern gets
+uniform float pattern_darkness : hint_range(0.0, 1.0) = 0.7;
 
 // Performance quality: 0=Low (best FPS), 1=Medium, 2=High
 uniform int quality_level : hint_range(0, 2) = 1;
@@ -68,17 +71,17 @@ float fbm3d(vec3 p) {
 	return value;
 }
 
-// Marble swirl pattern
-float marble_pattern(vec3 pos, float time) {
+// Marble vein pattern — produces dark veins on bright surface
+float marble_veins(vec3 pos, float time) {
 	vec3 flow_pos = pos;
 	flow_pos.x += sin(pos.y * 2.0 + time * time_speed) * 0.3;
 	flow_pos.y += cos(pos.x * 2.0 + time * time_speed) * 0.3;
 	flow_pos.z += sin(pos.x * 1.5 + pos.y * 1.5 + time * time_speed) * 0.2;
 
 	float pattern = fbm3d(flow_pos * swirl_scale);
-	pattern = sin(pattern * 10.0 + pos.x + pos.y + pos.z);
-
-	return pattern * 0.5 + 0.5;
+	// Sin produces veins — abs() makes them sharp dark lines
+	float veins = abs(sin(pattern * 10.0 + pos.x + pos.y + pos.z));
+	return veins;
 }
 
 // Bubble/inclusion pattern - quality-adaptive
@@ -101,51 +104,48 @@ float fresnel(float amount, vec3 normal, vec3 view) {
 	return pow(1.0 - clamp(dot(normalize(normal), normalize(view)), 0.0, 1.0), amount);
 }
 
-// Boost saturation for vivid colors
-vec3 saturate_color(vec3 color, float amount) {
-	float grey = dot(color, vec3(0.299, 0.587, 0.114));
-	return mix(vec3(grey), color, 1.0 + amount);
-}
-
 void vertex() {
 	world_pos = (WORLD_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
 void fragment() {
-	// Create marble swirl pattern
-	float swirl = marble_pattern(world_pos, TIME);
+	// Get vein pattern — 0.0 = vein center (dark), 1.0 = clean surface (bright)
+	float veins = marble_veins(world_pos, TIME);
 
-	// Add bubble inclusions
+	// Sharpen veins into crisp dark lines
+	float vein_mask = smoothstep(0.05, 0.4, veins);
+
+	// Bright base: blend primary → secondary across the surface
+	float surface_noise = noise3d(world_pos * 1.2);
+	vec3 bright_base = mix(secondary_color, swirl_color, surface_noise * 0.5);
+
+	// Dark vein color: much darker version of primary
+	vec3 dark_vein = primary_color * (1.0 - pattern_darkness);
+
+	// Final color: bright surface with dark veins carved in
+	vec3 final_color = mix(dark_vein, bright_base, vein_mask);
+
+	// Bubble inclusions — bright patches
 	float bubble = bubbles(world_pos);
+	final_color = mix(final_color, swirl_color, bubble * 0.4);
 
-	// Sharpen pattern into bold distinct regions
-	float sharp_swirl = smoothstep(0.35, 0.65, swirl);
-
-	// High contrast color regions — primary vs swirl clearly distinct
-	vec3 base_mix = mix(primary_color, secondary_color, sharp_swirl);
-	vec3 final_color = mix(base_mix, swirl_color, sharp_swirl * swirl_intensity);
-
-	// Bubble inclusions add secondary color patches
-	vec3 bubble_tint = mix(swirl_color, secondary_color, 0.5);
-	final_color = mix(final_color, bubble_tint, bubble * 0.5);
-
-	// Boost saturation for vivid marble colors
-	final_color = saturate_color(final_color, 0.3);
+	// Overall brightness boost — marbles should read bright
+	final_color *= 1.25;
 
 	// Calculate view direction
 	vec3 view_dir = normalize(CAMERA_POSITION - world_pos);
 
-	// Enhanced fresnel rim — colored edge glow
+	// Fresnel rim — bright colored edge for readability at distance
 	float fresnel_amount = fresnel(rim_power, NORMAL, view_dir);
-	vec3 rim_color = mix(secondary_color, swirl_color, 0.5);
+	vec3 rim_color = mix(secondary_color, swirl_color, 0.6);
 	final_color += fresnel_amount * rim_intensity * rim_color;
 
 	// Clamp
 	final_color = clamp(final_color, vec3(0.0), vec3(1.0));
 
-	// Output — glossy marble with vivid colors
+	// Output
 	ALBEDO = final_color;
 	ROUGHNESS = 1.0 - glossiness;
 	METALLIC = metallic_amount;
-	SPECULAR = 0.3;
+	SPECULAR = 0.35;
 }

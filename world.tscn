@@ -29,10 +29,11 @@ sky_material = SubResource("PhysicalSkyMaterial_r06yd")
 background_mode = 2
 sky = SubResource("Sky_78err")
 ambient_light_source = 2
-ambient_light_color = Color(0.4, 0.42, 0.5, 1)
-ambient_light_energy = 0.12
+ambient_light_color = Color(0.45, 0.48, 0.58, 1)
+ambient_light_energy = 0.18
 reflected_light_source = 0
 tonemap_mode = 0
+tonemap_exposure = 1.0
 
 [sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_wntx8"]
 
