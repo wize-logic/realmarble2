@@ -76,7 +76,7 @@ func generate_skybox() -> void:
 
 	# Use ProceduralSkyMaterial for compatibility-friendly visuals with better art direction
 	sky_material = ProceduralSkyMaterial.new()
-	sky_material.energy_multiplier = 0.55
+	sky_material.energy_multiplier = 0.70
 	sky_material.sky_curve = 0.15
 	sky_material.ground_curve = 0.35
 	sky_material.sun_angle_max = 1.0
