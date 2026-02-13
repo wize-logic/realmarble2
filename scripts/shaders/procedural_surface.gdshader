@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
+render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_disabled;
 
 // Surface type parameters
 uniform vec3 base_color : source_color = vec3(0.5, 0.5, 0.5);
@@ -55,6 +55,7 @@ void fragment() {
 	color = mix(color, color * 1.15, n * wear_amount * 0.3);
 
 	ALBEDO = color;
-	ROUGHNESS = roughness + n * 0.05;
-	METALLIC = metallic;
+	ROUGHNESS = 1.0;
+	METALLIC = 0.0;
+	SPECULAR = 0.0;
 }
